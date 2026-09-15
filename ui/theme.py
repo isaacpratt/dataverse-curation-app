@@ -1,4 +1,4 @@
-"""Design tokens extracted from updated_layout/*.html (Tailwind config).
+"""Design tokens for the app (originally extracted from a Tailwind mock).
 
 Palette is Material 3-like: primary #004ccd, tertiary #4142cf, error #ba1a1a,
 surface #faf8ff, backgrounds #f2f3ff/#eaedff, outline-variant #c3c6d8.

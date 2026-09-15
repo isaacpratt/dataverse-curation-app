@@ -57,12 +57,12 @@ class RequirementsDialog(QDialog):
         layout.addLayout(top)
 
         self._editor = QTextEdit()
-        self._editor.setPlaceholderText("Edit the JSON for the selected profile. Each profile has label and rules. See CurationLog.pdf / DepositorChecklist.pdf for field names.")
+        self._editor.setPlaceholderText("Edit the JSON for the selected profile. Each profile has label and rules. See docs/CurationLog.pdf / docs/DepositorChecklist.pdf for field names.")
         layout.addWidget(self._editor, 1)
 
         hint = QLabel(
             "Profiles are stored in <b>requirements_profiles.json</b> next to the executable. "
-            "The <b>McMaster</b> profile is pre-filled from CurationLog.pdf + DepositorChecklist.pdf. "
+            "The <b>McMaster</b> profile is pre-filled from docs/CurationLog.pdf + docs/DepositorChecklist.pdf. "
             "Restart the app or re-select the profile in the dataset view to see changes."
         )
         hint.setWordWrap(True)

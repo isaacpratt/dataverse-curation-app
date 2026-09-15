@@ -42,7 +42,7 @@ build:
 		--add-data "ui/assets;ui/assets" main.py
 	# Copy example config + checklist PDFs into the full folder so the
 	# lite exe can find them via its sibling lookup (no-op when absent).
-	$(PYTHON) -c "import shutil, pathlib; [shutil.copy(f, 'dist/curation-app-full/' + pathlib.Path(f).name) for f in ('config.example.json', 'CurationLog.pdf', 'DepositorChecklist.pdf') if pathlib.Path(f).exists()]"
+	$(PYTHON) -c "import shutil, pathlib; [shutil.copy(f, 'dist/curation-app-full/' + pathlib.Path(f).name) for f in ('config.example.json', 'docs/CurationLog.pdf', 'docs/DepositorChecklist.pdf') if pathlib.Path(f).exists()]"
 
 # Rebuild only the lite exe. Keeps dist/curation-app-full/ intact.
 rebuild-lite:

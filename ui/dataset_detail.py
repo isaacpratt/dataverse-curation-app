@@ -1,4 +1,4 @@
-"""Dataset detail — 2-column layout matching updated_layout/dataset_assessment.html.
+"""Dataset detail — 2-column assessment layout (metadata/files/checks + sticky sidebar).
 
 Left: Auto-Checks + Assessment Action. Right: File Manifest.
 Header: persistent ID badge, status pill, title, depositor/date, actions.

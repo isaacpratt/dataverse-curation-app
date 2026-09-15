@@ -78,6 +78,7 @@ Outputs: `dist/curation-app-lite.exe` (~63 MB, single file, no unzip step) next 
 - `docs/report-contract.md` — the JSON report format shared by engine and GUI
 - `docs/development.md` — setup, testing, adding checks, packaging
 - `docs/user-guide.md` — how a curator uses the app (dashboard, detail, metadata, log)
+- `docs/CurationLog.pdf`, `docs/DepositorChecklist.pdf` — McMaster curation reference behind the default metadata profile
 
 ## Roadmap
 

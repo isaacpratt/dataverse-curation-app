@@ -1,7 +1,7 @@
 """Metadata completeness checking against configurable requirement profiles.
 
 Profiles:
-- McMaster (default): derived from CurationLog.pdf + DepositorChecklist.pdf
+- McMaster (default): derived from docs/CurationLog.pdf + docs/DepositorChecklist.pdf
   (McMaster Dataverse). Mandatory fields are marked ★ Required.
 - Minimal: only the Dataverse core mandatory fields.
 
@@ -17,7 +17,7 @@ from pathlib import Path as _Path
 PROFILES: Dict[str, Dict[str, Any]] = {
     "McMaster": {
         "label": "McMaster — Curation Log + Depositor Checklist",
-        "description": "Rules from CurationLog.pdf and DepositorChecklist.pdf (McMaster Dataverse)",
+        "description": "Rules from docs/CurationLog.pdf and docs/DepositorChecklist.pdf (McMaster Dataverse)",
     },
     "Minimal": {
         "label": "Minimal — Dataverse core",
