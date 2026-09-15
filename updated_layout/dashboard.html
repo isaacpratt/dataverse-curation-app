@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Global Repo - Curator Dashboard</title>
+<!-- Tailwind CSS Config -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-tint": "#0052dd",
+                    "on-secondary-fixed": "#0d1c2e",
+                    "outline-variant": "#c3c6d8",
+                    "surface-bright": "#faf8ff",
+                    "background": "#faf8ff",
+                    "on-secondary-container": "#57657a",
+                    "on-background": "#131b2e",
+                    "outline": "#737687",
+                    "error-container": "#ffdad6",
+                    "primary-container": "#0f62fe",
+                    "tertiary-container": "#5b5ee9",
+                    "on-primary-fixed-variant": "#003da9",
+                    "tertiary-fixed-dim": "#c0c1ff",
+                    "on-primary-container": "#f3f3ff",
+                    "surface-container-highest": "#dae2fd",
+                    "surface": "#faf8ff",
+                    "primary-fixed": "#dbe1ff",
+                    "primary": "#004ccd",
+                    "secondary-fixed-dim": "#b9c7df",
+                    "inverse-surface": "#283044",
+                    "on-error": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "surface-dim": "#d2d9f4",
+                    "on-surface": "#131b2e",
+                    "tertiary": "#4142cf",
+                    "on-secondary-fixed-variant": "#3a485b",
+                    "secondary-container": "#d5e3fc",
+                    "primary-fixed-dim": "#b4c5ff",
+                    "secondary-fixed": "#d5e3fc",
+                    "inverse-primary": "#b4c5ff",
+                    "on-surface-variant": "#424656",
+                    "inverse-on-surface": "#eef0ff",
+                    "tertiary-fixed": "#e1e0ff",
+                    "on-tertiary-container": "#f6f3ff",
+                    "on-primary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#2f2ebe",
+                    "on-primary-fixed": "#00174c",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary-fixed": "#07006c",
+                    "surface-container-low": "#f2f3ff",
+                    "error": "#ba1a1a",
+                    "surface-variant": "#dae2fd",
+                    "on-error-container": "#93000a",
+                    "secondary": "#515f74",
+                    "surface-container": "#eaedff",
+                    "surface-container-high": "#e2e7ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "margin": "24px",
+                    "sm": "8px",
+                    "md": "16px",
+                    "xl": "32px",
+                    "gutter": "20px",
+                    "base": "4px",
+                    "lg": "24px"
+            },
+            "fontFamily": {
+                    "body-sm": [
+                            "Inter"
+                    ],
+                    "mono-sm": [
+                            "JetBrains Mono"
+                    ],
+                    "headline-xl": [
+                            "Inter"
+                    ],
+                    "body-lg": [
+                            "Inter"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "label-md": [
+                            "Inter"
+                    ],
+                    "headline-md": [
+                            "Inter"
+                    ],
+                    "headline-lg": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "body-sm": [
+                            "13px",
+                            {
+                                    "lineHeight": "18px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "mono-sm": [
+                            "13px",
+                            {
+                                    "lineHeight": "18px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-xl": [
+                            "36px",
+                            {
+                                    "lineHeight": "44px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-lg": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-md": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-md": [
+                            "20px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg": [
+                            "28px",
+                            {
+                                    "lineHeight": "36px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<!-- Google Fonts & Material Symbols -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background antialiased flex flex-col">
+<div class="flex-1 flex flex-col min-h-screen relative">
+<!-- TopNavBar -->
+<header class="bg-surface-container-lowest dark:bg-surface-container-lowest border-b border-outline-variant dark:border-outline-variant w-full h-16 sticky top-0 z-10">
+<div class="flex items-center justify-between px-lg w-full max-w-screen-2xl mx-auto h-full gap-md">
+<div class="flex items-center gap-md">
+<!-- Mobile Menu Button (Hidden on Desktop) -->
+<button class="md:hidden text-on-surface-variant p-sm rounded hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+<nav class="hidden md:flex items-center gap-sm flex-1">
+<a class="flex items-center gap-xs px-sm py-xs bg-secondary-container text-on-secondary-container rounded-lg font-semibold active:translate-x-1 transition-transform" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="dashboard">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-xs px-sm py-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-all active:translate-x-1 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="assignment">assignment</span>
+<span class="font-label-md text-label-md">My Assignments</span>
+</a>
+<div class="w-px h-6 bg-outline-variant mx-sm"></div>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider px-sm">Open Datasets:</span>
+<a class="flex items-center gap-xs px-sm py-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-all active:translate-x-1 rounded-lg" href="#">
+<span class="font-label-md text-label-md">Climate Trends...</span>
+</a>
+<a class="flex items-center gap-xs px-sm py-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-all active:translate-x-1 rounded-lg" href="#">
+<span class="font-label-md text-label-md">Urban Traffic...</span>
+</a>
+</nav>
+<div class="flex items-center gap-sm ml-auto">
+<button class="text-on-surface-variant dark:text-on-surface-variant p-xs rounded hover:bg-surface-container-low dark:hover:bg-surface-container-low transition-colors active:scale-95 duration-150">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-on-surface-variant dark:text-on-surface-variant p-xs rounded hover:bg-surface-container-low dark:hover:bg-surface-container-low transition-colors active:scale-95 duration-150">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<button class="text-on-surface-variant dark:text-on-surface-variant p-xs rounded hover:bg-surface-container-low dark:hover:bg-surface-container-low transition-colors active:scale-95 duration-150">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+</button>
+</div>
+</div>
+</header>
+<main class="flex-1 p-margin max-w-screen-xl mx-auto w-full">
+<div class="mb-xl">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-sm">Dashboard Overview</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">High-level summary of current curation activities across Global Repo.</p>
+</div>
+<!-- Metrics Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md mb-xl">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md border-l-[4px] border-l-tertiary shadow-sm flex flex-col justify-between">
+<div class="flex items-start justify-between mb-md">
+<div class="font-label-md text-label-md text-on-surface-variant uppercase">Pending Assignments</div>
+<span class="material-symbols-outlined text-tertiary">assignment_late</span>
+</div>
+<div class="flex items-baseline gap-sm">
+<span class="font-headline-xl text-headline-xl text-on-surface">42</span>
+<span class="font-body-sm text-body-sm text-outline">+5 this week</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md border-l-[4px] border-l-primary shadow-sm flex flex-col justify-between">
+<div class="flex items-start justify-between mb-md">
+<div class="font-label-md text-label-md text-on-surface-variant uppercase">In Review</div>
+<span class="material-symbols-outlined text-primary">preview</span>
+</div>
+<div class="flex items-baseline gap-sm">
+<span class="font-headline-xl text-headline-xl text-on-surface">18</span>
+<span class="font-body-sm text-body-sm text-outline">-2 this week</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md border-l-[4px] border-l-error shadow-sm flex flex-col justify-between">
+<div class="flex items-start justify-between mb-md">
+<div class="font-label-md text-label-md text-on-surface-variant uppercase">Needs Action</div>
+<span class="material-symbols-outlined text-error">warning</span>
+</div>
+<div class="flex items-baseline gap-sm">
+<span class="font-headline-xl text-headline-xl text-on-surface">7</span>
+<span class="font-body-sm text-body-sm text-error">Requires immediate attention</span>
+</div>
+</div>
+</div>
+<!-- Curation Queue Table -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+<div class="p-md bg-surface-container flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-outline-variant gap-md">
+<h3 class="font-headline-md text-headline-md text-on-surface shrink-0">Curation Queue</h3>
+<div class="flex-1 w-full max-w-md mx-auto sm:mx-md">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full pl-[36px] pr-sm py-sm bg-surface-container-lowest border border-outline-variant rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary font-body-sm text-body-sm placeholder:text-on-surface-variant text-on-surface transition-all" placeholder="Search datasets, authors..." type="text"/>
+</div>
+</div>
+<div class="flex gap-sm shrink-0">
+<button class="flex items-center gap-xs px-sm py-xs border border-outline-variant rounded text-on-surface-variant hover:bg-surface-container-low transition-colors font-label-md text-label-md">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+                            Filter
+                        </button>
+<button class="flex items-center gap-xs px-sm py-xs bg-primary text-on-primary rounded hover:bg-on-primary-fixed-variant transition-colors font-label-md text-label-md">
+<span class="material-symbols-outlined text-[18px]">person</span>
+                            My Assignments
+                        </button>
+</div>
+</div>
+<div class="overflow-x-auto w-full">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low font-label-md text-label-md text-on-surface-variant">
+<tr>
+<th class="py-sm px-md border-b border-outline-variant font-semibold">Dataset Title</th>
+<th class="py-sm px-md border-b border-outline-variant font-semibold">Submitting Author</th>
+<th class="py-sm px-md border-b border-outline-variant font-semibold">Submission Date</th>
+<th class="py-sm px-md border-b border-outline-variant font-semibold">Status</th>
+<th class="py-sm px-md border-b border-outline-variant font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md text-on-surface divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-md px-md">
+<div class="font-semibold text-on-surface">Global Climate Modeling Scenarios 2050</div>
+<div class="font-body-sm text-body-sm text-outline">ID: GR-2023-8891</div>
+</td>
+<td class="py-md px-md">Dr. E. Vance</td>
+<td class="py-md px-md text-on-surface-variant font-mono-sm text-mono-sm">2023-10-24</td>
+<td class="py-md px-md">
+<span class="inline-flex items-center px-2 py-1 rounded bg-secondary-container text-on-secondary-container font-label-md text-label-md border border-secondary-container uppercase">In Review</span>
+</td>
+<td class="py-md px-md text-right">
+<button class="text-primary hover:text-on-primary-fixed-variant transition-colors opacity-0 group-hover:opacity-100 p-1">
+<span class="material-symbols-outlined">edit</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group bg-surface">
+<td class="py-md px-md">
+<div class="font-semibold text-on-surface">Urban Traffic Flow Telemetry - NY Q3</div>
+<div class="font-body-sm text-body-sm text-outline">ID: GR-2023-8892</div>
+</td>
+<td class="py-md px-md">M. Chen, et al.</td>
+<td class="py-md px-md text-on-surface-variant font-mono-sm text-mono-sm">2023-10-25</td>
+<td class="py-md px-md">
+<span class="inline-flex items-center px-2 py-1 rounded bg-surface-variant text-on-surface-variant font-label-md text-label-md border border-outline-variant uppercase">Draft</span>
+</td>
+<td class="py-md px-md text-right">
+<button class="text-primary hover:text-on-primary-fixed-variant transition-colors opacity-0 group-hover:opacity-100 p-1">
+<span class="material-symbols-outlined">edit</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-md px-md">
+<div class="font-semibold text-on-surface">Genomic Sequences of Deep Sea Hydrothermal Vent Fauna</div>
+<div class="font-body-sm text-body-sm text-outline">ID: GR-2023-8884</div>
+</td>
+<td class="py-md px-md">S. O'Connor</td>
+<td class="py-md px-md text-on-surface-variant font-mono-sm text-mono-sm">2023-10-21</td>
+<td class="py-md px-md">
+<span class="inline-flex items-center px-2 py-1 rounded bg-error-container text-on-error-container font-label-md text-label-md border border-error-container uppercase">Author Contacted</span>
+</td>
+<td class="py-md px-md text-right">
+<button class="text-primary hover:text-on-primary-fixed-variant transition-colors opacity-0 group-hover:opacity-100 p-1">
+<span class="material-symbols-outlined">edit</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group bg-surface">
+<td class="py-md px-md">
+<div class="font-semibold text-on-surface">Historical Market Volatility Index 1990-2020</div>
+<div class="font-body-sm text-body-sm text-outline">ID: GR-2023-8870</div>
+</td>
+<td class="py-md px-md">Finance Dept, NYU</td>
+<td class="py-md px-md text-on-surface-variant font-mono-sm text-mono-sm">2023-10-18</td>
+<td class="py-md px-md">
+<span class="inline-flex items-center px-2 py-1 rounded bg-tertiary-container text-on-tertiary-container font-label-md text-label-md border border-tertiary-container uppercase">Ready for Publish</span>
+</td>
+<td class="py-md px-md text-right">
+<button class="text-primary hover:text-on-primary-fixed-variant transition-colors opacity-0 group-hover:opacity-100 p-1">
+<span class="material-symbols-outlined">publish</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+<!-- Fixed Branding Bottom Right -->
+<div class="fixed bottom-lg right-lg bg-surface-container-lowest border border-outline-variant shadow-md p-sm rounded-lg flex items-center gap-sm z-50">
+<img alt="Repository Logo" class="w-8 h-8 rounded" data-alt="A minimalist logo for a data repository, featuring interconnected blue geometric nodes forming a globe shape on a crisp white background, suitable for a light-mode modern UI." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsCIAeLDA1du_-sd5O7F2L-z0Dj6MMADV4Uc7mK9bdPVfoSo7ZA24GJR-ALSm8K7jjiR1fOZpKgd8eokpZsYWL8OzVjnz2UcREQI1MGHjkzilvj0Mv9w2dWHdMbt69Ib08ULoCUYN1fBU7pdTVuMe_l7a7n8A8fJgu3Fdi04b-rMlSf63PZs3NF2m71QZBcl4wKLjp4Ju41wtAxWQFkf2HAeLK_ku6i1BuzH1SQJUPV2zlU7cgBm3Y"/>
+<div class="pr-sm">
+<h1 class="font-headline-sm text-[16px] font-semibold text-on-surface leading-tight">Global Repo</h1>
+<p class="font-body-sm text-[12px] text-on-surface-variant leading-tight">Enterprise Tier</p>
+</div>
+</div>
+</div>
+</body></html>

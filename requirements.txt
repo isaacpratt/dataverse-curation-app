@@ -1,0 +1,21 @@
+PySide6>=6.6
+requests>=2.31
+# Dataset discovery: bulk crawl of draft datasets in a collection
+# (pin to a tag/commit after the Phase 3 integration spike)
+dataverse-metadata-crawler @ git+https://github.com/scholarsportal/dataverse-metadata-crawler.git
+openpyxl>=3.1
+pyreadstat>=1.2
+h5py>=3.10
+netCDF4>=1.6
+numpy>=1.24
+lxml>=4.9
+Pillow>=10.0
+tifffile>=2023.9
+pypdf>=4.0
+chardet>=5.2
+# dev only (also in pyproject [dev]):
+pytest>=7.4
+
+# Optional (detected at runtime, not packaged):
+#   OCR: tesseract binary (pytesseract can wrap it)
+#   exif metadata: exiftool binary (the R version also relies on it)

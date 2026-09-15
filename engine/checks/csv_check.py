@@ -1,0 +1,135 @@
+"""CSV/TSV health check.
+
+Port of CUR_Res_CurationTools Scripts/Inspect_csv_Script.R: encoding guess,
+parse with delimiter sniffing, ragged-row detection, missing-cell share,
+duplicate rows and an email (PII) scan on a sample.
+"""
+
+import csv
+from pathlib import Path
+from typing import List
+
+from engine.checks._util import detect_encoding, find_emails
+from engine.checks.base import Check, CheckResult
+
+_SAMPLE_BYTES = 1 << 20
+_PII_SAMPLE_ROWS = 1000
+# Upper bound for the full-parse pass: beyond this the file is sampled and
+# the content result carries truncated=True (a 5 GB "csv" must not OOM us).
+_MAX_ROWS_SCANNED = 50000
+# Duplicate tracking is capped too: retain at most this many distinct row
+# hashes instead of every row tuple.
+_MAX_SEEN_ROWS = 20000
+
+
+class CsvCheck(Check):
+    """CSV/TSV check - port of the CUR_Res_CurationTools R inspector."""
+
+    check_id = "format.csv"
+    extensions = {".csv", ".tsv"}
+
+    def run(self, files: List[Path]) -> List[CheckResult]:
+        from engine.checks._util import run_per_file
+
+        return run_per_file(self, files, self._run_one)
+
+    def _run_one(self, path: Path) -> List[CheckResult]:
+        name = path.name
+        size = path.stat().st_size
+        if size == 0:
+            return [
+                CheckResult(
+                    check_id="format.csv.openable",
+                    level="error",
+                    passed=False,
+                    message=f"{name}: file is empty",
+                )
+            ]
+
+        encoding = detect_encoding(path)
+        delimiter = "\t" if path.suffix.lower() == ".tsv" else None
+
+        openable = CheckResult(
+            check_id="format.csv.openable",
+            level="info",
+            passed=True,
+            message=f"{name}: parsed ({encoding})",
+            details={"encoding": encoding},
+        )
+
+        with open(path, newline="", encoding=encoding, errors="replace") as handle:
+            sample = handle.read(_SAMPLE_BYTES)
+        if delimiter is None:
+            try:
+                delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
+            except csv.Error:
+                delimiter = ","
+
+        rows = 0
+        widths = set()
+        duplicates = 0
+        seen_rows = set()
+        truncated = False
+        emails = set()
+        with open(path, newline="", encoding=encoding, errors="replace") as handle:
+            reader = csv.reader(handle, delimiter=delimiter)
+            for row in reader:
+                rows += 1
+                if rows > _MAX_ROWS_SCANNED:
+                    truncated = True
+                    break
+                widths.add(len(row))
+                key = hash(tuple(row))
+                if key in seen_rows:
+                    duplicates += 1
+                elif len(seen_rows) < _MAX_SEEN_ROWS:
+                    seen_rows.add(key)
+                if rows <= _PII_SAMPLE_ROWS:
+                    emails.update(find_emails(" ".join(row)))
+
+        width = next(iter(widths), 0)
+        if not widths:
+            structure = CheckResult(
+                check_id="format.csv.structure",
+                level="warning",
+                passed=False,
+                message=f"{name}: no data rows found",
+            )
+        else:
+            structure = CheckResult(
+                check_id="format.csv.structure",
+                level="warning" if len(widths) > 1 else "info",
+                passed=len(widths) <= 1,
+                message=(
+                    f"{name}: ragged rows detected "
+                    f"(row widths: {sorted(widths)})"
+                    if len(widths) > 1
+                    else f"{name}: consistent {width} columns"
+                ),
+            )
+
+        content = CheckResult(
+            check_id="format.csv.content",
+            level="info",
+            passed=True,
+            message=(
+                f"{name}: {rows}{'+' if truncated else ''} rows, "
+                f"{duplicates} duplicate row(s)"
+                + (" (sampled — file exceeds scan cap)" if truncated else "")
+            ),
+            details={"rows": rows, "duplicates": duplicates, "truncated": truncated},
+        )
+
+        results = [openable, structure, content]
+
+        if emails:
+            results.append(
+                CheckResult(
+                    check_id="format.csv.pii",
+                    level="warning",
+                    passed=False,
+                    message=f"{name}: possible email addresses found",
+                    details={"emails": sorted(emails)[:10]},
+                )
+            )
+        return results

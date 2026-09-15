@@ -1,0 +1,19 @@
+{
+  "dataverse": {
+    "base_url": "https://demo.borealisdata.ca",
+    "api_token": "",
+    "collection": "",
+    "collection_alias": "",
+    "subtree": ""
+  },
+  "app": {
+    "workspace": "C:/Users/<you>/Documents/curation-workspace"
+  },
+  "engine": {
+    "optional_tools": {
+      "tesseract": "",
+      "exiftool": ""
+    }
+  },
+  "_comment": "base_url can be changed in the app via Settings → Dataverse. Presets include the Borealis demo (demo.borealisdata.ca) and any custom instance. Copy this file to config.json and fill in api_token."
+}

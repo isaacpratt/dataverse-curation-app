@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+build/
+dist/
+*.spec
+# Local full-build copy used for fast testing (hundreds of MB, regenerable
+# via `make build-full` — never commit).
+curation-app-lite-win/
+*.db
+config.json
+.curation-workspace/
+.idea/
+.vscode/
+# Local AI-agent tooling (skills, sessions) — environment-specific, not app source.
+.opencode/

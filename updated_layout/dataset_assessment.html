@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Dataset Curation Assessment</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#0052dd",
+                        "on-secondary-fixed": "#0d1c2e",
+                        "outline-variant": "#c3c6d8",
+                        "surface-bright": "#faf8ff",
+                        "background": "#faf8ff",
+                        "on-secondary-container": "#57657a",
+                        "on-background": "#131b2e",
+                        "outline": "#737687",
+                        "error-container": "#ffdad6",
+                        "primary-container": "#0f62fe",
+                        "tertiary-container": "#5b5ee9",
+                        "on-primary-fixed-variant": "#003da9",
+                        "tertiary-fixed-dim": "#c0c1ff",
+                        "on-primary-container": "#f3f3ff",
+                        "surface-container-highest": "#dae2fd",
+                        "surface": "#faf8ff",
+                        "primary-fixed": "#dbe1ff",
+                        "primary": "#004ccd",
+                        "secondary-fixed-dim": "#b9c7df",
+                        "inverse-surface": "#283044",
+                        "on-error": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "surface-dim": "#d2d9f4",
+                        "on-surface": "#131b2e",
+                        "tertiary": "#4142cf",
+                        "on-secondary-fixed-variant": "#3a485b",
+                        "secondary-container": "#d5e3fc",
+                        "primary-fixed-dim": "#b4c5ff",
+                        "secondary-fixed": "#d5e3fc",
+                        "inverse-primary": "#b4c5ff",
+                        "on-surface-variant": "#424656",
+                        "inverse-on-surface": "#eef0ff",
+                        "tertiary-fixed": "#e1e0ff",
+                        "on-tertiary-container": "#f6f3ff",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#2f2ebe",
+                        "on-primary-fixed": "#00174c",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed": "#07006c",
+                        "surface-container-low": "#f2f3ff",
+                        "error": "#ba1a1a",
+                        "surface-variant": "#dae2fd",
+                        "on-error-container": "#93000a",
+                        "secondary": "#515f74",
+                        "surface-container": "#eaedff",
+                        "surface-container-high": "#e2e7ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "margin": "24px",
+                        "sm": "8px",
+                        "md": "16px",
+                        "xl": "32px",
+                        "gutter": "20px",
+                        "base": "4px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "body-sm": ["Inter"],
+                        "mono-sm": ["JetBrains Mono"],
+                        "headline-xl": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "mono-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "headline-xl": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom scrollbar for data tables */
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: theme('colors.surface');
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: theme('colors.outline-variant');
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md antialiased flex h-screen overflow-hidden relative">
+<!-- Main Content Area -->
+<div class="flex flex-col flex-1 w-full bg-background overflow-hidden">
+<!-- TopNavBar -->
+<header class="bg-surface-container-lowest w-full h-16 border-b border-outline-variant shrink-0 z-10 flex items-center justify-between px-lg">
+<div class="flex items-center gap-md">
+<span class="text-headline-md font-headline-md text-primary">DataCurator Pro</span>
+<div class="h-6 w-px bg-outline-variant mx-sm"></div>
+<nav class="flex items-center gap-1">
+<a class="flex items-center gap-xs px-3 py-1.5 rounded-DEFAULT text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined text-[18px]">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-xs px-3 py-1.5 rounded-DEFAULT bg-secondary-container text-on-secondary-container rounded-lg font-semibold" href="#">
+<span class="material-symbols-outlined text-[18px]" data-weight="fill" style="font-variation-settings: 'FILL' 1;">assignment</span>
+<span class="font-label-md text-label-md">My Assignments</span>
+</a>
+<div class="h-4 w-px bg-outline-variant mx-2"></div>
+<div class="flex items-center gap-1 bg-surface-container p-1 rounded-lg">
+<button class="flex items-center gap-xs px-3 py-1 bg-surface text-on-surface shadow-sm rounded border border-outline-variant/30 font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px] text-tertiary">database</span>
+                    Climate Trends...
+                </button>
+<button class="flex items-center gap-xs px-3 py-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded font-label-md text-label-md transition-colors">
+<span class="material-symbols-outlined text-[16px]">database</span>
+                    Urban Traffic...
+                </button>
+</div>
+</nav>
+<div class="h-6 w-px bg-outline-variant mx-sm"></div>
+<span class="font-body-sm text-body-sm text-on-surface-variant bg-surface-container px-sm py-xs rounded border border-outline-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">lock</span> Secure Session
+                </span>
+</div>
+<div class="flex items-center gap-sm">
+<button class="p-2 rounded hover:bg-surface-container-low transition-colors text-on-surface-variant active:scale-95 duration-150 relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="p-2 rounded hover:bg-surface-container-low transition-colors text-on-surface-variant active:scale-95 duration-150">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="p-2 rounded hover:bg-surface-container-low transition-colors text-on-surface-variant active:scale-95 duration-150">
+<span class="material-symbols-outlined">help</span>
+</button>
+</div>
+</header>
+<!-- Scrollable Canvas -->
+<main class="flex-1 overflow-y-auto p-lg custom-scrollbar">
+<div class="max-w-[1280px] mx-auto space-y-lg pb-xl">
+<!-- Page Header & Metadata -->
+<div class="flex flex-col md:flex-row md:items-start justify-between gap-md mb-xl">
+<div>
+<div class="flex items-center gap-sm mb-xs">
+<span class="font-mono-sm text-mono-sm text-on-surface-variant bg-surface-container px-2 py-1 rounded">SUB-2023-084</span>
+<span class="px-2 py-0.5 rounded bg-tertiary-container/20 border border-tertiary text-tertiary font-label-md text-label-md uppercase flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">hourglass_empty</span> In Review
+                            </span>
+</div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-xs">Climate Trends 1990-2023</h2>
+<p class="font-body-md text-body-md text-on-surface-variant flex items-center gap-sm">
+<span class="material-symbols-outlined text-[16px]">person</span> Submitted by Dr. Jane Doe on Oct 24, 2023
+                        </p>
+</div>
+<div class="flex gap-sm">
+<button class="px-4 py-2 border border-outline-variant rounded bg-surface-container-lowest text-on-surface font-label-md text-label-md hover:bg-surface-container-low transition-colors flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">download</span> Download All
+                        </button>
+<button class="px-4 py-2 border border-outline-variant rounded bg-surface-container-lowest text-on-surface font-label-md text-label-md hover:bg-surface-container-low transition-colors flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">history</span> View History
+                        </button>
+</div>
+</div>
+<!-- Main Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
+<!-- Left Column: Automated Checks & Assessment Form -->
+<div class="lg:col-span-1 space-y-lg">
+<!-- Section 1: Automated Metadata Checks -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden relative">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-tertiary"></div>
+<div class="p-md border-b border-surface-container-low bg-surface-bright flex items-center justify-between">
+<h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-tertiary">robot_2</span> Auto-Checks
+                                </h3>
+<span class="font-label-md text-label-md text-on-surface-variant">2/3 Passed</span>
+</div>
+<div class="p-md space-y-3">
+<!-- Check Item: Pass -->
+<div class="flex items-center justify-between p-sm rounded bg-surface-container border border-outline-variant/50">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary">check_circle</span>
+<span class="font-body-sm text-body-sm font-medium">DOI Verification</span>
+</div>
+<span class="font-label-md text-label-md text-primary bg-primary-container/20 px-2 py-0.5 rounded">PASS</span>
+</div>
+<!-- Check Item: Pass -->
+<div class="flex items-center justify-between p-sm rounded bg-surface-container border border-outline-variant/50">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary">check_circle</span>
+<span class="font-body-sm text-body-sm font-medium">License Match (CC-BY 4.0)</span>
+</div>
+<span class="font-label-md text-label-md text-primary bg-primary-container/20 px-2 py-0.5 rounded">PASS</span>
+</div>
+<!-- Check Item: Fail -->
+<div class="flex items-center justify-between p-sm rounded bg-error-container/20 border border-error/30">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-error">error</span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface">Required Fields</span>
+</div>
+<span class="font-label-md text-label-md text-error bg-error-container/50 px-2 py-0.5 rounded">FAIL</span>
+</div>
+<div class="pl-xl pr-sm pb-sm pt-xs">
+<p class="font-body-sm text-body-sm text-error/80 text-xs">Missing description for variable 'temp_anomaly' in codebook.</p>
+</div>
+</div>
+</section>
+<!-- Section 3: Curator Assessment Form -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
+<div class="p-md border-b border-surface-container-low bg-surface-bright">
+<h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary">rate_review</span> Assessment Action
+                                </h3>
+</div>
+<div class="p-md space-y-md">
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Internal Notes (Markdown supported)</label>
+<textarea class="w-full h-32 p-sm bg-surface border border-outline-variant rounded font-body-sm text-body-sm focus:border-primary focus:ring-2 focus:ring-primary-container/50 outline-none resize-y" placeholder="Enter findings, issues, or specific instructions for the author..."></textarea>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-xs">Decision State</label>
+<div class="relative">
+<select class="w-full p-sm bg-surface border border-outline-variant rounded font-body-sm text-body-sm appearance-none focus:border-primary focus:ring-2 focus:ring-primary-container/50 outline-none pr-10">
+<option disabled="" selected="" value="">Select next state...</option>
+<option value="approve">Approve &amp; Publish</option>
+<option value="contact">Contact Author (Revisions Required)</option>
+<option value="reject">Reject Submission</option>
+<option value="hold">Hold for Internal Review</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">arrow_drop_down</span>
+</div>
+</div>
+<div class="pt-sm border-t border-surface-container-low mt-md flex justify-end">
+<button class="px-6 py-2 bg-primary text-on-primary font-label-md text-label-md rounded hover:bg-on-primary-fixed-variant transition-colors shadow-sm active:scale-95">
+                                        Commit Decision
+                                    </button>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column: File Manifest Analysis -->
+<div class="lg:col-span-2 space-y-lg">
+<section class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden flex flex-col h-full min-h-[500px]">
+<div class="p-md border-b border-surface-container-low bg-surface-bright flex items-center justify-between shrink-0">
+<h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-secondary">inventory_2</span> File Manifest
+                                </h3>
+<div class="flex items-center gap-sm">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline text-[18px]">search</span>
+<input class="pl-8 pr-sm py-1.5 text-sm bg-surface border border-outline-variant rounded focus:border-primary focus:ring-1 focus:ring-primary outline-none font-body-sm w-48" placeholder="Filter files..." type="text"/>
+</div>
+</div>
+</div>
+<div class="flex-1 overflow-auto custom-scrollbar">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container sticky top-0 z-10 shadow-sm">
+<tr>
+<th class="p-sm font-label-md text-label-md text-on-surface-variant border-b border-outline-variant w-10"></th>
+<th class="p-sm font-label-md text-label-md text-on-surface-variant border-b border-outline-variant">Filename</th>
+<th class="p-sm font-label-md text-label-md text-on-surface-variant border-b border-outline-variant w-24">Size</th>
+<th class="p-sm font-label-md text-label-md text-on-surface-variant border-b border-outline-variant w-24">Format</th>
+<th class="p-sm font-label-md text-label-md text-on-surface-variant border-b border-outline-variant w-32">Scan Status</th>
+</tr>
+</thead>
+<tbody class="font-mono-sm text-mono-sm divide-y divide-surface-container-low">
+<tr class="hover:bg-surface-container-low transition-colors group cursor-pointer">
+<td class="p-sm text-center text-outline"><span class="material-symbols-outlined text-[18px]">description</span></td>
+<td class="p-sm font-medium text-on-surface group-hover:text-primary transition-colors">global_temp_anomalies_1990_2023.csv</td>
+<td class="p-sm text-on-surface-variant">14.2 MB</td>
+<td class="p-sm text-on-surface-variant">CSV</td>
+<td class="p-sm">
+<span class="inline-flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[14px]">shield</span> Clean
+                                                </span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group cursor-pointer bg-surface/50">
+<td class="p-sm text-center text-outline"><span class="material-symbols-outlined text-[18px]">map</span></td>
+<td class="p-sm font-medium text-on-surface group-hover:text-primary transition-colors">regional_climate_models.nc</td>
+<td class="p-sm text-on-surface-variant">1.8 GB</td>
+<td class="p-sm text-on-surface-variant">NetCDF</td>
+<td class="p-sm">
+<span class="inline-flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[14px]">shield</span> Clean
+                                                </span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group cursor-pointer bg-error-container/5 border-l-2 border-error">
+<td class="p-sm text-center text-outline"><span class="material-symbols-outlined text-[18px]">code</span></td>
+<td class="p-sm font-medium text-on-surface group-hover:text-primary transition-colors">analysis_scripts.zip</td>
+<td class="p-sm text-on-surface-variant">245 KB</td>
+<td class="p-sm text-on-surface-variant">ZIP</td>
+<td class="p-sm">
+<span class="inline-flex items-center gap-1 text-error">
+<span class="material-symbols-outlined text-[14px]">warning</span> Flagged
+                                                </span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group cursor-pointer bg-surface/50">
+<td class="p-sm text-center text-outline"><span class="material-symbols-outlined text-[18px]">picture_as_pdf</span></td>
+<td class="p-sm font-medium text-on-surface group-hover:text-primary transition-colors">methodology_supplement.pdf</td>
+<td class="p-sm text-on-surface-variant">2.1 MB</td>
+<td class="p-sm text-on-surface-variant">PDF</td>
+<td class="p-sm">
+<span class="inline-flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[14px]">shield</span> Clean
+                                                </span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group cursor-pointer">
+<td class="p-sm text-center text-outline"><span class="material-symbols-outlined text-[18px]">data_object</span></td>
+<td class="p-sm font-medium text-on-surface group-hover:text-primary transition-colors">metadata_schema.json</td>
+<td class="p-sm text-on-surface-variant">12 KB</td>
+<td class="p-sm text-on-surface-variant">JSON</td>
+<td class="p-sm">
+<span class="inline-flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[14px]">shield</span> Clean
+                                                </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-sm border-t border-surface-container-low bg-surface flex justify-between items-center text-body-sm text-on-surface-variant shrink-0">
+<span>Showing 5 of 5 files</span>
+<span>Total Size: 1.81 GB</span>
+</div>
+</section>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Bottom Right Branding -->
+<div class="fixed bottom-4 right-4 flex items-center gap-sm bg-surface-container-lowest p-2 rounded-lg shadow-md border border-outline-variant z-50">
+<div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center text-on-primary-container shrink-0">
+<span class="material-symbols-outlined text-[18px]" data-weight="fill" style="font-variation-settings: 'FILL' 1;">folder_special</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface leading-tight">Global Repo</span>
+<span class="text-[10px] text-on-surface-variant leading-tight">Enterprise Tier</span>
+</div>
+</div>
+</body></html>
