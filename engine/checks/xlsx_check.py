@@ -6,14 +6,14 @@ header preview and a 'likely non-tabular' heuristic.
 """
 
 from pathlib import Path
-from typing import List
 
+from engine.checks._util import pii_result
 from engine.checks.base import Check, CheckResult
 
 
-def _sheet_headers(workbook, sheet_name: str, max_cols: int = 5) -> tuple[List[str], bool]:
+def _sheet_headers(workbook, sheet_name: str, max_cols: int = 5) -> tuple[list[str], bool]:
     worksheet = workbook[sheet_name]
-    headers: List[str] = []
+    headers: list[str] = []
     for row in worksheet.iter_rows(min_row=1, max_row=1, max_col=max_cols, values_only=True):
         headers = [str(c) if c is not None else "" for c in row]
     messy = len(headers) <= 1 or any(
@@ -28,12 +28,12 @@ class XlsxCheck(Check):
     check_id = "format.xlsx"
     extensions = {".xlsx", ".xlsm", ".xls"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         from engine.checks._util import skipped as _skipped
 
         name = path.name
@@ -42,6 +42,8 @@ class XlsxCheck(Check):
         is_legacy = suffix == ".xls"
 
         if is_legacy:
+            from engine.checks._util import skipped as _skipped_pii
+
             return [
                 CheckResult(
                     check_id="format.xlsx.openable",
@@ -68,6 +70,10 @@ class XlsxCheck(Check):
                     "format.xlsx.tabular",
                     f"{name}: tabular scan skipped (legacy .xls)",
                 ),
+                _skipped_pii(
+                    "format.xlsx.pii",
+                    f"{name}: PII scan skipped (legacy .xls)",
+                ),
             ]
 
         try:
@@ -93,6 +99,10 @@ class XlsxCheck(Check):
                     "format.xlsx.tabular",
                     f"{name}: tabular scan skipped (openpyxl not installed)",
                 ),
+                _skipped(
+                    "format.xlsx.pii",
+                    f"{name}: PII scan skipped (openpyxl not installed)",
+                ),
             ]
 
         workbook = openpyxl.load_workbook(str(path), read_only=True, keep_links=False)
@@ -102,6 +112,15 @@ class XlsxCheck(Check):
 
             sheets = []
             messy_sheets = []
+            pii_findings = []
+            try:
+                from engine.constants import CAPS as _CAPS
+
+                _PII_ROWS = _CAPS.pii_sample_rows
+            except Exception:  # pragma: no cover
+                _PII_ROWS = 1_000
+            from engine.checks._util import find_pii as _find_pii_text
+
             for sheet_name in sheet_names:
                 # Cache worksheet handle (was: 3x workbook[s] lookups per sheet).
                 ws = workbook[sheet_name]
@@ -113,6 +132,15 @@ class XlsxCheck(Check):
                 sheets.append({"name": sheet_name, "dimensions": dims})
                 if messy:
                     messy_sheets.append(sheet_name)
+                # PII sample: first pii_sample_rows data rows (header skipped).
+                for row_idx, row in enumerate(
+                    ws.iter_rows(min_row=2, values_only=True), start=2
+                ):
+                    if row_idx - 1 > _PII_ROWS:
+                        break
+                    cells = [str(c) for c in row if c is not None]
+                    if cells:
+                        pii_findings.extend(_find_pii_text(" ".join(cells)))
         finally:
             workbook.close()
 
@@ -199,4 +227,20 @@ class XlsxCheck(Check):
                     details={"sheets_checked": len(sheet_names)},
                 )
             )
+
+        seen_pii = set()
+        unique_pii = []
+        for item in pii_findings:
+            key = (item["type"], item["value"])
+            if key not in seen_pii:
+                seen_pii.add(key)
+                unique_pii.append(item)
+        results.append(
+            pii_result(
+                "format.xlsx.pii",
+                name,
+                unique_pii,
+                scope=f"(first {_PII_ROWS} rows per sheet)",
+            )
+        )
         return results

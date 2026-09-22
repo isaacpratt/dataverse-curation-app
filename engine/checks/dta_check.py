@@ -1,14 +1,13 @@
 """Stata (.dta) inspection.
 
 Port of CUR_Res_CurationTools Scripts/Inspect_dta_Script.R (metadata quality
-and PII): dictionary extraction, label coverage, non-ASCII scan and an email
-(PII) scan on character columns.
+and PII): dictionary extraction, label coverage, non-ASCII scan and a
+structured-PII scan on character columns (piigex + CA pack).
 """
 
 from pathlib import Path
-from typing import List
 
-from engine.checks._util import find_emails
+from engine.checks._util import find_pii, pii_result
 from engine.checks.base import Check, CheckResult
 
 _ROW_LIMIT = 100
@@ -25,12 +24,19 @@ def _has_non_ascii(frame) -> bool:
 
 
 def _find_pii(frame) -> list:
-    found = set()
+    found = []
     for column in frame.columns:
         for value in frame[column].dropna().head(_ROW_LIMIT):
             if isinstance(value, str):
-                found.update(find_emails(value))
-    return sorted(found)
+                found.extend(find_pii(value))
+    seen = set()
+    unique = []
+    for item in found:
+        key = (item["type"], item["value"])
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    return unique
 
 
 class DtaCheck(Check):
@@ -39,12 +45,12 @@ class DtaCheck(Check):
     check_id = "format.stata"
     extensions = {".dta"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         try:
             import pyreadstat
         except ImportError:
@@ -161,17 +167,10 @@ class DtaCheck(Check):
             ),
         )
 
-        pii_addresses = _find_pii(frame)
-        pii = CheckResult(
-            check_id="format.stata.pii",
-            level="warning" if pii_addresses else "info",
-            passed=not pii_addresses,
-            message=(
-                f"{name}: possible email addresses found "
-                f"({', '.join(pii_addresses[:3])}...)"
-                if pii_addresses
-                else f"{name}: no email addresses detected"
-            ),
-            details={"emails": pii_addresses[:10]},
+        pii = pii_result(
+            "format.stata.pii",
+            name,
+            _find_pii(frame),
+            scope=f"first {_ROW_LIMIT} rows",
         )
         return [openable, dictionary, labels_check, encoding, pii]

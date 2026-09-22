@@ -6,7 +6,6 @@ value labels) and a non-ASCII encoding scan over character columns.
 """
 
 from pathlib import Path
-from typing import List
 
 from engine.checks.base import Check, CheckResult
 
@@ -56,7 +55,7 @@ class Sas7bdatCheck(Check):
     check_id = "format.sas"
     extensions = {".sas7bdat", ".xpt"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         # Per-file isolation like every other check (_detect_format opens the
         # file outside the guarded _read, so a raw OSError must not kill the
         # batch — run_per_file converts it to a finding).
@@ -64,7 +63,7 @@ class Sas7bdatCheck(Check):
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         try:
             import pyreadstat  # noqa: F401  ensure available before format detection
         except ImportError:

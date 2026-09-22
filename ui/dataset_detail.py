@@ -11,11 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QProgressBar,
@@ -30,30 +29,24 @@ from PySide6.QtWidgets import (
 from config import Config
 from dataverse_client import DataverseClient
 from download_manager import DownloadManager
-from metadata_check import DEFAULT_PROFILE, PROFILES, check_metadata_completeness
+from metadata_check import DEFAULT_PROFILE, PROFILES
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.download_dialog import DownloadApprovalDialog
 from ui.theme import (
     ERROR,
     ERROR_CONTAINER,
     ON_ERROR_CONTAINER,
-    ON_SURFACE,
     ON_SURFACE_VARIANT,
     OUTLINE_VARIANT,
     PRIMARY,
-    PRIMARY_CONTAINER,
-    SECONDARY_CONTAINER,
     SURFACE_CONTAINER,
     SURFACE_CONTAINER_LOW,
-    SURFACE_CONTAINER_LOWEST,
     SURFACE_VARIANT,
-    TERTIARY,
     action_button_style,
     enable_list_copy,
     label_badge_style,
     selectable_labels,
 )
-from ui.workers import CheckWorker, DownloadWorker, MetadataWorker
 from ui.widgets import (
     AppButton,
     AppTable,
@@ -63,6 +56,7 @@ from ui.widgets import (
     make_combo,
     make_search_field,
 )
+from ui.workers import CheckWorker, DownloadWorker, MetadataWorker
 
 
 def _human_size(n: int) -> str:
@@ -144,7 +138,7 @@ def _manifest_display_for_entry(e: dict) -> tuple[str, int, str]:
 
 
 def _pill_state(version_state: str, in_review: bool = False) -> tuple[str, str]:
-    """Same words as the dashboard status column (Draft/Published/In Review)."""
+    """Return the same words as the dashboard status column (Draft/Published/In Review)."""
     s = (version_state or "").upper()
     if s == "DRAFT":
         if in_review:
@@ -1205,9 +1199,12 @@ class DatasetDetailView(QWidget):
             pass
 
     def _reset_table_view(self, name: str, header) -> bool:
-        """Reset a tracked table to its construction view (widths/order/
-        visibility/sort). Clears the persisted entry so the reset survives
-        restarts. Returns True when a snapshot was applied."""
+        """Reset a tracked table to its construction view.
+
+        Restores widths/order/visibility/sort. Clears the persisted entry
+        so the reset survives restarts. Returns True when a snapshot was
+        applied.
+        """
         try:
             from storage import apply_table_view, clear_table_state
 
@@ -1572,12 +1569,6 @@ class DatasetDetailView(QWidget):
         total = int(diff.get("total_changes") or 0)
         meta = diff.get("metadata_changes") or []
         terms = diff.get("terms_changes") or []
-        n_files = (
-            len(diff.get("files_added") or [])
-            + len(diff.get("files_removed") or [])
-            + len(diff.get("files_replaced") or [])
-            + len(diff.get("file_changes") or [])
-        )
         self._version_summary.setText(f"{n_versions} version(s) · v{old_num} → Draft · {total} change(s)")
         if total == 0:
             self._version_placeholder(f"No changes since v{old_num} — the draft matches the published version.")
@@ -1997,7 +1988,7 @@ class DatasetDetailView(QWidget):
             badge_bg = ERROR_CONTAINER
             badge_fg = ON_ERROR_CONTAINER
         elif passed and level == "warning" and "Missing" in (badge or desc):
-            frame.setStyleSheet(f"QFrame {{ background: #fff0ef; border: 1px solid #ffb4ab; border-radius: 8px; }}")
+            frame.setStyleSheet("QFrame { background: #fff0ef; border: 1px solid #ffb4ab; border-radius: 8px; }")
             icon_name, icon_color = "octagon-alert", "#d97706"
             badge_text = badge or "WARN"
             badge_bg = ERROR_CONTAINER
@@ -2119,7 +2110,7 @@ class DatasetDetailView(QWidget):
         return None
 
     def _is_staged(self, path: str) -> bool:
-        """True when the inventory path is staged locally.
+        """Check whether the inventory path is staged locally.
 
         Checks the exact directoryLabel path first, then falls back to a
         basename match anywhere under files_dir: server bundles have not
@@ -2262,8 +2253,8 @@ class DatasetDetailView(QWidget):
         self._apply_file_filter_internal()
 
     def _apply_file_filter_internal(self) -> None:
-        from ui.checks_tree import build_tree_model, matches_status_filter
         from engine.status import classify
+        from ui.checks_tree import build_tree_model, matches_status_filter
 
         filt = (self._file_filter.text() or "").lower().strip()
         try:
@@ -2347,7 +2338,7 @@ class DatasetDetailView(QWidget):
             pass
 
     def _tree_has_collapsed(self) -> bool:
-        """True when any expandable manifest node is currently collapsed."""
+        """Check whether any expandable manifest node is currently collapsed."""
         try:
             model = self._file_tree.model()
             if model is None or model.rowCount() == 0:
@@ -2684,7 +2675,7 @@ class DatasetDetailView(QWidget):
     def _decision_choices(self) -> tuple[list[str], bool]:
         """(options, from_labels): instance curation labels when known."""
         try:
-            allowed = [str(l).strip() for l in ((self._curation or {}).get("allowed") or []) if str(l).strip()]
+            allowed = [str(lbl).strip() for lbl in ((self._curation or {}).get("allowed") or []) if str(lbl).strip()]
         except Exception:
             allowed = []
         if allowed:
@@ -2839,7 +2830,7 @@ class DatasetDetailView(QWidget):
 
     # -- checks cache ------------------------------------------------------
     def _cached_report_path(self) -> Path:
-        """Fixed cache path inside the dataset's curation workspace folder."""
+        """Return the fixed cache path inside the dataset's curation workspace folder."""
         return self._dl_mgr.dataset_dir(self._pid) / "checks-report.json"
 
     def _load_cached_report(self):

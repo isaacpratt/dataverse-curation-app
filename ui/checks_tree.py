@@ -27,7 +27,7 @@ the Scan column and a details tooltip.
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
-from engine.status import classify, file_status, status_label
+from engine.status import classify, status_label
 from ui.icons import file_icon, icon, status_icon
 
 COLUMNS = ["Name", "Size", "Format", "Scan"]

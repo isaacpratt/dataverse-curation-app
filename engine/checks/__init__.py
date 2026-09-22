@@ -4,29 +4,30 @@ See docs/engine-port.md for port status and docs/report-contract.md for the
 check_id namespaces.
 """
 
-from engine.checks.base import Check, CheckResult
 from engine.checks import (
-    extensions_check,
-    csv_check,
-    xlsx_check,
-    sav_check,
-    sas7bdat_check,
-    dta_check,
-    json_check,
-    xml_check,
-    ipynb_check,
-    sqlite_check,
-    hdf5_check,
-    nc_check,
-    gpkg_check,
-    tiff_check,
-    images_check,
-    pdf_check,
-    text_check,
     code_check,
     containers_check,
+    csv_check,
+    dta_check,
+    extensions_check,
     fastq_check,
+    gpkg_check,
+    hdf5_check,
+    images_check,
+    ipynb_check,
+    json_check,
+    nc_check,
+    pdf_check,
+    sas7bdat_check,
+    sav_check,
+    secret_check,
+    sqlite_check,
+    text_check,
+    tiff_check,
+    xlsx_check,
+    xml_check,
 )
+from engine.checks.base import Check, CheckResult
 
 _MODULES = (
     extensions_check,
@@ -47,6 +48,7 @@ _MODULES = (
     pdf_check,
     text_check,
     code_check,
+    secret_check,
     containers_check,
     fastq_check,
 )

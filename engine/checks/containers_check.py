@@ -9,7 +9,6 @@ a content listing. Formats without a native Python reader are reported as
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import List
 
 from engine.checks.base import Check, CheckResult
 
@@ -22,7 +21,7 @@ _MAX_UNCOMPRESSED_BYTES = 2 << 30
 
 
 def _unsafe_entry(name: str) -> bool:
-    """Zip-slip style traversal: absolute path or `..` segment.
+    r"""Zip-slip style traversal: absolute path or `..` segment.
 
     Covers POSIX + Windows forms: drive-absolute (C:\\…), backslash
     separators, and leading ~/.
@@ -46,12 +45,12 @@ class ContainersCheck(Check):
     check_id = "format.containers"
     extensions = {".zip", ".tar", ".tgz", ".tbz2", ".7z", ".rar", ".gz", ".bz2", ".xz"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         name = path.name
         suffixes = [s.lower() for s in path.suffixes]
         suffix = suffixes[-1] if suffixes else ""
@@ -84,7 +83,7 @@ class ContainersCheck(Check):
             ),
         ]
 
-    def _inspect_zip(self, path: Path) -> List[CheckResult]:
+    def _inspect_zip(self, path: Path) -> list[CheckResult]:
         from engine.checks._util import skipped as _skipped
 
         name = path.name
@@ -196,7 +195,7 @@ class ContainersCheck(Check):
             )
         return results
 
-    def _inspect_tar(self, path: Path) -> List[CheckResult]:
+    def _inspect_tar(self, path: Path) -> list[CheckResult]:
         from engine.checks._util import skipped as _skipped
 
         name = path.name

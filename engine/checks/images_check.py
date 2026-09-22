@@ -11,7 +11,6 @@ images still validate instead of reporting "Missing".
 
 import struct
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 from engine.checks.base import Check, CheckResult
 
@@ -19,7 +18,7 @@ from engine.checks.base import Check, CheckResult
 _STDLIB_HEADER_BYTES = 1 << 20
 
 
-def _parse_png(data: bytes) -> Optional[Tuple[int, int, str]]:
+def _parse_png(data: bytes) -> tuple[int, int, str] | None:
     # 8-byte signature + IHDR chunk (width/height BE uint32).
     if len(data) < 33 or data[:8] != b"\x89PNG\r\n\x1a\n":
         return None
@@ -36,7 +35,7 @@ def _parse_png(data: bytes) -> Optional[Tuple[int, int, str]]:
         return None
 
 
-def _parse_gif(data: bytes) -> Optional[Tuple[int, int, str]]:
+def _parse_gif(data: bytes) -> tuple[int, int, str] | None:
     if len(data) < 10 or data[:6] not in (b"GIF87a", b"GIF89a"):
         return None
     try:
@@ -48,7 +47,7 @@ def _parse_gif(data: bytes) -> Optional[Tuple[int, int, str]]:
         return None
 
 
-def _parse_bmp(data: bytes) -> Optional[Tuple[int, int, str]]:
+def _parse_bmp(data: bytes) -> tuple[int, int, str] | None:
     if len(data) < 30 or data[:2] != b"BM":
         return None
     try:
@@ -63,7 +62,7 @@ def _parse_bmp(data: bytes) -> Optional[Tuple[int, int, str]]:
         return None
 
 
-def _parse_jpeg(data: bytes) -> Optional[Tuple[int, int, str]]:
+def _parse_jpeg(data: bytes) -> tuple[int, int, str] | None:
     # SOI + scan markers for SOFn (frame header holds dimensions).
     if len(data) < 4 or data[:2] != b"\xff\xd8":
         return None
@@ -108,7 +107,7 @@ def _parse_jpeg(data: bytes) -> Optional[Tuple[int, int, str]]:
         return None
 
 
-def _parse_webp(data: bytes) -> Optional[Tuple[int, int, str]]:
+def _parse_webp(data: bytes) -> tuple[int, int, str] | None:
     if len(data) < 12 or data[:4] != b"RIFF" or data[8:12] != b"WEBP":
         return None
     try:
@@ -146,7 +145,7 @@ def _parse_webp(data: bytes) -> Optional[Tuple[int, int, str]]:
         return None
 
 
-def _stdlib_image_result(path: Path) -> List[CheckResult]:
+def _stdlib_image_result(path: Path) -> list[CheckResult]:
     """Validate common rasters without Pillow (header-only, no decode)."""
     name = path.name
     suffix = path.suffix.lower()
@@ -182,7 +181,7 @@ def _stdlib_image_result(path: Path) -> List[CheckResult]:
                 message=f"{name}: unreadable ({exc})",
             )
         ]
-    parsed: Optional[Tuple[int, int, str]] = None
+    parsed: tuple[int, int, str] | None = None
     fmt = suffix.lstrip(".").upper() or "IMAGE"
     if suffix in (".jpg", ".jpeg"):
         parsed = _parse_jpeg(data)
@@ -258,12 +257,12 @@ class ImagesCheck(Check):
     check_id = "format.images"
     extensions = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         try:
             from PIL import Image, ImageFile  # type: ignore
 

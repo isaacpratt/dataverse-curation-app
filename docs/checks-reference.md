@@ -22,6 +22,8 @@ the check reports `level="warning"` + `passed=True` +
 "Missing: pip install … — check not executed"
 instead of failing (shown as `MISSING`/`WARN` in the Curation checks tab).
 (`scipy`/`.mat` has no check module at all — see `unchecked_types` above.)
+Secret and PII scanners (`hush-scan`, `piigex`) are **required** and bundled in
+both lite and full builds — they never report as missing.
 
 ## What PASS means (two contexts)
 
@@ -34,25 +36,28 @@ instead of failing (shown as `MISSING`/`WARN` in the Curation checks tab).
   `FAIL` badge = an `error`-level finding. `○ SKIPPED` = the sub-check could
   not run (`details.skipped`, e.g. missing lib, encrypted PDF, legacy `.xls`,
   size caps) — distinct from a pass. Every module emits all owned IDs every
-  run, so passes like "No zero-byte files" and "no email addresses" are
-  visible in the manifest tree and the Markdown report.
+  run, so passes like "No zero-byte files" and "no PII values detected" are
+  visible in the manifest tree and the Markdown report. Findings lists in
+  `details` are capped (`secret_max_listed` / `pii_max_samples`); the message
+  says explicitly e.g. `showing first 10 of 47 sample(s)` and `details.count`
+  always carries the full total.
 
 ## Issue taxonomy by level
 
 | Level | Meaning | Typical examples |
 |---|---|---|
 | `info` | No action expected; confirms health | File parsed OK + encoding; extension census; NetCDF variable count; consistent CSV columns |
-| `warning` | Curator should review; likely needs a fix or a note to the researcher | Ragged CSV rows; duplicate rows; email addresses (PII) in tabular/text; non-ASCII filenames; executables (`.exe/.bat`); hidden Excel sheets or macros; notebook with unexecuted cells; PDF without extractable text; mixed line endings; TODO markers in code; external HDF5 links; system junk (`Thumbs.db`, `__MACOSX`) |
+| `warning` | Curator should review; likely needs a fix or a note to the researcher | Ragged CSV rows; duplicate rows; structured PII (email, SSN/SIN, cards, postal codes, …) in tabular/text; potential secrets in code/text/config (`format.secrets`); non-ASCII filenames; executables (`.exe/.bat`); hidden Excel sheets or macros; notebook with unexecuted cells; PDF without extractable text; mixed line endings; TODO markers in code; external HDF5 links; system junk (`Thumbs.db`, `__MACOSX`) |
 | `error` | Data integrity problem | Empty (0-byte) file; unparseable CSV/JSON/XML/notebook; corrupt zip/tar; unreadable SPSS/Stata/SAS; missing GeoPackage geometry tables; truncated image; checksum mismatch on download |
 
 ## Per-format checks
 
 | Module | Check IDs | What it examines | Notable findings |
 |---|---|---|---|
-| `csv_check` | `format.csv.openable/structure/content/pii` | Encoding, delimiter sniffing, ragged rows, missing cells, duplicate rows, email scan (1k-row sample); full parse capped at 50k rows (`truncated: true` when sampled) | Ragged rows (warning), duplicates (warning), emails = possible PII (warning) |
-| `xlsx_check` | `format.xlsx.openable/sheets/hidden/macros/tabular` | Workbook opens, sheet list, hidden sheets, VBA macros, tabular shape | Hidden sheets, macros (warning — preservation risk) |
+| `csv_check` | `format.csv.openable/structure/content/pii` | Encoding, delimiter sniffing, ragged rows, missing cells, duplicate rows, structured-PII scan (piigex + CA postal/SIN) on a 1k-row sample; full parse capped at 50k rows (`truncated: true` when sampled) | Ragged rows (warning), duplicates (warning), PII values = possible personal data (warning) |
+| `xlsx_check` | `format.xlsx.openable/sheets/hidden/macros/tabular/pii` | Workbook opens, sheet list, hidden sheets, VBA macros, tabular shape, structured-PII sample (first 1k data rows per sheet) | Hidden sheets, macros (warning — preservation risk), PII values (warning) |
 | `sav_check` (`pyreadstat`) | `format.spss.openable/dictionary/encoding/labels` | SPSS opens, variable dictionary, encoding, value labels | Unreadable file (error), missing labels |
-| `dta_check` (`pyreadstat`) | `format.stata.*` (also `pii`) | As SPSS plus email scan | Same family + PII |
+| `dta_check` (`pyreadstat`) | `format.stata.*` (also `pii`) | As SPSS plus structured-PII scan (piigex + CA pack) on character columns | Same family + PII |
 | `sas7bdat_check` (`pyreadstat`) | `format.sas.format_detected/openable/dictionary/encoding/labels` | 128-byte `SAS FILE` magic, then as SPSS | Non-SAS file with `.sas7bdat` extension |
 | `json_check` | `format.json.valid` | Strict parse (files over 64 MiB get a too-large warning instead of a full parse) | Unparseable JSON (error) |
 | `xml_check` (`lxml`) | `format.xml.valid` | Well-formedness | Malformed XML (error) |
@@ -64,8 +69,9 @@ instead of failing (shown as `MISSING`/`WARN` in the Curation checks tab).
 | `tiff_check` (`tifffile`) | `format.tiff.valid` | Header/pages parse | Corrupt TIFF (error) |
 | `images_check` (`Pillow`) | `format.images.valid` | Raster opens, mode/size | Unreadable/truncated image (error) |
 | `pdf_check` (`pypdf`) | `format.pdf.openable/text` | Opens, page count, extractable text sampled on the first 3 pages | No extractable text on sampled pages — scanned PDF needing OCR (warning) |
-| `text_check` | `format.text.readable/line_endings/control_chars` | Encoding, line-ending mix, control characters | Mixed endings, control chars (warning) |
+| `text_check` | `format.text.readable/line_endings/control_chars/pii` | Encoding, line-ending mix, control characters, structured-PII scan on the 1 MiB sample | Mixed endings, control chars, PII values (warning) |
 | `code_check` | `format.code.readable/todo_markers` | Readable text (first 1 MiB), TODO/FIXME scan | TODO markers (warning) |
+| `secret_check` | `format.secrets` | hush-scan (regex + entropy) over the first **5 MiB** of code/text/config files (`.py .r .do .md .yml .env …`) | Potential secrets: API keys, tokens, private keys, high-entropy strings (warning); findings list capped at 20 with explicit “showing first N of M” copy |
 | `containers_check` | `format.containers.valid/unsafe_entry/encrypted` | Zip integrity (`testzip`), tar members, traversal (`..`/absolute) entries, encrypted entries; inspection capped at 10k members / 2 GiB uncompressed | Corrupt archive (error), traversal entries + encrypted members (warning) |
 | `fastq_check` | `format.fastq.valid/metadata` | Gzip-aware 4-line record validation (header/`+`/seq-qual length agreement), read length/GC on capped sample | Malformed records incl. length mismatches (warning), no valid reads (error) |
 | `extensions_check` (dataset) | `inventory.extensions/zero_byte/executables/system_junk` | Extension census, 0-byte files, executables, OS junk (nested `__MACOSX` dirs included) | 0-byte (error), executables/junk (warning) |

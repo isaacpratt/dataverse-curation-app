@@ -2,7 +2,8 @@
 
 Palette is Material 3-like: primary #004ccd, tertiary #4142cf, error #ba1a1a,
 surface #faf8ff, backgrounds #f2f3ff/#eaedff, outline-variant #c3c6d8.
-Typography is Inter (body) + JetBrains Mono (monospace)."""
+Typography is Inter (body) + JetBrains Mono (monospace).
+"""
 
 # --- Colors ---
 PRIMARY = "#004ccd"
@@ -666,8 +667,10 @@ def label_badge_colors(label: str) -> tuple[str, str, str]:
 
 
 def label_badge_style(label: str) -> str:
-    """Inline badge face with DOI-badge chrome (bordered 8px box) in the
-    label's own colors. Inline so it always paints (see action_button_style).
+    """Build an inline badge face with DOI-badge chrome (bordered 8px box).
+
+    Uses the label's own colors. Inline so it always paints (see
+    action_button_style).
     """
     bg, fg, border = label_badge_colors(label)
     return (

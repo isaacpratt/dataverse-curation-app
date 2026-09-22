@@ -6,7 +6,6 @@ file set as a whole (e.g. inventory.extensions, dataset.filename_policy).
 """
 
 from pathlib import Path
-from typing import Type
 
 from engine.checks import registry
 from engine.checks.base import Check
@@ -40,10 +39,10 @@ def _match_suffixes(path: Path) -> set[str]:
     return set(suffixes) or {path.suffix.lower()}
 
 
-def checks_for_file(path: Path) -> list[Type[Check]]:
+def checks_for_file(path: Path) -> list[type[Check]]:
     wanted = _match_suffixes(path)
     return [cls for cls in registry.values() if wanted & set(cls.extensions)]
 
 
-def dataset_level_checks() -> list[Type[Check]]:
+def dataset_level_checks() -> list[type[Check]]:
     return [cls for cls in registry.values() if not cls.extensions]

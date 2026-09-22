@@ -93,16 +93,20 @@ Serialization: `CheckResult.to_dict()` / `from_dict()` (identity).
 
 `passed` is always present: `true` = the check succeeded / policy met; `false` = the check found a violation. An `info` check is typically `passed: true` with details. A “check not executed” for a missing optional lib is `level="warning"` + `passed=True` with `message` noting `pip install …` plus `details.skipped=True` (explicit SKIPPED state — see `engine/status.py:classify`). Sub-checks that cannot run (encrypted input, size caps, legacy formats, unreadable files) use the same `warning`+`passed`+`details.skipped` shape via `_util.skipped()`.
 
-Always-emit contract: when a module runs on a file (or dataset), it emits exactly one `CheckResult` per owned `check_id` — passes included (e.g. `inventory.zero_byte` reports "No zero-byte files", `format.csv.pii` reports "no email addresses"). Absent IDs mean the module never ran, not a silent pass.
+Always-emit contract: when a module runs on a file (or dataset), it emits exactly one `CheckResult` per owned `check_id` — passes included (e.g. `inventory.zero_byte` reports "No zero-byte files", `format.csv.pii` reports "no PII values detected"). Absent IDs mean the module never ran, not a silent pass.
+
+### Finding-list caps (secrets / PII)
+
+`details` may cap long finding lists while `details.count` keeps the full total. The human-readable `message` always says when truncation happened, e.g. `analysis.py: 115 potential secret(s) — showing first 20 of 115` or `data.csv: 47 possible PII value(s) — showing first 10 of 47 sample(s)`.
 
 ## Check ID namespaces
 
 | Namespace | Examples | Scope |
 | --- | --- | --- |
 | `inventory.*` | `inventory.extensions`, `inventory.zero_byte`, `inventory.executables`, `inventory.system_junk` | dataset-level |
-| `format.<format>.*` | `format.csv.structure`, `format.gpkg.layers`, `format.pdf.text` | per-file |
+| `format.<format>.*` | `format.csv.structure`, `format.gpkg.layers`, `format.pdf.text`, `format.secrets` | per-file |
 
-Registered checks live in `engine/checks/__init__.py:registry` (20 modules); see `docs/engine-port.md` and `docs/checks-reference.md`. `engine/runner.py:list_planned_checks` enumerates which IDs will run for a file list before execution — displayed in the **Auto-Checks** card as planned badges, then as results.
+Registered checks live in `engine/checks/__init__.py:registry` (21 modules); see `docs/engine-port.md` and `docs/checks-reference.md`. `engine/runner.py:list_planned_checks` enumerates which IDs will run for a file list before execution — displayed in the **Auto-Checks** card as planned badges, then as results.
 
 ## Serialization
 

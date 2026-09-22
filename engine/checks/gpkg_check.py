@@ -8,7 +8,6 @@ geospatial stack is required.
 
 import sqlite3
 from pathlib import Path
-from typing import List
 
 from engine.checks.base import Check, CheckResult
 
@@ -33,14 +32,14 @@ class GpkgCheck(Check):
     check_id = "format.gpkg"
     extensions = {".gpkg"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         # Per-file isolation like every other check: one bad file must not
         # kill the whole batch (run_per_file converts faults to findings).
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         from engine.checks._util import quoted_ident
         from engine.checks._util import skipped as _skipped
 

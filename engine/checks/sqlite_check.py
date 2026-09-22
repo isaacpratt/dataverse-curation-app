@@ -6,7 +6,6 @@ check plus a manifest of tables with row counts.
 
 import sqlite3
 from pathlib import Path
-from typing import List
 
 from engine.checks.base import Check, CheckResult
 
@@ -19,12 +18,12 @@ class SqliteCheck(Check):
     check_id = "format.sqlite"
     extensions = {".sqlite", ".sqlite3", ".db"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         from engine.checks._util import quoted_ident, sqlite_uri
 
         name = path.name

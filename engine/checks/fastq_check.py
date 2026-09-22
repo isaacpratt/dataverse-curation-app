@@ -7,7 +7,6 @@ content on a sample. Transparently handles gzip-compressed files.
 
 import gzip
 from pathlib import Path
-from typing import List
 
 from engine.checks.base import Check, CheckResult
 
@@ -26,7 +25,7 @@ def _open_text(path: Path):
         magic = probe.read(2)
     if magic == b"\x1f\x8b":
         return gzip.open(str(path), "rt", encoding="ascii", errors="replace")
-    return open(str(path), "r", encoding="ascii", errors="replace")
+    return open(str(path), encoding="ascii", errors="replace")
 
 
 class FastqCheck(Check):
@@ -35,12 +34,12 @@ class FastqCheck(Check):
     check_id = "format.fastq"
     extensions = {".fastq", ".fq"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         name = path.name
         reads = 0
         total_length = 0

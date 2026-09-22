@@ -5,9 +5,8 @@ detection, mixed line endings and non-printable control characters.
 """
 
 from pathlib import Path
-from typing import List
 
-from engine.checks._util import detect_encoding
+from engine.checks._util import detect_encoding, find_pii, pii_result
 from engine.checks.base import Check, CheckResult
 
 _SAMPLE_BYTES = 1 << 20
@@ -23,12 +22,12 @@ class TextCheck(Check):
     check_id = "format.text"
     extensions = {".txt", ".md", ".rst", ".log"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         from engine.checks._util import skipped as _skipped
 
         name = path.name
@@ -48,11 +47,17 @@ class TextCheck(Check):
                     "format.text.control_chars",
                     f"{name}: control-char scan skipped (empty file)",
                 ),
+                _skipped(
+                    "format.text.pii",
+                    f"{name}: PII scan skipped (empty file)",
+                ),
             ]
 
         encoding = detect_encoding(path)
         with open(path, "rb") as handle:
             raw = handle.read(_SAMPLE_BYTES)
+        sampled = path.stat().st_size > _SAMPLE_BYTES
+        text = raw.decode(encoding, errors="replace")
 
         crlf = raw.count(b"\r\n")
         lone_lf = raw.count(b"\n") - crlf
@@ -63,6 +68,8 @@ class TextCheck(Check):
             1 for byte in raw
             if (byte < 32 and byte not in _ALLOWED_CONTROLS) or byte == 127
         )
+
+        pii_findings = find_pii(text)
 
         results = [
             CheckResult(
@@ -117,4 +124,15 @@ class TextCheck(Check):
                     details={"count": 0},
                 )
             )
+        results.append(
+            pii_result(
+                "format.text.pii",
+                name,
+                pii_findings,
+                scope=(
+                    "(sampled first 1 MiB)" if sampled else "(full file)"
+                ),
+                extra_details={"sampled": sampled},
+            )
+        )
         return results

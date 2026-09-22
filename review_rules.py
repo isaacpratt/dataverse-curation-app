@@ -40,13 +40,13 @@ import fnmatch
 import json as _json
 import re
 from pathlib import Path as _Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 RULESETS_VERSION = 2
 
 # Memo for load_rulesets(): {"sig": (path, mtime_ns, size), "pool": {...}}.
 # Shared read-only result — see load_rulesets docstring.
-_RULESETS_MEMO: Dict[str, Any] = {}
+_RULESETS_MEMO: dict[str, Any] = {}
 
 FIELD_LEVELS = ("required", "optional", "unchecked")
 CONTENT_SCOPES = ("filenames", "metadata", "file-content")
@@ -56,7 +56,7 @@ DEFAULT_RULESET_KEY = "mcmaster-default"
 
 # Fallback catalog used when the live metadatablocks schema is unavailable
 # (offline / no permission). The Review-config page prefers the live schema.
-FIELD_CATALOG: List[Dict[str, str]] = [
+FIELD_CATALOG: list[dict[str, str]] = [
     {"block": "citation", "field": "title", "label": "Title"},
     {"block": "citation", "field": "author", "label": "Author Name & Affiliation"},
     {"block": "citation", "field": "datasetContact", "label": "Dataset Contact"},
@@ -92,7 +92,7 @@ def _file_name() -> str:
 
 
 def rulesets_path() -> _Path:
-    """Same location as the legacy profiles file (exe dir when frozen)."""
+    """Return the same location as the legacy profiles file (exe dir when frozen)."""
     try:
         from metadata_check import profiles_path as _legacy
 
@@ -116,9 +116,9 @@ def _mc_req(text: str) -> str:
     return text
 
 
-def _builtin_mcmaster() -> Dict[str, Any]:
+def _builtin_mcmaster() -> dict[str, Any]:
     def fr(block: str, field: str, label: str, level: str, req: str,
-           handler: str = "nonempty", template: str = "") -> Dict[str, Any]:
+           handler: str = "nonempty", template: str = "") -> dict[str, Any]:
         return {
             "block": block, "field": field, "label": label, "level": level,
             "requirement": req, "handler": handler,
@@ -213,7 +213,7 @@ def _builtin_mcmaster() -> Dict[str, Any]:
     }
 
 
-def _builtin_minimal() -> Dict[str, Any]:
+def _builtin_minimal() -> dict[str, Any]:
     # Legacy Minimal rows use raw typeNames + short requirement suffixes —
     # preserved exactly for back-compat.
     specs = [
@@ -242,7 +242,7 @@ def _builtin_minimal() -> Dict[str, Any]:
     }
 
 
-def builtin_rulesets() -> Dict[str, Dict[str, Any]]:
+def builtin_rulesets() -> dict[str, dict[str, Any]]:
     return {"mcmaster-default": _builtin_mcmaster(), "minimal": _builtin_minimal()}
 
 
@@ -250,11 +250,11 @@ def builtin_rulesets() -> Dict[str, Dict[str, Any]]:
 # Load / save
 
 
-def _normalize_ruleset(key: str, raw: Any) -> Dict[str, Any] | None:
+def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         return None
     builtin = builtin_rulesets().get(key, {})
-    out: Dict[str, Any] = {
+    out: dict[str, Any] = {
         "label": str(raw.get("label") or builtin.get("label") or key),
         "description": str(raw.get("description") or builtin.get("description") or ""),
         "dataverses": raw.get("dataverses", builtin.get("dataverses", ["*"])),
@@ -298,7 +298,7 @@ def _normalize_ruleset(key: str, raw: Any) -> Dict[str, Any] | None:
     return out
 
 
-def load_rulesets() -> Dict[str, Dict[str, Any]]:
+def load_rulesets() -> dict[str, dict[str, Any]]:
     """Built-ins overlaid with the v2 file when present. Never raises.
 
     Memoized by file identity (path + mtime + size): completeness evaluates
@@ -337,12 +337,12 @@ def load_rulesets() -> Dict[str, Dict[str, Any]]:
         return base
 
 
-def save_rulesets(rulesets: Dict[str, Dict[str, Any]]) -> _Path:
+def save_rulesets(rulesets: dict[str, dict[str, Any]]) -> _Path:
     import os
     import tempfile
 
     path = rulesets_path()
-    clean: Dict[str, Any] = {}
+    clean: dict[str, Any] = {}
     for key, val in (rulesets or {}).items():
         norm = _normalize_ruleset(str(key), val)
         if norm is not None:
@@ -364,7 +364,7 @@ def save_rulesets(rulesets: Dict[str, Dict[str, Any]]) -> _Path:
     return path
 
 
-def get_ruleset(key: str, rulesets: Dict[str, Dict[str, Any]] | None = None) -> Dict[str, Any]:
+def get_ruleset(key: str, rulesets: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     pool = rulesets if isinstance(rulesets, dict) else load_rulesets()
     if key in pool:
         return pool[key]
@@ -384,12 +384,12 @@ def _norm_base(url: str) -> str:
 
 
 def rulesets_for_dataverse(base_url: str,
-                            rulesets: Dict[str, Dict[str, Any]] | None = None) -> List[Tuple[str, Dict[str, Any]]]:
+                            rulesets: dict[str, dict[str, Any]] | None = None) -> list[tuple[str, dict[str, Any]]]:
     """(key, ruleset) usable for an instance: '*' matches all. Never raises."""
     try:
         pool = rulesets if isinstance(rulesets, dict) else load_rulesets()
         want = _norm_base(base_url)
-        out: List[Tuple[str, Dict[str, Any]]] = []
+        out: list[tuple[str, dict[str, Any]]] = []
         for key, rs in pool.items():
             dvs = rs.get("dataverses") or ["*"]
             norms = {_norm_base(d) for d in dvs if isinstance(d, str)}
@@ -411,7 +411,7 @@ def _mc() -> Any:
     return _m
 
 
-def _blocks(metadata: Dict[str, Any]) -> Dict[str, Any]:
+def _blocks(metadata: dict[str, Any]) -> dict[str, Any]:
     try:
         latest = metadata.get("latestVersion") or {}
         return latest.get("metadataBlocks") or metadata.get("metadataBlocks") or {}
@@ -419,8 +419,8 @@ def _blocks(metadata: Dict[str, Any]) -> Dict[str, Any]:
         return {}
 
 
-def _eval_handler(handler: str, metadata: Dict[str, Any], blocks: Dict[str, Any],
-                  block: str, field: str) -> Tuple[bool, str]:
+def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any],
+                  block: str, field: str) -> tuple[bool, str]:
     m = _mc()
     if handler == "nonempty":
         raw = m._field(blocks, block, field)
@@ -457,7 +457,7 @@ def _eval_handler(handler: str, metadata: Dict[str, Any], blocks: Dict[str, Any]
         if not rel_list:
             return False, "—"
         complete = False
-        displays: List[str] = []
+        displays: list[str] = []
         for entry in rel_list:
             cit = entry.get("publicationCitation", {}).get("value", "") \
                 if isinstance(entry.get("publicationCitation"), dict) else str(entry.get("publicationCitation") or "")
@@ -504,8 +504,8 @@ def _eval_handler(handler: str, metadata: Dict[str, Any], blocks: Dict[str, Any]
     return m._nonempty(raw), m._display_value(raw)
 
 
-def _iter_metadata_strings(metadata: Dict[str, Any]) -> List[str]:
-    out: List[str] = []
+def _iter_metadata_strings(metadata: dict[str, Any]) -> list[str]:
+    out: list[str] = []
 
     def _walk(v: Any) -> None:
         if isinstance(v, str):
@@ -525,7 +525,7 @@ def _iter_metadata_strings(metadata: Dict[str, Any]) -> List[str]:
     return out
 
 
-def _match_filenames(rule: Dict[str, Any], inventory: List[Dict[str, Any]] | None) -> Tuple[bool | None, str]:
+def _match_filenames(rule: dict[str, Any], inventory: list[dict[str, Any]] | None) -> tuple[bool | None, str]:
     """(found | None=pending, evidence). None when the file list is not loaded."""
     if inventory is None:
         return None, "— (load file list to check)"
@@ -577,8 +577,8 @@ def _match_filenames(rule: Dict[str, Any], inventory: List[Dict[str, Any]] | Non
     return False, "No matching file found"
 
 
-def _match_metadata(rule: Dict[str, Any], metadata: Dict[str, Any],
-                    _strings: List[str] | None = None) -> Tuple[bool, str]:
+def _match_metadata(rule: dict[str, Any], metadata: dict[str, Any],
+                    _strings: list[str] | None = None) -> tuple[bool, str]:
     pattern = str(rule.get("pattern") or "")
     if not pattern:
         return False, "—"
@@ -599,7 +599,7 @@ def _match_metadata(rule: Dict[str, Any], metadata: Dict[str, Any],
     return False, "No matching text in metadata"
 
 
-def _match_file_content(rule: Dict[str, Any], staged_dir: Any) -> Tuple[bool | None, str]:
+def _match_file_content(rule: dict[str, Any], staged_dir: Any) -> tuple[bool | None, str]:
     """(found | None=pending, evidence). Pending when nothing is staged.
 
     Runs synchronously (called from the completeness evaluation on the UI
@@ -655,10 +655,10 @@ _MAX_CONTENT_BYTES = 1 << 20
 _MAX_CONTENT_FILE_SIZE = 5 * 1024 * 1024
 
 # Memo for _match_file_content: {(root, sig, pattern, match, case): result}.
-_CONTENT_MEMO: Dict[Any, Tuple[bool | None, str]] = {}
+_CONTENT_MEMO: dict[Any, tuple[bool | None, str]] = {}
 
 
-def _staged_signature(root: Any) -> Tuple[int, int, int] | None:
+def _staged_signature(root: Any) -> tuple[int, int, int] | None:
     """Cheap (count, bytes, max-mtime) fingerprint of a staged tree."""
     try:
         n = total = newest = 0
@@ -680,8 +680,7 @@ def _staged_signature(root: Any) -> Tuple[int, int, int] | None:
         return None
 
 
-def _scan_staged_files(root: Any, pattern: str, match: str, case: bool) -> Tuple[bool | None, str]:
-    from pathlib import Path as _P
+def _scan_staged_files(root: Any, pattern: str, match: str, case: bool) -> tuple[bool | None, str]:
 
     candidates = []
     try:
@@ -727,10 +726,10 @@ def _scan_staged_files(root: Any, pattern: str, match: str, case: bool) -> Tuple
     return False, f"No matching text in {checked} staged file(s)"
 
 
-def evaluate_content_rule(rule: Dict[str, Any], metadata: Dict[str, Any],
-                           inventory: List[Dict[str, Any]] | None,
+def evaluate_content_rule(rule: dict[str, Any], metadata: dict[str, Any],
+                           inventory: list[dict[str, Any]] | None,
                            staged_dir: Any = None,
-                           _metadata_strings: List[str] | None = None) -> Dict[str, Any]:
+                           _metadata_strings: list[str] | None = None) -> dict[str, Any]:
     """Evaluate one content rule across its chosen scopes (OR semantics)."""
     scope = rule.get("scope") if isinstance(rule.get("scope"), list) else ["filenames"]
     scope = [s for s in scope if s in CONTENT_SCOPES] or ["filenames"]
@@ -740,8 +739,8 @@ def evaluate_content_rule(rule: Dict[str, Any], metadata: Dict[str, Any],
     strings = _metadata_strings
     if strings is None and "metadata" in scope:
         strings = _iter_metadata_strings(metadata or {})
-    pending_bits: List[str] = []
-    evidences: List[str] = []
+    pending_bits: list[str] = []
+    evidences: list[str] = []
     for s in scope:
         try:
             if s == "filenames":
@@ -784,11 +783,11 @@ def evaluate_content_rule(rule: Dict[str, Any], metadata: Dict[str, Any],
             "response_template": str(rule.get("response_template") or "")}
 
 
-def evaluate_ruleset(metadata: Dict[str, Any], ruleset: Dict[str, Any],
-                      inventory: List[Dict[str, Any]] | None = None,
-                      staged_dir: Any = None) -> List[Dict[str, Any]]:
+def evaluate_ruleset(metadata: dict[str, Any], ruleset: dict[str, Any],
+                      inventory: list[dict[str, Any]] | None = None,
+                      staged_dir: Any = None) -> list[dict[str, Any]]:
     """Run every enabled rule. 'unchecked' field rules are skipped. Never raises."""
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     try:
         blocks = _blocks(metadata or {})
     except Exception:

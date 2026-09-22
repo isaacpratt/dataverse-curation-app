@@ -21,7 +21,7 @@ def test_markdown_shows_passes_and_inventory(tmp_path):
     assert "inventory.zero_byte" in md
     assert "No zero-byte files" in md
     assert "format.csv.pii" in md
-    assert "no email addresses" in md
+    assert "no PII values detected" in md
     assert "JSON is canonical" in md
 
 

@@ -10,10 +10,10 @@ toggles findings in/out. Placeholders supported in every template:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 
-def _fmt(template: str, ctx: Dict[str, Any]) -> str:
+def _fmt(template: str, ctx: dict[str, Any]) -> str:
     try:
         return str(template or "").format_map(_SafeDict(ctx))
     except Exception:
@@ -35,12 +35,12 @@ def _is_skipped(result: Any) -> bool:
             return False
 
 
-def collect_metadata_sections(ruleset: Dict[str, Any],
-                               completeness: List[Dict[str, Any]],
+def collect_metadata_sections(ruleset: dict[str, Any],
+                               completeness: list[dict[str, Any]],
                                dataset_title: str = "",
-                               persistent_id: str = "") -> List[Dict[str, Any]]:
+                               persistent_id: str = "") -> list[dict[str, Any]]:
     """One section per incomplete, non-pending rule finding."""
-    sections: List[Dict[str, Any]] = []
+    sections: list[dict[str, Any]] = []
     for r in completeness or []:
         try:
             if not isinstance(r, dict):
@@ -72,9 +72,9 @@ def collect_metadata_sections(ruleset: Dict[str, Any],
     return sections
 
 
-def collect_filecheck_sections(ruleset: Dict[str, Any], report: Any) -> List[Dict[str, Any]]:
+def collect_filecheck_sections(ruleset: dict[str, Any], report: Any) -> list[dict[str, Any]]:
     """One section per failed warning/error file or dataset check."""
-    sections: List[Dict[str, Any]] = []
+    sections: list[dict[str, Any]] = []
     if report is None:
         return sections
     templates = {}
@@ -132,20 +132,20 @@ def collect_filecheck_sections(ruleset: Dict[str, Any], report: Any) -> List[Dic
 
 def _severity_tag(level: str) -> str:
     """Human severity label for a section level ('' when not a warning)."""
-    l = str(level or "").lower()
-    if l == "error":
+    lowered = str(level or "").lower()
+    if lowered == "error":
         return "Error"
-    if l == "warning":
+    if lowered == "warning":
         return "Warning"
-    if l == "required":
+    if lowered == "required":
         return "Required"
-    if l in ("optional", "recommended"):
+    if lowered in ("optional", "recommended"):
         return "Recommended"
     return ""
 
 
-def render_response(ruleset: Dict[str, Any],
-                    sections: List[Dict[str, Any]],
+def render_response(ruleset: dict[str, Any],
+                    sections: list[dict[str, Any]],
                     dataset_title: str = "",
                     persistent_id: str = "") -> str:
     """Markdown draft from header + included sections + footer.
@@ -161,7 +161,7 @@ def render_response(ruleset: Dict[str, Any],
                       {"dataset_title": dataset_title, "persistent_id": persistent_id})
     except Exception:
         header, footer = "", ""
-    lines: List[str] = []
+    lines: list[str] = []
     if header.strip():
         lines += [header.strip(), ""]
     included = [s for s in (sections or []) if isinstance(s, dict) and s.get("included")]
@@ -181,11 +181,11 @@ def render_response(ruleset: Dict[str, Any],
     return "\n".join(lines).strip() + "\n"
 
 
-def build_response(ruleset: Dict[str, Any],
-                   completeness: List[Dict[str, Any]] | None,
+def build_response(ruleset: dict[str, Any],
+                   completeness: list[dict[str, Any]] | None,
                    report: Any = None,
                    dataset_title: str = "",
-                   persistent_id: str = "") -> Tuple[str, List[Dict[str, Any]]]:
+                   persistent_id: str = "") -> tuple[str, list[dict[str, Any]]]:
     """Assemble sections + rendered markdown. Never raises."""
     try:
         sections = collect_metadata_sections(ruleset or {}, completeness or [],

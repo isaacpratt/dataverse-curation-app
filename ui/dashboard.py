@@ -12,12 +12,10 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLineEdit,
     QMenu,
     QTableWidgetItem,
     QVBoxLayout,
@@ -25,7 +23,14 @@ from PySide6.QtWidgets import (
 )
 
 from config import Config
-from ui.theme import ERROR, OUTLINE_VARIANT, PRIMARY, SURFACE_CONTAINER_LOWEST, TERTIARY, enable_table_copy, selectable_labels
+from ui.theme import (
+    ERROR,
+    OUTLINE_VARIANT,
+    PRIMARY,
+    SURFACE_CONTAINER_LOWEST,
+    TERTIARY,
+    selectable_labels,
+)
 from ui.widgets import AppButton, AppTable, flush_table_style, make_combo, make_search_field
 from ui.workers import CrawlWorker
 
@@ -119,12 +124,12 @@ def _parse_date_epoch(s: str) -> float:
 
 
 def _local_downloaded_batch(workspace: Path, pids: list[str]) -> dict[str, str]:
-    """Downloaded timestamps for many datasets with ONE sqlite connect.
+    """Return downloaded timestamps for many datasets with ONE sqlite connect.
 
     Same sources/semantics as _local_downloaded (state.db download actions,
     staged-dir mtime fallback); "" or "YYYY-MM-DD HH:MM" per pid.
     """
-    out = {p: "" for p in pids}
+    out = dict.fromkeys(pids, "")
     try:
         ws = Path(workspace)
         db = ws / "state.db"
@@ -167,7 +172,7 @@ def _local_downloaded_batch(workspace: Path, pids: list[str]) -> dict[str, str]:
 
 
 def _local_downloaded(workspace: Path, persistent_id: str) -> str:
-    """Downloaded timestamp for one dataset from local system state.
+    """Return the downloaded timestamp for one dataset from local system state.
 
     Sources (best-effort, never raises):
     - state.db curation_actions (downloaded/download)
@@ -181,7 +186,7 @@ def _local_downloaded(workspace: Path, persistent_id: str) -> str:
 
 
 def _decided_ids(workspace: Path) -> set[str]:
-    """Persistent IDs with a logged decision/export (best-effort)."""
+    """Return persistent IDs with a logged decision/export (best-effort)."""
     try:
         db = Path(workspace) / "state.db"
         if not db.exists():
@@ -300,7 +305,7 @@ def diff_dashboard_datasets(old: list[dict], new: list[dict]) -> dict:
 
 
 def load_dashboard_cache(workspace: Path, key: str) -> dict | None:
-    """Cached {saved_at, datasets, labels} for one instance+collection slot.
+    """Load cached {saved_at, datasets, labels} for one instance+collection slot.
 
     Returns None when missing/corrupt — never raises.
     """
@@ -323,7 +328,7 @@ def load_dashboard_cache(workspace: Path, key: str) -> dict | None:
         return {
             "saved_at": str(entry.get("saved_at") or ""),
             "datasets": [d for d in datasets if isinstance(d, dict)],
-            "labels": [str(l) for l in labels if str(l).strip()],
+            "labels": [str(lbl) for lbl in labels if str(lbl).strip()],
         }
     except Exception:
         return None
@@ -356,7 +361,7 @@ def save_dashboard_cache(workspace: Path, key: str, datasets: list[dict], labels
         raw[key] = {
             "saved_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
             "datasets": clean_rows,
-            "labels": [str(l) for l in (labels or []) if str(l).strip()],
+            "labels": [str(lbl) for lbl in (labels or []) if str(lbl).strip()],
         }
         # Prune oldest slots beyond 10 to bound file size.
         try:
@@ -370,7 +375,7 @@ def save_dashboard_cache(workspace: Path, key: str, datasets: list[dict], labels
                     raw[key] = {
                         "saved_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
                         "datasets": clean_rows,
-                        "labels": [str(l) for l in (labels or []) if str(l).strip()],
+                        "labels": [str(lbl) for lbl in (labels or []) if str(lbl).strip()],
                     }
         except Exception:
             pass
@@ -619,7 +624,7 @@ class DashboardView(QWidget):
     # -- curation labels (per-instance set, remembered with each pull) -----
 
     def _current_collection(self) -> str:
-        """Configured collection alias ("" = whole repository)."""
+        """Return the configured collection alias ("" = whole repository)."""
         try:
             return (
                 getattr(self._config.dataverse, "collection", "")
@@ -776,7 +781,7 @@ class DashboardView(QWidget):
                 pass
 
     def _on_labels_discovered(self, labels: list) -> None:
-        clean = [str(l).strip() for l in (labels or []) if str(l).strip()]
+        clean = [str(lbl).strip() for lbl in (labels or []) if str(lbl).strip()]
         # Preserve first-appearance order, drop dupes
         seen: list[str] = []
         for label in clean:
@@ -799,7 +804,7 @@ class DashboardView(QWidget):
 
             get_app_log().info(
                 "Curation label filter options: "
-                + (", ".join(f"'{l}'" for l in seen) if seen else "(none)")
+                + (", ".join(f"'{lbl}'" for lbl in seen) if seen else "(none)")
             )
         except Exception:
             pass
@@ -884,8 +889,8 @@ class DashboardView(QWidget):
             # Visual order too (restore/moves must reflect on both headers).
             for target in range(count):
                 logical = next(
-                    (l for l in range(count)
-                     if table_hdr.visualIndex(l) == target),
+                    (i for i in range(count)
+                     if table_hdr.visualIndex(i) == target),
                     None,
                 )
                 if logical is None:
@@ -1291,7 +1296,7 @@ class DashboardView(QWidget):
                 if (st == "DRAFT" or "REVIEW" in st) and d.get("persistent_id") not in decided:
                     needs_action += 1
         vals = [pending, in_review, needs_action]
-        for card, val in zip(self._metric_cards, vals):
+        for card, val in zip(self._metric_cards, vals, strict=False):
             v_lbl = card.findChild(QLabel, "metricValue")
             if v_lbl:
                 v_lbl.setText(str(val))

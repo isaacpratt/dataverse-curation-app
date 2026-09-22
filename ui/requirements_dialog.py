@@ -1,10 +1,8 @@
 """Requirements profile editor — GUI for adding/editing curation checklists."""
 
 import json
-from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QComboBox,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -12,12 +10,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from metadata_check import PROFILES, profiles_path
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.theme import action_button_style
-
 from ui.widgets import AppButton, make_combo
-
-from metadata_check import DEFAULT_PROFILE, PROFILES, profiles_path
 
 PROFILES_PATH = profiles_path()
 
@@ -113,7 +109,7 @@ class RequirementsDialog(QDialog):
                 self._profiles = json.loads(PROFILES_PATH.read_text(encoding="utf-8"))
             except Exception as exc:
                 show_warning(self, "Profiles", f"Could not load {PROFILES_PATH}:\n{exc}")
-                self._profiles = {k: v for k, v in PROFILES.items()}
+                self._profiles = dict(PROFILES)
         else:
             # Seed file from built-ins on first open
             self._profiles = {

@@ -1,5 +1,6 @@
-"""Phase 1 port tests for the remaining formats, run against
-CUR_Res_CurationTools sample data (skipped when absent).
+"""Phase 1 port tests for the remaining formats.
+
+Run against CUR_Res_CurationTools sample data (skipped when absent).
 """
 
 from pathlib import Path

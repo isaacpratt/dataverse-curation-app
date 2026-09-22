@@ -109,7 +109,7 @@ def test_items_raise_severity_tags():
     assert "**Required:**" in md
     assert "**Recommended:**" in md
     # severity tags ride on the ruleset-driven messages
-    err_line = next(l for l in md.splitlines() if "**Error:**" in l)
+    err_line = next(line for line in md.splitlines() if "**Error:**" in line)
     assert "empty" in err_line  # ruleset's zero_byte template ("The file '{path}' is empty…")
 
 

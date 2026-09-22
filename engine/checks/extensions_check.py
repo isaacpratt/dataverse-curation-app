@@ -7,7 +7,6 @@ This is a dataset-level check - it runs on the whole file set.
 
 from collections import Counter
 from pathlib import Path
-from typing import List
 
 from engine.checks._util import EXECUTABLE_EXTS, JUNK_NAMES
 from engine.checks.base import Check, CheckResult
@@ -21,7 +20,7 @@ class ExtensionsCheck(Check):
     check_id = "inventory.extensions"
     extensions = set()
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         if not files:
             return [
                 CheckResult(
@@ -99,7 +98,7 @@ class ExtensionsCheck(Check):
                     check_id="inventory.executables",
                     level="warning",
                     passed=False,
-                    message=f"executable file(s): " + ", ".join(executables[:10]),
+                    message="executable file(s): " + ", ".join(executables[:10]),
                     details={"count": len(executables), "files": executables[:10]},
                 )
             )
@@ -119,7 +118,7 @@ class ExtensionsCheck(Check):
                     check_id="inventory.system_junk",
                     level="warning",
                     passed=False,
-                    message=f"system junk file(s): " + ", ".join(junk[:10]),
+                    message="system junk file(s): " + ", ".join(junk[:10]),
                     details={"count": len(junk), "files": junk[:10]},
                 )
             )

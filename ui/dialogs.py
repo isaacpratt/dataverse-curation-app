@@ -3,7 +3,6 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QTextEdit, QVBoxLayout
 
-
 _ICON_COLORS = {
     "triangle-alert": "#d97706",
     "octagon-x": "#ba1a1a",

@@ -9,10 +9,9 @@ import logging
 import threading
 from collections import deque
 from datetime import datetime, timezone
-from typing import Deque, List
 
 _LOCK = threading.Lock()
-_BUFFER: Deque[str] = deque(maxlen=2000)
+_BUFFER: deque[str] = deque(maxlen=2000)
 
 _logger = logging.getLogger("curation_app")
 
@@ -42,7 +41,7 @@ def log(message: str) -> None:
         pass
 
 
-def lines() -> List[str]:
+def lines() -> list[str]:
     with _LOCK:
         return list(_BUFFER)
 

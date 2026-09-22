@@ -11,10 +11,17 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class EngineCaps:
     sample_bytes: int = 1 << 20
+    # Secrets get a larger window than encoding/TODO scans (matches hush's
+    # own 5 MiB file cap) without reading multi-GB renamed .txt blobs whole.
+    secret_sample_bytes: int = 5 << 20
     sniff_bytes: int = 32 << 10
     max_rows_scanned: int = 50_000
     max_seen_rows: int = 20_000
     pii_sample_rows: int = 1_000
+    # Cap objects embedded in CheckResult.details; the full count still
+    # appears in the message and details.count (explicit truncation copy).
+    secret_max_listed: int = 20
+    pii_max_samples: int = 10
     row_limit_tabular: int = 100
     max_full_parse_bytes: int = 64 << 20
     max_members: int = 10_000

@@ -53,9 +53,8 @@ class CrawlWorker(QThread):
         import traceback
 
         try:
-            from dataverse_client import DataverseClient
-
             from applog import get_app_log
+            from dataverse_client import DataverseClient
 
             self.progress.emit(f"Connecting to {self._base_url} …")
             client = DataverseClient(self._base_url, self._api_token)
@@ -107,7 +106,6 @@ class CrawlWorker(QThread):
             # published/deaccessioned rows are never attempted.
             from dataverse_client import is_draft_dataset
 
-            pids = [d.get("persistent_id", "") for d in datasets if d.get("persistent_id")]
             labels: list = []
             report = None
             try:
@@ -172,7 +170,7 @@ class CrawlWorker(QThread):
                 try:
                     get_app_log().info(
                         "Curation report: labels in use on drafts: "
-                        + (", ".join(f"'{l}'" for l in labels) if labels else "(none)")
+                        + (", ".join(f"'{lbl}'" for lbl in labels) if labels else "(none)")
                     )
                 except Exception:
                     pass
@@ -284,7 +282,7 @@ class CrawlWorker(QThread):
             try:
                 get_app_log().info(
                     "Curation labels discovered (report in-use ∪ allowed probes): "
-                    + (", ".join(f"'{l}'" for l in labels) if labels else "(none)")
+                    + (", ".join(f"'{lbl}'" for lbl in labels) if labels else "(none)")
                 )
             except Exception:
                 pass

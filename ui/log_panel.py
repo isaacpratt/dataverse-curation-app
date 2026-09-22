@@ -10,7 +10,7 @@ palette as the rest of the app while staying deliberately distinct (high
 contrast, dark-on-light backgrounds for ERROR/WARN rows).
 """
 
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -30,11 +30,11 @@ from ui.theme import (
     ON_SURFACE_VARIANT,
     OUTLINE_VARIANT,
     PRIMARY,
-    SURFACE_CONTAINER_LOWEST,
     SURFACE_CONTAINER_LOW,
+    SURFACE_CONTAINER_LOWEST,
     TERTIARY,
+    action_button_style,
 )
-from ui.theme import action_button_style
 from ui.widgets import AppButton
 
 

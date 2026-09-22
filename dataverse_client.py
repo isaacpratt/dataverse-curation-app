@@ -12,15 +12,15 @@ which the UI can display.
 import hashlib
 import importlib.util
 import json
-import logging
 import os
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -78,7 +78,7 @@ def _dvmeta_cli_path() -> Path:
     return Path(spec.origin)
 
 
-def _field_value(dataset_version: Dict[str, Any], type_name: str) -> Any:
+def _field_value(dataset_version: dict[str, Any], type_name: str) -> Any:
     fields = (
         dataset_version.get("metadataBlocks", {})
         .get("citation", {})
@@ -90,12 +90,12 @@ def _field_value(dataset_version: Dict[str, Any], type_name: str) -> Any:
     return None
 
 
-def extract_title(dataset_version: Dict[str, Any]) -> str:
+def extract_title(dataset_version: dict[str, Any]) -> str:
     value = _field_value(dataset_version, "title")
     return value if isinstance(value, str) else ""
 
 
-def _extract_contact(dataset_version: Dict[str, Any]) -> str:
+def _extract_contact(dataset_version: dict[str, Any]) -> str:
     value = _field_value(dataset_version, "datasetContact")
     if isinstance(value, list) and value:
         first = value[0] or {}
@@ -109,9 +109,9 @@ def _extract_contact(dataset_version: Dict[str, Any]) -> str:
     return ""
 
 
-def normalize_files(dataset_version: Dict[str, Any]) -> List[Dict[str, Any]]:
+def normalize_files(dataset_version: dict[str, Any]) -> list[dict[str, Any]]:
     """Normalize a datasetVersion.files array into flat file records."""
-    records: List[Dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
     for entry in dataset_version.get("files", []):
         data_file = entry.get("dataFile", {}) or {}
         checksum_type = ""
@@ -173,14 +173,14 @@ def normalize_files(dataset_version: Dict[str, Any]) -> List[Dict[str, Any]]:
 _DATE_RE = None  # lazy compiled in _scan_restriction_dates
 
 
-def _scan_restriction_dates(obj: Any, depth: int = 0) -> Dict[str, str]:
+def _scan_restriction_dates(obj: Any, depth: int = 0) -> dict[str, str]:
     """Collect {dotted.key.path: YYYY-MM-DD} for embargo/retention-ish keys."""
     import re
 
     global _DATE_RE
     if _DATE_RE is None:
         _DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
-    found: Dict[str, str] = {}
+    found: dict[str, str] = {}
     if isinstance(obj, dict):
         items = obj.items()
     elif isinstance(obj, list) and depth < 2:
@@ -205,7 +205,7 @@ def _scan_restriction_dates(obj: Any, depth: int = 0) -> Dict[str, str]:
     return found
 
 
-def extract_file_restrictions(entry: Dict[str, Any], data_file: Dict[str, Any]) -> Dict[str, str]:
+def extract_file_restrictions(entry: dict[str, Any], data_file: dict[str, Any]) -> dict[str, str]:
     """Pull embargo/retention dates out of a file-version entry.
 
     Field names vary by Dataverse version, so both the entry-level and
@@ -213,7 +213,7 @@ def extract_file_restrictions(entry: Dict[str, Any], data_file: Dict[str, Any]) 
     retention / dateAvailable keys holding a YYYY-MM-DD date. Returns
     {"embargo_date": ..., "retention": ...} with "" when absent.
     """
-    found: Dict[str, str] = {}
+    found: dict[str, str] = {}
     for source in (entry or {}, data_file or {}):
         if isinstance(source, dict):
             for path, date in _scan_restriction_dates(source).items():
@@ -231,7 +231,7 @@ def extract_file_restrictions(entry: Dict[str, Any], data_file: Dict[str, Any]) 
     return {"embargo_date": embargo_date, "retention": retention}
 
 
-def parse_timestamps(payload: Dict[str, Any]) -> Dict[str, str]:
+def parse_timestamps(payload: dict[str, Any]) -> dict[str, str]:
     """Normalize a /timestamps response data object to known date fields."""
     data = (payload or {}).get("data")
     if not isinstance(data, dict):
@@ -254,7 +254,7 @@ def parse_timestamps(payload: Dict[str, Any]) -> Dict[str, str]:
 REVIEW_SUBMIT_TYPES = frozenset({"SUBMITTEDDS"})
 
 
-def note_review_submission(pid: str, note: Any) -> Optional[Dict[str, str]]:
+def note_review_submission(pid: str, note: Any) -> dict[str, str] | None:
     """Structured review-submission match (in-app notification format).
 
     Matches when the note's type is a review-submission type AND its
@@ -288,9 +288,9 @@ def note_review_submission(pid: str, note: Any) -> Optional[Dict[str, str]]:
     }
 
 
-def parse_ds_metadata_payload(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+def parse_ds_metadata_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse a dvmeta ds_metadata_*.json export into normalized datasets."""
-    datasets: List[Dict[str, Any]] = []
+    datasets: list[dict[str, Any]] = []
     for entry in payload.values():
         if not isinstance(entry, dict):
             continue
@@ -330,7 +330,7 @@ def parse_ds_metadata_payload(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     return datasets
 
 
-def locks_indicate_review(locks: List[Dict[str, Any]]) -> bool:
+def locks_indicate_review(locks: list[dict[str, Any]]) -> bool:
     import re as _re
 
     # Match "review" (InReview, in_review, in-review, "In Review") but not
@@ -346,7 +346,7 @@ def locks_indicate_review(locks: List[Dict[str, Any]]) -> bool:
     return False
 
 
-def search_item_state(item: Dict[str, Any]) -> tuple:
+def search_item_state(item: dict[str, Any]) -> tuple:
     """Derive (state, has_draft) from a Search API dataset doc.
 
     A dataset with a published version plus a new draft version can surface
@@ -371,7 +371,7 @@ def search_item_state(item: Dict[str, Any]) -> tuple:
     return "", False
 
 
-def parse_allowed_labels(data: Any) -> List[str]:
+def parse_allowed_labels(data: Any) -> list[str]:
     """Parse the allowedCurationLabels `data` payload.
 
     Shapes seen in the wild: a comma-separated string, a JSON array of
@@ -382,7 +382,7 @@ def parse_allowed_labels(data: Any) -> List[str]:
     "received", so the allowed set NEVER populated and only in-use labels
     ever showed).
     """
-    seen: List[str] = []
+    seen: list[str] = []
     if isinstance(data, dict):
         data = data.get("message", "")
     if isinstance(data, str):
@@ -416,7 +416,7 @@ def top_level_collection(collection: str) -> str:
 
 
 def is_draft_dataset(ds: Any) -> bool:
-    """True when a crawl row is under curation (draft or in review).
+    """Check whether a crawl row is under curation (draft or in review).
 
     Curation labels/status exist only for datasets under curation — the
     shared predicate for per-draft label reads and probe ordering, so
@@ -435,8 +435,8 @@ def is_draft_dataset(ds: Any) -> bool:
 # Keyed by a SHA-256 fingerprint, never the token itself. Successes only —
 # a failure (bad token, network) returns None and retries next time.
 # Collection roles share the lock with a (base_url, fingerprint, alias) key.
-_ME_CACHE: Dict[tuple, Dict[str, Any]] = {}
-_ROLE_CACHE: Dict[tuple, List[str]] = {}
+_ME_CACHE: dict[tuple, dict[str, Any]] = {}
+_ROLE_CACHE: dict[tuple, list[str]] = {}
 _ME_LOCK = threading.Lock()
 
 
@@ -457,7 +457,7 @@ def _me_cache_key(base_url: str, api_token: str) -> tuple:
 # for every dataset under a first-level collection, so one network call
 # per top-level collection per process is enough; [] is a valid negative
 # entry (none configured) — None means "unknown, may fetch".
-_ALLOWED_LABELS_CACHE: Dict[tuple, List[str]] = {}
+_ALLOWED_LABELS_CACHE: dict[tuple, list[str]] = {}
 _ALLOWED_LABELS_LOCK = threading.Lock()
 
 _ALLOWED_LABELS_FILE = "curation_labels.json"
@@ -472,8 +472,8 @@ def allowed_labels_cache_key(base_url: str, collection: str) -> tuple:
     return (base, top_level_collection(collection or "").lower())
 
 
-def get_cached_allowed_labels(base_url: str, collection: str) -> Optional[List[str]]:
-    """Cached allowed labels, or None when unknown (caller may fetch once)."""
+def get_cached_allowed_labels(base_url: str, collection: str) -> list[str] | None:
+    """Return cached allowed labels, or None when unknown (caller may fetch once)."""
     try:
         with _ALLOWED_LABELS_LOCK:
             hit = _ALLOWED_LABELS_CACHE.get(allowed_labels_cache_key(base_url, collection))
@@ -482,10 +482,10 @@ def get_cached_allowed_labels(base_url: str, collection: str) -> Optional[List[s
         return None
 
 
-def set_cached_allowed_labels(base_url: str, collection: str, labels: List[str]) -> None:
+def set_cached_allowed_labels(base_url: str, collection: str, labels: list[str]) -> None:
     """Store allowed labels (including []) for a top-level collection."""
     try:
-        clean = [str(l).strip() for l in (labels or []) if str(l).strip()]
+        clean = [str(lbl).strip() for lbl in (labels or []) if str(lbl).strip()]
         with _ALLOWED_LABELS_LOCK:
             _ALLOWED_LABELS_CACHE[allowed_labels_cache_key(base_url, collection)] = clean
     except Exception:
@@ -503,8 +503,8 @@ def _allowed_labels_disk_key(base_url: str, collection: str) -> str:
 
 def read_allowed_labels_cache(
     workspace, base_url: str, collection: str
-) -> Optional[List[str]]:
-    """Allowed labels from disk for a top-level collection (None = unknown).
+) -> list[str] | None:
+    """Read allowed labels from disk for a top-level collection (None = unknown).
 
     Only slots stamped "probed" at format v2 by a real discovery round
     count as hits: the allowed set is probed exactly once per collection
@@ -542,7 +542,7 @@ def read_allowed_labels_cache(
         labels = entry.get("labels", [])
         if not isinstance(labels, list):
             return None
-        clean = [str(l) for l in labels if str(l).strip()]
+        clean = [str(lbl) for lbl in labels if str(lbl).strip()]
         set_cached_allowed_labels(base_url, collection, clean)
         return clean
     except Exception:
@@ -550,7 +550,7 @@ def read_allowed_labels_cache(
 
 
 def write_allowed_labels_cache(
-    workspace, base_url: str, collection: str, labels: List[str]
+    workspace, base_url: str, collection: str, labels: list[str]
 ) -> None:
     """Persist allowed labels for a top-level collection (best-effort).
 
@@ -574,7 +574,7 @@ def write_allowed_labels_cache(
         except Exception:
             coll = ""
         raw[_allowed_labels_disk_key(base_url, collection)] = {
-            "labels": [str(l) for l in (labels or []) if str(l).strip()],
+            "labels": [str(lbl) for lbl in (labels or []) if str(lbl).strip()],
             "collection": coll,
             "probed": True,
             "v": 2,
@@ -596,7 +596,7 @@ def write_allowed_labels_cache(
 
 _METADATABLOCKS_FILE = "metadatablocks_cache.json"
 
-_METADATABLOCKS_MEMO: Dict[tuple, List[Dict[str, str]]] = {}
+_METADATABLOCKS_MEMO: dict[tuple, list[dict[str, str]]] = {}
 _METADATABLOCKS_LOCK = threading.Lock()
 
 
@@ -607,7 +607,7 @@ def _metadatablocks_disk_key(base_url: str) -> str:
         return ""
 
 
-def parse_metadatablock_names(payload: Dict[str, Any]) -> List[str]:
+def parse_metadatablock_names(payload: dict[str, Any]) -> list[str]:
     """Block names from a GET /api/metadatablocks payload. Never raises."""
     try:
         data = (payload or {}).get("data")
@@ -621,9 +621,9 @@ def parse_metadatablock_names(payload: Dict[str, Any]) -> List[str]:
         return []
 
 
-def parse_metadatablock_display_names(payload: Dict[str, Any]) -> Dict[str, str]:
+def parse_metadatablock_display_names(payload: dict[str, Any]) -> dict[str, str]:
     """{block name: display name} from a GET /api/metadatablocks payload."""
-    out: Dict[str, str] = {}
+    out: dict[str, str] = {}
     try:
         data = (payload or {}).get("data")
         items = data if isinstance(data, list) else []
@@ -639,7 +639,7 @@ def parse_metadatablock_display_names(payload: Dict[str, Any]) -> Dict[str, str]
     return out
 
 
-def parse_metadatablock_fields(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+def parse_metadatablock_fields(payload: dict[str, Any]) -> list[dict[str, str]]:
     """[{block, field, label}] from a GET /api/metadatablocks/{name} payload.
 
     Field map lives under data.metadataFields on older servers and under
@@ -647,7 +647,7 @@ def parse_metadatablock_fields(payload: Dict[str, Any]) -> List[Dict[str, str]]:
     (verified on 6.8: {"name": ..., "fields": {"geographicCoverage":
     {"name": ..., "displayName": ...}}}). Missing/unknown shapes yield [].
     """
-    out: List[Dict[str, str]] = []
+    out: list[dict[str, str]] = []
     try:
         data = (payload or {}).get("data") or {}
         block = str(data.get("name") or "").strip()
@@ -677,7 +677,7 @@ def parse_metadatablock_fields(payload: Dict[str, Any]) -> List[Dict[str, str]]:
     return out
 
 
-def get_cached_metadata_fields(base_url: str) -> Optional[List[Dict[str, str]]]:
+def get_cached_metadata_fields(base_url: str) -> list[dict[str, str]] | None:
     try:
         with _METADATABLOCKS_LOCK:
             hit = _METADATABLOCKS_MEMO.get((_metadatablocks_disk_key(base_url),))
@@ -686,7 +686,7 @@ def get_cached_metadata_fields(base_url: str) -> Optional[List[Dict[str, str]]]:
         return None
 
 
-def set_cached_metadata_fields(base_url: str, fields: List[Dict[str, str]]) -> None:
+def set_cached_metadata_fields(base_url: str, fields: list[dict[str, str]]) -> None:
     try:
         clean = [dict(f) for f in (fields or []) if isinstance(f, dict) and f.get("field")]
         with _METADATABLOCKS_LOCK:
@@ -695,7 +695,7 @@ def set_cached_metadata_fields(base_url: str, fields: List[Dict[str, str]]) -> N
         pass
 
 
-def read_metadata_fields_cache(workspace, base_url: str) -> Optional[List[Dict[str, str]]]:
+def read_metadata_fields_cache(workspace, base_url: str) -> list[dict[str, str]] | None:
     """Field catalog from disk for an instance (None = unknown). Never raises."""
     try:
         path = Path(workspace) / _METADATABLOCKS_FILE
@@ -719,7 +719,7 @@ def read_metadata_fields_cache(workspace, base_url: str) -> Optional[List[Dict[s
         return None
 
 
-def write_metadata_fields_cache(workspace, base_url: str, fields: List[Dict[str, str]]) -> None:
+def write_metadata_fields_cache(workspace, base_url: str, fields: list[dict[str, str]]) -> None:
     """Persist an instance's field catalog (best-effort)."""
     try:
         import json as _json
@@ -741,7 +741,7 @@ def write_metadata_fields_cache(workspace, base_url: str, fields: List[Dict[str,
         pass
 
 
-def parse_curation_status(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def parse_curation_status(payload: dict[str, Any]) -> dict[str, Any] | None:
     """Parse a curationStatus response into {label, time, assigner} or None.
 
     Handles both the single-object form and the includeHistory=true array
@@ -775,7 +775,7 @@ def _clean_curation_value(value: Any) -> str:
     return "" if text.lower() in _CURATION_NONE_VALUES else text
 
 
-def parse_curation_states_csv(text: str) -> List[Dict[str, Any]]:
+def parse_curation_states_csv(text: str) -> list[dict[str, Any]]:
     """Parse the superuser listCurationStates CSV report.
 
     Columns (by position — header labels are localized bundle strings):
@@ -791,7 +791,7 @@ def parse_curation_states_csv(text: str) -> List[Dict[str, Any]]:
     import io
     import re
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     try:
         reader = csv.reader(io.StringIO(text or ""))
     except Exception:
@@ -815,8 +815,8 @@ def parse_curation_states_csv(text: str) -> List[Dict[str, Any]]:
             # Header row or unexpected shape — keep the raw text as a
             # title candidate only if it cannot be the localized header.
             title = first
-        def _cell(i: int) -> str:
-            return cells[i].strip() if len(cells) > i else ""
+        def _cell(i: int, _cells=cells) -> str:
+            return _cells[i].strip() if len(_cells) > i else ""
         label = _clean_curation_value(_cell(3))
         rows.append(
             {
@@ -840,7 +840,7 @@ def parse_curation_states_csv(text: str) -> List[Dict[str, Any]]:
     return rows
 
 
-def _summarize_file_entry(entry: Any) -> Dict[str, str]:
+def _summarize_file_entry(entry: Any) -> dict[str, str]:
     """Condense a compare-API file object to {name, path, id, kind}."""
     if not isinstance(entry, dict):
         return {"name": str(entry or ""), "path": "", "id": "", "kind": ""}
@@ -851,7 +851,7 @@ def _summarize_file_entry(entry: Any) -> Dict[str, str]:
     return {"name": name, "path": path, "id": fid, "kind": kind}
 
 
-def parse_version_compare(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def parse_version_compare(payload: dict[str, Any]) -> dict[str, Any] | None:
     """Parse a versions/compare response into a normalized diff.
 
     Mirrors DatasetVersionDifference.compareVersionsAsJson: oldVersion /
@@ -864,7 +864,7 @@ def parse_version_compare(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not isinstance(data, dict):
         return None
 
-    def _ver(key: str) -> Dict[str, str]:
+    def _ver(key: str) -> dict[str, str]:
         v = data.get(key) or {}
         if not isinstance(v, dict):
             v = {}
@@ -875,8 +875,8 @@ def parse_version_compare(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "updated": str(v.get("lastUpdatedDate") or ""),
         }
 
-    def _field_changes(items: Any) -> List[Dict[str, str]]:
-        out: List[Dict[str, str]] = []
+    def _field_changes(items: Any) -> list[dict[str, str]]:
+        out: list[dict[str, str]] = []
         for item in items if isinstance(items, list) else []:
             if not isinstance(item, dict):
                 continue
@@ -889,7 +889,7 @@ def parse_version_compare(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             )
         return out
 
-    metadata_changes: List[Dict[str, str]] = []
+    metadata_changes: list[dict[str, str]] = []
     for block in data.get("metadataChanges") or []:
         if not isinstance(block, dict):
             continue
@@ -943,14 +943,14 @@ def parse_version_compare(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
 
 
-def parse_dataset_versions(data: Any) -> List[Dict[str, str]]:
+def parse_dataset_versions(data: Any) -> list[dict[str, str]]:
     """Normalize a versions-list payload into version timeline entries.
 
     Each entry: {number ("1.0" or "Draft"), state, create_time,
     last_update, release_time, note}. Tolerates missing keys and
     non-list payloads (returns []).
     """
-    out: List[Dict[str, str]] = []
+    out: list[dict[str, str]] = []
     if isinstance(data, dict):
         data = [data] if any(k in data for k in ("versionState", "versionNumber", "createTime")) else []
     items = data if isinstance(data, list) else []
@@ -991,7 +991,7 @@ class DataverseClient:
 
     # -- low level -----------------------------------------------------------
 
-    def _headers(self) -> Dict[str, str]:
+    def _headers(self) -> dict[str, str]:
         headers = {"Accept": "application/json"}
         if self._api_token:
             headers["X-Dataverse-key"] = self._api_token
@@ -1001,8 +1001,8 @@ class DataverseClient:
         return f"{self._base_url}{path}"
 
     def _get_json(
-        self, path: str, params: Optional[Dict[str, str]] = None
-    ) -> Dict[str, Any]:
+        self, path: str, params: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         from applog import log_response
 
         last_exc: Exception | None = None
@@ -1032,7 +1032,7 @@ class DataverseClient:
                         raise RuntimeError(
                             f"GET {path} returned non-JSON response "
                             f"({response.status_code})"
-                        )
+                        ) from None
                     if path == "/api/search" and isinstance(body, dict):
                         try:
                             n = len(body.get("data", {}).get("items", []))
@@ -1074,7 +1074,7 @@ class DataverseClient:
         raise last_exc  # pragma: no cover
 
     def _get_text(
-        self, path: str, params: Optional[Dict[str, str]] = None
+        self, path: str, params: dict[str, str] | None = None
     ) -> str:
         """GET returning raw text (for non-JSON endpoints like the CSV report).
 
@@ -1135,7 +1135,7 @@ class DataverseClient:
 
     # -- discovery -----------------------------------------------------------
 
-    def _crawl(self, subtree: str, workdir: Optional[Path] = None) -> Path:
+    def _crawl(self, subtree: str, workdir: Path | None = None) -> Path:
         """Run the dvmeta CLI at version=draft; returns the export JSON path.
 
         When `workdir` is None a temp dir is created. It is intentionally
@@ -1185,8 +1185,8 @@ class DataverseClient:
             raise RuntimeError("dvmeta produced no ds_metadata export")
         return exports[-1]
 
-    def _search_fallback(self, subtree: str = "", per_page: int = 100, start: int = 0) -> List[Dict[str, Any]]:
-        params: Dict[str, str] = {
+    def _search_fallback(self, subtree: str = "", per_page: int = 100, start: int = 0) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
             "q": "*",
             "type": "dataset",
             "per_page": str(per_page),
@@ -1213,7 +1213,7 @@ class DataverseClient:
                 ) from exc
             raise
         items = payload.get("data", {}).get("items", [])
-        datasets: List[Dict[str, Any]] = []
+        datasets: list[dict[str, Any]] = []
         for item in items:
             pid = item.get("global_id") or item.get("identifier") or ""
             contacts = item.get("contacts") or []
@@ -1246,8 +1246,8 @@ class DataverseClient:
         return datasets
 
     def list_draft_datasets(
-        self, subtree: str = "", workdir: Optional[Path] = None, max_pages: int = 10
-    ) -> List[Dict[str, Any]]:
+        self, subtree: str = "", workdir: Path | None = None, max_pages: int = 10
+    ) -> list[dict[str, Any]]:
         """All draft datasets in the subtree (superset of in-review).
 
         Uses the dvmeta crawler when available (dev installs); in the
@@ -1285,8 +1285,8 @@ class DataverseClient:
                             shutil.rmtree(tmp_root, ignore_errors=True)
                     except Exception:
                         pass
-        all_datasets: List[Dict[str, Any]] = []
-        seen: Dict[str, int] = {}
+        all_datasets: list[dict[str, Any]] = []
+        seen: dict[str, int] = {}
         hit_page_cap = False
         for page in range(1, max_pages + 1):
             start = (page - 1) * 100
@@ -1335,8 +1335,8 @@ class DataverseClient:
             return False
 
     def list_datasets_in_review(
-        self, subtree: str = "", workdir: Optional[Path] = None
-    ) -> List[Dict[str, Any]]:
+        self, subtree: str = "", workdir: Path | None = None
+    ) -> list[dict[str, Any]]:
         """Drafts from the crawl, kept only when locked IN_REVIEW."""
         drafts = self.list_draft_datasets(subtree, workdir)
         return [d for d in drafts if self.dataset_in_review(d["persistent_id"])]
@@ -1347,8 +1347,8 @@ class DataverseClient:
     # vs curator code path (bulk CSV report vs per-draft label reads) once
     # per session instead of burning a doomed 403 first.
 
-    def get_me(self) -> Optional[Dict[str, Any]]:
-        """Authenticated user's profile (identity + superuser flag), or None.
+    def get_me(self) -> dict[str, Any] | None:
+        """Fetch the authenticated user's profile (identity + superuser flag), or None.
 
         One network call per (instance, token) per process: successes are
         cached; failures return None without caching (a later retry may
@@ -1393,7 +1393,7 @@ class DataverseClient:
             pass
         return dict(data)
 
-    def user_is_superuser(self) -> Optional[bool]:
+    def user_is_superuser(self) -> bool | None:
         """True/False from /api/users/:me; None when identity is unknown."""
         try:
             me = self.get_me()
@@ -1403,7 +1403,7 @@ class DataverseClient:
             return None
         return bool(me.get("superuser"))
 
-    def get_collection_roles(self, alias: str) -> Optional[List[str]]:
+    def get_collection_roles(self, alias: str) -> list[str] | None:
         """Role names the calling user holds on one collection, or None.
 
         Matches the /api/users/:me identifier against
@@ -1461,7 +1461,7 @@ class DataverseClient:
         data = payload.get("data") if isinstance(payload, dict) else None
         if not isinstance(data, list):
             return None
-        roles: List[str] = []
+        roles: list[str] = []
         for entry in data:
             try:
                 if not isinstance(entry, dict):
@@ -1499,8 +1499,8 @@ class DataverseClient:
 
     def get_curation_status(
         self, identifier: str, include_history: bool = False
-    ) -> Optional[Dict[str, Any]]:
-        """Current curation label for a draft dataset, or None if unset/unavailable."""
+    ) -> dict[str, Any] | None:
+        """Return the current curation label for a draft dataset, or None if unset/unavailable."""
         path, base_params = self._curation_paths(identifier, "curationStatus")
         params = dict(base_params or {})
         if include_history:
@@ -1516,7 +1516,7 @@ class DataverseClient:
             return None
         return parse_curation_status(payload)
 
-    def get_curation_history(self, identifier: str) -> List[Dict[str, Any]]:
+    def get_curation_history(self, identifier: str) -> list[dict[str, Any]]:
         """Full label-assignment history (oldest-first) for a draft dataset."""
         path, base_params = self._curation_paths(identifier, "curationStatus")
         params = dict(base_params or {})
@@ -1546,8 +1546,8 @@ class DataverseClient:
                 )
         return out
 
-    def get_allowed_curation_labels(self, identifier: str) -> List[str]:
-        """Allowed labels for one dataset (instance/collection-specific).
+    def get_allowed_curation_labels(self, identifier: str) -> list[str]:
+        """Return allowed labels for one dataset (instance/collection-specific).
 
         Reports what the server answered to the app log: the received list
         on success, or the denial status when this dataset yields no answer
@@ -1590,22 +1590,22 @@ class DataverseClient:
         try:
             get_app_log().info(
                 f"allowedCurationLabels for {identifier}: received "
-                + (", ".join(f"'{l}'" for l in labels) if labels else "(empty — none configured)")
+                + (", ".join(f"'{lbl}'" for lbl in labels) if labels else "(empty — none configured)")
             )
         except Exception:
             pass
         return labels
 
     def discover_curation_labels(
-        self, persistent_ids: List[str], sample_size: int = 5
-    ) -> List[str]:
+        self, persistent_ids: list[str], sample_size: int = 5
+    ) -> list[str]:
         """Union of allowed labels across a sample of datasets.
 
         Allowed labels can vary per collection/dataset, so probe the first
         few datasets until at least one reports a non-empty set. Order of
         first appearance is preserved.
         """
-        labels: List[str] = []
+        labels: list[str] = []
         for pid in (persistent_ids or [])[: max(1, sample_size)]:
             try:
                 for label in self.get_allowed_curation_labels(pid):
@@ -1629,9 +1629,9 @@ class DataverseClient:
         return labels
 
     def fetch_allowed_labels_shared(
-        self, collection: str, probe_pids: List[str], max_attempts: int = 3
-    ) -> List[str]:
-        """Allowed labels via the top-level shared cache (probed once).
+        self, collection: str, probe_pids: list[str], max_attempts: int = 3
+    ) -> list[str]:
+        """Return allowed labels via the top-level shared cache (probed once).
 
         Memory cache first; on miss, probe drafts in order and stop at the
         first non-empty answer, so one discovery round costs a single API
@@ -1651,12 +1651,12 @@ class DataverseClient:
                 get_app_log().info(
                     "allowedCurationLabels: cache hit for "
                     f"'{collection or 'whole repository'}': "
-                    + (", ".join(f"'{l}'" for l in cached) if cached else "(empty)")
+                    + (", ".join(f"'{lbl}'" for lbl in cached) if cached else "(empty)")
                 )
             except Exception:
                 pass
             return list(cached)
-        labels: List[str] = []
+        labels: list[str] = []
         try:
             attempts = max(1, int(max_attempts or 1))
         except Exception:
@@ -1686,7 +1686,7 @@ class DataverseClient:
         try:
             get_app_log().info(
                 f"allowedCurationLabels: probed {probed} dataset(s), "
-                + (", ".join(f"'{l}'" for l in labels) if labels
+                + (", ".join(f"'{lbl}'" for lbl in labels) if labels
                    else ("no dataset answered — will retry next session"
                          if not answered else "none configured"))
             )
@@ -1712,7 +1712,7 @@ class DataverseClient:
 
     # -- metadata blocks (field catalog) ------------------------------------
 
-    def get_metadatablock_names(self) -> List[str]:
+    def get_metadatablock_names(self) -> list[str]:
         """Block names from GET /api/metadatablocks ([] when unavailable)."""
         try:
             payload = self._get_json("/api/metadatablocks")
@@ -1720,7 +1720,7 @@ class DataverseClient:
             return []
         return parse_metadatablock_names(payload)
 
-    def get_metadatablock_display_names(self) -> Dict[str, str]:
+    def get_metadatablock_display_names(self) -> dict[str, str]:
         """{block name: display name} from GET /api/metadatablocks ({} on miss)."""
         try:
             payload = self._get_json("/api/metadatablocks")
@@ -1728,7 +1728,7 @@ class DataverseClient:
             return {}
         return parse_metadatablock_display_names(payload)
 
-    def get_metadatablock_fields(self, block: str) -> List[Dict[str, str]]:
+    def get_metadatablock_fields(self, block: str) -> list[dict[str, str]]:
         """[{block, field, label}] for one block ([] when unavailable)."""
         try:
             payload = self._get_json(f"/api/metadatablocks/{block}")
@@ -1736,7 +1736,7 @@ class DataverseClient:
             return []
         return parse_metadatablock_fields(payload)
 
-    def fetch_metadata_field_catalog(self) -> List[Dict[str, str]]:
+    def fetch_metadata_field_catalog(self) -> list[dict[str, str]]:
         """Full field catalog across blocks (memory/disk cache first).
 
         One /api/metadatablocks call plus one per block on miss; cached per
@@ -1752,7 +1752,7 @@ class DataverseClient:
             cached = None
         if cached:
             return list(cached)
-        fields: List[Dict[str, str]] = []
+        fields: list[dict[str, str]] = []
         try:
             labels = self.get_metadatablock_display_names()
         except Exception:
@@ -1775,7 +1775,7 @@ class DataverseClient:
             pass
         return fields
 
-    def list_curation_states(self) -> Optional[List[Dict[str, Any]]]:
+    def list_curation_states(self) -> list[dict[str, Any]] | None:
         """Bulk curation-status report for ALL draft datasets (one CSV call).
 
         Returns parsed rows on success (possibly empty), or None when the
@@ -1802,7 +1802,7 @@ class DataverseClient:
         identifier: str,
         old: str = ":latest-published",
         new: str = ":draft",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Diff two dataset versions (default: published vs draft).
 
         Wraps GET /api/datasets/{id}/versions/{old}/compare/{new}, which
@@ -1813,7 +1813,7 @@ class DataverseClient:
         """
         if ":" in identifier:
             path = f"/api/datasets/:persistentId/versions/{old}/compare/{new}"
-            params: Optional[Dict[str, str]] = {"persistentId": identifier}
+            params: dict[str, str] | None = {"persistentId": identifier}
         else:
             path = f"/api/datasets/{identifier}/versions/{old}/compare/{new}"
             params = None
@@ -1832,7 +1832,7 @@ class DataverseClient:
             return None
         return parse_version_compare(payload)
 
-    def list_versions(self, identifier: str) -> List[Dict[str, str]]:
+    def list_versions(self, identifier: str) -> list[dict[str, str]]:
         """All versions of a dataset (oldest-first as returned) for timelines.
 
         Returns [] when the dataset has no visible versions, on 4xx, or on
@@ -1840,7 +1840,7 @@ class DataverseClient:
         """
         if ":" in identifier:
             path = "/api/datasets/:persistentId/versions"
-            params: Optional[Dict[str, str]] = {"persistentId": identifier}
+            params: dict[str, str] | None = {"persistentId": identifier}
         else:
             path = f"/api/datasets/{identifier}/versions"
             params = None
@@ -1857,7 +1857,7 @@ class DataverseClient:
 
     def get_timestamps(
         self, identifier: str, numeric_id: Any = None
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """Lifecycle timestamps for a dataset (create/publication/DOI/draft touches).
 
         Wraps GET /api/datasets/{id}/timestamps. Tries the :persistentId form
@@ -1865,7 +1865,7 @@ class DataverseClient:
         route one form). Returns {} when unavailable (4xx) or on network
         failure — callers treat this as best-effort timeline data.
         """
-        candidates: List[tuple] = []
+        candidates: list[tuple] = []
         if ":" in identifier:
             candidates.append(
                 ("/api/datasets/:persistentId/timestamps", {"persistentId": identifier})
@@ -1897,7 +1897,7 @@ class DataverseClient:
         persistent_id: str,
         per_page: int = 100,
         max_pages: int = 5,
-    ) -> List[Dict[str, str]]:
+    ) -> list[dict[str, str]]:
         """Review-submission events for a dataset from the user's notifications.
 
         Dataverse exposes no submitted-for-review timestamp on the dataset
@@ -1908,7 +1908,7 @@ class DataverseClient:
         comes from each note's ownerDisplayName as pulled from the API.
         Returns matches (possibly []) — never raises for 4xx/network issues.
         """
-        matches: List[Dict[str, str]] = []
+        matches: list[dict[str, str]] = []
         if not (persistent_id or "").strip():
             return matches
         try:
@@ -1993,7 +1993,7 @@ class DataverseClient:
 
     # -- metadata ------------------------------------------------------------
 
-    def get_dataset_metadata(self, identifier: str) -> Dict[str, Any]:
+    def get_dataset_metadata(self, identifier: str) -> dict[str, Any]:
         if ":" in identifier:
             payload = self._get_json(
                 "/api/datasets/:persistentId",
@@ -2005,7 +2005,7 @@ class DataverseClient:
 
     def get_file_inventory(
         self, identifier: str, version: str = "draft"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         # Try draft first (with correct lowercase ":draft"), fall back to
         # :latest for published datasets. Auth failures (401/403) fail fast
         # — retrying other versions would mask a bad token and risk running
@@ -2049,7 +2049,7 @@ class DataverseClient:
                 raise
         # fallback: try without version (latest published)
         payload = self._get_json(
-            f"/api/datasets/:persistentId" if ":" in identifier else f"/api/datasets/{identifier}",
+            "/api/datasets/:persistentId" if ":" in identifier else f"/api/datasets/{identifier}",
             params={"persistentId": identifier} if ":" in identifier else None,
         )
         # dataset metadata contains latestVersion files? try to extract
@@ -2062,10 +2062,10 @@ class DataverseClient:
     def _stream_download(
         self,
         path: str,
-        params: Dict[str, str],
-        dl_headers: Dict[str, str],
+        params: dict[str, str],
+        dl_headers: dict[str, str],
         dest: Path,
-        progress: Optional[Callable[[int], None]],
+        progress: Callable[[int], None] | None,
         label: str,
     ) -> int | None:
         """One version attempt of a streaming download, with retries.
@@ -2155,7 +2155,7 @@ class DataverseClient:
         identifier: str,
         dest: Path,
         version: str = "draft",
-        progress: Optional[Callable[[int], None]] = None,
+        progress: Callable[[int], None] | None = None,
     ) -> Path:
         dest = Path(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -2183,7 +2183,7 @@ class DataverseClient:
         self,
         file_id: str,
         dest: Path,
-        progress: Optional[Callable[[int], None]] = None,
+        progress: Callable[[int], None] | None = None,
     ) -> Path:
         """Download one file in its ORIGINAL uploaded format.
 
@@ -2195,7 +2195,7 @@ class DataverseClient:
 
         dest = Path(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dl_headers: Dict[str, str] = {"Accept": "*/*"}
+        dl_headers: dict[str, str] = {"Accept": "*/*"}
         if self._api_token:
             dl_headers["X-Dataverse-key"] = self._api_token
         last_exc: Exception | None = None
@@ -2229,7 +2229,7 @@ class DataverseClient:
                             time.sleep(wait)
                             # Retry without truncating a prior partial twice:
                             # loop re-opens dest with "wb".
-                            raise _RetryOriginal()
+                            raise _RetryOriginal() from None
                         raise
                     received = 0
                     with open(dest, "wb") as handle:

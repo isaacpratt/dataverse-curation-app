@@ -31,13 +31,10 @@ from PySide6.QtWidgets import (
 
 from ui.theme import (
     ON_SURFACE,
-    ON_SURFACE_VARIANT,
     OUTLINE_VARIANT,
     SURFACE_CONTAINER_LOW,
     SURFACE_CONTAINER_LOWEST,
-    enable_list_copy,
     enable_table_copy,
-    selectable_labels,
 )
 
 __all__ = [
@@ -95,12 +92,12 @@ class AppButton(QPushButton):
 
 
 class AppTable(QTableWidget):
-    """Standard table: movable + resizable + sortable columns, row selection,
-    no gridlines, hidden vertical header, Ctrl+C copy support.
+    """Build a standard table (sortable columns, row selection, no grid).
 
-    headers: ordered column titles. widths: {index: px} initial widths
-    (default 120). row_height: vertical default section size.
-    sortable: leave True unless the view depends on insertion order.
+    Hidden vertical header and Ctrl+C copy support. headers: ordered column
+    titles. widths: {index: px} initial widths (default 120). row_height:
+    vertical default section size. sortable: leave True unless the view
+    depends on insertion order.
 
     Emits columns_fitted after a successful content fit so split-header
     views (dashboard queue) can mirror the new section sizes.
@@ -163,7 +160,7 @@ class AppTable(QTableWidget):
             self.fit_columns_to_content()
 
     def populate_guarded(self, row_count: int) -> None:
-        """setRowCount with sorting suppressed so inserts stay in order."""
+        """SetRowCount with sorting suppressed so inserts stay in order."""
         was = self.isSortingEnabled()
         self.setSortingEnabled(False)
         self.setRowCount(row_count)
@@ -176,7 +173,7 @@ class AppTable(QTableWidget):
         self._auto_fit = False
 
     def disable_auto_fit(self) -> None:
-        """Saved widths restored — never overwrite the user's layout."""
+        """Disable auto-fit after saved widths are restored — never overwrite the user's layout."""
         self._auto_fit = False
 
     def enable_auto_fit(self) -> None:
@@ -317,7 +314,7 @@ def flush_list_style(last: bool = True) -> str:
 
 
 def make_card(title: str, parent: QWidget | None = None) -> tuple:
-    """Standard white card (8px unified radius) with a header bar.
+    """Build a standard white card (8px unified radius) with a header bar.
 
     Returns (card, body_layout, title_label, header_layout) — append extra
     header widgets (summaries, combos, filters) to header_layout.
@@ -363,7 +360,7 @@ def make_card(title: str, parent: QWidget | None = None) -> tuple:
 
 def make_search_field(placeholder: str, parent: QWidget | None = None, *, height: int = 36,
                       min_width: int = 220) -> QLineEdit:
-    """Standard search box (SearchField style: rounded, 13px text)."""
+    """Build a standard search box (SearchField style: rounded, 13px text)."""
     field = QLineEdit(parent)
     field.setObjectName("SearchField")
     field.setPlaceholderText(placeholder)
@@ -380,7 +377,7 @@ def make_search_field(placeholder: str, parent: QWidget | None = None, *, height
 
 def make_line_edit(placeholder: str = "", parent: QWidget | None = None, *,
                    height: int = 36, password: bool = False) -> QLineEdit:
-    """Standard form field: same height/focus ring as make_search_field."""
+    """Build a standard form field: same height/focus ring as make_search_field."""
     field = QLineEdit(parent)
     field.setObjectName("SearchField")
     field.setPlaceholderText(placeholder)
@@ -420,7 +417,7 @@ class _NoWheelCombo(QComboBox):
 
 def make_combo(items=None, parent: QWidget | None = None, *, height: int = 36,
                min_width: int = 130, tip: str = "") -> QComboBox:
-    """Standard dropdown (themed chevron, 12px semibold entries).
+    """Build a standard dropdown (themed chevron, 12px semibold entries).
 
     items: list of labels or (label, data) tuples. Wheel-safe: scrolling
     over an unfocused combo scrolls the page, never the value.

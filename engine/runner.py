@@ -1,10 +1,11 @@
-"""Report runner: dispatches checks over a staged dataset directory and
-aggregates findings into a DatasetReport (docs/report-contract.md).
+"""Run report checks over a staged dataset directory.
+
+Dispatches checks and aggregates findings into a DatasetReport
+(docs/report-contract.md).
 """
 
 import mimetypes
 from pathlib import Path
-from typing import List
 
 from engine import __version__
 from engine.checks.base import CheckResult
@@ -12,9 +13,12 @@ from engine.dispatcher import checks_for_file, dataset_level_checks
 from engine.report import DatasetReport, FileEntry
 
 
-def collect_files(dataset_dir: Path) -> List[Path]:
-    """Staged files, sorted. Symlinks are skipped (a staged symlink could
-    point outside the dataset dir) and vanishing paths are ignored."""
+def collect_files(dataset_dir: Path) -> list[Path]:
+    """List staged files, sorted.
+
+    Symlinks are skipped (a staged symlink could point outside the
+    dataset dir) and vanishing paths are ignored.
+    """
     out = []
     for path in sorted(dataset_dir.rglob("*")):
         try:
@@ -31,7 +35,7 @@ def guess_mime(path: Path) -> str:
     return mime or "application/octet-stream"
 
 
-def _safe_run(check_cls, files: List[Path]) -> List[CheckResult]:
+def _safe_run(check_cls, files: list[Path]) -> list[CheckResult]:
     try:
         return check_cls().run(files)
     except Exception as exc:
@@ -126,7 +130,7 @@ def run_report(
             return False
 
     _report_progress(f"Found {len(files)} file(s), starting {len(dataset_level_checks())} dataset-level check(s)…")
-    dataset_checks: List[CheckResult] = []
+    dataset_checks: list[CheckResult] = []
     for check_cls in dataset_level_checks():
         if _cancelled():
             break
@@ -143,7 +147,7 @@ def run_report(
             checks = []
         if checks:
             _report_progress(f"[{idx}/{len(files)}] {path.name}: {', '.join(c.check_id for c in checks)} …")
-        file_checks: List[CheckResult] = []
+        file_checks: list[CheckResult] = []
         for check_cls in checks:
             if _cancelled():
                 break
@@ -166,8 +170,8 @@ def run_report(
             checks=file_checks,
         )
 
-    entries: List[FileEntry] = []
-    unmatched: List[Path] = []
+    entries: list[FileEntry] = []
+    unmatched: list[Path] = []
     # Pre-classify unmatched sequentially (cheap) to keep warning stable.
     matched_flags: list[bool] = []
     for path in files:
@@ -175,7 +179,7 @@ def run_report(
             matched_flags.append(bool(checks_for_file(path)))
         except Exception:
             matched_flags.append(False)
-    unmatched = [p for p, m in zip(files, matched_flags) if not m]
+    unmatched = [p for p, m in zip(files, matched_flags, strict=True) if not m]
 
     indexed = list(enumerate(files, 1))
     if max_workers and max_workers > 1:

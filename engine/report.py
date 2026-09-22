@@ -8,7 +8,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from engine.checks.base import CheckResult
 
@@ -18,9 +18,9 @@ class FileEntry:
     path: str
     size_bytes: int
     mime_type: str
-    checks: List[CheckResult] = field(default_factory=list)
+    checks: list[CheckResult] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "path": self.path,
             "size_bytes": self.size_bytes,
@@ -29,7 +29,7 @@ class FileEntry:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "FileEntry":
+    def from_dict(cls, data: dict[str, Any]) -> "FileEntry":
         if not isinstance(data, dict):
             raise ValueError(f"FileEntry must be an object, got {type(data).__name__}")
         try:
@@ -59,10 +59,10 @@ class DatasetReport:
     timestamp: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
-    dataset_checks: List[CheckResult] = field(default_factory=list)
-    files: List[FileEntry] = field(default_factory=list)
+    dataset_checks: list[CheckResult] = field(default_factory=list)
+    files: list[FileEntry] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "persistent_id": self.persistent_id,
             "label": self.label,
@@ -73,7 +73,7 @@ class DatasetReport:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "DatasetReport":
+    def from_dict(cls, data: dict[str, Any]) -> "DatasetReport":
         if not isinstance(data, dict):
             raise ValueError(f"DatasetReport must be an object, got {type(data).__name__}")
         try:

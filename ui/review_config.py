@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import copy
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -43,14 +43,13 @@ from ui.dialogs import show_critical, show_info, show_warning
 from ui.theme import action_button_style, selectable_labels
 from ui.widgets import AppButton, make_card, make_combo, make_search_field
 
-
 _LEVELS = ["required", "optional", "unchecked"]
 
 
 class ContentRuleDialog(QDialog):
     """Add/edit one text-search rule (filenames / metadata / file-content)."""
 
-    def __init__(self, parent=None, rule: Dict[str, Any] | None = None) -> None:
+    def __init__(self, parent=None, rule: dict[str, Any] | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Content rule")
         self.resize(520, 560)
@@ -104,7 +103,7 @@ class ContentRuleDialog(QDialog):
         btns.rejected.connect(self.reject)
         lay.addWidget(btns)
 
-    def result_rule(self, rule_id: str = "") -> Dict[str, Any] | None:
+    def result_rule(self, rule_id: str = "") -> dict[str, Any] | None:
         label = self._label.text().strip()
         pattern = self._pattern.text().strip()
         if not label or not pattern:
@@ -147,12 +146,12 @@ class ReviewConfigView(QWidget):
             import review_rules as _rr
 
             self._rr = _rr
-            self._rulesets: Dict[str, Dict[str, Any]] = copy.deepcopy(_rr.load_rulesets())
+            self._rulesets: dict[str, dict[str, Any]] = copy.deepcopy(_rr.load_rulesets())
         except Exception:
             self._rr = None  # type: ignore[assignment]
             self._rulesets = {}
         self._current = self._pick_initial_key()
-        self._schema: List[Dict[str, str]] | None = self._load_cached_schema()
+        self._schema: list[dict[str, str]] | None = self._load_cached_schema()
         # selection for the right-hand template editor
         self._sel_kind: str = "field"  # field | content | header | footer
         self._sel_key: str = ""
@@ -206,7 +205,7 @@ class ReviewConfigView(QWidget):
         except Exception:
             return "mcmaster-default"
 
-    def _load_cached_schema(self) -> List[Dict[str, str]] | None:
+    def _load_cached_schema(self) -> list[dict[str, str]] | None:
         try:
             from dataverse_client import read_metadata_fields_cache
 
@@ -218,7 +217,7 @@ class ReviewConfigView(QWidget):
             pass
         return None
 
-    def _current_ruleset(self) -> Dict[str, Any]:
+    def _current_ruleset(self) -> dict[str, Any]:
         rs = (self._rulesets or {}).get(self._current)
         if isinstance(rs, dict):
             return rs
@@ -406,7 +405,7 @@ class ReviewConfigView(QWidget):
 
     # -- data -> ui --------------------------------------------------------
 
-    def _schema_fields(self) -> List[Dict[str, str]]:
+    def _schema_fields(self) -> list[dict[str, str]]:
         if self._schema:
             return [dict(f) for f in self._schema if isinstance(f, dict) and f.get("field")]
         try:
@@ -427,14 +426,14 @@ class ReviewConfigView(QWidget):
                     base.append({"block": key[0], "field": key[1], "label": str(fr.get("label") or key[1])})
         return sorted(base, key=lambda f: (f.get("block") or "", f.get("field") or ""))
 
-    def _rule_entries(self) -> List[Dict[str, Any]]:
+    def _rule_entries(self) -> list[dict[str, Any]]:
         """One row per field rule plus unchecked schema leftovers.
 
         Rows are keyed by (block, field, handler): several rules may share
         one field (e.g. Author names vs ORCiDs both live on citation.author),
         so a plain (block, field) key would collide and edit the wrong rule.
         """
-        entries: List[Dict[str, Any]] = []
+        entries: list[dict[str, Any]] = []
         covered: set = set()
         schema_labels = {
             (str(f.get("block") or ""), str(f.get("field") or "")): str(f.get("block_label") or "")
@@ -722,7 +721,7 @@ class ReviewConfigView(QWidget):
         except Exception:
             pass
 
-    def _find_field_rule(self, block: str, field: str, handler: str) -> Dict[str, Any] | None:
+    def _find_field_rule(self, block: str, field: str, handler: str) -> dict[str, Any] | None:
         for fr in (self._current_ruleset().get("field_rules") or []):
             if not isinstance(fr, dict):
                 continue
@@ -799,7 +798,7 @@ class ReviewConfigView(QWidget):
         except Exception:
             pass
 
-    def _selected_content_rule(self) -> Dict[str, Any] | None:
+    def _selected_content_rule(self) -> dict[str, Any] | None:
         try:
             item = self._content_list.currentItem()
             rid = item.data(Qt.UserRole) if item else ""

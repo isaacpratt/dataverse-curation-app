@@ -55,7 +55,7 @@ python -c "import compileall; compileall.compile_dir('ui',quiet=1)"
 - `storage.py` — SQLite local state (`datasets`, `files`, `check_results`, `curation_actions`) plus JSON caches (`dataset_sizes.json`, `curation_labels.json`, `table_layout.json` with save/restore helpers).
 - `engine/checks/base.py` — `Check` base class and `CheckResult(check_id, level, passed, message, details)` dataclass with `to_dict/from_dict`.
 - `engine/checks/<format>_check.py` — 20 format modules (csv, xlsx, sav, dta, sas7bdat, json, xml, ipynb, sqlite, hdf5, nc, gpkg, tiff, images, pdf, text, code, containers, fastq, extensions); lazy `try/except ImportError` for heavy libs.
-- `engine/checks/_util.py` — `missing_library`, `detect_encoding`, `find_emails`.
+- `engine/checks/_util.py` — `missing_library`, `detect_encoding`, `find_emails`, `find_pii` (piigex + Canadian postal/SIN), `pii_result` (always-emit PII result with truncation copy).
 - `engine/checks/__init__.py` — `registry` of all checks.
 - `engine/report.py` — `DatasetReport`/`FileEntry` with JSON round-trip (`to_dict`/`from_dict`/`save`/`load`).
 - `engine/dispatcher.py` — maps file path to checks (compound names shed one compression layer: `.fq.gz` → fastq, `.tar.gz` → tar); dataset-level checks have empty `extensions`.

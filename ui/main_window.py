@@ -11,8 +11,12 @@ bar's repository badge always shows the chosen Dataverse (base URL +
 collection alias).
 """
 
+# ctypes at module level: only struct *layouts* live here (no handles), so
+# this is safe on every platform; all real Win32 calls stay Windows-gated.
+import ctypes
+
 from PySide6.QtCore import QEvent, QPoint, Qt
-from PySide6.QtGui import QShortcut, QKeySequence
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -20,22 +24,17 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
-    QSizePolicy,
 )
-
-# ctypes at module level: only struct *layouts* live here (no handles), so
-# this is safe on every platform; all real Win32 calls stay Windows-gated.
-import ctypes
-
-from ui.dialogs import show_warning
 
 from config import Config
 from ui.about_pane import AboutPane
 from ui.dashboard import DashboardView
 from ui.dataset_detail import DatasetDetailView
+from ui.dialogs import show_warning
 from ui.log_panel import LogPage
 from ui.settings_dialog import SettingsPane
 from ui.widgets import AppButton
@@ -897,7 +896,7 @@ class MainWindow(QMainWindow):
             pass
 
     def _topnav_is_interactive(self, topnav_pos) -> bool:
-        """True when the TopNav point sits on a clickable control."""
+        """Check whether the TopNav point sits on a clickable control."""
         try:
             for btn in self._topnav.findChildren(QPushButton):
                 try:

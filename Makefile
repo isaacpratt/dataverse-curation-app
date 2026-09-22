@@ -47,14 +47,23 @@ typecheck:
 # rebuilding (a few seconds), and the heavy lib folder persists across
 # builds until you explicitly `rm -rf dist/curation-app-full`.
 # ------------------------------------------------------------------
+# PyInstaller flags shared by lite recipes: heavy binary libs excluded;
+# hush/piigex are pure-Python secret/PII scanners and always ship (hidden
+# imports because checks load them inside functions).
+LITE_EXCLUDES = --exclude-module pyreadstat --exclude-module netCDF4 \
+	--exclude-module h5py --exclude-module scipy
+SECRET_HIDDENS = --hidden-import hush --hidden-import hush.scanner \
+	--hidden-import hush.rules --hidden-import hush.entropy \
+	--hidden-import piigex --hidden-import stdnum
+
 build:
 	$(PYTHON) -m PyInstaller --noconfirm --clean --name curation-app-lite --windowed --onefile \
-		--exclude-module pyreadstat --exclude-module netCDF4 --exclude-module h5py \
-		--exclude-module scipy \
+		$(LITE_EXCLUDES) $(SECRET_HIDDENS) \
 		--add-data "ui/assets;ui/assets" \
 		--workpath .pyi-cache \
 		main.py
 	$(PYTHON) -m PyInstaller --noconfirm --clean --name curation-app-full --windowed --onedir \
+		$(SECRET_HIDDENS) \
 		--add-data "ui/assets;ui/assets" --workpath .pyi-cache main.py
 	# Copy example config + checklist PDFs into the full folder so the
 	# lite exe can find them via its sibling lookup (no-op when absent).
@@ -64,8 +73,7 @@ build:
 # No --clean here so PyInstaller reuses its Analysis cache (~seconds).
 rebuild-lite:
 	$(PYTHON) -m PyInstaller --noconfirm --name curation-app-lite --windowed --onefile \
-		--exclude-module pyreadstat --exclude-module netCDF4 --exclude-module h5py \
-		--exclude-module scipy \
+		$(LITE_EXCLUDES) $(SECRET_HIDDENS) \
 		--add-data "ui/assets;ui/assets" \
 		--workpath .pyi-cache \
 		main.py
@@ -75,6 +83,7 @@ rebuild-lite:
 # need the lite exe.
 build-full:
 	$(PYTHON) -m PyInstaller --noconfirm --clean --name curation-app-full --windowed --onedir \
+		$(SECRET_HIDDENS) \
 		--add-data "ui/assets;ui/assets" --workpath .pyi-cache main.py
 
 # Smoke the lite exe without a display: --headless --help must exit 0 and

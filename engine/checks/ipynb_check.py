@@ -6,7 +6,6 @@ schema, cell counts, output presence and unexecuted-code detection.
 
 import json
 from pathlib import Path
-from typing import List
 
 from engine.checks.base import Check, CheckResult
 
@@ -20,12 +19,12 @@ class IpynbCheck(Check):
     check_id = "format.ipynb"
     extensions = {".ipynb"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         from engine.checks._util import skipped as _skipped
 
         name = path.name

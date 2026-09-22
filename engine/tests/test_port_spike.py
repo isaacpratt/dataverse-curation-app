@@ -1,7 +1,7 @@
-"""Phase 1 port-spike tests: run the ported checks against the sample data
-shipped with CUR_Res_CurationTools and assert parity of findings.
+"""Phase 1 port-spike tests against CUR_Res_CurationTools sample data.
 
-Skipped automatically when the sibling repo or its samples are absent.
+Run the ported checks and assert parity of findings. Skipped
+automatically when the sibling repo or its samples are absent.
 """
 
 from pathlib import Path

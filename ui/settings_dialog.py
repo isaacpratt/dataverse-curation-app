@@ -10,11 +10,10 @@ and emits `saved`. Closed via the Settings nav toggle (no Close button by
 design); `discarded` is kept for compat but no longer emitted by this pane.
 """
 
-from pathlib import Path
-
 import importlib.metadata
 import subprocess
 import sys
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QColor
@@ -31,12 +30,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from config import PRESETS, Config
 from dataverse_client import DataverseClient
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.theme import ERROR, PRIMARY, action_button_style, enable_table_copy, selectable_labels
 from ui.widgets import AppButton, AppTable, flush_table_style, make_combo, make_line_edit
-
-from config import PRESETS, Config
 
 # Compact face for buttons living inside table action cells: the standard
 # action_button_style padding (7px 14px) made "Reinstall"+"Uninstall" need
@@ -71,8 +69,10 @@ class _ShellWorker(QThread):
 
 
 class SettingsPane(QWidget):
-    """Edits dataverse.base_url/api_token/subtree, app.workspace and
-    optional tool paths. Persists to config.json on Save."""
+    """Edit dataverse.base_url/api_token/subtree, app.workspace and tool paths.
+
+    Persists to config.json on Save.
+    """
 
     saved = Signal()
     discarded = Signal()
@@ -112,7 +112,6 @@ class SettingsPane(QWidget):
         sub.setWordWrap(True)
         outer.addWidget(sub)
 
-        from PySide6.QtWidgets import QTabWidget
 
         tabs = QTabWidget()
 
@@ -305,7 +304,8 @@ class SettingsPane(QWidget):
         layout.addLayout(outer)
 
         try:
-            from PySide6.QtGui import QKeySequence as _QKS, QShortcut as _QSC
+            from PySide6.QtGui import QKeySequence as _QKS
+            from PySide6.QtGui import QShortcut as _QSC
 
             _QSC(_QKS("Ctrl+S", _QKS.PortableText), self, self._on_save)  # type: ignore[arg-type]
         except Exception:
@@ -380,7 +380,7 @@ class SettingsPane(QWidget):
 
     @staticmethod
     def _detect_tool(key: str, configured: str) -> str:
-        """Resolved binary path or '' — configured path wins, else PATH lookup."""
+        """Resolve a binary path — configured path wins, else PATH lookup ('' if missing)."""
         import shutil
 
         candidates: list[str] = []

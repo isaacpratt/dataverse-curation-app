@@ -1,23 +1,23 @@
-"""Dataverse Curation App - entry point.
+"""Launch the Dataverse Curation App entry point.
 
-Launches the desktop GUI (default); --headless runs the engine on a staged
+Default is the desktop GUI; --headless runs the engine on a staged
 dataset directory and writes a JSON report (see docs/development.md).
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
 
 def _sibling_libs_path() -> Path | None:
-    """If we're a frozen (PyInstaller) binary, look for a sibling folder
-    `curation-app-full/` next to the exe and return its path. The folder
-    should be an onedir PyInstaller build (or just a Python site-packages
-    tree) — anything we can prepend to sys.path to load the heavy optional
-    libraries (pyreadstat, netCDF4, h5py, …) without re-bundling them in
-    the lite onefile exe. The lite exe remains self-contained; the
-    sibling folder is purely additive.
+    """Find a sibling full-build libs folder next to a frozen exe.
+
+    Looks for `curation-app-full/` next to the exe and returns its path.
+    The folder should be an onedir PyInstaller build (or just a Python
+    site-packages tree) — anything we can prepend to sys.path to load the
+    heavy optional libraries (pyreadstat, netCDF4, h5py, …) without
+    re-bundling them in the lite onefile exe. The lite exe remains
+    self-contained; the sibling folder is purely additive.
     """
     if not getattr(sys, "frozen", False):
         return None
@@ -32,8 +32,10 @@ def _sibling_libs_path() -> Path | None:
 
 
 def _inject_sibling_libs() -> int:
-    """Prepend the sibling libs folder to sys.path. Returns the number of
-    new path entries added (0 if none / not frozen)."""
+    """Prepend the sibling libs folder to sys.path.
+
+    Returns the number of new path entries added (0 if none / not frozen).
+    """
     folder = _sibling_libs_path()
     if folder is None:
         return 0
@@ -59,18 +61,19 @@ def _inject_sibling_libs() -> int:
 # These imports are TYPE_CHECKING-only at runtime to keep --headless fast
 # (~300ms + ~100MB saved by not loading Qt). PyInstaller still discovers
 # them via the explicit hidden-imports in the spec / Makefile.
-from typing import TYPE_CHECKING as _TYPE_CHECKING
+from typing import TYPE_CHECKING as _TYPE_CHECKING  # noqa: E402
 
-if _TYPE_CHECKING:  # pragma: no cover
+if _TYPE_CHECKING:  # pragma: no cover  # noqa: E402
     import PySide6  # noqa: F401
     import PySide6.QtCore  # noqa: F401
     import PySide6.QtGui  # noqa: F401
     import PySide6.QtWidgets  # noqa: F401
+
     import response_draft  # noqa: F401
     import review_rules  # noqa: F401
-    import ui.main_window  # noqa: F401
     import ui.dashboard  # noqa: F401
     import ui.dataset_detail  # noqa: F401
+    import ui.main_window  # noqa: F401
     import ui.review_config  # noqa: F401
     import ui.settings_dialog  # noqa: F401
     import ui.workers  # noqa: F401

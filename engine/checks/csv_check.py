@@ -2,14 +2,13 @@
 
 Port of CUR_Res_CurationTools Scripts/Inspect_csv_Script.R: encoding guess,
 parse with delimiter sniffing, ragged-row detection, missing-cell share,
-duplicate rows and an email (PII) scan on a sample.
+duplicate rows and a structured-PII scan on a sample (piigex + CA pack).
 """
 
 import csv
 from pathlib import Path
-from typing import List
 
-from engine.checks._util import detect_encoding, find_emails
+from engine.checks._util import detect_encoding, find_pii, pii_result
 from engine.checks.base import Check, CheckResult
 
 try:
@@ -38,12 +37,12 @@ class CsvCheck(Check):
     check_id = "format.csv"
     extensions = {".csv", ".tsv"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         from engine.checks._util import skipped as _skipped
 
         name = path.name
@@ -96,9 +95,9 @@ class CsvCheck(Check):
             rows = 0
             widths = set()
             duplicates = 0
-            seen_rows = set()
+            seen_rows: set[int] = set()
             truncated = False
-            emails = set()
+            pii_findings = []
             for row in reader:
                 rows += 1
                 if rows > _MAX_ROWS_SCANNED:
@@ -111,7 +110,7 @@ class CsvCheck(Check):
                 elif len(seen_rows) < _MAX_SEEN_ROWS:
                     seen_rows.add(key)
                 if rows <= _PII_SAMPLE_ROWS:
-                    emails.update(find_emails(" ".join(row)))
+                    pii_findings.extend(find_pii(" ".join(row)))
         # Single-pass above already populated rows/widths/duplicates.
 
         width = next(iter(widths), 0)
@@ -149,24 +148,21 @@ class CsvCheck(Check):
 
         results = [openable, structure, content]
 
-        if emails:
-            results.append(
-                CheckResult(
-                    check_id="format.csv.pii",
-                    level="warning",
-                    passed=False,
-                    message=f"{name}: possible email addresses found",
-                    details={"emails": sorted(emails)[:10]},
-                )
+        # Dedupe across rows (same value in many rows → one sample entry).
+        seen_pii = set()
+        unique_pii = []
+        for item in pii_findings:
+            pii_key = (item["type"], item["value"])
+            if pii_key not in seen_pii:
+                seen_pii.add(pii_key)
+                unique_pii.append(item)
+
+        results.append(
+            pii_result(
+                "format.csv.pii",
+                name,
+                unique_pii,
+                scope=f"in first {_PII_SAMPLE_ROWS} rows",
             )
-        else:
-            results.append(
-                CheckResult(
-                    check_id="format.csv.pii",
-                    level="info",
-                    passed=True,
-                    message=f"{name}: no email addresses in first {_PII_SAMPLE_ROWS} rows",
-                    details={"rows_scanned": min(rows, _PII_SAMPLE_ROWS)},
-                )
-            )
+        )
         return results

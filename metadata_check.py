@@ -8,13 +8,12 @@ Profiles:
 Each result: {field, requirement, value, status}
 """
 
-import re
-from typing import Any, Dict, List, Tuple
-
 import json as _json
+import re
 from pathlib import Path as _Path
+from typing import Any
 
-PROFILES: Dict[str, Dict[str, Any]] = {
+PROFILES: dict[str, dict[str, Any]] = {
     "McMaster": {
         "label": "McMaster — Curation Log + Depositor Checklist",
         "description": "Rules from docs/CurationLog.pdf and docs/DepositorChecklist.pdf (McMaster Dataverse)",
@@ -115,11 +114,11 @@ _register_rulesets_in_profiles()
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
 
 
-def _fields_for_block(metadata_blocks: Dict[str, Any], block_name: str) -> List[Dict[str, Any]]:
+def _fields_for_block(metadata_blocks: dict[str, Any], block_name: str) -> list[dict[str, Any]]:
     return metadata_blocks.get(block_name, {}).get("fields", [])
 
 
-def _field(metadata_blocks: Dict[str, Any], block_name: str, type_name: str) -> Any:
+def _field(metadata_blocks: dict[str, Any], block_name: str, type_name: str) -> Any:
     for field in _fields_for_block(metadata_blocks, block_name):
         if field.get("typeName") == type_name:
             return field.get("value")
@@ -178,7 +177,7 @@ def _display_value(value: Any, max_len: int = 120) -> str:
                 else:
                     # Fallback: join primitive sub-values
                     sub_vals = []
-                    for kk, vv in item.items():
+                    for _kk, vv in item.items():
                         if isinstance(vv, dict) and vv.get("value"):
                             sub_vals.append(str(vv["value"]))
                         elif isinstance(vv, str) and vv.strip():
@@ -201,7 +200,7 @@ def _display_value(value: Any, max_len: int = 120) -> str:
     return str(value)[:max_len]
 
 
-def _extract_orcid_value(metadata_blocks: Dict[str, Any]) -> str:
+def _extract_orcid_value(metadata_blocks: dict[str, Any]) -> str:
     authors = _field(metadata_blocks, "citation", "author") or []
     seq = authors if isinstance(authors, list) else [authors]
     fallback = ""
@@ -221,7 +220,7 @@ def _extract_orcid_value(metadata_blocks: Dict[str, Any]) -> str:
     return fallback
 
 
-def _check_mcmaster(metadata: dict, blocks: Dict[str, Any], inventory: List[Dict[str, Any]] | None) -> List[Dict[str, Any]]:
+def _check_mcmaster(metadata: dict, blocks: dict[str, Any], inventory: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     def has(block: str, name: str) -> bool:
         return _nonempty(_field(blocks, block, name))
 
@@ -259,7 +258,7 @@ def _check_mcmaster(metadata: dict, blocks: Dict[str, Any], inventory: List[Dict
         if not readme_ok:
             readme_val = "No README file found"
 
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
 
     def add(field: str, requirement: str, value: str, ok: bool) -> None:
         results.append({"field": field, "requirement": requirement, "value": value or "—", "status": "complete" if ok else "incomplete"})
@@ -342,14 +341,14 @@ def _check_mcmaster(metadata: dict, blocks: Dict[str, Any], inventory: List[Dict
     return results
 
 
-def _check_minimal(metadata: dict, blocks: Dict[str, Any], inventory: List[Dict[str, Any]] | None) -> List[Dict[str, Any]]:
+def _check_minimal(metadata: dict, blocks: dict[str, Any], inventory: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     def has(block: str, name: str) -> bool:
         return _nonempty(_field(blocks, block, name))
 
     def val(block: str, name: str) -> str:
         return _display_value(_field(blocks, block, name))
 
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     for field, req in [
         ("title", "Minimal — Required: Title"),
         ("author", "Minimal — Required: Author"),
@@ -364,9 +363,9 @@ def _check_minimal(metadata: dict, blocks: Dict[str, Any], inventory: List[Dict[
 def check_metadata_completeness(
     metadata: dict,
     profile: str = DEFAULT_PROFILE,
-    inventory: List[Dict[str, Any]] | None = None,
+    inventory: list[dict[str, Any]] | None = None,
     staged_dir: Any = None,
-) -> List[dict]:
+) -> list[dict]:
     """Deterministic completeness check for the chosen profile/ruleset.
 
     Profiles `McMaster`/`Minimal` and any custom v2 ruleset key all evaluate
@@ -402,10 +401,10 @@ def check_metadata_completeness(
 def check_with_ruleset(
     metadata: dict,
     ruleset_key: str = "mcmaster-default",
-    inventory: List[Dict[str, Any]] | None = None,
+    inventory: list[dict[str, Any]] | None = None,
     staged_dir: Any = None,
-    rulesets: Dict[str, Any] | None = None,
-) -> Tuple[List[dict], Dict[str, Any]]:
+    rulesets: dict[str, Any] | None = None,
+) -> tuple[list[dict], dict[str, Any]]:
     """Full rule evaluation (keeps rule_id/level/pending for the Response pane)."""
     import review_rules as _rr
 
@@ -428,6 +427,6 @@ def refresh_profiles_from_rulesets() -> None:
 def check_completeness(
     metadata: dict,
     profile: str = DEFAULT_PROFILE,
-    inventory: List[Dict[str, Any]] | None = None,
-) -> List[dict]:
+    inventory: list[dict[str, Any]] | None = None,
+) -> list[dict]:
     return check_metadata_completeness(metadata, profile, inventory)

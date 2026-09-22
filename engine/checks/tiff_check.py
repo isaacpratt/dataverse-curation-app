@@ -5,7 +5,6 @@ page/series structure, dimensions, data type and compression.
 """
 
 from pathlib import Path
-from typing import List
 
 from engine.checks.base import Check, CheckResult
 
@@ -16,12 +15,12 @@ class TiffCheck(Check):
     check_id = "format.tiff"
     extensions = {".tif", ".tiff"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         try:
             import tifffile
         except ImportError:

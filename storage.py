@@ -20,7 +20,7 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS datasets (
@@ -143,8 +143,8 @@ class AppState:
         action: str,
         notes: str = "",
         actor: str = "curator",
-        details: Optional[Dict[str, Any]] = None,
-        timestamp: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        timestamp: str | None = None,
     ) -> int:
         """Append one curation action. Returns the new row id."""
         ts = timestamp or _utcnow_iso()
@@ -165,7 +165,7 @@ class AppState:
             self._conn.commit()
             return int(cur.lastrowid or 0)
 
-    def list_actions(self, dataset_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    def list_actions(self, dataset_id: str, limit: int = 100) -> list[dict[str, Any]]:
         """Newest-first action log for one dataset."""
         cur = self._conn.execute(
             "SELECT timestamp, action, actor, notes, details_json "
@@ -173,7 +173,7 @@ class AppState:
             "ORDER BY timestamp DESC, id DESC LIMIT ?",
             (dataset_id, limit),
         )
-        out: List[Dict[str, Any]] = []
+        out: list[dict[str, Any]] = []
         for row in cur.fetchall():
             try:
                 details = json.loads(row["details_json"] or "{}")
@@ -190,7 +190,7 @@ class AppState:
             )
         return out
 
-    def last_action(self, dataset_id: str, action: str) -> Optional[Dict[str, Any]]:
+    def last_action(self, dataset_id: str, action: str) -> dict[str, Any] | None:
         """Newest action of a given type, or None."""
         cur = self._conn.execute(
             "SELECT timestamp, action, actor, notes, details_json "
@@ -215,7 +215,7 @@ class AppState:
 
 
 def open_state(workspace: Path) -> AppState:
-    """Convenience: open <workspace>/state.db (creating dirs as needed)."""
+    """Open <workspace>/state.db (creating dirs as needed)."""
     return AppState(Path(workspace) / "state.db")
 
 
@@ -223,7 +223,7 @@ _SIZE_CACHE_NAME = "dataset_sizes.json"
 _TABLE_LAYOUT_NAME = "table_layout.json"
 
 
-def read_size_cache(workspace: Path) -> Dict[str, Dict[str, Any]]:
+def read_size_cache(workspace: Path) -> dict[str, dict[str, Any]]:
     """{persistent_id: {"size": bytes, "files": n}} from the last metadata load.
 
     Never raises; returns {} when the cache is missing or corrupt.
@@ -234,7 +234,7 @@ def read_size_cache(workspace: Path) -> Dict[str, Dict[str, Any]]:
         return {}
     if not isinstance(raw, dict):
         return {}
-    out: Dict[str, Dict[str, Any]] = {}
+    out: dict[str, dict[str, Any]] = {}
     for pid, entry in raw.items():
         if not isinstance(entry, dict):
             continue
@@ -403,7 +403,7 @@ def apply_table_view(header, snap) -> None:
                 # target slot at a time (moveSection works in visual slots).
                 for target in range(count):
                     logical = next(
-                        (l for l in range(count) if order[l] == target), None
+                        (i for i in range(count) if order[i] == target), None
                     )
                     if logical is None:
                         continue

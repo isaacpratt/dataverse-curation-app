@@ -14,6 +14,7 @@ import pytest
 
 from download_manager import DownloadManager
 from engine.checks._util import detect_encoding, missing_library
+from engine.checks.code_check import CodeCheck
 from engine.checks.containers_check import ContainersCheck
 from engine.checks.csv_check import CsvCheck
 from engine.checks.extensions_check import ExtensionsCheck
@@ -25,10 +26,8 @@ from engine.checks.text_check import TextCheck
 from engine.checks.tiff_check import TiffCheck
 from engine.checks.xlsx_check import XlsxCheck
 from engine.checks.xml_check import XmlCheck
-from engine.checks.code_check import CodeCheck
 from engine.dispatcher import checks_for_file
 from engine.runner import collect_files, list_planned_checks, run_report
-
 
 # -- dispatcher -----------------------------------------------------------
 
@@ -202,7 +201,7 @@ def test_extract_atomic_preserves_stage(tmp_path):
     (dest / "old" / "keep.txt").write_text("keep")
     bad = tmp_path / "bad.zip"
     bad.write_bytes(b"not a zip")
-    with pytest.raises(Exception):
+    with pytest.raises((zipfile.BadZipFile, OSError, ValueError, RuntimeError)):
         manager._extract(bad, dest)
     assert (dest / "old" / "keep.txt").read_text() == "keep"
     assert not (tmp_path / "stage.new").exists()
@@ -289,7 +288,6 @@ def test_netcdf_name_patterns():
 
 
 def test_extensions_nested_junk_and_single_component(tmp_path):
-    from engine.checks.extensions_check import ExtensionsCheck
 
     nested = tmp_path / "a" / "__MACOSX" / "sub"
     nested.mkdir(parents=True)

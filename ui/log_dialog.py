@@ -1,6 +1,5 @@
 """Log dialog: shows all communication with the Dataverse server."""
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QDialog,

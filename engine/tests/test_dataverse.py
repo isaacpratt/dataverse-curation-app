@@ -896,9 +896,9 @@ def test_get_me_returns_profile_and_caches(monkeypatch):
 
 
 def test_get_me_denied_is_none_without_caching(monkeypatch):
-    import dataverse_client as _dc
-
     import requests
+
+    import dataverse_client as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
 
@@ -944,9 +944,9 @@ def test_get_collection_roles_matches_me_identifier(monkeypatch):
 
 
 def test_get_collection_roles_denied_or_empty(monkeypatch):
-    import dataverse_client as _dc
-
     import requests
+
+    import dataverse_client as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
     monkeypatch.setattr(_dc, "_ROLE_CACHE", {})

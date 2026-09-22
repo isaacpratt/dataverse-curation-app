@@ -1,6 +1,6 @@
 """Always-emit contract: a module run yields one result per owned check_id."""
 
-from pathlib import Path
+import pytest
 
 from engine.checks import registry
 
@@ -20,14 +20,15 @@ def _expected_ids():
             "format.csv.content", "format.csv.pii",
         },
         "format.code": {"format.code.readable", "format.code.todo_markers"},
+        "format.secrets": {"format.secrets"},
         "format.text": {
             "format.text.readable", "format.text.line_endings",
-            "format.text.control_chars",
+            "format.text.control_chars", "format.text.pii",
         },
         "format.xlsx": {
             "format.xlsx.openable", "format.xlsx.sheets",
             "format.xlsx.hidden", "format.xlsx.macros",
-            "format.xlsx.tabular",
+            "format.xlsx.tabular", "format.xlsx.pii",
         },
         "format.hdf5": {"format.hdf5.openable", "format.hdf5.external_links"},
         "format.fastq": {"format.fastq.valid", "format.fastq.metadata"},
@@ -68,13 +69,15 @@ def test_clean_files_emit_full_id_sets(tmp_path):
         "format.containers": ("a.zip",),
         "format.csv": ("a,b\n1,2\n",),
         "format.code": ("x = 1\n",),
+        "format.secrets": ("x = 1\n",),
         "format.text": ("hello\n",),
+        "format.xlsx": None,  # written below as real workbook via openpyxl path
         "format.fastq": ("@r\nACGT\n+\nIIII\n",),
         "format.ipynb": ('{"nbformat": 4, "cells": []}',),
     }
     import zipfile
 
-    for check_id, cls in registry.items():
+    for _check_id, cls in registry.items():
         parent = cls.check_id
         if parent not in expected:
             continue  # single-id modules trivially satisfy the contract
@@ -98,6 +101,14 @@ def test_clean_files_emit_full_id_sets(tmp_path):
         elif parent == "format.ipynb":
             p = tmp_path / "n.ipynb"
             p.write_text(samples[parent][0])
+            results = cls().run([p])
+        elif parent == "format.xlsx":
+            openpyxl = pytest.importorskip("openpyxl")
+            p = tmp_path / "s.xlsx"
+            wb = openpyxl.Workbook()
+            wb.active.append(["a", "b"])
+            wb.active.append([1, 2])
+            wb.save(str(p))
             results = cls().run([p])
         else:
             ext = next(iter(cls.extensions))

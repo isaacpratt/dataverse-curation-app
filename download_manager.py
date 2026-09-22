@@ -9,9 +9,9 @@ Qt worker threads; see docs/architecture.md.
 import hashlib
 import shutil
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
 
 _STREAM_CHUNK = 1 << 20
 
@@ -169,7 +169,7 @@ class DownloadManager:
         return missing
 
     def is_fully_staged(self, persistent_id: str, inventory: list | None = None) -> bool:
-        """True when every inventory file is already staged with matching size."""
+        """Check whether every inventory file is already staged with matching size."""
         try:
             inv = inventory if inventory is not None else self.inventory(persistent_id)
             return bool(inv) and not self.missing_files(persistent_id, inv)
@@ -209,7 +209,7 @@ class DownloadManager:
             pass
 
     def load_metadata(self, persistent_id: str) -> tuple:
-        """Cached (metadata, inventory) or (None, None) — never raises."""
+        """Load cached (metadata, inventory) or (None, None) — never raises."""
         try:
             import json as _json
 
@@ -228,7 +228,7 @@ class DownloadManager:
     def approve_and_download(
         self,
         persistent_id: str,
-        progress: Optional[Callable[[int], None]] = None,
+        progress: Callable[[int], None] | None = None,
     ) -> Path:
         """Download the bundle and stage its contents for the check engine.
 
@@ -256,9 +256,9 @@ class DownloadManager:
         self,
         persistent_id: str,
         inventory: list | None = None,
-        progress: Optional[Callable[[int], None]] = None,
+        progress: Callable[[int], None] | None = None,
         max_workers: int = 1,
-    ) -> List[str]:
+    ) -> list[str]:
         """Fetch original uploads behind tabular .tab derivatives.
 
         Returns staged original paths. Skips files already staged with a
@@ -320,7 +320,7 @@ class DownloadManager:
                     pass
                 return None
 
-        staged: List[str] = []
+        staged: list[str] = []
         tabular_items = [it for it in inv if isinstance(it, dict) and it.get("tabular")]
         if max_workers and max_workers > 1 and len(tabular_items) > 1:
             from concurrent.futures import ThreadPoolExecutor
@@ -343,9 +343,9 @@ class DownloadManager:
     def verify(
         self,
         persistent_id: str,
-        progress: Optional[Callable[[int, int], None]] = None,
+        progress: Callable[[int, int], None] | None = None,
         max_workers: int = 1,
-    ) -> Tuple[bool, List[str], List[str]]:
+    ) -> tuple[bool, list[str], list[str]]:
         """Rehash staged files against the Dataverse inventory checksums.
 
         Returns (ok, problems, warnings). Missing files, unsupported
@@ -357,8 +357,8 @@ class DownloadManager:
         """
         inventory = self._client.get_file_inventory(persistent_id)
         staged_root = self.files_dir(persistent_id)
-        problems: List[str] = []
-        warnings: List[str] = []
+        problems: list[str] = []
+        warnings: list[str] = []
         total = len(inventory) if isinstance(inventory, list) else 0
         done = 0
 

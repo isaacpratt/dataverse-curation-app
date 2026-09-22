@@ -52,7 +52,7 @@ class Config:
     app: AppConfig = field(default_factory=AppConfig)
 
     @classmethod
-    def load(cls, path: Path | None = None) -> "Config":
+    def load(cls, path: Path | None = None) -> Config:
         cfg_path = Path(path) if path else DEFAULT_CONFIG_PATH
         # Env overrides win over file (CI / headless secrets without
         # persisting tokens to disk).

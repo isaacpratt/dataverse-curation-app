@@ -8,7 +8,7 @@ health sample of the first variable.
 
 import re
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 from engine.checks.base import Check, CheckResult
 
@@ -30,7 +30,7 @@ def _is_georeferenced(ds: Any) -> bool:
 
 
 def _data_health(ds: Any) -> tuple[str, bool]:
-    """Returns (message, healthy). Mirrors the R 'All NaNs (Empty)' scan."""
+    """Return (message, healthy). Mirrors the R 'All NaNs (Empty)' scan."""
     if not ds.variables:
         return ("no variables", False)
     first = next(iter(ds.variables.values()))
@@ -59,14 +59,14 @@ class NcCheck(Check):
     check_id = "format.netcdf"
     extensions = {".nc", ".cdf"}
 
-    def run(self, files: List[Path]) -> List[CheckResult]:
+    def run(self, files: list[Path]) -> list[CheckResult]:
         # Per-file isolation: a fault in one file becomes a finding, never a
         # batch-killing crash (the `with ds:` body below is fallible).
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> List[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:
         try:
             from netCDF4 import Dataset
         except ImportError:
