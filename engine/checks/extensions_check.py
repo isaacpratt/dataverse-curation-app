@@ -68,7 +68,7 @@ class ExtensionsCheck(Check):
                 level="info",
                 passed=True,
                 message=f"{len(files)} files; {distribution}",
-                details={"counts": dict(extensions)},
+                details={"counts": dict(extensions), "files_checked": len(files)},
             )
         ]
 
@@ -80,6 +80,17 @@ class ExtensionsCheck(Check):
                     passed=False,
                     message=f"{len(zero_byte)} zero-byte file(s): "
                     + ", ".join(zero_byte[:10]),
+                    details={"count": len(zero_byte), "files": zero_byte[:10]},
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    check_id="inventory.zero_byte",
+                    level="info",
+                    passed=True,
+                    message=f"No zero-byte files ({len(files)} files checked)",
+                    details={"count": 0, "files_checked": len(files)},
                 )
             )
         if executables:
@@ -89,6 +100,17 @@ class ExtensionsCheck(Check):
                     level="warning",
                     passed=False,
                     message=f"executable file(s): " + ", ".join(executables[:10]),
+                    details={"count": len(executables), "files": executables[:10]},
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    check_id="inventory.executables",
+                    level="info",
+                    passed=True,
+                    message="No executables (.exe/.bat/.sh/.bin/.jar/.msi/.com)",
+                    details={"count": 0, "files_checked": len(files)},
                 )
             )
         if junk:
@@ -98,6 +120,17 @@ class ExtensionsCheck(Check):
                     level="warning",
                     passed=False,
                     message=f"system junk file(s): " + ", ".join(junk[:10]),
+                    details={"count": len(junk), "files": junk[:10]},
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    check_id="inventory.system_junk",
+                    level="info",
+                    passed=True,
+                    message="No system junk (.DS_Store/Thumbs.db/__MACOSX)",
+                    details={"count": 0, "files_checked": len(files)},
                 )
             )
         return results

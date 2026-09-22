@@ -29,7 +29,26 @@ class CheckResult:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CheckResult":
-        return cls(**data)
+        """Strict parse: raises ValueError on corrupt/foreign payloads."""
+        if not isinstance(data, dict):
+            raise ValueError(f"CheckResult must be an object, got {type(data).__name__}")
+        try:
+            check_id = str(data["check_id"])
+            level = str(data["level"])
+            passed = bool(data["passed"])
+            message = str(data["message"])
+        except KeyError as exc:
+            raise ValueError(f"CheckResult missing required field {exc}") from exc
+        details = data.get("details", {})
+        if not isinstance(details, dict):
+            raise ValueError("CheckResult.details must be an object")
+        return cls(
+            check_id=check_id,
+            level=level,
+            passed=passed,
+            message=message,
+            details=details,
+        )
 
 
 class Check:

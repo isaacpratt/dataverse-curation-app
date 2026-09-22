@@ -34,6 +34,8 @@ class XlsxCheck(Check):
         return run_per_file(self, files, self._run_one)
 
     def _run_one(self, path: Path) -> List[CheckResult]:
+        from engine.checks._util import skipped as _skipped
+
         name = path.name
         suffix = path.suffix.lower()
         is_macro = suffix == ".xlsm"
@@ -49,7 +51,23 @@ class XlsxCheck(Check):
                         f"{name}: legacy binary .xls - convert to .xlsx "
                         "for long-term preservation"
                     ),
-                )
+                ),
+                _skipped(
+                    "format.xlsx.sheets",
+                    f"{name}: sheet scan skipped (legacy .xls)",
+                ),
+                _skipped(
+                    "format.xlsx.hidden",
+                    f"{name}: hidden-sheet scan skipped (legacy .xls)",
+                ),
+                _skipped(
+                    "format.xlsx.macros",
+                    f"{name}: macro scan skipped (legacy .xls)",
+                ),
+                _skipped(
+                    "format.xlsx.tabular",
+                    f"{name}: tabular scan skipped (legacy .xls)",
+                ),
             ]
 
         try:
@@ -57,7 +75,25 @@ class XlsxCheck(Check):
         except ImportError:
             from engine.checks._util import missing_library
 
-            return [missing_library("format.xlsx.openable", "openpyxl")]
+            return [
+                missing_library("format.xlsx.openable", "openpyxl"),
+                _skipped(
+                    "format.xlsx.sheets",
+                    f"{name}: sheet scan skipped (openpyxl not installed)",
+                ),
+                _skipped(
+                    "format.xlsx.hidden",
+                    f"{name}: hidden-sheet scan skipped (openpyxl not installed)",
+                ),
+                _skipped(
+                    "format.xlsx.macros",
+                    f"{name}: macro scan skipped (openpyxl not installed)",
+                ),
+                _skipped(
+                    "format.xlsx.tabular",
+                    f"{name}: tabular scan skipped (openpyxl not installed)",
+                ),
+            ]
 
         workbook = openpyxl.load_workbook(str(path), read_only=True, keep_links=False)
         try:
@@ -67,8 +103,13 @@ class XlsxCheck(Check):
             sheets = []
             messy_sheets = []
             for sheet_name in sheet_names:
+                # Cache worksheet handle (was: 3x workbook[s] lookups per sheet).
+                ws = workbook[sheet_name]
                 headers, messy = _sheet_headers(workbook, sheet_name)
-                dims = workbook[sheet_name].calculate_dimension()
+                try:
+                    dims = ws.calculate_dimension()
+                except Exception:
+                    dims = ""
                 sheets.append({"name": sheet_name, "dimensions": dims})
                 if messy:
                     messy_sheets.append(sheet_name)
@@ -97,6 +138,17 @@ class XlsxCheck(Check):
                     level="warning",
                     passed=False,
                     message=f"{name}: {len(hidden)} hidden sheet(s): {', '.join(hidden)}",
+                    details={"hidden": hidden},
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    check_id="format.xlsx.hidden",
+                    level="info",
+                    passed=True,
+                    message=f"{name}: no hidden sheets",
+                    details={"hidden": []},
                 )
             )
         if is_macro:
@@ -108,6 +160,25 @@ class XlsxCheck(Check):
                     message=f"{name}: macro-enabled workbook (.xlsm)",
                 )
             )
+        else:
+            from engine.checks._util import skipped as _skipped2
+
+            if suffix == ".xlsm":
+                results.append(
+                    CheckResult(
+                        check_id="format.xlsx.macros",
+                        level="info",
+                        passed=True,
+                        message=f"{name}: no macros detected",
+                    )
+                )
+            else:
+                results.append(
+                    _skipped2(
+                        "format.xlsx.macros",
+                        f"{name}: macro scan not applicable (not .xlsm)",
+                    )
+                )
         if messy_sheets:
             results.append(
                 CheckResult(
@@ -115,6 +186,17 @@ class XlsxCheck(Check):
                     level="warning",
                     passed=False,
                     message=f"{name}: sheet(s) may be non-tabular: {', '.join(messy_sheets)}",
+                    details={"messy_sheets": messy_sheets},
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    check_id="format.xlsx.tabular",
+                    level="info",
+                    passed=True,
+                    message=f"{name}: all sheets look tabular",
+                    details={"sheets_checked": len(sheet_names)},
                 )
             )
         return results

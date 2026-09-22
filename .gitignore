@@ -8,10 +8,30 @@ dist/
 # Local full-build copy used for fast testing (hundreds of MB, regenerable
 # via `make build-full` — never commit).
 curation-app-lite-win/
+curation-app-full/
 *.db
+*.sqlite
+*.sqlite-journal
+*.log
 config.json
+requirements_profiles.json
+dashboard_cache.json
+dataset_sizes.json
+table_layout.json
 .curation-workspace/
+workspace/
+downloads/
 .idea/
 .vscode/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.env
+.env.*
+.DS_Store
+Thumbs.db
+.pyi-cache/
 # Local AI-agent tooling (skills, sessions) — environment-specific, not app source.
 .opencode/

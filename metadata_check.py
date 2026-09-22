@@ -9,7 +9,7 @@ Each result: {field, requirement, value, status}
 """
 
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import json as _json
 from pathlib import Path as _Path
@@ -18,14 +18,19 @@ PROFILES: Dict[str, Dict[str, Any]] = {
     "McMaster": {
         "label": "McMaster — Curation Log + Depositor Checklist",
         "description": "Rules from docs/CurationLog.pdf and docs/DepositorChecklist.pdf (McMaster Dataverse)",
+        "ruleset": "mcmaster-default",
     },
     "Minimal": {
         "label": "Minimal — Dataverse core",
         "description": "Only Dataverse core mandatory fields (Title, Author, Contact, Description, Subject)",
+        "ruleset": "minimal",
     },
 }
 
 DEFAULT_PROFILE = "McMaster"
+
+# Legacy profile key -> v2 ruleset key (custom rulesets use their own key).
+PROFILE_TO_RULESET = {"McMaster": "mcmaster-default", "Minimal": "minimal"}
 
 _FILE_NAME = "requirements_profiles.json"
 
@@ -47,17 +52,54 @@ def profiles_path() -> _Path:
     return _Path(_FILE_NAME)
 
 
+# Keys PROFILES gained from v2 rulesets (tracked so deleted rulesets can be
+# removed again on refresh, not just added).
+_V2_PROFILE_KEYS: set = set()
+
+
 # Load custom profiles from file if present (written by Requirements dialog)
+# Supports both the legacy flat shape and the v2 {version, rulesets} shape
+# (written by the Review-configuration page). v2 rulesets appear as extra
+# PROFILES entries so the dataset combo lists them.
+def _register_rulesets_in_profiles() -> None:
+    try:
+        import review_rules as _rr
+
+        pool = _rr.load_rulesets()
+        for _key, _rs in pool.items():
+            if _key in ("mcmaster-default", "minimal"):
+                continue
+            PROFILES[_key] = {
+                "label": str(_rs.get("label") or _key),
+                "description": str(_rs.get("description") or ""),
+                "ruleset": _key,
+            }
+            _V2_PROFILE_KEYS.add(_key)
+        # Drop customs that no longer exist (deleted in Review configuration).
+        for _stale in [k for k in _V2_PROFILE_KEYS if k not in pool]:
+            PROFILES.pop(_stale, None)
+            _V2_PROFILE_KEYS.discard(_stale)
+    except Exception:
+        pass
+
+
 try:
     _profiles_path = profiles_path()
     if _profiles_path.exists():
         _loaded = _json.loads(_profiles_path.read_text(encoding="utf-8"))
-        if isinstance(_loaded, dict):
+        if isinstance(_loaded, dict) and _loaded.get("version") == 2 and isinstance(_loaded.get("rulesets"), dict):
+            pass  # v2 file: profiles come from review_rules (see below)
+        elif isinstance(_loaded, dict):
             for k, v in _loaded.items():
+                if k in ("version", "rulesets"):
+                    continue
+                if not isinstance(k, str) or not isinstance(v, dict):
+                    # Skip malformed entries without mutating built-ins.
+                    continue
                 if k not in PROFILES:
-                    PROFILES[k] = v
+                    PROFILES[k] = dict(v)
                 else:
-                    PROFILES[k].update(v)
+                    PROFILES[k] = {**PROFILES[k], **v}
         elif _loaded is not None:
             raise ValueError("profiles JSON must be an object")
 except Exception as exc:
@@ -67,6 +109,8 @@ except Exception as exc:
         get_app_log().error(f"requirements profiles unreadable ({exc}) — using built-ins")
     except Exception:
         pass
+
+_register_rulesets_in_profiles()
 
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
 
@@ -159,15 +203,22 @@ def _display_value(value: Any, max_len: int = 120) -> str:
 
 def _extract_orcid_value(metadata_blocks: Dict[str, Any]) -> str:
     authors = _field(metadata_blocks, "citation", "author") or []
-    for author in authors if isinstance(authors, list) else [authors]:
-        if isinstance(author, dict):
-            id_val = author.get("authorIdentifier", {})
-            scheme = author.get("authorIdentifierScheme", {})
-            id_str = id_val.get("value", "") if isinstance(id_val, dict) else str(id_val or "")
-            scheme_str = scheme.get("value", "") if isinstance(scheme, dict) else str(scheme or "")
-            if "orcid" in str(scheme_str).lower() and id_str.strip():
-                return id_str.strip()
-    return ""
+    seq = authors if isinstance(authors, list) else [authors]
+    fallback = ""
+    for author in seq:
+        if not isinstance(author, dict):
+            continue
+        id_val = author.get("authorIdentifier", {})
+        scheme = author.get("authorIdentifierScheme", {})
+        id_str = id_val.get("value", "") if isinstance(id_val, dict) else str(id_val or "")
+        scheme_str = scheme.get("value", "") if isinstance(scheme, dict) else str(scheme or "")
+        if "orcid" in str(scheme_str).lower() and id_str.strip():
+            cleaned = id_str.strip()
+            # Prefer a valid ORCID; keep first found as fallback.
+            if ORCID_RE.match(cleaned):
+                return cleaned
+            fallback = fallback or cleaned
+    return fallback
 
 
 def _check_mcmaster(metadata: dict, blocks: Dict[str, Any], inventory: List[Dict[str, Any]] | None) -> List[Dict[str, Any]]:
@@ -192,9 +243,16 @@ def _check_mcmaster(metadata: dict, blocks: Dict[str, Any], inventory: List[Dict
     elif len(inventory) == 0:
         readme_val = "No files in dataset — README not applicable"
     else:
+        from pathlib import Path as _P
+
         for f in inventory:
-            path = (f.get("path") or f.get("label") or "").lower()
-            if "readme" in path:
+            if not isinstance(f, dict):
+                continue
+            raw_path = str(f.get("path") or f.get("label") or "")
+            base = _P(raw_path).name.lower()
+            # Match README as a basename (readme, readme.md/txt, readme_*),
+            # not any substring (avoids myreadme_data.csv false positives).
+            if base == "readme" or base.startswith(("readme.", "readme_", "readme-")):
                 readme_ok = True
                 readme_val = f.get("path") or f.get("label") or "found"
                 break
@@ -211,13 +269,23 @@ def _check_mcmaster(metadata: dict, blocks: Dict[str, Any], inventory: List[Dict
     desc_raw = _field(blocks, "citation", "dsDescription")
     desc_val = _display_value(desc_raw)
     add("Description", "McMaster — Required (Curation Log: Full Citation; Checklist: Basic Metadata)", desc_val, has("citation", "dsDescription"))
-    authors_ok = has("citation", "author") and all(
-        _nonempty((a or {}).get("authorName", {})) for a in (_field(blocks, "citation", "author") or []) if isinstance(a, dict)
+    _authors_raw = _field(blocks, "citation", "author") or []
+    _authors = [a for a in _authors_raw if isinstance(a, dict)] if isinstance(_authors_raw, list) else []
+    authors_ok = has("citation", "author") and bool(_authors) and all(
+        _nonempty((a or {}).get("authorName", {})) for a in _authors
     )
-    affil_ok = isinstance(_field(blocks, "citation", "author") or [], list) and all(
-        _nonempty((a or {}).get("authorAffiliation", {})) for a in (_field(blocks, "citation", "author") or []) if isinstance(a, dict)
-    )
-    add("Author Name & Affiliation", "McMaster — Required (Curation Log: Full Citation)", val("citation", "author"), authors_ok and affil_ok)
+    # Affiliation: require every listed author to carry one (curation log
+    # asks for full citation). Report which authors are missing it.
+    _missing_affil = [
+        str((a.get("authorName", {}) or {}).get("value", "") if isinstance(a.get("authorName", {}), dict) else a.get("authorName", "") or f"author {i+1}")
+        for i, a in enumerate(_authors)
+        if not _nonempty((a or {}).get("authorAffiliation", {}))
+    ]
+    affil_ok = bool(_authors) and not _missing_affil
+    _author_val = val("citation", "author")
+    if _missing_affil:
+        _author_val = (_author_val + f" [missing affiliation: {', '.join(_missing_affil[:3])}]"[:200]) if _author_val != "—" else f"missing affiliation: {', '.join(_missing_affil[:3])}"
+    add("Author Name & Affiliation", "McMaster — Required (Curation Log: Full Citation)", _author_val, authors_ok and affil_ok)
     add("Dataset Contact", "McMaster — Required (Curation Log + Checklist)", val("citation", "datasetContact"), has("citation", "datasetContact"))
     add("Subject", "McMaster — Required (Checklist: Basic Metadata)", val("citation", "subject"), has("citation", "subject"))
     add("License", "McMaster — Required (Checklist: Data License)", license_val or "—", license_ok)
@@ -229,28 +297,36 @@ def _check_mcmaster(metadata: dict, blocks: Dict[str, Any], inventory: List[Dict
 
     rel_pub = _field(blocks, "citation", "publication") or []
     rel_list = rel_pub if isinstance(rel_pub, list) else ([rel_pub] if rel_pub else [])
+    rel_list = [r for r in rel_list if isinstance(r, dict)]
     has_pub = len(rel_list) > 0
     pub_complete = False
     pub_val = "—"
     pub_id_val = "—"
     pub_id_ok = False
-    if has_pub and isinstance(rel_list[0], dict):
-        first = rel_list[0]
-        # Prefer citation/journal, fall back to ID for display
-        cit = first.get("publicationCitation", {}).get("value", "") if isinstance(first.get("publicationCitation"), dict) else str(first.get("publicationCitation") or "")
-        jour = first.get("journal", {}).get("value", "") if isinstance(first.get("journal"), dict) else ""
-        id_val = first.get("publicationIDNumber", {}).get("value", "") if isinstance(first.get("publicationIDNumber"), dict) else ""
-        if cit or jour:
-            pub_val = f"{cit} — {jour}".strip(" —") if cit and jour else (cit or jour)
-        elif id_val:
-            pub_val = id_val
-        else:
-            pub_val = _display_value(first)
-        title_ok = _nonempty(first.get("publicationCitation", {})) or _nonempty(first.get("title", {}))
-        journal_ok = _nonempty(first.get("journal", {}))
-        pub_complete = bool(title_ok and journal_ok)
-        pub_id_val = id_val or "—"
-        pub_id_ok = bool(id_val.strip())
+    if has_pub:
+        # Pass when ANY related publication is complete (not just first).
+        displays: list[str] = []
+        for entry in rel_list:
+            cit = entry.get("publicationCitation", {}).get("value", "") if isinstance(entry.get("publicationCitation"), dict) else str(entry.get("publicationCitation") or "")
+            jour = entry.get("journal", {}).get("value", "") if isinstance(entry.get("journal"), dict) else ""
+            id_val = entry.get("publicationIDNumber", {}).get("value", "") if isinstance(entry.get("publicationIDNumber"), dict) else str(entry.get("publicationIDNumber") or "")
+            if cit or jour:
+                displays.append(f"{cit} — {jour}".strip(" —") if cit and jour else (cit or jour))
+            elif id_val:
+                displays.append(id_val)
+            else:
+                displays.append(_display_value(entry))
+            title_ok = _nonempty(entry.get("publicationCitation", {})) or _nonempty(entry.get("title", {}))
+            journal_ok = _nonempty(entry.get("journal", {}))
+            if title_ok and journal_ok:
+                pub_complete = True
+            if id_val and str(id_val).strip():
+                pub_id_ok = True
+                if pub_id_val == "—":
+                    pub_id_val = str(id_val)
+        pub_val = displays[0] if displays else "—"
+        if len(displays) > 1:
+            pub_val += f" (+{len(displays)-1} more)"
     add("Related Publication (title + journal)", "McMaster — Required (Curation Log + Checklist: *Publication)", pub_val, pub_complete)
     add("Related Publication ID", "McMaster — Required (Curation Log: Pub ID)", pub_id_val, pub_id_ok)
 
@@ -285,13 +361,67 @@ def _check_minimal(metadata: dict, blocks: Dict[str, Any], inventory: List[Dict[
     return results
 
 
-def check_metadata_completeness(metadata: dict, profile: str = DEFAULT_PROFILE, inventory: List[Dict[str, Any]] | None = None) -> List[dict]:
-    """Deterministic completeness check for the chosen profile."""
+def check_metadata_completeness(
+    metadata: dict,
+    profile: str = DEFAULT_PROFILE,
+    inventory: List[Dict[str, Any]] | None = None,
+    staged_dir: Any = None,
+) -> List[dict]:
+    """Deterministic completeness check for the chosen profile/ruleset.
+
+    Profiles `McMaster`/`Minimal` and any custom v2 ruleset key all evaluate
+    through the programmatic rule engine, so the Review-configuration page
+    controls the rows. Legacy hard-coded checks remain as the fallback when
+    the rule engine is unavailable.
+    """
+    try:
+        import review_rules as _rr
+
+        pool = _rr.load_rulesets()
+        key = PROFILE_TO_RULESET.get(profile, profile)
+        if key in pool or profile in ("McMaster", "Minimal"):
+            ruleset = _rr.get_ruleset(key, pool)
+            evaluated = _rr.evaluate_ruleset(metadata or {}, ruleset, inventory, staged_dir)
+            # Strip engine-only keys for the legacy {field, requirement,
+            # value, status} contract (callers that need rule ids use
+            # check_with_ruleset below).
+            return [
+                {"field": r["field"], "requirement": r["requirement"],
+                 "value": r.get("value", "—"), "status": r["status"]}
+                for r in evaluated
+            ]
+    except Exception:
+        pass
     latest = metadata.get("latestVersion") or {}
     blocks = latest.get("metadataBlocks") or metadata.get("metadataBlocks") or {}
     if profile == "Minimal":
         return _check_minimal(metadata, blocks, inventory)
     return _check_mcmaster(metadata, blocks, inventory)
+
+
+def check_with_ruleset(
+    metadata: dict,
+    ruleset_key: str = "mcmaster-default",
+    inventory: List[Dict[str, Any]] | None = None,
+    staged_dir: Any = None,
+    rulesets: Dict[str, Any] | None = None,
+) -> Tuple[List[dict], Dict[str, Any]]:
+    """Full rule evaluation (keeps rule_id/level/pending for the Response pane)."""
+    import review_rules as _rr
+
+    pool = rulesets if isinstance(rulesets, dict) else _rr.load_rulesets()
+    # get_ruleset resolves legacy profile names ("McMaster"/"Minimal") and
+    # falls back to the default for unknown keys.
+    ruleset = _rr.get_ruleset(ruleset_key, pool)
+    return _rr.evaluate_ruleset(metadata or {}, ruleset, inventory, staged_dir), ruleset
+
+
+def refresh_profiles_from_rulesets() -> None:
+    """Re-list custom rulesets in PROFILES (call after saving rules)."""
+    try:
+        _register_rulesets_in_profiles()
+    except Exception:
+        pass
 
 
 # Back-compat alias used by older code

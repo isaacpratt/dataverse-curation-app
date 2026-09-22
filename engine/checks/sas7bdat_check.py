@@ -69,8 +69,27 @@ class Sas7bdatCheck(Check):
             import pyreadstat  # noqa: F401  ensure available before format detection
         except ImportError:
             from engine.checks._util import missing_library
+            from engine.checks._util import skipped as _skipped
 
-            return [missing_library("format.sas.openable", "pyreadstat")]
+            return [
+                _skipped(
+                    "format.sas.format_detected",
+                    f"{path.name}: format detection skipped (pyreadstat not installed)",
+                ),
+                missing_library("format.sas.openable", "pyreadstat"),
+                _skipped(
+                    "format.sas.dictionary",
+                    f"{path.name}: dictionary skipped (pyreadstat not installed)",
+                ),
+                _skipped(
+                    "format.sas.labels",
+                    f"{path.name}: label scan skipped (pyreadstat not installed)",
+                ),
+                _skipped(
+                    "format.sas.encoding",
+                    f"{path.name}: encoding scan skipped (pyreadstat not installed)",
+                ),
+            ]
         name = path.name
         fmt = _detect_format(path)
         detected = CheckResult(
@@ -84,6 +103,8 @@ class Sas7bdatCheck(Check):
         try:
             frame, meta = _read(path, fmt)
         except Exception as exc:
+            from engine.checks._util import skipped as _skipped2
+
             return [
                 detected,
                 CheckResult(
@@ -91,6 +112,18 @@ class Sas7bdatCheck(Check):
                     level="error",
                     passed=False,
                     message=f"{name}: failed to read ({exc})",
+                ),
+                _skipped2(
+                    "format.sas.dictionary",
+                    f"{name}: dictionary skipped (unreadable file)",
+                ),
+                _skipped2(
+                    "format.sas.labels",
+                    f"{name}: label scan skipped (unreadable file)",
+                ),
+                _skipped2(
+                    "format.sas.encoding",
+                    f"{name}: encoding scan skipped (unreadable file)",
                 ),
             ]
 

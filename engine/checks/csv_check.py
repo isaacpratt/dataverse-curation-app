@@ -12,14 +12,24 @@ from typing import List
 from engine.checks._util import detect_encoding, find_emails
 from engine.checks.base import Check, CheckResult
 
-_SAMPLE_BYTES = 1 << 20
-_PII_SAMPLE_ROWS = 1000
-# Upper bound for the full-parse pass: beyond this the file is sampled and
-# the content result carries truncated=True (a 5 GB "csv" must not OOM us).
-_MAX_ROWS_SCANNED = 50000
-# Duplicate tracking is capped too: retain at most this many distinct row
-# hashes instead of every row tuple.
-_MAX_SEEN_ROWS = 20000
+try:
+    from engine.constants import CAPS as _CAPS
+
+    _SAMPLE_BYTES = _CAPS.sample_bytes
+    _PII_SAMPLE_ROWS = _CAPS.pii_sample_rows
+    # Upper bound for the full-parse pass: beyond this the file is sampled and
+    # the content result carries truncated=True (a 5 GB "csv" must not OOM us).
+    _MAX_ROWS_SCANNED = _CAPS.max_rows_scanned
+    # Duplicate tracking is capped too: retain at most this many distinct row
+    # hashes instead of every row tuple.
+    _MAX_SEEN_ROWS = _CAPS.max_seen_rows
+    _SNIFF_BYTES = _CAPS.sniff_bytes
+except Exception:  # pragma: no cover - constants import must never break checks
+    _SAMPLE_BYTES = 1 << 20
+    _PII_SAMPLE_ROWS = 1000
+    _MAX_ROWS_SCANNED = 50000
+    _MAX_SEEN_ROWS = 20000
+    _SNIFF_BYTES = 32 << 10
 
 
 class CsvCheck(Check):
@@ -34,6 +44,8 @@ class CsvCheck(Check):
         return run_per_file(self, files, self._run_one)
 
     def _run_one(self, path: Path) -> List[CheckResult]:
+        from engine.checks._util import skipped as _skipped
+
         name = path.name
         size = path.stat().st_size
         if size == 0:
@@ -43,7 +55,19 @@ class CsvCheck(Check):
                     level="error",
                     passed=False,
                     message=f"{name}: file is empty",
-                )
+                ),
+                _skipped(
+                    "format.csv.structure",
+                    f"{name}: structure skipped (empty file)",
+                ),
+                _skipped(
+                    "format.csv.content",
+                    f"{name}: content skipped (empty file)",
+                ),
+                _skipped(
+                    "format.csv.pii",
+                    f"{name}: PII scan skipped (empty file)",
+                ),
             ]
 
         encoding = detect_encoding(path)
@@ -57,22 +81,24 @@ class CsvCheck(Check):
             details={"encoding": encoding},
         )
 
+        # Single open: sniff on a 32KB prefix, then seek(0) for the full
+        # parse (was: two full opens + 1MB sniff). Module constants are used
+        # (not CAPS directly) so tests can monkeypatch caps.
         with open(path, newline="", encoding=encoding, errors="replace") as handle:
-            sample = handle.read(_SAMPLE_BYTES)
-        if delimiter is None:
-            try:
-                delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
-            except csv.Error:
-                delimiter = ","
-
-        rows = 0
-        widths = set()
-        duplicates = 0
-        seen_rows = set()
-        truncated = False
-        emails = set()
-        with open(path, newline="", encoding=encoding, errors="replace") as handle:
+            sample = handle.read(_SNIFF_BYTES)
+            if delimiter is None:
+                try:
+                    delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
+                except csv.Error:
+                    delimiter = ","
+            handle.seek(0)
             reader = csv.reader(handle, delimiter=delimiter)
+            rows = 0
+            widths = set()
+            duplicates = 0
+            seen_rows = set()
+            truncated = False
+            emails = set()
             for row in reader:
                 rows += 1
                 if rows > _MAX_ROWS_SCANNED:
@@ -86,6 +112,7 @@ class CsvCheck(Check):
                     seen_rows.add(key)
                 if rows <= _PII_SAMPLE_ROWS:
                     emails.update(find_emails(" ".join(row)))
+        # Single-pass above already populated rows/widths/duplicates.
 
         width = next(iter(widths), 0)
         if not widths:
@@ -130,6 +157,16 @@ class CsvCheck(Check):
                     passed=False,
                     message=f"{name}: possible email addresses found",
                     details={"emails": sorted(emails)[:10]},
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    check_id="format.csv.pii",
+                    level="info",
+                    passed=True,
+                    message=f"{name}: no email addresses in first {_PII_SAMPLE_ROWS} rows",
+                    details={"rows_scanned": min(rows, _PII_SAMPLE_ROWS)},
                 )
             )
         return results

@@ -91,7 +91,9 @@ Serialization: `CheckResult.to_dict()` / `from_dict()` (identity).
 | `warning` | Curator should review; likely needs a fix or a note back to the researcher (e.g. non-ASCII filename, “check not executed”) | amber badge |
 | `error` | Data integrity problem (e.g. CSV cannot be parsed, checksum mismatch) | red badge |
 
-`passed` is always present: `true` = the check succeeded / policy met; `false` = the check found a violation. An `info` check is typically `passed: true` with details. A “check not executed” for a missing optional lib is `level="warning"` + `passed=True` with `message` noting `pip install …`.
+`passed` is always present: `true` = the check succeeded / policy met; `false` = the check found a violation. An `info` check is typically `passed: true` with details. A “check not executed” for a missing optional lib is `level="warning"` + `passed=True` with `message` noting `pip install …` plus `details.skipped=True` (explicit SKIPPED state — see `engine/status.py:classify`). Sub-checks that cannot run (encrypted input, size caps, legacy formats, unreadable files) use the same `warning`+`passed`+`details.skipped` shape via `_util.skipped()`.
+
+Always-emit contract: when a module runs on a file (or dataset), it emits exactly one `CheckResult` per owned `check_id` — passes included (e.g. `inventory.zero_byte` reports "No zero-byte files", `format.csv.pii` reports "no email addresses"). Absent IDs mean the module never ran, not a silent pass.
 
 ## Check ID namespaces
 
@@ -106,5 +108,5 @@ Registered checks live in `engine/checks/__init__.py:registry` (20 modules); see
 
 - `DatasetReport.to_dict()` / `from_dict()` (pure Python objects), `FileEntry` likewise.
 - `DatasetReport.save(path)` / `load(path)` write/read pretty-printed JSON.
-- The GUI exports reports via `ui/dataset_detail.py:_on_export` → save dialog defaulting to `workspace/downloads/<id>/reports/` → `DatasetReport.save`, and the detail view renders file/summary results from `report.files[].checks` and `report.dataset_checks`. A CSV flattened view for the curation log is a future enhancement (currently JSON only).
+- The GUI exports reports via `ui/dataset_detail.py:_on_export` → save dialog defaulting to `workspace/downloads/<id>/reports/` → `DatasetReport.save` + `save_markdown` (JSON + Markdown side-by-side; JSON is canonical, Markdown is a derived view via `engine/report_md.py`). The detail view renders the manifest tree (`ui/checks_tree.py`: folder > file > check) from `report.files[].checks` and dataset-level rows from `report.dataset_checks`. Headless `--format json|md|both` mirrors the same outputs (`engine/runner.py:run_report_to_file`).
 - The detail view holds the in-memory `_report` after `CheckWorker.finished`; `storage.py:curation_actions` records the export event.

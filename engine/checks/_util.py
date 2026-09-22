@@ -13,14 +13,45 @@ JUNK_NAMES = {".ds_store", "thumbs.db", "__macosx"}
 
 
 def missing_library(check_id: str, lib: str) -> CheckResult:
-    # Contract (docs/report-contract.md): "not executed" is warning + passed.
+    # Contract (docs/report-contract.md): "not executed" is warning + passed
+    # with details.skipped=True so the UI/Markdown renders an explicit
+    # SKIPPED state instead of confusing it with a real pass.
     # "Missing: …" prefix matches the pre-run probe wording so the UI renders
     # the same amber MISSING/WARN style before and after the run.
+    # Frozen (PyInstaller) builds cannot `pip install` into the bundle and
+    # may be offline — point at the full build instead.
+    import sys
+
+    if getattr(sys, "frozen", False):
+        message = (
+            f"Missing: {lib} not in this lite build — "
+            "use dist/curation-app-full/curation-app-full.exe "
+            "for full format coverage"
+        )
+    else:
+        message = f"Missing: pip install {lib} — check not executed"
     return CheckResult(
         check_id=check_id,
         level="warning",
         passed=True,
-        message=f"Missing: pip install {lib} — check not executed",
+        message=message,
+        details={"skipped": True, "required": lib},
+    )
+
+
+def skipped(check_id: str, reason: str) -> CheckResult:
+    """Explicit skip for a sub-check that could not run (encrypted input,
+    too-large cap, legacy format, upstream read failure, …).
+
+    Wire-compatible with missing_library: warning + passed, with
+    details.skipped=True so status.py classifies it as SKIPPED.
+    """
+    return CheckResult(
+        check_id=check_id,
+        level="warning",
+        passed=True,
+        message=reason,
+        details={"skipped": True, "reason": reason},
     )
 
 
@@ -30,10 +61,18 @@ def detect_encoding(path: Path, sample_bytes: int = 65536) -> str:
     except ImportError:
         return "utf-8"
 
-    with open(path, "rb") as handle:
-        sample = handle.read(sample_bytes)
-    guess = chardet.detect(sample)
-    return guess.get("encoding") or "utf-8"
+    try:
+        with open(path, "rb") as handle:
+            sample = handle.read(sample_bytes)
+    except OSError:
+        return "utf-8"
+    try:
+        guess = chardet.detect(sample)
+    except Exception:
+        return "utf-8"
+    if not isinstance(guess, dict):
+        return "utf-8"
+    return str(guess.get("encoding") or "utf-8")
 
 
 def find_emails(text: str) -> List[str]:

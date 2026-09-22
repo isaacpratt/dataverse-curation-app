@@ -31,13 +31,19 @@ class SqliteCheck(Check):
         with open(path, "rb") as handle:
             magic = handle.read(16)
         if magic != b"SQLite format 3\x00":
+            from engine.checks._util import skipped as _skipped
+
             return [
                 CheckResult(
                     check_id="format.sqlite.valid",
                     level="error",
                     passed=False,
                     message=f"{name}: not an SQLite database (bad magic)",
-                )
+                ),
+                _skipped(
+                    "format.sqlite.manifest",
+                    f"{name}: table scan skipped (not an SQLite database)",
+                ),
             ]
 
         conn = sqlite3.connect(sqlite_uri(path), uri=True)
@@ -56,12 +62,22 @@ class SqliteCheck(Check):
                     "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
                 )
             ]
+            _MAX_COUNT_SCAN = 100_000
             counts = {}
+            truncated = len(tables) > _MAX_TABLES_LISTED
             for table in tables[:_MAX_TABLES_LISTED]:
                 try:
-                    counts[table] = conn.execute(
-                        f"SELECT COUNT(*) FROM {quoted_ident(table)}"
+                    try:
+                        conn.execute("PRAGMA query_only=ON")
+                    except sqlite3.Error:
+                        pass
+                    # Bounded count: full COUNT(*) scans 100M-row tables for
+                    # minutes. Cap the scan — report ">N" when truncated.
+                    n = conn.execute(
+                        f"SELECT COUNT(*) FROM "
+                        f"(SELECT 1 FROM {quoted_ident(table)} LIMIT {_MAX_COUNT_SCAN + 1})"
                     ).fetchone()[0]
+                    counts[table] = n if n <= _MAX_COUNT_SCAN else f">{_MAX_COUNT_SCAN}"
                 except sqlite3.Error:
                     counts[table] = None
         finally:
@@ -82,7 +98,11 @@ class SqliteCheck(Check):
             check_id="format.sqlite.manifest",
             level="info",
             passed=True,
-            message=f"{name}: {len(tables)} table(s)",
-            details={"tables": counts},
+            message=(
+                f"{name}: {len(tables)} table(s)"
+                + (" (list truncated)" if truncated else "")
+                + ("; counts capped at 100k" if any(isinstance(v, str) for v in counts.values()) else "")
+            ),
+            details={"tables": counts, "truncated": truncated},
         )
         return [valid, manifest]

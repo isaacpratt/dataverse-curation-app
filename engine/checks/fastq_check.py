@@ -11,7 +11,14 @@ from typing import List
 
 from engine.checks.base import Check, CheckResult
 
-_MAX_READS_SAMPLED = 1000
+try:
+    from engine.constants import CAPS as _CAPS
+
+    _MAX_READS_SAMPLED = _CAPS.fastq_reads_sampled
+    _MAX_LINE_CHARS = _CAPS.fastq_max_line_chars
+except Exception:  # pragma: no cover
+    _MAX_READS_SAMPLED = 1000
+    _MAX_LINE_CHARS = 1_000_000
 
 
 def _open_text(path: Path):
@@ -60,6 +67,14 @@ class FastqCheck(Check):
 
         with _open_text(path) as handle:
             for raw_line in handle:
+                # Line-length cap: a malformed single-line file must not
+                # buffer GBs in one string.
+                if len(raw_line) > _MAX_LINE_CHARS:
+                    bad_records += 1
+                    record = []
+                    if reads >= _MAX_READS_SAMPLED:
+                        break
+                    continue
                 record.append(raw_line.rstrip("\r\n"))
                 if len(record) == 4:
                     _finish_record()
@@ -72,13 +87,20 @@ class FastqCheck(Check):
             bad_records += 1
 
         if reads == 0:
+            from engine.checks._util import skipped as _skipped
+
             return [
                 CheckResult(
                     check_id="format.fastq.valid",
                     level="error",
                     passed=False,
                     message=f"{name}: no valid reads found",
-                )
+                    details={"bad_records": bad_records},
+                ),
+                _skipped(
+                    "format.fastq.metadata",
+                    f"{name}: metadata skipped (no valid reads)",
+                ),
             ]
 
         avg_length = total_length / reads

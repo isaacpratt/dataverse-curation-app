@@ -16,11 +16,12 @@ import importlib.metadata
 import subprocess
 import sys
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -30,11 +31,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from dataverse_client import DataverseClient
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.theme import ERROR, PRIMARY, action_button_style, enable_table_copy, selectable_labels
-from ui.widgets import AppButton, AppTable, make_combo, make_line_edit
+from ui.widgets import AppButton, AppTable, flush_table_style, make_combo, make_line_edit
 
 from config import PRESETS, Config
+
+# Compact face for buttons living inside table action cells: the standard
+# action_button_style padding (7px 14px) made "Reinstall"+"Uninstall" need
+# 294px against a 240px column, clipping both buttons. Same kit look, cell-
+# sized padding.
+_CELL_BTN_STYLE = (
+    "QPushButton { background: #ffffff; color: #131b2e; "
+    "border: 1px solid #c3c6d8; border-radius: 6px; padding: 0 8px; "
+    "font-weight: 600; font-size: 12px; }"
+    "QPushButton:hover { background: #e2e7ff; border: 1px solid #004ccd; }"
+    "QPushButton:pressed { background: #d5e3fc; }"
+    "QPushButton:disabled { background: #f4f5f7; color: #9aa3b5; "
+    "border: 1px solid #dfe3ea; }"
+)
 
 
 class _ShellWorker(QThread):
@@ -79,7 +95,10 @@ class SettingsPane(QWidget):
     def __init__(self, config: Config, parent=None) -> None:
         super().__init__(parent)
         self._config = config
-        self.setStyleSheet("background: #faf8ff;")
+        # Scoped to self: a bare `background` rule would act subtree-wide
+        # and override app-level backgrounds (e.g. the extensions table).
+        self.setObjectName("SettingsDialog")
+        self.setStyleSheet("QWidget#SettingsDialog { background: #faf8ff; }")
 
         outer = QVBoxLayout()
         outer.setContentsMargins(24, 24, 24, 24)
@@ -100,6 +119,14 @@ class SettingsPane(QWidget):
         # General tab
         general = QWidget()
         form = QFormLayout(general)
+        form.setContentsMargins(16, 16, 16, 16)
+        form.setSpacing(12)
+        form.setHorizontalSpacing(12)
+        form.setVerticalSpacing(12)
+        form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        form.setRowWrapPolicy(QFormLayout.DontWrapRows)
+        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        form.setFormAlignment(Qt.AlignTop)
 
         self.preset_combo = make_combo(list(PRESETS), min_width=200)
         form.addRow("Dataverse preset", self.preset_combo)
@@ -114,28 +141,91 @@ class SettingsPane(QWidget):
         form.addRow("Collection / collection alias", self.subtree_edit)
 
         ws_row = QHBoxLayout()
+        ws_row.setContentsMargins(0, 0, 0, 0)
+        ws_row.setSpacing(8)
         self.workspace_edit = make_line_edit()
         browse_btn = AppButton("Browse…", kind="secondary", size="sm")
         browse_btn.setStyleSheet(action_button_style(False))
         browse_btn.clicked.connect(self._browse_workspace)
         ws_row.addWidget(self.workspace_edit, 1)
-        ws_row.addWidget(browse_btn)
+        ws_row.addWidget(browse_btn, 0)
         form.addRow("Workspace", ws_row)
 
         test_btn = AppButton("Test connection", kind="secondary", size="sm")
         test_btn.setStyleSheet(action_button_style(False))
         test_btn.clicked.connect(self._test_connection)
         self._test_btn = test_btn
-        form.addRow(test_btn)
+        
+        # Save button moved under Test connection (standard secondary face
+        # like the other form buttons, not the old wide primary look).
+        save_btn = AppButton("Save", kind="secondary", size="sm")
+        save_btn.setStyleSheet(action_button_style(False))
+        save_btn.setToolTip("Save to config.json (Ctrl+S)")
+        save_btn.clicked.connect(self._on_save)
+        
+        conn_row = QHBoxLayout()
+        conn_row.setContentsMargins(0, 0, 0, 0)
+        conn_row.setSpacing(8)
+        conn_row.addWidget(test_btn, 0)
+        self._conn_status = QLabel("")
+        self._conn_status.setWordWrap(True)
+        self._conn_status.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        self._conn_status.setStyleSheet("font-size: 12px; color: #57657a; border: none; background: transparent;")
+        conn_row.addWidget(self._conn_status, 1)
+        
+        # Vertical layout for test + save stacked
+        conn_vbox = QVBoxLayout()
+        conn_vbox.setContentsMargins(0, 0, 0, 0)
+        conn_vbox.setSpacing(8)
+        conn_vbox.addLayout(conn_row)
+        conn_vbox.addWidget(save_btn, 0, Qt.AlignLeft)
+        
+        form.addRow("", conn_vbox)
+        # A stale verdict must not survive a URL edit.
+        self.url_edit.textChanged.connect(lambda _t: self._conn_status.setText(""))
+        self.url_edit.textChanged.connect(lambda _t: self._clear_user_info())
+        self.token_edit.textChanged.connect(lambda _t: self._clear_user_info())
+        self.subtree_edit.textChanged.connect(lambda _t: self._clear_collection_role())
+
+        # Signed-in user (identity from GET /api/users/:me, collection
+        # role by matching that identifier in the alias assignments).
+        user_heading = QLabel("Signed in user")
+        user_heading.setStyleSheet(
+            "font-size: 12px; font-weight: 600; color: #424656; "
+            "border: none; background: transparent; padding-top: 8px;"
+        )
+        form.addRow(user_heading)
+        self._user_identifier = self._make_user_value()
+        form.addRow("Identifier", self._user_identifier)
+        self._user_display = self._make_user_value()
+        form.addRow("Display name", self._user_display)
+        self._user_super = self._make_user_value()
+        form.addRow("Superuser", self._user_super)
+        self._user_affil = self._make_user_value()
+        form.addRow("Affiliation", self._user_affil)
+        self._user_role = self._make_user_value()
+        form.addRow("Collection role", self._user_role)
+        self._user_status = QLabel("")
+        self._user_status.setWordWrap(True)
+        self._user_status.setStyleSheet("font-size: 11px; color: #57657a; border: none; background: transparent;")
+        form.addRow("", self._user_status)
 
         tabs.addTab(general, "General")
 
-        # Extensions tab: optional libs + external binaries
+        # Extensions tab: optional libs + external binaries.
+        # Flush tab page (card pattern): zero layout margins; the table
+        # bleeds edge-to-edge while the hint/buttons below keep an inset.
+        # Table is first (square top meets the tab bar) but not last
+        # (square bottom meets the inset content below).
         ext_tab = QWidget()
         ext_layout = QVBoxLayout(ext_tab)
+        ext_layout.setContentsMargins(0, 0, 0, 0)
+        ext_layout.setSpacing(0)
         self.ext_table = AppTable(
             ["Package", "Installed", "Size", "Used for", "Action"],
-            widths={0: 110, 1: 130, 2: 90, 3: 200, 4: 240},
+            widths={0: 110, 1: 130, 2: 90, 3: 200, 4: 300},
             row_height=34,
             stretch_last=False,
             # NOTE: sorting stays OFF here on purpose — per-row action
@@ -146,41 +236,73 @@ class SettingsPane(QWidget):
         )
         # Used-for column absorbs leftover width.
         self.ext_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.ext_table.setStyleSheet(flush_table_style(last=False))
+        # Remember the user's column widths/order across sessions.
+        try:
+            from storage import (
+                restore_table_state,
+                save_table_state,
+                snapshot_table_view,
+            )
+
+            _ext_header = self.ext_table.horizontalHeader()
+            self._ext_snap = snapshot_table_view(_ext_header)
+            if restore_table_state(self._config.app.workspace, "extensions", _ext_header):
+                self.ext_table.disable_auto_fit()
+            _ext_header.sectionResized.connect(
+                lambda *a: save_table_state(
+                    self._config.app.workspace, "extensions", _ext_header
+                )
+            )
+            _ext_header.sectionMoved.connect(
+                lambda *a: save_table_state(
+                    self._config.app.workspace, "extensions", _ext_header
+                )
+            )
+        except Exception:
+            pass
         ext_layout.addWidget(self.ext_table, 1)
         ext_hint = QLabel("External binaries (Tesseract for OCR, ExifTool for deep metadata) live in the table below — use Browse… to point at them.")
         ext_hint.setWordWrap(True)
-        ext_layout.addWidget(ext_hint)
+        bottom = QWidget()
+        bottom_lay = QVBoxLayout(bottom)
+        bottom_lay.setContentsMargins(12, 8, 12, 8)
+        bottom_lay.addWidget(ext_hint)
         ext_btn_row = QHBoxLayout()
         self.ext_status = QLabel("")
         ext_btn_row.addWidget(self.ext_status, 1)
-        refresh_ext_btn = AppButton("Refresh", kind="secondary", size="sm")
+        refresh_ext_btn = AppButton("Refresh", kind="secondary")
         refresh_ext_btn.setStyleSheet(action_button_style(False))
         refresh_ext_btn.setToolTip("Re-check installed versions and re-measure sizes")
         refresh_ext_btn.clicked.connect(self._refresh_sizes)
         ext_btn_row.addWidget(refresh_ext_btn)
-        install_all_btn = AppButton("Install all missing", kind="secondary", size="sm")
+        install_all_btn = AppButton("Install all missing", kind="secondary")
         install_all_btn.setStyleSheet(action_button_style(False))
         install_all_btn.clicked.connect(self._install_all)
         ext_btn_row.addWidget(install_all_btn)
-        ext_layout.addLayout(ext_btn_row)
+        reset_cols_btn = AppButton("Reset columns", kind="secondary")
+        reset_cols_btn.setStyleSheet(action_button_style(False))
+        reset_cols_btn.setToolTip("Restore default column widths and order")
+        reset_cols_btn.clicked.connect(self._on_reset_ext_view)
+        ext_btn_row.addWidget(reset_cols_btn)
+        bottom_lay.addLayout(ext_btn_row)
+        ext_layout.addWidget(bottom)
         tabs.addTab(ext_tab, "Extensions")
-        outer.addWidget(tabs, 1)
-
-        buttons = QHBoxLayout()
-        buttons.setSpacing(8)
-        # No Close button by design — the Settings nav button toggles this
-        # pane open/closed, so a second close affordance is redundant.
-        buttons.addStretch(1)
-        save_btn = AppButton("Save", kind="primary")
-        save_btn.setMinimumWidth(140)
-        save_btn.setToolTip("Save to config.json (Ctrl+S)")
-        save_btn.clicked.connect(self._on_save)
-        buttons.addWidget(save_btn)
+        # Outline wrapper: the tab pane cannot draw rounded corners itself
+        # (Qt drops the arcs — see theme.py TabWidget note), so a plain
+        # card draws the outline. Standard card inset keeps flush children
+        # (e.g. the Extensions table) clear of the corner arcs.
+        tabs_card = QFrame()
+        tabs_card.setObjectName("Card")
+        card_lay = QVBoxLayout(tabs_card)
+        card_lay.setContentsMargins(16, 12, 16, 12)
+        card_lay.setSpacing(8)
+        card_lay.addWidget(tabs)
+        outer.addWidget(tabs_card, 1)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(outer)
-        layout.addLayout(buttons)
 
         try:
             from PySide6.QtGui import QKeySequence as _QKS, QShortcut as _QSC
@@ -206,11 +328,26 @@ class SettingsPane(QWidget):
         """Re-read config + extension state (called each time the pane opens)."""
         self._load_from_config()
         self._refresh_extensions()
+        self._refresh_user_info()
 
     def _refresh_sizes(self) -> None:
         """Clear the size cache and re-walk installed packages on demand."""
         self._size_cache = {}
         self._refresh_extensions()
+
+    def _on_reset_ext_view(self) -> None:
+        """Reset the extensions table to its construction view."""
+        try:
+            from storage import apply_table_view, clear_table_state
+
+            snap = getattr(self, "_ext_snap", None)
+            clear_table_state(self._config.app.workspace, "extensions")
+            self.ext_table.enable_auto_fit()
+            if isinstance(snap, dict):
+                apply_table_view(self.ext_table.horizontalHeader(), snap)
+            self._refresh_extensions()
+        except Exception:
+            pass
 
     def _load_from_config(self) -> None:
         self.preset_combo.setCurrentText(self._config.preset_label())
@@ -344,23 +481,33 @@ class SettingsPane(QWidget):
         self.ext_table.setRowCount(len(self.EXTENSIONS))
         for row, (pip_name, import_name, desc) in enumerate(self.EXTENSIONS):
             self.ext_table.setItem(row, 0, QTableWidgetItem(pip_name))
+            from ui.icons import icon as _ext_icon
+
             try:
                 ver = importlib.metadata.version(pip_name if pip_name != "Pillow" else "Pillow")
-                installed = f"✓ {ver}"
+                installed, is_installed = ver, True
             except importlib.metadata.PackageNotFoundError:
                 try:
                     __import__(import_name)
-                    installed = "✓ installed"
+                    installed, is_installed = "installed", True
                 except ImportError:
-                    installed = "✗ Not installed"
+                    installed, is_installed = "Not installed", False
             except Exception:
-                installed = "?"
-            is_installed = installed.startswith("✓")
+                installed, is_installed = "?", False
             inst_item = QTableWidgetItem(installed)
-            if installed.startswith("✗"):
+            if not is_installed and installed != "?":
                 inst_item.setForeground(QColor(ERROR))
             elif is_installed:
                 inst_item.setForeground(QColor(PRIMARY))
+            try:
+                if not is_installed and installed != "?":
+                    inst_item.setIcon(_ext_icon("x", color=ERROR))
+                elif is_installed:
+                    inst_item.setIcon(_ext_icon("check", color=PRIMARY))
+                else:
+                    inst_item.setIcon(_ext_icon("minus", color="#57657a"))
+            except Exception:
+                pass
             self.ext_table.setItem(row, 1, inst_item)
             if is_installed and import_name not in self._size_cache:
                 self._size_cache[import_name] = self._package_size(pip_name, import_name)
@@ -370,15 +517,16 @@ class SettingsPane(QWidget):
             self.ext_table.setItem(row, 3, QTableWidgetItem(desc))
             # Action cell: padded container so buttons never clip ("mangled" text fix)
             cell = QWidget()
-            cell.setStyleSheet("background: transparent; border: none;")
+            cell.setObjectName("ExtActionCell")
+            cell.setStyleSheet("QWidget#ExtActionCell { background: transparent; border: none; }")
             cell_lay = QHBoxLayout(cell)
             cell_lay.setContentsMargins(6, 3, 6, 3)
             cell_lay.setSpacing(6)
             install_btn = AppButton("Reinstall" if is_installed else "Install", kind="secondary", size="sm")
-            install_btn.setStyleSheet(action_button_style(False))
+            install_btn.setStyleSheet(_CELL_BTN_STYLE)
             install_btn.clicked.connect(lambda _checked, n=pip_name: self._install_package(n))
             uninstall_btn = AppButton("Uninstall", kind="secondary", size="sm")
-            uninstall_btn.setStyleSheet(action_button_style(False))
+            uninstall_btn.setStyleSheet(_CELL_BTN_STYLE)
             uninstall_btn.setEnabled(is_installed)
             uninstall_btn.clicked.connect(lambda _checked, n=pip_name: self._uninstall_package(n))
             if frozen:
@@ -400,9 +548,15 @@ class SettingsPane(QWidget):
             configured = (self._tool_paths or {}).get(key, "")
             resolved = self._detect_tool(key, configured)
             self.ext_table.setItem(row, 0, QTableWidgetItem(label))
-            status = "✓ installed" if resolved else "✗ Not installed"
-            status_item = QTableWidgetItem(status)
+            status_item = QTableWidgetItem("installed" if resolved else "Not installed")
             status_item.setForeground(QColor(PRIMARY if resolved else ERROR))
+            try:
+                status_item.setIcon(
+                    _ext_icon("check", color=PRIMARY) if resolved
+                    else _ext_icon("x", color=ERROR)
+                )
+            except Exception:
+                pass
             status_item.setToolTip(
                 resolved
                 or (f"Configured: {configured}" if configured else "Add the binary path via Browse… or leave empty to use PATH")
@@ -419,18 +573,22 @@ class SettingsPane(QWidget):
             self.ext_table.setItem(row, 2, QTableWidgetItem(tool_size))
             self.ext_table.setItem(row, 3, QTableWidgetItem(desc))
             tool_cell = QWidget()
-            tool_cell.setStyleSheet("background: transparent; border: none;")
+            tool_cell.setObjectName("ToolActionCell")
+            tool_cell.setStyleSheet("QWidget#ToolActionCell { background: transparent; border: none; }")
             tool_lay = QHBoxLayout(tool_cell)
             tool_lay.setContentsMargins(6, 3, 6, 3)
             tool_lay.setSpacing(6)
             browse_btn = AppButton("Browse…", kind="secondary", size="sm")
-            browse_btn.setStyleSheet(action_button_style(False))
+            browse_btn.setStyleSheet(_CELL_BTN_STYLE)
             browse_btn.setToolTip(f"Locate the {label} executable")
             browse_btn.clicked.connect(lambda _checked, k=key: self._browse_tool(k))
             tool_lay.addWidget(browse_btn)
             tool_lay.addStretch()
             self.ext_table.setCellWidget(row, 4, tool_cell)
             self.ext_table.setRowHeight(row, 34)
+        # Content-width columns (Used-for stays Stretch); no-op when a
+        # saved view was restored or the user already resized.
+        self.ext_table.fit_columns_to_content()
 
     def _browse_tool(self, key: str) -> None:
         from PySide6.QtWidgets import QFileDialog as _QFileDialog
@@ -522,10 +680,187 @@ class SettingsPane(QWidget):
             f"Installing {', '.join(missing)}… (UI stays responsive)",
         )
 
+    @staticmethod
+    def _make_user_value() -> QLabel:
+        """Read-only identity field (selectable, muted until resolved)."""
+        lbl = QLabel("—")
+        lbl.setWordWrap(True)
+        lbl.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        lbl.setStyleSheet("font-size: 12px; color: #424656; border: none; background: transparent;")
+        return lbl
+
+    def _clear_collection_role(self) -> None:
+        """Blank only the collection-role row (alias edits stale it alone)."""
+        try:
+            if getattr(self, "_user_role", None) is not None:
+                self._user_role.setText("—")
+        except Exception:
+            pass
+
+    def _set_collection_role(
+        self, roles: list | None, alias: str = ""
+    ) -> None:
+        """Render the caller's role(s) on the alias collection.
+
+        roles None = could not determine (denied/network/empty alias);
+        [] = no direct role assignment; otherwise the joined role names.
+        """
+        try:
+            if roles is None:
+                self._user_role.setText("—")
+                tip = "Could not determine a role for this collection."
+            elif not roles:
+                self._user_role.setText(
+                    "No direct role" if (alias or "").strip() else "—"
+                )
+                tip = (
+                    f"No direct role assignment on '{alias}'."
+                    if (alias or "").strip()
+                    else "Enter a collection alias above to check the role."
+                )
+            else:
+                self._user_role.setText(", ".join(str(r) for r in roles))
+                tip = f"Role(s) on '{alias}': " + ", ".join(str(r) for r in roles)
+            self._user_role.setToolTip(tip)
+        except Exception:
+            pass
+
+    def _clear_user_info(self) -> None:
+        """Blank the identity rows (stale identity must not survive edits)."""
+        try:
+            for attr in (
+                "_user_identifier", "_user_display", "_user_super", "_user_affil",
+                "_user_role",
+            ):
+                lbl = getattr(self, attr, None)
+                if lbl is not None:
+                    lbl.setText("—")
+                    lbl.setStyleSheet(
+                        "font-size: 12px; color: #424656; "
+                        "border: none; background: transparent;"
+                    )
+            if getattr(self, "_user_status", None) is not None:
+                self._user_status.setText("")
+        except Exception:
+            pass
+
+    def _set_user_info(self, me: dict | None, status: str = "") -> None:
+        """Render a /api/users/:me profile into the identity rows."""
+        try:
+            ok = isinstance(me, dict) and bool(me)
+            self._user_identifier.setText(str((me or {}).get("identifier") or "—"))
+            display = str(
+                (me or {}).get("displayName")
+                or " ".join(
+                    p for p in (
+                        str((me or {}).get("firstName") or "").strip(),
+                        str((me or {}).get("lastName") or "").strip(),
+                    )
+                    if p
+                )
+                or "—"
+            )
+            self._user_display.setText(display)
+            is_super = bool((me or {}).get("superuser")) if ok else None
+            self._user_super.setText(
+                "—" if is_super is None else ("Yes" if is_super else "No")
+            )
+            self._user_super.setStyleSheet(
+                "font-size: 12px; font-weight: 600; "
+                f"color: {'#16a34a' if is_super else ('#424656' if is_super is None else '#57657a')}; "
+                "border: none; background: transparent;"
+            )
+            self._user_affil.setText(str((me or {}).get("affiliation") or "—"))
+            self._user_status.setText(status)
+        except Exception:
+            pass
+
+    def _refresh_user_info(self) -> None:
+        """Fetch identity + alias-collection role off the GUI thread."""
+        try:
+            base = self.url_edit.text().strip().rstrip("/")
+            token = self.token_edit.text().strip()
+            alias = self.subtree_edit.text().strip()
+        except Exception:
+            return
+        if not base or not token:
+            self._set_user_info(
+                None, "Enter a base URL and API token above, then Test connection."
+            )
+            self._set_collection_role(None, alias)
+            return
+        if self._shell_worker is not None and self._shell_worker.isRunning():
+            return  # a test/extension task is running; refreshes on next open
+        self._user_status.setText("Checking identity…")
+
+        def _fetch() -> tuple:
+            import json as _json
+
+            try:
+                client = DataverseClient(base, token)
+                me = client.get_me()
+            except Exception:
+                me = None
+            try:
+                roles = client.get_collection_roles(alias) if alias else None
+            except Exception:
+                roles = None
+            return True, "Identity", _json.dumps({"me": me or {}, "roles": roles})
+
+        worker = _ShellWorker(_fetch, self)
+        self._shell_worker = worker
+        worker.done.connect(self._on_identity_done)
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
+
+    def _on_identity_done(self, ok: bool, title: str, message: str) -> None:
+        self._shell_worker = None
+        try:
+            import json as _json
+
+            payload = _json.loads(message or "{}")
+        except Exception:
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        me = payload.get("me") if isinstance(payload.get("me"), dict) else {}
+        roles = payload.get("roles")
+        try:
+            alias = self.subtree_edit.text().strip()
+        except Exception:
+            alias = ""
+        if me:
+            self._set_user_info(me, "")
+        else:
+            self._set_user_info(
+                None, "Could not verify identity — check the URL/token (see log)."
+            )
+        self._set_collection_role(
+            list(roles) if isinstance(roles, list) else None, alias
+        )
+
+    def _set_conn_status(self, ok: bool | None, text: str, tip: str = "") -> None:
+        """Inline connection verdict next to the Test connection button.
+
+        ok True/False colors the text green/red; None is the neutral
+        in-progress tone. No dialog — the result lives where the test ran.
+        """
+        try:
+            color = "#16a34a" if ok is True else (ERROR if ok is False else "#57657a")
+            self._conn_status.setStyleSheet(
+                f"font-size: 12px; color: {color}; border: none; background: transparent;"
+            )
+            self._conn_status.setText(text)
+            self._conn_status.setToolTip(tip or text)
+        except Exception:
+            pass
+
     def _test_connection(self) -> None:
         base = self.url_edit.text().strip().rstrip("/")
         if not base:
-            show_warning(self, "Test connection", "Enter a base URL first.")
+            self._set_conn_status(False, "Enter a base URL first.")
             return
 
         def _probe() -> tuple:
@@ -543,9 +878,9 @@ class SettingsPane(QWidget):
             self._test_btn.setEnabled(False)
         except Exception:
             pass
-        self.ext_status.setText(f"Contacting {base}…")
+        self._set_conn_status(None, f"Contacting {base}…")
         if self._shell_worker is not None and self._shell_worker.isRunning():
-            self.ext_status.setText("Another task is already running — please wait…")
+            self._set_conn_status(None, "Another task is already running — please wait…")
             try:
                 self._test_btn.setEnabled(True)
             except Exception:
@@ -563,11 +898,12 @@ class SettingsPane(QWidget):
             self._test_btn.setEnabled(True)
         except Exception:
             pass
-        self.ext_status.setText(message.splitlines()[0] if message else "")
+        # Inline verdict (no dialog): first line in the label, full text in tooltip.
+        first = (message.splitlines()[0] if message else "").strip()
+        self._set_conn_status(bool(ok), first or ("Connected." if ok else "Connection failed."), message)
         if ok:
-            show_info(self, title, message)
-        else:
-            show_critical(self, title, message)
+            # A good connection means the token is worth identifying.
+            self._refresh_user_info()
 
     def _on_save(self) -> None:
         base = self.url_edit.text().strip().rstrip("/")

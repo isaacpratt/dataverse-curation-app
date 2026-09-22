@@ -52,6 +52,8 @@ def _check_description(check_cls) -> str:
 
 def list_planned_checks(files: list[Path]) -> list[dict]:
     """Return list of checks that will be run for the given file list, with status."""
+    from collections import Counter
+
     from engine.checks import registry
 
     planned = []
@@ -65,32 +67,49 @@ def list_planned_checks(files: list[Path]) -> list[dict]:
                 "will_run": True,
             }
         )
-    # per-file: group by check, using the same dispatcher as the real run
-    # (so compound names like .fq.gz plan exactly what will execute).
-    from collections import Counter
-
-    ext_counter = Counter(p.suffix.lower() or "(no ext)" for p in files)
+    # per-file: single pass over files (O(F) dispatcher calls, not O(C*F)).
+    counts: Counter = Counter()
+    for path in files:
+        try:
+            for check_cls in checks_for_file(path):
+                counts[check_cls.check_id] += 1
+        except Exception:
+            continue
     for check_cls in registry.values():
         if not check_cls.extensions:
             continue
-        matching = [p for p in files if check_cls in checks_for_file(p)]
+        matching_n = counts.get(check_cls.check_id, 0)
         planned.append(
             {
                 "check_id": check_cls.check_id,
                 "description": _check_description(check_cls),
                 "file_types": ", ".join(sorted(check_cls.extensions)),
-                "will_run": len(matching) > 0,
-                "matching_files": len(matching),
+                "will_run": matching_n > 0,
+                "matching_files": matching_n,
             }
         )
     return planned
 
 
 def run_report(
-    dataset_dir: Path, persistent_id: str = "", label: str = "", progress_callback=None
+    dataset_dir: Path,
+    persistent_id: str = "",
+    label: str = "",
+    progress_callback=None,
+    max_workers: int = 1,
+    is_cancelled=None,
 ) -> DatasetReport:
-    """Run all applicable checks on a staged dataset directory."""
+    """Run all applicable checks on a staged dataset directory.
+
+    `max_workers>1` parallelizes per-file checks with a ThreadPool (checks
+    are per-file isolated via `run_per_file`). `is_cancelled` is an optional
+    zero-arg callable polled between files for cooperative cancellation.
+    """
     dataset_dir = Path(dataset_dir)
+    try:
+        dataset_resolved = dataset_dir.resolve()
+    except OSError:
+        dataset_resolved = dataset_dir
     files = collect_files(dataset_dir)
 
     def _report_progress(msg: str) -> None:
@@ -100,38 +119,94 @@ def run_report(
             except Exception:
                 pass
 
+    def _cancelled() -> bool:
+        try:
+            return bool(is_cancelled and is_cancelled())
+        except Exception:
+            return False
+
     _report_progress(f"Found {len(files)} file(s), starting {len(dataset_level_checks())} dataset-level check(s)…")
     dataset_checks: List[CheckResult] = []
     for check_cls in dataset_level_checks():
+        if _cancelled():
+            break
         _report_progress(f"Running {check_cls.check_id} …")
         dataset_checks.extend(_safe_run(check_cls, files))
 
     _report_progress(f"Running per-file checks on {len(files)} file(s)…")
-    entries: List[FileEntry] = []
-    unmatched: List[Path] = []
-    for idx, path in enumerate(files, 1):
-        file_checks: List[CheckResult] = []
-        checks = checks_for_file(path)
+
+    def _run_one_file(args) -> FileEntry | Path | None:
+        idx, path = args
+        try:
+            checks = checks_for_file(path)
+        except Exception:
+            checks = []
         if checks:
             _report_progress(f"[{idx}/{len(files)}] {path.name}: {', '.join(c.check_id for c in checks)} …")
-        else:
-            unmatched.append(path)
+        file_checks: List[CheckResult] = []
         for check_cls in checks:
+            if _cancelled():
+                break
             file_checks.extend(_safe_run(check_cls, [path]))
         try:
             size = path.stat().st_size
         except OSError:
-            continue  # vanished mid-run
-        entries.append(
-            FileEntry(
-                path=path.relative_to(dataset_dir).as_posix(),
-                size_bytes=size,
-                mime_type=guess_mime(path),
-                checks=file_checks,
-            )
+            return None  # vanished mid-run
+        try:
+            rel = path.resolve().relative_to(dataset_resolved).as_posix()
+        except ValueError:
+            # Symlink-race escape outside dataset_dir: record basename only.
+            rel = path.name
+        except OSError:
+            return None
+        return FileEntry(
+            path=rel,
+            size_bytes=size,
+            mime_type=guess_mime(path),
+            checks=file_checks,
         )
+
+    entries: List[FileEntry] = []
+    unmatched: List[Path] = []
+    # Pre-classify unmatched sequentially (cheap) to keep warning stable.
+    matched_flags: list[bool] = []
+    for path in files:
+        try:
+            matched_flags.append(bool(checks_for_file(path)))
+        except Exception:
+            matched_flags.append(False)
+    unmatched = [p for p, m in zip(files, matched_flags) if not m]
+
+    indexed = list(enumerate(files, 1))
+    if max_workers and max_workers > 1:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            for result in pool.map(_run_one_file, indexed):
+                if _cancelled():
+                    break
+                if result is None or isinstance(result, Path):
+                    continue
+                entries.append(result)
+        # Restore deterministic sorted order (ThreadPool.map preserves
+        # order already, but sort defensively by path).
+        entries.sort(key=lambda e: e.path)
+    else:
+        for idx, path in indexed:
+            if _cancelled():
+                break
+            result = _run_one_file((idx, path))
+            if result is None or isinstance(result, Path):
+                continue
+            entries.append(result)
     if unmatched:
         exts = sorted({p.suffix.lower() or "(no extension)" for p in unmatched})
+        sample: list[str] = []
+        for p in unmatched[:10]:
+            try:
+                sample.append(p.resolve().relative_to(dataset_resolved).as_posix())
+            except (ValueError, OSError):
+                sample.append(p.name)
         dataset_checks.append(
             CheckResult(
                 check_id="inventory.unchecked_types",
@@ -143,7 +218,7 @@ def run_report(
                 ),
                 details={
                     "extensions": exts,
-                    "files": [p.relative_to(dataset_dir).as_posix() for p in unmatched[:10]],
+                    "files": sample,
                 },
             )
         )
@@ -162,7 +237,33 @@ def run_report_to_file(
     out_path: Path,
     persistent_id: str = "",
     label: str = "",
+    max_workers: int = 1,
+    fmt: str = "json",
 ) -> DatasetReport:
-    report = run_report(dataset_dir, persistent_id=persistent_id, label=label)
-    report.save(Path(out_path))
+    """Write the report in json, md, or both (sibling extension swap).
+
+    fmt="both" writes out_path as given plus the sibling (.json<->.md).
+    """
+    report = run_report(
+        dataset_dir, persistent_id=persistent_id, label=label, max_workers=max_workers
+    )
+    out_path = Path(out_path)
+    fmt = (fmt or "json").lower()
+    if fmt not in ("json", "md", "markdown", "both"):
+        raise ValueError(f"unknown format {fmt!r} (json|md|both)")
+    if fmt in ("md", "markdown"):
+        if out_path.suffix.lower() != ".md":
+            out_path = out_path.with_suffix(".md")
+        report.save_markdown(out_path)
+    elif fmt == "both":
+        json_path = out_path if out_path.suffix.lower() == ".json" else out_path.with_suffix(".json")
+        md_path = json_path.with_suffix(".md") if json_path.suffix.lower() == ".json" else out_path.with_suffix(".md")
+        # When caller passed .md, mirror: md as given, json sibling.
+        if out_path.suffix.lower() == ".md":
+            md_path = out_path
+            json_path = out_path.with_suffix(".json")
+        report.save(json_path)
+        report.save_markdown(md_path)
+    else:
+        report.save(out_path)
     return report

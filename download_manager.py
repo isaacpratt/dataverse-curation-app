@@ -34,7 +34,16 @@ class DownloadManager:
         sanitized = (
             persistent_id.replace(":", "_").replace("/", "_").replace("\\", "_")
         )
-        return self._workspace / "downloads" / sanitized
+        # Block ".." traversal: server-supplied PIDs are untrusted.
+        sanitized = sanitized.replace("..", "__")
+        sanitized = sanitized.strip()
+        if sanitized in ("", ".", "__", "_"):
+            sanitized = "_dataset"
+        # Avoid hidden / dot-leading dirs and cap length for Windows paths.
+        sanitized = sanitized.lstrip(".")
+        if not sanitized:
+            sanitized = "_dataset"
+        return self._workspace / "downloads" / sanitized[:120]
 
     def files_dir(self, persistent_id: str) -> Path:
         return self.dataset_dir(persistent_id) / "files"
@@ -60,10 +69,20 @@ class DownloadManager:
 
     @staticmethod
     def quote_from(inventory: list, persistent_id: str) -> DownloadQuote:
+        total = 0
+        count = 0
+        for f in inventory:
+            if not isinstance(f, dict):
+                continue
+            count += 1
+            try:
+                total += int(f.get("size_bytes", 0) or 0)
+            except (TypeError, ValueError):
+                continue
         return DownloadQuote(
             persistent_id=persistent_id,
-            file_count=len(inventory),
-            total_size_bytes=sum(int(f.get("size_bytes", 0) or 0) for f in inventory),
+            file_count=count,
+            total_size_bytes=total,
         )
 
     def missing_files(self, persistent_id: str, inventory: list | None = None) -> list:
@@ -77,39 +96,69 @@ class DownloadManager:
 
         inv = inventory if inventory is not None else self.inventory(persistent_id)
         staged_root = self.files_dir(persistent_id)
-        # One directory walk for all basename fallbacks.
+        # One directory walk for all basename fallbacks: map basename ->
+        # list of staged sizes so the fallback can still enforce size match.
         staged_basenames: set[str] = set()
+        staged_sizes: dict[str, list[int]] = {}
         try:
             if staged_root.exists():
                 for p in staged_root.rglob("*"):
                     try:
                         if p.is_file():
                             staged_basenames.add(p.name)
+                            try:
+                                sz = p.stat().st_size
+                            except OSError:
+                                continue
+                            staged_sizes.setdefault(p.name, []).append(sz)
                     except Exception:
                         continue
         except Exception:
             pass
         missing: list = []
+        if not isinstance(inv, list):
+            return []
         for item in inv:
+            if not isinstance(item, dict):
+                continue
             path = item.get("path", "")
-            if not path:
+            if not path or not isinstance(path, str):
                 continue
             local = self._contained(staged_root, path)
-            if local is not None and local.is_file():
+            if local is not None:
                 try:
-                    expected = int(item.get("size_bytes", 0) or 0)
-                    if not expected or local.stat().st_size == expected:
+                    if local.is_file():
+                        try:
+                            expected = int(item.get("size_bytes", 0) or 0)
+                        except (TypeError, ValueError):
+                            expected = 0
+                        try:
+                            actual = local.stat().st_size
+                        except OSError:
+                            missing.append(path)
+                            continue
+                        if not expected or actual == expected:
+                            continue
+                        # Size mismatch on the exact path — still missing.
+                        missing.append(path)
                         continue
-                    # Size mismatch on the exact path — still missing.
+                except OSError:
                     missing.append(path)
                     continue
-                except Exception:
-                    continue
             # Exact path absent (or unsafe): accept a same-named file
-            # anywhere under files_dir as staged.
+            # anywhere under files_dir as staged, but still enforce size
+            # when the inventory knows it (avoids same-name false-staged).
             try:
-                if _Path(path).name and _Path(path).name in staged_basenames:
-                    continue
+                base = _Path(path).name
+                if base and base in staged_basenames:
+                    try:
+                        expected_fb = int(item.get("size_bytes", 0) or 0)
+                    except (TypeError, ValueError):
+                        expected_fb = 0
+                    if not expected_fb:
+                        continue
+                    if expected_fb in staged_sizes.get(base, []):
+                        continue
             except Exception:
                 pass
             if local is None:
@@ -133,15 +182,29 @@ class DownloadManager:
         """Cache dataset metadata + file manifest beside the downloads."""
         try:
             import json as _json
+            import os
+            import tempfile
+
+            def _atomic_write(path, payload) -> None:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                fd, tmp_name = tempfile.mkstemp(
+                    dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
+                )
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                        handle.write(_json.dumps(payload, indent=2, ensure_ascii=False))
+                    os.replace(tmp_name, path)
+                except Exception:
+                    try:
+                        os.unlink(tmp_name)
+                    except OSError:
+                        pass
+                    raise
 
             base = self.dataset_dir(persistent_id)
             base.mkdir(parents=True, exist_ok=True)
-            self.metadata_path(persistent_id).write_text(
-                _json.dumps(metadata or {}, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
-            self.manifest_path(persistent_id).write_text(
-                _json.dumps(inventory or [], indent=2, ensure_ascii=False), encoding="utf-8"
-            )
+            _atomic_write(self.metadata_path(persistent_id), metadata or {})
+            _atomic_write(self.manifest_path(persistent_id), inventory or [])
         except Exception:
             pass
 
@@ -194,53 +257,95 @@ class DownloadManager:
         persistent_id: str,
         inventory: list | None = None,
         progress: Optional[Callable[[int], None]] = None,
+        max_workers: int = 1,
     ) -> List[str]:
         """Fetch original uploads behind tabular .tab derivatives.
 
         Returns staged original paths. Skips files already staged with a
         matching size. Never raises — per-file failures are collected and
-        ignored (the .tab remains available for checks).
+        ignored (the .tab remains available for checks). `max_workers>1`
+        fetches originals in parallel (I/O-bound).
         """
         try:
             inv = inventory if inventory is not None else self.inventory(persistent_id)
         except Exception:
             return []
         root = self.files_dir(persistent_id)
-        staged: List[str] = []
-        for item in inv:
+        if not isinstance(inv, list):
+            return []
+
+        def _fetch_one(item) -> str | None:
+            dest: Path | None = None
             try:
-                if not item.get("tabular"):
-                    continue
+                if not isinstance(item, dict) or not item.get("tabular"):
+                    return None
                 file_id = str(item.get("id") or "")
                 original_name = str(item.get("original_name") or "")
                 if not file_id or not original_name:
-                    continue
+                    return None
                 rel = Path(item.get("path", "") or "")
-                # original_name is a bare file name; rel.parent carries any
-                # subdirectory. Both are containment-checked as one path.
                 if str(rel.parent) not in ("", "."):
                     target = rel.parent / Path(original_name).name
                 else:
                     target = Path(Path(original_name).name)
                 dest = self._contained(root, target.as_posix())
                 if dest is None:
-                    continue
-                expected = int(item.get("original_size", 0) or 0)
-                if dest.is_file() and (not expected or dest.stat().st_size == expected):
-                    staged.append(dest.relative_to(root).as_posix())
-                    continue
+                    return None
+                try:
+                    expected = int(item.get("original_size", 0) or 0)
+                except (TypeError, ValueError):
+                    expected = 0
+                if dest.is_file():
+                    try:
+                        actual_size = dest.stat().st_size
+                    except OSError:
+                        actual_size = -1
+                    if actual_size >= 0 and (
+                        (expected and actual_size == expected)
+                        or (not expected and actual_size > 0)
+                    ):
+                        return dest.relative_to(root).as_posix()
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 self._client.download_datafile_original(file_id, dest, progress=progress)
-                staged.append(dest.relative_to(root).as_posix())
+                return dest.relative_to(root).as_posix()
             except Exception:
-                continue
+                try:
+                    if dest is not None and dest.is_file():
+                        try:
+                            if dest.stat().st_size == 0:
+                                dest.unlink()
+                        except OSError:
+                            pass
+                except Exception:
+                    pass
+                return None
+
+        staged: List[str] = []
+        tabular_items = [it for it in inv if isinstance(it, dict) and it.get("tabular")]
+        if max_workers and max_workers > 1 and len(tabular_items) > 1:
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                for rel in pool.map(_fetch_one, tabular_items):
+                    if rel:
+                        staged.append(rel)
+        else:
+            for item in tabular_items:
+                rel = _fetch_one(item)
+                if rel:
+                    staged.append(rel)
         return staged
 
     @staticmethod
     def _is_tabular(item: dict) -> bool:
         return bool(item.get("tabular")) or str(item.get("path", "")).lower().endswith(".tab")
 
-    def verify(self, persistent_id: str) -> Tuple[bool, List[str], List[str]]:
+    def verify(
+        self,
+        persistent_id: str,
+        progress: Optional[Callable[[int, int], None]] = None,
+        max_workers: int = 1,
+    ) -> Tuple[bool, List[str], List[str]]:
         """Rehash staged files against the Dataverse inventory checksums.
 
         Returns (ok, problems, warnings). Missing files, unsupported
@@ -254,34 +359,54 @@ class DownloadManager:
         staged_root = self.files_dir(persistent_id)
         problems: List[str] = []
         warnings: List[str] = []
-        for item in inventory:
+        total = len(inventory) if isinstance(inventory, list) else 0
+        done = 0
+
+        def _bump() -> None:
+            nonlocal done
+            done += 1
+            if progress:
+                try:
+                    progress(done, total)
+                except Exception:
+                    pass
+
+        def _verify_one(item) -> tuple[str | None, str | None]:
+            if not isinstance(item, dict):
+                return ("malformed inventory entry (missing path)", None)
             rel = str(item.get("path", "") or "")
-            if not rel or not isinstance(item, dict):
-                problems.append("malformed inventory entry (missing path)")
-                continue
+            if not rel:
+                return ("malformed inventory entry (missing path)", None)
             local = self._contained(staged_root, rel)
             if local is None:
-                problems.append(f"unsafe path (outside workspace): {rel}")
-                continue
-            if not local.exists():
-                problems.append(f"missing: {rel}")
-                continue
+                return (f"unsafe path (outside workspace): {rel}", None)
+            try:
+                if not local.exists():
+                    return (f"missing: {rel}", None)
+                # A directory masquerading as a file is a problem, not a crash.
+                if not local.is_file():
+                    return (f"not a file: {rel}", None)
+            except OSError as exc:
+                return (f"unreadable: {rel} ({exc})", None)
             if not item.get("checksum_value"):
-                warnings.append(f"no checksum recorded for {rel} — integrity unverified")
-                continue
+                return (None, f"no checksum recorded for {rel} — integrity unverified")
             algorithm = item.get("checksum_type") or "md5"
             try:
                 actual = self._hash_file(local, algorithm)
             except ValueError:
-                problems.append(
-                    f"unsupported checksum type '{algorithm}' for {rel}"
+                return (
+                    f"unsupported checksum type '{algorithm}' for {rel}",
+                    None,
                 )
-                continue
-            expected = str(item["checksum_value"]).lower()
-            if actual != expected:
+            except OSError as exc:
+                return (f"unreadable: {rel} ({exc})", None)
+            expected = str(item.get("checksum_value") or "").lower()
+            if not expected:
+                return (None, f"no checksum recorded for {rel} — integrity unverified")
+            if actual.lower() != expected:
                 try:
                     size = local.stat().st_size
-                except Exception:
+                except OSError:
                     size = -1
                 line = (
                     f"checksum mismatch: {rel} "
@@ -302,9 +427,31 @@ class DownloadManager:
                             else ""
                         )
                     )
-                    warnings.append(line)
-                else:
-                    problems.append(line)
+                    return (None, line)
+                return (line, None)
+            return (None, None)
+
+        # Sequential by default (deterministic order for tests); opt-in
+        # ThreadPool for multi-GB datasets via max_workers>1.
+        items = inventory if isinstance(inventory, list) else []
+        if max_workers and max_workers > 1:
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                for prob, warn in pool.map(_verify_one, items):
+                    if prob:
+                        problems.append(prob)
+                    elif warn:
+                        warnings.append(warn)
+                    _bump()
+        else:
+            for item in items:
+                prob, warn = _verify_one(item)
+                if prob:
+                    problems.append(prob)
+                elif warn:
+                    warnings.append(warn)
+                _bump()
         return (not problems, problems, warnings)
 
     # -- helpers ---------------------------------------------------------------

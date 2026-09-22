@@ -28,7 +28,10 @@ class AboutPane(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setStyleSheet("background: #faf8ff;")
+        # Scoped to self: a bare `background` rule would act subtree-wide
+        # and override app-level backgrounds below this pane.
+        self.setObjectName("AboutPane")
+        self.setStyleSheet("QWidget#AboutPane { background: #faf8ff; }")
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 24, 24, 24)
@@ -44,7 +47,7 @@ class AboutPane(QWidget):
         card = QFrame()
         card.setObjectName("Card")
         card.setStyleSheet(
-            "QFrame#Card { background: #ffffff; border: 1px solid #c3c6d8; border-radius: 12px; }"
+            "QFrame#Card { background: #ffffff; border: 1px solid #c3c6d8; border-radius: 8px; }"
         )
         body = QVBoxLayout(card)
         body.setContentsMargins(20, 20, 20, 20)
@@ -61,7 +64,7 @@ class AboutPane(QWidget):
 
         blurb = QLabel(
             "Desktop assistant for curating Dataverse datasets: discover drafts, "
-            "approve downloads, run format checks, verify metadata completeness, "
+            "approve downloads, run format checks, verify metadata, "
             "compare versions, and record decisions — all against the Dataverse "
             "Native/Search API with an API token. No direct database access; "
             "downloads, reports, and metadata caches live under your workspace."
@@ -75,7 +78,7 @@ class AboutPane(QWidget):
         bullets = QLabel(
             "• Dashboard of datasets in review with status, label, and collection filters<br>"
             "• Per-file format checks (20 engines) plus dataset-level findings<br>"
-            "• Metadata completeness profiles and published-vs-draft comparison<br>"
+            "• Metadata check profiles and published-vs-draft comparison<br>"
             "• Per-dataset timeline: versions, curation labels, local actions<br>"
             "• Headless mode: <span style='font-family:monospace'>python main.py --headless &lt;dir&gt;</span>"
         )
@@ -97,8 +100,14 @@ class AboutPane(QWidget):
 
         row = QHBoxLayout()
         row.setSpacing(8)
-        back_btn = AppButton("× Close", kind="secondary")
+        back_btn = AppButton("Close", kind="secondary")
         back_btn.clicked.connect(lambda: self.discarded.emit())
+        try:
+            from ui.icons import icon as _about_icon
+
+            back_btn.setIcon(_about_icon("x"))
+        except Exception:
+            pass
         row.addWidget(back_btn)
         row.addStretch(1)
         outer.addLayout(row)

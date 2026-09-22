@@ -30,11 +30,24 @@ class FileEntry:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "FileEntry":
+        if not isinstance(data, dict):
+            raise ValueError(f"FileEntry must be an object, got {type(data).__name__}")
+        try:
+            path = str(data["path"])
+            size_bytes = int(data["size_bytes"])
+        except KeyError as exc:
+            raise ValueError(f"FileEntry missing required field {exc}") from exc
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"FileEntry has invalid field: {exc}") from exc
+        mime_type = str(data.get("mime_type", "") or "")
+        raw_checks = data.get("checks", [])
+        if not isinstance(raw_checks, list):
+            raise ValueError("FileEntry.checks must be a list")
         return cls(
-            path=data["path"],
-            size_bytes=data["size_bytes"],
-            mime_type=data.get("mime_type", ""),
-            checks=[CheckResult.from_dict(c) for c in data.get("checks", [])],
+            path=path,
+            size_bytes=size_bytes,
+            mime_type=mime_type,
+            checks=[CheckResult.from_dict(c) for c in raw_checks],
         )
 
 
@@ -61,21 +74,86 @@ class DatasetReport:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "DatasetReport":
+        if not isinstance(data, dict):
+            raise ValueError(f"DatasetReport must be an object, got {type(data).__name__}")
+        try:
+            persistent_id = str(data["persistent_id"])
+            label = str(data["label"])
+            engine_version = str(data["engine_version"])
+        except KeyError as exc:
+            raise ValueError(f"DatasetReport missing required field {exc}") from exc
+        timestamp = str(data.get("timestamp", "") or "")
+        raw_ds = data.get("dataset_checks", [])
+        raw_files = data.get("files", [])
+        if not isinstance(raw_ds, list) or not isinstance(raw_files, list):
+            raise ValueError("DatasetReport dataset_checks/files must be lists")
         return cls(
-            persistent_id=data["persistent_id"],
-            label=data["label"],
-            engine_version=data["engine_version"],
-            timestamp=data.get("timestamp", ""),
-            dataset_checks=[
-                CheckResult.from_dict(c) for c in data.get("dataset_checks", [])
-            ],
-            files=[FileEntry.from_dict(f) for f in data.get("files", [])],
+            persistent_id=persistent_id,
+            label=label,
+            engine_version=engine_version,
+            timestamp=timestamp,
+            dataset_checks=[CheckResult.from_dict(c) for c in raw_ds],
+            files=[FileEntry.from_dict(f) for f in raw_files],
         )
 
-    def save(self, path: Path) -> None:
-        path.write_text(
-            json.dumps(self.to_dict(), indent=2), encoding="utf-8"
+    def to_markdown(self) -> str:
+        from engine.report_md import render_markdown
+
+        return render_markdown(self)
+
+    def save_markdown(self, path: Path) -> None:
+        import os
+        import tempfile
+
+        from engine.report_md import render_markdown
+
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        data = render_markdown(self)
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
         )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(data)
+                handle.flush()
+                try:
+                    os.fsync(handle.fileno())
+                except OSError:
+                    pass
+            os.replace(tmp_name, path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
+
+    def save(self, path: Path) -> None:
+        import os
+        import tempfile
+
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        data = json.dumps(self.to_dict(), indent=2)
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(data)
+                handle.flush()
+                try:
+                    os.fsync(handle.fileno())
+                except OSError:
+                    pass
+            os.replace(tmp_name, path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
 
     @classmethod
     def load(cls, path: Path) -> "DatasetReport":

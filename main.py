@@ -56,18 +56,24 @@ def _inject_sibling_libs() -> int:
 
 # Ensure PyInstaller bundles the GUI even though it is imported lazily
 # inside main() (so --headless can run without a display).
-try:
+# These imports are TYPE_CHECKING-only at runtime to keep --headless fast
+# (~300ms + ~100MB saved by not loading Qt). PyInstaller still discovers
+# them via the explicit hidden-imports in the spec / Makefile.
+from typing import TYPE_CHECKING as _TYPE_CHECKING
+
+if _TYPE_CHECKING:  # pragma: no cover
     import PySide6  # noqa: F401
     import PySide6.QtCore  # noqa: F401
     import PySide6.QtGui  # noqa: F401
     import PySide6.QtWidgets  # noqa: F401
+    import response_draft  # noqa: F401
+    import review_rules  # noqa: F401
     import ui.main_window  # noqa: F401
     import ui.dashboard  # noqa: F401
     import ui.dataset_detail  # noqa: F401
+    import ui.review_config  # noqa: F401
     import ui.settings_dialog  # noqa: F401
     import ui.workers  # noqa: F401
-except ImportError:
-    pass
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -80,7 +86,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "dataset_dir", nargs="?", help="staged dataset directory (headless mode)"
     )
-    parser.add_argument("--out", default="curation_report.json", help="output JSON path")
+    parser.add_argument("--out", default="curation_report.json", help="output report path")
+    parser.add_argument(
+        "--format",
+        default="json",
+        choices=("json", "md", "both"),
+        help="report format: json, md, or both (default: json)",
+    )
     parser.add_argument("--persistent-id", default="", help="dataset persistent ID")
     parser.add_argument(
         "--config",
@@ -107,12 +119,37 @@ def main(argv: list[str] | None = None) -> int:
             # Both flags are GUI-only (config/token/network); accepting them
             # here would silently ignore what the user asked for.
             parser.error("--dataverse/--config are GUI-only and ignored in headless mode")
+        dataset_path = Path(args.dataset_dir)
+        if not dataset_path.exists():
+            parser.error(f"dataset_dir not found: {args.dataset_dir}")
+        if not dataset_path.is_dir():
+            parser.error(f"dataset_dir is not a directory: {args.dataset_dir}")
+        out_path = Path(args.out)
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            parser.error(f"cannot create output directory ({exc})")
         from engine.runner import run_report_to_file
 
-        report = run_report_to_file(
-            Path(args.dataset_dir),
-            Path(args.out),
-            persistent_id=args.persistent_id,
+        try:
+            report = run_report_to_file(
+                dataset_path,
+                out_path,
+                persistent_id=args.persistent_id,
+                fmt=args.format,
+            )
+        except Exception as exc:
+            print(f"headless run failed: {exc}", file=sys.stderr)
+            return 2
+        errors = sum(
+            1
+            for r in report.dataset_checks
+            if r.level == "error" and not r.passed
+        ) + sum(
+            1
+            for f in report.files
+            for r in f.checks
+            if r.level == "error" and not r.passed
         )
         warnings = sum(
             1
@@ -124,15 +161,29 @@ def main(argv: list[str] | None = None) -> int:
             for r in f.checks
             if r.level in {"warning", "error"} and not r.passed
         )
-        print(f"Report written to {args.out} ({len(report.files)} files, {warnings} finding(s))")
-        return 0
+        written = str(out_path)
+        if args.format == "both":
+            sibling = out_path.with_suffix(".md" if out_path.suffix.lower() != ".md" else ".json")
+            written = f"{out_path} + {sibling}"
+        print(f"Report written to {written} ({len(report.files)} files, {warnings} finding(s))")
+        # CI-usable exit code: 1 when error-level findings exist, 0 otherwise.
+        # Warnings alone do not fail the run.
+        return 1 if errors else 0
 
     from PySide6.QtWidgets import QApplication
 
     from config import Config
     from ui.main_window import MainWindow
 
-    cfg = Config.load(Path(args.config))
+    try:
+        cfg = Config.load(Path(args.config))
+    except ValueError as exc:
+        # Corrupt config: fall back to defaults but tell the user loudly
+        # instead of silently discarding their workspace/token.
+        print(f"config warning: {exc} — using defaults", file=sys.stderr)
+        from config import Config as _Config
+
+        cfg = _Config()
     if args.dataverse:
         cfg.dataverse.base_url = args.dataverse.rstrip("/")
 

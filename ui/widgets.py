@@ -15,7 +15,7 @@ Intentional one-offs (NOT kit violations):
   with no kit equivalent.
 """
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -43,6 +43,8 @@ from ui.theme import (
 __all__ = [
     "AppButton",
     "AppTable",
+    "flush_table_style",
+    "flush_list_style",
     "make_card",
     "make_search_field",
     "make_line_edit",
@@ -99,7 +101,12 @@ class AppTable(QTableWidget):
     headers: ordered column titles. widths: {index: px} initial widths
     (default 120). row_height: vertical default section size.
     sortable: leave True unless the view depends on insertion order.
+
+    Emits columns_fitted after a successful content fit so split-header
+    views (dashboard queue) can mirror the new section sizes.
     """
+
+    columns_fitted = Signal()
 
     def __init__(
         self,
@@ -122,6 +129,10 @@ class AppTable(QTableWidget):
             self.setColumnWidth(i, width)
             hdr.setSectionResizeMode(i, QHeaderView.Interactive)
         self.setShowGrid(False)
+        # NoFrame: the 1px StyledPanel frame would inset every flush table
+        # 1px inside its card (770px table in a 772px card); the card border
+        # already provides the outline.
+        self.setFrameStyle(QFrame.NoFrame)
         self.setSelectionBehavior(QTableWidget.SelectRows)
         self.setEditTriggers(QTableWidget.NoEditTriggers)
         self.setAlternatingRowColors(False)
@@ -130,7 +141,26 @@ class AppTable(QTableWidget):
         self.verticalHeader().setDefaultSectionSize(row_height)
         self.setFocusPolicy(Qt.NoFocus)
         self.setSortingEnabled(sortable)
+        self._auto_fit = True
+        self._fitting = False
+        self._fitted = False
+        hdr.sectionResized.connect(self._on_user_section_resized)
         enable_table_copy(self)
+
+    def showEvent(self, event) -> None:
+        """First visible paint: fit once the viewport has a real width.
+
+        Populates often run during __init__ (cached dashboard, settings
+        reload) when the widget is still hidden — viewport().width() is
+        meaningless there, so fit defers to here.
+        """
+        super().showEvent(event)
+        if self._auto_fit and not self._fitted and self.rowCount() > 0:
+            QTimer.singleShot(0, self._fit_after_show)
+
+    def _fit_after_show(self) -> None:
+        if self._auto_fit and not self._fitted and self.isVisible():
+            self.fit_columns_to_content()
 
     def populate_guarded(self, row_count: int) -> None:
         """setRowCount with sorting suppressed so inserts stay in order."""
@@ -139,9 +169,155 @@ class AppTable(QTableWidget):
         self.setRowCount(row_count)
         self.setSortingEnabled(was)
 
+    def _on_user_section_resized(self, *_args) -> None:
+        """Lock content auto-fit once the user drags a column edge."""
+        if self._fitting:
+            return
+        self._auto_fit = False
+
+    def disable_auto_fit(self) -> None:
+        """Saved widths restored — never overwrite the user's layout."""
+        self._auto_fit = False
+
+    def enable_auto_fit(self) -> None:
+        """Clear restore/manual locks so the next populate re-fits content."""
+        self._auto_fit = True
+        self._fitted = False
+
+    def fit_columns_to_content(
+        self,
+        *,
+        min_width: int = 48,
+        max_width: int = 520,
+    ) -> None:
+        """Size Interactive columns to their header/cell/widget content.
+
+        Stretch columns and a stretched last section keep absorbing slack.
+        No-ops when already fitted, when the user resized a column, when a
+        saved view was restored, or while hidden (showEvent retries).
+        If fitted widths overflow the viewport, every fitted column scales
+        down by one ratio so nothing is clipped — required where the
+        horizontal scrollbar is off (dashboard queue, meta table). Header
+        signals stay blocked so the fit is not persisted as a manual
+        resize; columns_fitted fires afterwards for split-header sync.
+        """
+        if not self._auto_fit or self._fitted or self.rowCount() <= 0:
+            return
+        if not self.isVisible():
+            return
+        hdr = self.horizontalHeader()
+        was_sorting = self.isSortingEnabled()
+        was_stretch_last = hdr.stretchLastSection()
+        self._fitting = True
+        hdr.blockSignals(True)
+        try:
+            self.setSortingEnabled(False)
+            hdr.setStretchLastSection(False)
+            count = self.columnCount()
+            targets: dict[int, int] = {}
+            # Stretch sections are not content-sized; reserve their current
+            # width so the downscale below never crushes them to zero.
+            stretch_reserve = 0
+            for i in range(count):
+                if hdr.isSectionHidden(i):
+                    continue
+                mode = hdr.sectionResizeMode(i)
+                if mode == QHeaderView.Stretch:
+                    stretch_reserve += max(
+                        min_width, min(max_width, int(hdr.sectionSize(i)))
+                    )
+                    continue
+                if mode != QHeaderView.Interactive:
+                    continue
+                hint = 0
+                try:
+                    hint = int(hdr.sectionSizeFromContents(i))
+                except Exception:
+                    hint = 0
+                try:
+                    col_hint = int(self.sizeHintForColumn(i))
+                    if col_hint > hint:
+                        hint = col_hint
+                except Exception:
+                    pass
+                for row in range(self.rowCount()):
+                    cell = self.cellWidget(row, i)
+                    if cell is None:
+                        continue
+                    try:
+                        w = int(cell.sizeHint().width()) + 8
+                        if w > hint:
+                            hint = w
+                    except Exception:
+                        continue
+                if hint <= 0:
+                    continue
+                targets[i] = max(min_width, min(max_width, hint))
+            usable = self.viewport().width() - stretch_reserve
+            total = sum(targets.values())
+            if usable > 0 and total > usable:
+                ratio = usable / total
+                for i, w in list(targets.items()):
+                    targets[i] = max(min_width, int(round(w * ratio)))
+            for i, w in targets.items():
+                hdr.resizeSection(i, w)
+            hdr.setStretchLastSection(was_stretch_last)
+        except Exception:
+            pass
+        finally:
+            hdr.blockSignals(False)
+            self._fitting = False
+            try:
+                self.setSortingEnabled(was_sorting)
+            except Exception:
+                pass
+            self._fitted = True
+            self.columns_fitted.emit()
+
+
+def flush_table_style(last: bool = True) -> str:
+    """Edge-to-edge QTableWidget face for tables flush inside cards/panes.
+
+    Qt never clips children to a parent's border-radius, so a flush table
+    paints its own corners: square top (meets the header/content above
+    flush), 8px bottom when `last` (meets the card/pane border) else square
+    (more flush content follows). Header end-caps stay square for the same
+    reason — the global 8px section radius would notch unfilled.
+    The background is explicit (not inherited from the app rule): without
+    it, a styled lavender ancestor makes the whole table body transparent
+    and rows render page-colored instead of white.
+    """
+    bottom = "8px" if last else "0px"
+    return (
+        "QTableWidget { background: " + SURFACE_CONTAINER_LOWEST + "; border: none; "
+        "border-top-left-radius: 0px; border-top-right-radius: 0px; "
+        "border-bottom-left-radius: " + bottom + "; "
+        "border-bottom-right-radius: " + bottom + "; } "
+        "QHeaderView::section:first { border-top-left-radius: 0px; } "
+        "QHeaderView::section:last { border-top-right-radius: 0px; } "
+        # Scrollbar lanes must be painted inline too: app-level QScrollBar
+        # backgrounds demonstrably do not stick under styled ancestors
+        # (lanes render page-colored, leaving the bottom-right corner an
+        # unfilled hole). Thumbs/grooves keep coming from the global theme.
+        "QTableWidget QScrollBar:vertical { background: " + SURFACE_CONTAINER_LOWEST + "; } "
+        "QTableWidget QScrollBar:horizontal { background: " + SURFACE_CONTAINER_LOWEST + "; } "
+    )
+
+
+def flush_list_style(last: bool = True) -> str:
+    """Edge-to-edge QListWidget face, same corner contract as flush tables."""
+    bottom = "8px" if last else "0px"
+    return (
+        "QListWidget { background: #ffffff; border: none; "
+        "border-top-left-radius: 0px; border-top-right-radius: 0px; "
+        "border-bottom-left-radius: " + bottom + "; "
+        "border-bottom-right-radius: " + bottom + "; "
+        "font-size: 12px; color: #424656; }"
+    )
+
 
 def make_card(title: str, parent: QWidget | None = None) -> tuple:
-    """Standard white card (12px radius) with a header bar.
+    """Standard white card (8px unified radius) with a header bar.
 
     Returns (card, body_layout, title_label, header_layout) — append extra
     header widgets (summaries, combos, filters) to header_layout.
@@ -150,15 +326,18 @@ def make_card(title: str, parent: QWidget | None = None) -> tuple:
     card.setObjectName("Card")
     card.setStyleSheet(
         f"QFrame#Card {{ background: {SURFACE_CONTAINER_LOWEST}; "
-        f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 12px; }}"
+        f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; }}"
     )
     outer = QVBoxLayout(card)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
     top = QFrame()
+    # Scoped (#id): a bare `QFrame {...}` rule would restyle every QFrame
+    # below this bar — inline scope beats app-level rules subtree-wide.
+    top.setObjectName("CardTopBar")
     top.setStyleSheet(
-        f"QFrame {{ background: #faf8ff; border-bottom: 1px solid {SURFACE_CONTAINER_LOW}; "
-        "border-top-left-radius: 12px; border-top-right-radius: 12px; }"
+        f"QFrame#CardTopBar {{ background: #faf8ff; border-bottom: 1px solid {SURFACE_CONTAINER_LOW}; "
+        "border-top-left-radius: 8px; border-top-right-radius: 8px; }"
     )
     top_lay = QHBoxLayout(top)
     top_lay.setContentsMargins(16, 12, 16, 12)
@@ -176,7 +355,8 @@ def make_card(title: str, parent: QWidget | None = None) -> tuple:
     body.setSpacing(8)
     wrap = QWidget()
     wrap.setLayout(body)
-    wrap.setStyleSheet("background: transparent; border: none;")
+    wrap.setObjectName("CardBodyWrap")
+    wrap.setStyleSheet("QWidget#CardBodyWrap { background: transparent; border: none; }")
     outer.addWidget(wrap)
     return card, body, title_lbl, top_lay
 
@@ -216,13 +396,36 @@ def make_line_edit(placeholder: str = "", parent: QWidget | None = None, *,
     return field
 
 
+class _NoWheelCombo(QComboBox):
+    """QComboBox that ignores mouse-wheel unless it holds focus.
+
+    Stops scroll-over accidents: wheeling over an unfocused dropdown (e.g.
+    the Required/Optional level combos while scrolling the page) passes
+    the event to the parent scroll area instead of flipping the value.
+    Once clicked/tabbed into, the wheel works as usual.
+    """
+
+    def wheelEvent(self, event) -> None:  # type: ignore[override]
+        try:
+            if not self.hasFocus():
+                event.ignore()
+                return
+        except Exception:
+            pass
+        try:
+            super().wheelEvent(event)
+        except Exception:
+            pass
+
+
 def make_combo(items=None, parent: QWidget | None = None, *, height: int = 36,
                min_width: int = 130, tip: str = "") -> QComboBox:
     """Standard dropdown (themed chevron, 12px semibold entries).
 
-    items: list of labels or (label, data) tuples.
+    items: list of labels or (label, data) tuples. Wheel-safe: scrolling
+    over an unfocused combo scrolls the page, never the value.
     """
-    combo = QComboBox(parent)
+    combo = _NoWheelCombo(parent)
     combo.setFixedHeight(height)
     combo.setMinimumWidth(min_width)
     combo.setCursor(Qt.PointingHandCursor)

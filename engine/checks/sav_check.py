@@ -39,10 +39,49 @@ class SavCheck(Check):
             import pyreadstat
         except ImportError:
             from engine.checks._util import missing_library
+            from engine.checks._util import skipped as _skipped
 
-            return [missing_library("format.spss.openable", "pyreadstat")]
+            return [
+                missing_library("format.spss.openable", "pyreadstat"),
+                _skipped(
+                    "format.spss.dictionary",
+                    f"{path.name}: dictionary skipped (pyreadstat not installed)",
+                ),
+                _skipped(
+                    "format.spss.labels",
+                    f"{path.name}: label scan skipped (pyreadstat not installed)",
+                ),
+                _skipped(
+                    "format.spss.encoding",
+                    f"{path.name}: encoding scan skipped (pyreadstat not installed)",
+                ),
+            ]
         name = path.name
-        frame, meta = pyreadstat.read_sav(str(path), row_limit=_ROW_LIMIT)
+        try:
+            frame, meta = pyreadstat.read_sav(str(path), row_limit=_ROW_LIMIT)
+        except Exception as exc:
+            from engine.checks._util import skipped as _skipped2
+
+            return [
+                CheckResult(
+                    check_id="format.spss.openable",
+                    level="error",
+                    passed=False,
+                    message=f"{name}: failed to read ({exc})",
+                ),
+                _skipped2(
+                    "format.spss.dictionary",
+                    f"{name}: dictionary skipped (unreadable file)",
+                ),
+                _skipped2(
+                    "format.spss.labels",
+                    f"{name}: label scan skipped (unreadable file)",
+                ),
+                _skipped2(
+                    "format.spss.encoding",
+                    f"{name}: encoding scan skipped (unreadable file)",
+                ),
+            ]
 
         labels = list(meta.column_labels or [])
         types = list(meta.original_variable_types or [])

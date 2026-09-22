@@ -38,6 +38,109 @@ from ui.theme import action_button_style
 from ui.widgets import AppButton
 
 
+class LogPage(QWidget):
+    """Full-page log view — lives in the main stack alongside dashboard/detail."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("LogPage")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        header = QHBoxLayout()
+        header.setSpacing(8)
+        title = QLabel("Dataverse Communication Log")
+        title.setStyleSheet("font-size: 14px; font-weight: 600; color: #131b2e; background: transparent; border: none;")
+        header.addWidget(title)
+        header.addStretch(1)
+        # Live toggle
+        self._live_btn = QPushButton("Live")
+        self._live_btn.setCheckable(True)
+        self._live_btn.setChecked(True)
+        self._live_btn.setCursor(Qt.PointingHandCursor)
+        self._live_btn.setFixedHeight(28)
+        self._live_btn.setMinimumWidth(90)
+        self._live_btn.setToolTip("Follow new log lines as they arrive (click to pause)")
+        self._live_btn.toggled.connect(self._on_live_toggled)
+        self._style_live_btn()
+        header.addWidget(self._live_btn)
+        clear_btn = AppButton("Clear log", kind="secondary")
+        clear_btn.setStyleSheet(action_button_style(False))
+        clear_btn.setToolTip("Clear the log buffer")
+        clear_btn.clicked.connect(self._clear)
+        header.addWidget(clear_btn)
+        refresh_btn = AppButton("Refresh", kind="secondary")
+        refresh_btn.setStyleSheet(action_button_style(False))
+        refresh_btn.setToolTip("Refresh log now")
+        refresh_btn.clicked.connect(self._refresh)
+        header.addWidget(refresh_btn)
+        layout.addLayout(header)
+
+        self._view = QPlainTextEdit()
+        self._view.setReadOnly(True)
+        font = QFont("Consolas")
+        font.setStyleHint(QFont.Monospace)
+        self._view.setFont(font)
+        self._view.setPlaceholderText("Log will appear here as the app talks to Dataverse…")
+        self._view.setStyleSheet(
+            f"QPlainTextEdit {{ background: {SURFACE_CONTAINER_LOW}; color: {ON_SURFACE}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 6px 8px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; }}"
+        )
+        self._highlighter = LogHighlighter(self._view.document())
+        layout.addWidget(self._view, 1)
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._refresh)
+        self._timer.start(800)
+        self._last_len = 0
+
+    def _style_live_btn(self) -> None:
+        from ui.icons import icon as _live_icon
+
+        live = self._live_btn.isChecked()
+        self._live_btn.setText("Live" if live else "Paused")
+        try:
+            self._live_btn.setIcon(
+                _live_icon("circle-dot", color="#00174c")
+                if live else _live_icon("circle", color="#57657a")
+            )
+        except Exception:
+            pass
+        self._live_btn.setStyleSheet(
+            "QPushButton { background: #dbe1ff; color: #00174c; border: 1px solid #c3c6d8; "
+            "border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 700; }"
+            if live else
+            "QPushButton { background: #ffffff; color: #57657a; border: 1px solid #c3c6d8; "
+            "border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 700; }"
+        )
+
+    def _on_live_toggled(self, checked: bool) -> None:
+        self._style_live_btn()
+        if checked:
+            self._live_btn.setToolTip("Follow new log lines as they arrive (click to pause)")
+            self._last_len = -1  # force a catch-up refresh
+            if not self._timer.isActive():
+                self._timer.start(800)
+        else:
+            self._live_btn.setToolTip("Paused — new lines are buffered (click to resume)")
+            self._timer.stop()
+
+    def _refresh(self) -> None:
+        lines = applog.lines()
+        if len(lines) != self._last_len:
+            self._view.setPlainText("\n".join(lines) or "(log is empty)")
+            if self._live_btn.isChecked():
+                self._view.verticalScrollBar().setValue(self._view.verticalScrollBar().maximum())
+            self._last_len = len(lines)
+            self._live_btn.setToolTip(
+                f"Follow new log lines as they arrive — {len(lines)} line(s) buffered (click to pause)"
+            )
+
+    def _clear(self) -> None:
+        applog.clear()
+        self._refresh()
+
+
 class LogHighlighter(QSyntaxHighlighter):
     """INAV-style highlighter for the curation log (themed to brand)."""
 
@@ -194,7 +297,7 @@ class LogPanel(QWidget):
         header.addWidget(title)
         header.addStretch(1)
         # NOTE: stateful Live toggle one-off (see ui/widgets.py) — not AppButton by design.
-        self._live_btn = QPushButton("● Live")
+        self._live_btn = QPushButton("Live")
         self._live_btn.setCheckable(True)
         self._live_btn.setChecked(True)
         self._live_btn.setCursor(Qt.PointingHandCursor)
@@ -204,14 +307,21 @@ class LogPanel(QWidget):
         self._live_btn.toggled.connect(self._on_live_toggled)
         self._style_live_btn()
         header.addWidget(self._live_btn)
-        clear_btn = AppButton("Clear", kind="secondary", size="sm")
+        # Standard secondary button (md/36px): the sm face uses md padding,
+        # so a 28px Clear squeezed its text — conform to the kit instead.
+        clear_btn = AppButton("Clear", kind="secondary")
         clear_btn.setStyleSheet(action_button_style(False))
-        clear_btn.setMinimumWidth(70)
         clear_btn.setToolTip("Clear the log buffer")
         clear_btn.clicked.connect(self._clear)
         header.addWidget(clear_btn)
-        close_btn = AppButton("×", kind="ghost", size="sm")
+        close_btn = AppButton("", kind="ghost", size="sm")
         close_btn.setFixedSize(26, 26)
+        try:
+            from ui.icons import icon as _close_icon
+
+            close_btn.setIcon(_close_icon("x"))
+        except Exception:
+            close_btn.setText("×")
         close_btn.setToolTip("Hide the log (Ctrl+L to show again)")
         close_btn.clicked.connect(self._on_close)
         header.addWidget(close_btn)
@@ -242,14 +352,23 @@ class LogPanel(QWidget):
             pass
 
     def _style_live_btn(self) -> None:
+        from ui.icons import icon as _live_icon
+
         live = self._live_btn.isChecked()
-        self._live_btn.setText("● Live" if live else "○ Paused")
+        self._live_btn.setText("Live" if live else "Paused")
+        try:
+            self._live_btn.setIcon(
+                _live_icon("circle-dot", color="#00174c")
+                if live else _live_icon("circle", color="#57657a")
+            )
+        except Exception:
+            pass
         self._live_btn.setStyleSheet(
             "QPushButton { background: #dbe1ff; color: #00174c; border: 1px solid #c3c6d8; "
-            "border-radius: 6px; padding: 0 8px; font-size: 10px; font-weight: 700; }"
+            "border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 700; }"
             if live else
             "QPushButton { background: #ffffff; color: #57657a; border: 1px solid #c3c6d8; "
-            "border-radius: 6px; padding: 0 8px; font-size: 10px; font-weight: 700; }"
+            "border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 700; }"
         )
 
     def _on_live_toggled(self, checked: bool) -> None:

@@ -42,6 +42,7 @@ class GpkgCheck(Check):
 
     def _run_one(self, path: Path) -> List[CheckResult]:
         from engine.checks._util import quoted_ident
+        from engine.checks._util import skipped as _skipped
 
         name = path.name
         try:
@@ -53,7 +54,15 @@ class GpkgCheck(Check):
                     level="error",
                     passed=False,
                     message=f"{name}: read failed ({exc})",
-                )
+                ),
+                _skipped(
+                    "format.gpkg.layers",
+                    f"{name}: layer scan skipped (unreadable file)",
+                ),
+                _skipped(
+                    "format.gpkg.crs",
+                    f"{name}: CRS scan skipped (unreadable file)",
+                ),
             ]
 
         try:
@@ -70,7 +79,15 @@ class GpkgCheck(Check):
                             f"{name}: not a GeoPackage "
                             f"(application_id {application_id:#x})"
                         ),
-                    )
+                    ),
+                    _skipped(
+                        "format.gpkg.layers",
+                        f"{name}: layer scan skipped (not a GeoPackage)",
+                    ),
+                    _skipped(
+                        "format.gpkg.crs",
+                        f"{name}: CRS scan skipped (not a GeoPackage)",
+                    ),
                 ]
 
             try:
@@ -99,7 +116,15 @@ class GpkgCheck(Check):
                         level="error",
                         passed=False,
                         message=f"{name}: invalid GeoPackage tables ({exc})",
-                    )
+                    ),
+                    _skipped(
+                        "format.gpkg.layers",
+                        f"{name}: layer scan skipped (invalid tables)",
+                    ),
+                    _skipped(
+                        "format.gpkg.crs",
+                        f"{name}: CRS scan skipped (invalid tables)",
+                    ),
                 ]
 
             layers = []
@@ -137,7 +162,14 @@ class GpkgCheck(Check):
                     passed=False,
                     message=f"{name}: empty GPKG (0 layers)",
                 )
-                return [valid, empty]
+                return [
+                    valid,
+                    empty,
+                    _skipped(
+                        "format.gpkg.crs",
+                        f"{name}: CRS scan skipped (0 layers)",
+                    ),
+                ]
 
             layers_result = CheckResult(
                 check_id="format.gpkg.layers",
@@ -174,7 +206,15 @@ class GpkgCheck(Check):
                     level="error",
                     passed=False,
                     message=f"{name}: read failed ({exc})",
-                )
+                ),
+                _skipped(
+                    "format.gpkg.layers",
+                    f"{name}: layer scan skipped (read failed)",
+                ),
+                _skipped(
+                    "format.gpkg.crs",
+                    f"{name}: CRS scan skipped (read failed)",
+                ),
             ]
         finally:
             try:

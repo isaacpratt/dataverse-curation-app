@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS curation_actions (
 );
 CREATE INDEX IF NOT EXISTS idx_curation_actions_dataset
     ON curation_actions(dataset_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_curation_actions_action
+    ON curation_actions(action, dataset_id);
 """
 
 
@@ -69,23 +71,69 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _atomic_write_json(path: Path, payload: object) -> None:
+    """Atomic JSON write via tmp+rename (crash-safe, never truncates)."""
+    import os
+    import tempfile
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = json.dumps(payload, indent=2, ensure_ascii=False)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(data)
+            handle.flush()
+            try:
+                os.fsync(handle.fileno())
+            except OSError:
+                pass
+        os.replace(tmp_name, path)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+
+
 class AppState:
-    def __init__(self, db_path: Path) -> None:
+    def __init__(self, db_path: Path, timeout: float = 30.0) -> None:
+        import threading
+
         db_path = Path(db_path)
         try:
             db_path.parent.mkdir(parents=True, exist_ok=True)
         except Exception:
             pass
-        self._conn = sqlite3.connect(str(db_path))
+        # timeout avoids SQLITE_BUSY on concurrent dashboard/detail access;
+        # WAL allows readers during writes; check_same_thread=False with a
+        # write lock keeps Qt worker threads safe.
+        self._conn = sqlite3.connect(str(db_path), timeout=timeout, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        try:
+            self._conn.execute("PRAGMA journal_mode=WAL;")
+            self._conn.execute("PRAGMA busy_timeout=30000;")
+        except sqlite3.Error:
+            pass
         self._conn.executescript(_SCHEMA)
+        self._lock = threading.Lock()
 
     def close(self) -> None:
         try:
-            self._conn.commit()
+            with self._lock:
+                try:
+                    self._conn.commit()
+                except Exception:
+                    pass
+                self._conn.close()
         except Exception:
-            pass
-        self._conn.close()
+            try:
+                self._conn.close()
+            except Exception:
+                pass
 
     # -- curation action log -------------------------------------------
 
@@ -100,21 +148,22 @@ class AppState:
     ) -> int:
         """Append one curation action. Returns the new row id."""
         ts = timestamp or _utcnow_iso()
-        cur = self._conn.execute(
-            "INSERT INTO curation_actions "
-            "(dataset_id, timestamp, action, actor, notes, details_json) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                dataset_id,
-                ts,
-                action,
-                actor,
-                notes or "",
-                json.dumps(details or {}, ensure_ascii=False),
-            ),
-        )
-        self._conn.commit()
-        return int(cur.lastrowid or 0)
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO curation_actions "
+                "(dataset_id, timestamp, action, actor, notes, details_json) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    dataset_id,
+                    ts,
+                    action,
+                    actor,
+                    notes or "",
+                    json.dumps(details or {}, ensure_ascii=False),
+                ),
+            )
+            self._conn.commit()
+            return int(cur.lastrowid or 0)
 
     def list_actions(self, dataset_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Newest-first action log for one dataset."""
@@ -210,8 +259,7 @@ def write_size_entry(workspace: Path, persistent_id: str, size_bytes: int, file_
         if not isinstance(raw, dict):
             raw = {}
         raw[persistent_id] = {"size": int(size_bytes or 0), "files": int(file_count or 0)}
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+        _atomic_write_json(path, raw)
     except Exception:
         pass
 
@@ -220,8 +268,39 @@ def _table_layout_path(workspace: Path) -> Path:
     return Path(workspace) / _TABLE_LAYOUT_NAME
 
 
+def _enum_int(value) -> int:
+    """Best-effort int from a PySide6 enum member OR a plain int.
+
+    This PySide6 build raises TypeError on int(enum), so .value is the
+    fallback; duck-typed headers (tests) may return plain ints.
+    """
+    try:
+        return int(value)
+    except Exception:
+        pass
+    v = getattr(value, "value", None)
+    if isinstance(v, int):
+        return v
+    return 0
+
+
+def _sort_order_value(raw: int):
+    """Enum for real Qt headers when possible, plain int otherwise."""
+    try:
+        from PySide6.QtCore import Qt
+
+        return Qt.SortOrder(int(raw))
+    except Exception:
+        return int(raw)
+
+
 def save_table_state(workspace: Path, name: str, header) -> None:
-    """Persist a QHeaderView's section sizes (best-effort, never raises)."""
+    """Persist a table's full view state (best-effort, never raises).
+
+    Records column widths, the user's sort indicator, hidden columns, and
+    the visual column order so the table reopens exactly as it was left.
+    Extra keys are additive: older readers keep the "widths" contract.
+    """
     try:
         path = _table_layout_path(workspace)
         try:
@@ -230,37 +309,191 @@ def save_table_state(workspace: Path, name: str, header) -> None:
             raw = {}
         if not isinstance(raw, dict):
             raw = {}
-        widths = [header.sectionSize(i) for i in range(header.count())]
-        raw[name] = {"widths": widths}
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+        count = header.count()
+        entry: dict = {"widths": [header.sectionSize(i) for i in range(count)]}
+        try:
+            if header.isSortIndicatorShown():
+                entry["sort"] = [
+                    int(header.sortIndicatorSection()),
+                    _enum_int(header.sortIndicatorOrder()),
+                ]
+                entry["sort_shown"] = True
+        except Exception:
+            pass
+        try:
+            entry["hidden"] = [bool(header.isSectionHidden(i)) for i in range(count)]
+        except Exception:
+            pass
+        try:
+            entry["order"] = [int(header.visualIndex(i)) for i in range(count)]
+        except Exception:
+            pass
+        raw[name] = entry
+        _atomic_write_json(path, raw)
     except Exception:
         pass
 
 
-def restore_table_state(workspace: Path, name: str, header) -> None:
-    """Re-apply persisted section sizes (best-effort, never raises)."""
+def snapshot_table_view(header) -> dict:
+    """Capture a header's current view state for later reset (never raises).
+
+    Records widths, hidden columns, visual order, and the sort indicator —
+    call right after construction (before restore) so reset reproduces the
+    fresh-start view exactly.
+    """
+    snap: dict = {"widths": [], "hidden": [], "order": [],
+                  "sort": None, "sort_shown": False}
     try:
-        path = _table_layout_path(workspace)
-        if not path.exists():
+        count = header.count()
+        snap["widths"] = [header.sectionSize(i) for i in range(count)]
+        try:
+            snap["hidden"] = [bool(header.isSectionHidden(i)) for i in range(count)]
+        except Exception:
+            pass
+        try:
+            snap["order"] = [int(header.visualIndex(i)) for i in range(count)]
+        except Exception:
+            pass
+        try:
+            if header.isSortIndicatorShown():
+                snap["sort"] = [
+                    int(header.sortIndicatorSection()),
+                    _enum_int(header.sortIndicatorOrder()),
+                ]
+                snap["sort_shown"] = True
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return snap
+
+
+def apply_table_view(header, snap) -> None:
+    """Re-apply a view-state dict (snapshot or persisted entry). Never raises."""
+    try:
+        if not isinstance(snap, dict):
             return
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        widths = (raw.get(name) or {}).get("widths") if isinstance(raw, dict) else None
-        if not isinstance(widths, list):
-            return
+        count = header.count()
         try:
             header.blockSignals(True)
-            for i, width in enumerate(widths):
-                if i >= header.count():
-                    break
-                try:
-                    header.resizeSection(i, max(20, int(width)))
-                except Exception:
-                    continue
+            # -- widths ---------------------------------------------------
+            widths = snap.get("widths")
+            if isinstance(widths, list):
+                for i, width in enumerate(widths):
+                    if i >= count:
+                        break
+                    try:
+                        header.resizeSection(i, max(20, int(width)))
+                    except Exception:
+                        continue
+            # -- hidden columns -------------------------------------------
+            hidden = snap.get("hidden")
+            if isinstance(hidden, list):
+                for i, flag in enumerate(hidden):
+                    if i >= count:
+                        break
+                    try:
+                        header.setSectionHidden(i, bool(flag))
+                    except Exception:
+                        continue
+            # -- visual column order --------------------------------------
+            order = snap.get("order")
+            if isinstance(order, list) and len(order) == count:
+                # order[logical] = visual index wanted; move into place one
+                # target slot at a time (moveSection works in visual slots).
+                for target in range(count):
+                    logical = next(
+                        (l for l in range(count) if order[l] == target), None
+                    )
+                    if logical is None:
+                        continue
+                    try:
+                        current = header.visualIndex(logical)
+                        if current != target:
+                            header.moveSection(current, target)
+                    except Exception:
+                        continue
         finally:
             try:
                 header.blockSignals(False)
             except Exception:
                 pass
+        # -- sort indicator (after widths/order: fires one reorder) -------
+        # Legacy entries carry neither key: leave the indicator alone.
+        sort = snap.get("sort")
+        if not isinstance(sort, list) and ("sort" in snap or "sort_shown" in snap):
+            try:
+                header.setSortIndicatorShown(False)
+            except Exception:
+                pass
+        elif isinstance(sort, list) and len(sort) == 2:
+            try:
+                column = int(sort[0])
+                if 0 <= column < count:
+                    # Real Qt headers want the enum; duck-typed headers
+                    # accept the plain int (first call falls back).
+                    try:
+                        header.setSortIndicator(
+                            column, _sort_order_value(sort[1])
+                        )
+                    except Exception:
+                        header.setSortIndicator(column, int(sort[1]))
+                    if snap.get("sort_shown"):
+                        try:
+                            header.setSortIndicatorShown(True)
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            header.setSortIndicatorShown(False)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
     except Exception:
         pass
+
+
+def clear_table_state(workspace: Path, name: str) -> None:
+    """Drop one table's persisted entry so defaults survive restarts."""
+    try:
+        path = _table_layout_path(workspace)
+        if not path.exists():
+            return
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        if not isinstance(raw, dict) or name not in raw:
+            return
+        try:
+            del raw[name]
+        except Exception:
+            return
+        _atomic_write_json(path, raw)
+    except Exception:
+        pass
+
+
+def restore_table_state(workspace: Path, name: str, header) -> bool:
+    """Re-apply a persisted view state (best-effort, never raises).
+
+    Widths always come back; sort indicator, hidden columns, and visual
+    order apply only when they were saved (newer saves only).
+    Returns True when a saved entry was applied (caller should skip
+    content auto-fit so the user's layout wins).
+    """
+    try:
+        path = _table_layout_path(workspace)
+        if not path.exists():
+            return False
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return False
+        entry = raw.get(name)
+        if not isinstance(entry, dict) or not entry:
+            return False
+        apply_table_view(header, entry)
+        return True
+    except Exception:
+        return False

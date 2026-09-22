@@ -30,6 +30,59 @@ class XmlCheck(Check):
             return [missing_library("format.xml.valid", "lxml")]
 
         name = path.name
+        # Size gate: full DOM parse of a 500MB dump OOMs. Beyond the cap,
+        # stream with iterparse for root/namespace summary only.
+        _MAX_FULL_PARSE_BYTES = 64 << 20
+        try:
+            size = path.stat().st_size
+        except OSError:
+            size = 0
+        if size > _MAX_FULL_PARSE_BYTES:
+            try:
+                context = etree.iterparse(str(path), events=("start",), huge_tree=False)
+                root_tag = None
+                namespaces: set[str] = set()
+                for _, elem in context:
+                    if root_tag is None:
+                        root_tag = etree.QName(elem).localname
+                        nsmap = getattr(elem, "nsmap", {}) or {}
+                        namespaces = {k for k in nsmap if k}
+                        break
+                # Free the parser promptly.
+                try:
+                    del context
+                except Exception:
+                    pass
+                if root_tag is None:
+                    return [
+                        CheckResult(
+                            check_id="format.xml.valid",
+                            level="error",
+                            passed=False,
+                            message=f"{name}: empty or unparseable XML",
+                        )
+                    ]
+                message = f"{name}: well-formed (streamed, {size} bytes), root <{root_tag}>"
+                if namespaces:
+                    message += f", namespaces: {', '.join(sorted(namespaces))}"
+                return [
+                    CheckResult(
+                        check_id="format.xml.valid",
+                        level="info",
+                        passed=True,
+                        message=message,
+                        details={"streamed": True, "size_bytes": size},
+                    )
+                ]
+            except etree.XMLSyntaxError as exc:
+                return [
+                    CheckResult(
+                        check_id="format.xml.valid",
+                        level="error",
+                        passed=False,
+                        message=f"{name}: not well-formed ({exc})",
+                    )
+                ]
         try:
             tree = etree.parse(str(path))
         except etree.XMLSyntaxError as exc:

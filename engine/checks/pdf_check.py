@@ -29,13 +29,22 @@ class PdfCheck(Check):
             from pypdf import PdfReader
         except ImportError:
             from engine.checks._util import missing_library
+            from engine.checks._util import skipped as _skipped
 
-            return [missing_library("format.pdf.openable", "pypdf")]
+            return [
+                missing_library("format.pdf.openable", "pypdf"),
+                _skipped(
+                    "format.pdf.text",
+                    f"{path.name}: text scan skipped (pypdf not installed)",
+                ),
+            ]
 
         name = path.name
         reader = PdfReader(str(path))
         try:
             if reader.is_encrypted:
+                from engine.checks._util import skipped as _skipped2
+
                 # Report encryption without touching .pages (accessing pages
                 # on an encrypted file is version-dependent and can raise).
                 return [
@@ -44,7 +53,11 @@ class PdfCheck(Check):
                         level="warning",
                         passed=False,
                         message=f"{name}: encrypted PDF",
-                    )
+                    ),
+                    _skipped2(
+                        "format.pdf.text",
+                        f"{name}: text scan skipped (encrypted PDF)",
+                    ),
                 ]
 
             # Sample the first few pages: a cover-only scan must not condemn

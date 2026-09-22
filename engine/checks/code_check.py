@@ -65,4 +65,15 @@ class CodeCheck(Check):
                     details={"count": len(markers)},
                 )
             )
+        else:
+            results.append(
+                CheckResult(
+                    check_id="format.code.todo_markers",
+                    level="info",
+                    passed=True,
+                    message=f"{name}: no TODO/FIXME markers"
+                    + (" (sampled first 1 MiB)" if sampled else ""),
+                    details={"count": 0, "sampled": sampled},
+                )
+            )
         return results

@@ -11,10 +11,22 @@ from PySide6.QtCore import QThread, Signal
 _POOL_SIZE = 8
 
 # Review-inbox scan cache: find_review_submissions re-reads up to 5 inbox
-# pages, so memoize per (instance, dataset) for 10 minutes — reopening a
-# dataset skips the rescan.
+# pages, so memoize per (instance, dataset, token) for 10 minutes —
+# reopening a dataset skips the rescan. Token hash is included so a token
+# switch never reuses the prior user's inbox.
 _INBOX_TTL_S = 600.0
 _inbox_cache: dict = {}
+_inbox_lock = __import__("threading").Lock()
+
+
+def _inbox_key(base_url: str, pid: str, api_token: str) -> tuple:
+    import hashlib
+
+    try:
+        token_hash = hashlib.sha256((api_token or "").encode("utf-8")).hexdigest()[:16]
+    except Exception:
+        token_hash = ""
+    return (base_url, pid, token_hash)
 
 
 class CrawlWorker(QThread):
@@ -25,6 +37,11 @@ class CrawlWorker(QThread):
     # dashboard can offer per-instance label filtering. Carried separately
     # because `finished(list)` signature is fixed.
     labelsDiscovered = Signal(list)
+    # Emitted with the PURE probe result (never the filter union):
+    # {"labels": [...], "probed": bool, "collection": str}. The dashboard
+    # stamps the disk slot only when probed is True, so a cache hit can
+    # never freeze an unverified union in place.
+    allowedProbed = Signal(dict)
 
     def __init__(self, base_url: str, api_token: str, subtree: str, parent=None):
         super().__init__(parent)
@@ -37,6 +54,8 @@ class CrawlWorker(QThread):
 
         try:
             from dataverse_client import DataverseClient
+
+            from applog import get_app_log
 
             self.progress.emit(f"Connecting to {self._base_url} …")
             client = DataverseClient(self._base_url, self._api_token)
@@ -58,33 +77,78 @@ class CrawlWorker(QThread):
                     flag = False
                 return ds, flag
 
+            from concurrent.futures import as_completed
+
             with ThreadPoolExecutor(max_workers=_POOL_SIZE) as pool:
                 futures = [pool.submit(_check_lock, ds) for ds in datasets]
-                for i, fut in enumerate(futures, 1):
+                # as_completed avoids head-of-line blocking: one stalled
+                # locks call no longer stalls all later results.
+                done_n = 0
+                for fut in as_completed(futures):
                     if self.isInterruptionRequested():
                         for f in futures:
                             f.cancel()
                         return
                     ds, flag = fut.result()
+                    done_n += 1
                     if flag:
                         ds["state"] = "In Review"
                         in_review_n += 1
-                    if i % 10 == 0 or i == total:
+                    if done_n % 10 == 0 or done_n == total:
                         self.progress.emit(
-                            f"Checking review locks… {i}/{total} ({in_review_n} in review)"
+                            f"Checking review locks… {done_n}/{total} ({in_review_n} in review)"
                         )
-            # Curation labels are set at the Dataverse level — pull them in bulk
-            # via the superuser CSV report (one call for all drafts). Non-
-            # superuser tokens get 403 there, so fall back to per-dataset
-            # curationStatus calls in that case.
+            # Curation labels are set at the Dataverse level. Superusers
+            # pull them in bulk via the CSV report (one call for all
+            # drafts). Non-superuser tokens 403 there, so for them the
+            # identity probe (/api/users/:me) decides up front: skip the
+            # doomed report call and read per-draft curationStatus only —
+            # labels/status exist solely for datasets under curation, so
+            # published/deaccessioned rows are never attempted.
+            from dataverse_client import is_draft_dataset
+
             pids = [d.get("persistent_id", "") for d in datasets if d.get("persistent_id")]
             labels: list = []
             report = None
             try:
-                self.progress.emit("Fetching curation-label report for this Dataverse …")
-                report = client.list_curation_states()
+                superuser = client.user_is_superuser()
             except Exception:
-                report = None
+                superuser = None
+            try:
+                me = client.get_me() or {}
+                who = (
+                    str(me.get("displayName") or me.get("identifier") or "").strip()
+                )
+                if superuser is True:
+                    self.progress.emit(
+                        f"Connected as {who or 'user'} (superuser) — fetching curation-label report …"
+                    )
+                    get_app_log().info(
+                        f"Identity: {who or 'user'} is a superuser — bulk curation report"
+                    )
+                elif superuser is False:
+                    self.progress.emit(
+                        f"Connected as {who or 'user'} — per-draft curation labels …"
+                    )
+                    get_app_log().info(
+                        f"Identity: {who or 'user'} is not a superuser — "
+                        "per-draft label reads (no bulk report attempt)"
+                    )
+            except Exception:
+                pass
+            if superuser is True:
+                try:
+                    report = client.list_curation_states()
+                except Exception:
+                    report = None
+            elif superuser is False:
+                report = None  # skip the doomed 403 entirely
+            else:
+                # Identity unknown (network): legacy try-then-fallback.
+                try:
+                    report = client.list_curation_states()
+                except Exception:
+                    report = None
             if report is not None:
                 by_pid = {r["persistent_id"]: r for r in report if r.get("persistent_id")}
                 by_title = {r["title"]: r for r in report if r.get("title")}
@@ -105,6 +169,13 @@ class CrawlWorker(QThread):
                     f"Curation report: {len(report)} draft(s), "
                     f"{len(labels)} label(s) in use"
                 )
+                try:
+                    get_app_log().info(
+                        "Curation report: labels in use on drafts: "
+                        + (", ".join(f"'{l}'" for l in labels) if labels else "(none)")
+                    )
+                except Exception:
+                    pass
             else:
                 def _read_status(ds: dict) -> tuple:
                     try:
@@ -113,10 +184,22 @@ class CrawlWorker(QThread):
                         status = None
                     return ds, status or {}
 
-                total = len(datasets)
+                # Drafts only — non-drafts have no readable curation status.
+                drafts: list = []
+                for ds in datasets:
+                    if is_draft_dataset(ds):
+                        drafts.append(ds)
+                    else:
+                        ds["curation_label"] = ""
+                        ds["curation_time"] = ""
+                        ds["curation_assigner"] = ""
+                total = len(drafts)
+                if total == 0:
+                    self.progress.emit("No drafts — skipping per-dataset label reads.")
                 with ThreadPoolExecutor(max_workers=_POOL_SIZE) as pool:
-                    futures = [pool.submit(_read_status, ds) for ds in datasets]
-                    for i, fut in enumerate(futures, 1):
+                    futures = [pool.submit(_read_status, ds) for ds in drafts]
+                    done_n = 0
+                    for fut in as_completed(futures):
                         if self.isInterruptionRequested():
                             for f in futures:
                                 f.cancel()
@@ -125,45 +208,69 @@ class CrawlWorker(QThread):
                         ds["curation_label"] = status.get("label", "")
                         ds["curation_time"] = status.get("time", "")
                         ds["curation_assigner"] = status.get("assigner", "")
-                        if i % 10 == 0 or i == total:
-                            self.progress.emit(f"Reading curation labels… {i}/{total}")
+                        done_n += 1
+                        if done_n % 10 == 0 or done_n == total:
+                            self.progress.emit(f"Reading curation labels… {done_n}/{total}")
             # Union with the allowed set (labels can exist that no draft
             # currently carries, and vice versa for legacy values). The set
-            # is collection-wide but may vary per collection/dataset, so walk
-            # draft datasets first (bounded): first success wins, plus a few
-            # more for cross-collection variation. Drafts go first because
-            # the endpoint requires PublishDataset permission, which curator
-            # tokens typically hold only on datasets under curation
-            # (published rows otherwise 403).
+            # is shared across a first-level collection: a stamped disk
+            # slot (one real probe round, first alias use) serves every
+            # later session with zero calls; otherwise a single probe round
+            # runs here (drafts go first — the endpoint needs
+            # PublishDataset permission, which curator tokens typically
+            # hold only on datasets under curation; published rows
+            # otherwise 403). Sub-collections reuse the top-level entry.
             try:
                 ordered = [
                     d.get("persistent_id", "")
                     for d in datasets
-                    if d.get("persistent_id")
-                    and (
-                        (d.get("state") or "").upper() == "DRAFT"
-                        or "REVIEW" in (d.get("state") or "").upper()
-                        or d.get("has_draft")
-                    )
+                    if d.get("persistent_id") and is_draft_dataset(d)
                 ]
                 ordered += [
                     d.get("persistent_id", "")
                     for d in datasets
                     if d.get("persistent_id") and d.get("persistent_id") not in ordered
                 ]
-                self.progress.emit("Fetching allowed curation labels for this Dataverse …")
-                attempts = 0
-                for probe in ordered:
-                    if attempts >= 5 or self.isInterruptionRequested():
-                        break
-                    attempts += 1
+                from dataverse_client import get_cached_allowed_labels
+
+                was_cached = (
+                    get_cached_allowed_labels(self._base_url, self._subtree)
+                    is not None
+                )
+                if was_cached:
+                    self.progress.emit("Using cached curation labels for this collection …")
+                else:
+                    self.progress.emit("Fetching allowed curation labels (one call) …")
+                if self.isInterruptionRequested():
+                    return
+                fetched = client.fetch_allowed_labels_shared(
+                    self._subtree, ordered, max_attempts=3
+                )
+                for label in fetched:
+                    if label not in labels:
+                        labels.append(label)
+                # Report the pure probe result (not the union above) so the
+                # dashboard stamps the disk slot only for a real round.
+                # Empty pid lists never stamp: a zero-dataset crawl must not
+                # freeze [] in place before any dataset exists to probe.
+                # Rounds where nothing answered (transport/server errors)
+                # never stamp either: they retry next session instead of
+                # freezing an error [] forever.
+                try:
+                    answered = False
                     try:
-                        found = client.get_allowed_curation_labels(probe)
+                        answered = bool(client.last_allowed_probe_answered())
                     except Exception:
-                        found = []
-                    for label in found:
-                        if label not in labels:
-                            labels.append(label)
+                        answered = False
+                    self.allowedProbed.emit(
+                        {
+                            "labels": list(fetched),
+                            "probed": (not was_cached) and bool(ordered) and answered,
+                            "collection": self._subtree,
+                        }
+                    )
+                except Exception:
+                    pass
             except Exception:
                 pass
             if labels:
@@ -174,6 +281,13 @@ class CrawlWorker(QThread):
                     "No curation labels found — none configured, or the token "
                     "lacks PublishDataset permission (see log for 403s)"
                 )
+            try:
+                get_app_log().info(
+                    "Curation labels discovered (report in-use ∪ allowed probes): "
+                    + (", ".join(f"'{l}'" for l in labels) if labels else "(none)")
+                )
+            except Exception:
+                pass
             try:
                 self.labelsDiscovered.emit(labels)
             except Exception:
@@ -205,11 +319,17 @@ class DownloadWorker(QThread):
             from download_manager import DownloadManager
 
             mgr = DownloadManager(self._client, self._workspace)
+            if self.isInterruptionRequested():
+                return
             staged = mgr.approve_and_download(
                 self._pid, progress=lambda n: self.progress.emit(n)
             )
+            if self.isInterruptionRequested():
+                return
             self.finished.emit(staged)
         except Exception as exc:
+            if self.isInterruptionRequested():
+                return
             self.error.emit(f"{exc}\n\n{traceback.format_exc()}")
 
 
@@ -225,6 +345,7 @@ class CheckWorker(QThread):
         self._label = label
 
     def run(self) -> None:
+        import os
         import traceback
 
         try:
@@ -233,9 +354,65 @@ class CheckWorker(QThread):
             def _cb(msg: str) -> None:
                 self.progress.emit(msg)
 
-            report = run_report(self._dataset_dir, persistent_id=self._pid, label=self._label, progress_callback=_cb)
+            workers = max(1, min(8, (os.cpu_count() or 4)))
+            report = run_report(
+                self._dataset_dir,
+                persistent_id=self._pid,
+                label=self._label,
+                progress_callback=_cb,
+                max_workers=workers,
+                is_cancelled=self.isInterruptionRequested,
+            )
+            if self.isInterruptionRequested():
+                return
             self.finished.emit(report)
         except Exception as exc:
+            if self.isInterruptionRequested():
+                return
+            self.error.emit(f"{exc}\n\n{traceback.format_exc()}")
+
+
+class MetadataBlocksWorker(QThread):
+    """Fetch the instance's metadata-field catalog (metadatablocks API)."""
+
+    finished = Signal(list)
+    error = Signal(str)
+
+    def __init__(self, base_url: str, api_token: str, workspace, parent=None):
+        super().__init__(parent)
+        self._base_url = base_url
+        self._api_token = api_token
+        self._workspace = workspace
+
+    def run(self) -> None:
+        import traceback
+
+        try:
+            from dataverse_client import (
+                DataverseClient,
+                read_metadata_fields_cache,
+                write_metadata_fields_cache,
+            )
+
+            try:
+                cached = read_metadata_fields_cache(self._workspace, self._base_url)
+            except Exception:
+                cached = None
+            if cached:
+                self.finished.emit(cached)
+                return
+            client = DataverseClient(self._base_url, self._api_token)
+            fields = client.fetch_metadata_field_catalog()
+            if self.isInterruptionRequested():
+                return
+            try:
+                write_metadata_fields_cache(self._workspace, self._base_url, fields)
+            except Exception:
+                pass
+            self.finished.emit(fields or [])
+        except Exception as exc:
+            if self.isInterruptionRequested():
+                return
             self.error.emit(f"{exc}\n\n{traceback.format_exc()}")
 
 
@@ -243,47 +420,90 @@ class MetadataWorker(QThread):
     finished = Signal(dict, list, dict, dict, dict)
     error = Signal(str)
 
-    def __init__(self, base_url: str, api_token: str, persistent_id: str, parent=None):
+    def __init__(self, base_url: str, api_token: str, persistent_id: str, parent=None,
+                 collection: str = ""):
         super().__init__(parent)
         self._base_url = base_url
         self._api_token = api_token
         self._pid = persistent_id
+        self._collection = collection or ""
 
     def run(self) -> None:
+        import time as _time
         import traceback
+        from concurrent.futures import ThreadPoolExecutor, as_completed
 
         try:
             from dataverse_client import DataverseClient
 
             client = DataverseClient(self._base_url, self._api_token)
-            metadata = client.get_dataset_metadata(self._pid)
-            try:
-                inventory = client.get_file_inventory(self._pid)
-                inventory_failed = False
-            except Exception:
-                # Keep [] (all consumers iterate it) but flag the failure so
-                # the view shows an error state instead of "no files".
+            # Parallel independent fetches (was serial sum of 8x RTT).
+            def _fetch(name: str):
+                try:
+                    if name == "metadata":
+                        return ("metadata", client.get_dataset_metadata(self._pid))
+                    if name == "inventory":
+                        return ("inventory", client.get_file_inventory(self._pid))
+                    if name == "curation":
+                        return ("curation", client.get_curation_status(self._pid) or {})
+                    if name == "version_diff":
+                        return ("version_diff", client.compare_versions(self._pid) or {})
+                    if name == "versions":
+                        return ("versions", client.list_versions(self._pid))
+                    if name == "history":
+                        return ("history", client.get_curation_history(self._pid))
+                    if name == "allowed":
+                        # Shared top-level cache: zero calls on hit, else one
+                        # call for this dataset (its collection's list is the
+                        # top-level list). No per-open probing.
+                        return (
+                            "allowed",
+                            client.fetch_allowed_labels_shared(
+                                self._collection, [self._pid], max_attempts=1
+                            ),
+                        )
+                    if name == "in_review":
+                        return ("in_review", bool(client.dataset_in_review(self._pid)))
+                except Exception:
+                    return (name, None)
+                return (name, None)
+
+            results: dict = {}
+            names = ["metadata", "inventory", "curation", "version_diff", "versions", "history", "allowed", "in_review"]
+            with ThreadPoolExecutor(max_workers=5) as pool:
+                futures = {pool.submit(_fetch, n): n for n in names}
+                for fut in as_completed(futures):
+                    if self.isInterruptionRequested():
+                        for f in futures:
+                            f.cancel()
+                        return
+                    try:
+                        key, value = fut.result()
+                    except Exception:
+                        continue
+                    results[key] = value
+            metadata = results.get("metadata") or {}
+            if not isinstance(metadata, dict):
+                metadata = {}
+            inventory = results.get("inventory")
+            inventory_failed = False
+            if not isinstance(inventory, list):
                 inventory = []
                 inventory_failed = True
-            try:
-                curation = client.get_curation_status(self._pid) or {}
-            except Exception:
+            curation = results.get("curation")
+            if not isinstance(curation, dict):
                 curation = {}
-            try:
-                version_diff = client.compare_versions(self._pid) or {}
-            except Exception:
+            version_diff = results.get("version_diff")
+            if not isinstance(version_diff, dict):
                 version_diff = {}
-            try:
-                versions = client.list_versions(self._pid)
-            except Exception:
+            versions = results.get("versions")
+            if not isinstance(versions, list):
                 versions = []
-            try:
-                history = client.get_curation_history(self._pid)
-            except Exception:
+            history = results.get("history")
+            if not isinstance(history, list):
                 history = []
-            try:
-                allowed = client.discover_curation_labels([self._pid], sample_size=1)
-            except Exception:
+            allowed = results.get("allowed")
+            if not isinstance(allowed, list):
                 allowed = []
             if isinstance(curation, dict):
                 curation["history"] = history
@@ -297,21 +517,18 @@ class MetadataWorker(QThread):
             except Exception:
                 timestamps = {}
             try:
-                import time as _time
-
-                cache_key = (self._base_url, self._pid)
-                cached = _inbox_cache.get(cache_key)
+                cache_key = _inbox_key(self._base_url, self._pid, self._api_token)
+                with _inbox_lock:
+                    cached = _inbox_cache.get(cache_key)
                 if cached is not None and _time.monotonic() - cached[0] < _INBOX_TTL_S:
                     review_submissions = cached[1]
                 else:
                     review_submissions = client.find_review_submissions(self._pid)
-                    _inbox_cache[cache_key] = (_time.monotonic(), review_submissions)
+                    with _inbox_lock:
+                        _inbox_cache[cache_key] = (_time.monotonic(), review_submissions)
             except Exception:
                 review_submissions = []
-            try:
-                in_review = bool(client.dataset_in_review(self._pid))
-            except Exception:
-                in_review = False
+            in_review = bool(results.get("in_review"))
             extra = {
                 "versions": versions,
                 "timestamps": timestamps if isinstance(timestamps, dict) else {},

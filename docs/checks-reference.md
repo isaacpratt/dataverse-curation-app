@@ -31,7 +31,11 @@ instead of failing (shown as `MISSING`/`WARN` in the Curation checks tab).
 - **After running**: `✓`/`passed: true` = the policy held — no violation found
   (an `info` result is typically `passed: true` with details, e.g. "consistent
   12 columns"). `✕`/`passed: false` = a finding the curator should review.
-  `FAIL` badge = an `error`-level finding.
+  `FAIL` badge = an `error`-level finding. `○ SKIPPED` = the sub-check could
+  not run (`details.skipped`, e.g. missing lib, encrypted PDF, legacy `.xls`,
+  size caps) — distinct from a pass. Every module emits all owned IDs every
+  run, so passes like "No zero-byte files" and "no email addresses" are
+  visible in the manifest tree and the Markdown report.
 
 ## Issue taxonomy by level
 

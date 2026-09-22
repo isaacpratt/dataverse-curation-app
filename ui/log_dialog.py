@@ -30,10 +30,10 @@ class LogDialog(QDialog):
         layout.addWidget(self._view, 1)
 
         btn_row = QHBoxLayout()
-        refresh_btn = AppButton("Refresh", kind="secondary", size="sm")
+        refresh_btn = AppButton("Refresh", kind="secondary")
         refresh_btn.setStyleSheet(action_button_style(False))
         refresh_btn.clicked.connect(self._refresh)
-        clear_btn = AppButton("Clear log", kind="secondary", size="sm")
+        clear_btn = AppButton("Clear log", kind="secondary")
         clear_btn.setStyleSheet(action_button_style(False))
         clear_btn.clicked.connect(self._clear)
         btn_row.addWidget(refresh_btn)

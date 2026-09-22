@@ -41,6 +41,10 @@ _RETRYABLE_NETWORK = (
 _RETRYABLE_STATUS = (429, 503)
 
 
+class _RetryOriginal(Exception):
+    """Internal: throttled original-format download should retry the loop."""
+
+
 def _throttle_delay(exc: requests.HTTPError) -> float | None:
     """Retry-After seconds for a retryable HTTP error, else None.
 
@@ -138,11 +142,15 @@ def normalize_files(dataset_version: Dict[str, Any]) -> List[Dict[str, Any]]:
             )
         except (TypeError, ValueError):
             original_size = 0
+        try:
+            size_bytes = int(data_file.get("filesize") or 0)
+        except (TypeError, ValueError):
+            size_bytes = 0
         records.append(
             {
                 "id": str(data_file.get("id", "")),
                 "path": f"{directory}/{filename}" if directory else filename,
-                "size_bytes": int(data_file.get("filesize") or 0),
+                "size_bytes": size_bytes,
                 "mime_type": data_file.get("contentType") or "",
                 "checksum_type": checksum_type.lower(),
                 "checksum_value": checksum_value,
@@ -323,10 +331,19 @@ def parse_ds_metadata_payload(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def locks_indicate_review(locks: List[Dict[str, Any]]) -> bool:
-    return any(
-        "review" in str(lock.get("lockType", lock.get("reason", ""))).lower()
-        for lock in locks
-    )
+    import re as _re
+
+    # Match "review" (InReview, in_review, in-review, "In Review") but not
+    # "Preview": the 'r' must not be preceded by 'p' (case-insensitive).
+    _review_re = _re.compile(r"(?<!p)review", _re.IGNORECASE)
+    for lock in locks:
+        if not isinstance(lock, dict):
+            continue
+        # Prefer lockType; fall back to reason only when lockType is empty.
+        kind = lock.get("lockType") or lock.get("reason", "")
+        if kind and _review_re.search(str(kind)):
+            return True
+    return False
 
 
 def search_item_state(item: Dict[str, Any]) -> tuple:
@@ -355,15 +372,373 @@ def search_item_state(item: Dict[str, Any]) -> tuple:
 
 
 def parse_allowed_labels(data: Any) -> List[str]:
-    """Parse the allowedCurationLabels `data` payload (comma-separated string)."""
-    if not isinstance(data, str):
-        return []
+    """Parse the allowedCurationLabels `data` payload.
+
+    Shapes seen in the wild: a comma-separated string, a JSON array of
+    strings, or (Dataverse 6.8) an envelope object carrying either under
+    "message". All shapes yield the same deduped list — previously the
+    array shape was silently dropped to [], and the envelope shape with it
+    (every probe against such servers returned [] while the log still said
+    "received", so the allowed set NEVER populated and only in-use labels
+    ever showed).
+    """
     seen: List[str] = []
-    for part in data.split(","):
-        label = part.strip()
+    if isinstance(data, dict):
+        data = data.get("message", "")
+    if isinstance(data, str):
+        parts = data.split(",")
+    elif isinstance(data, (list, tuple)):
+        parts = list(data)
+    else:
+        return []
+    for part in parts:
+        label = str(part).strip() if isinstance(part, str) else str(part or "").strip()
         if label and label not in seen:
             seen.append(label)
     return seen
+
+
+def top_level_collection(collection: str) -> str:
+    """First path segment of a collection alias.
+
+    Allowed curation labels are shared across a first-level collection and
+    everything under it ("mcmaster/x" uses "mcmaster"'s list), so the
+    allowed-set cache is keyed by this segment, not the full alias.
+    "" means the whole repository.
+    """
+    try:
+        seg = (collection or "").strip().strip("/")
+    except Exception:
+        return ""
+    if not seg:
+        return ""
+    return seg.split("/")[0].strip()
+
+
+def is_draft_dataset(ds: Any) -> bool:
+    """True when a crawl row is under curation (draft or in review).
+
+    Curation labels/status exist only for datasets under curation — the
+    shared predicate for per-draft label reads and probe ordering, so
+    published/deaccessioned rows are never probed.
+    """
+    try:
+        if not isinstance(ds, dict):
+            return False
+        state = str(ds.get("state") or "").upper()
+        return state == "DRAFT" or "REVIEW" in state or bool(ds.get("has_draft"))
+    except Exception:
+        return False
+
+
+# Authenticated-identity cache: (base_url, token fingerprint) -> /api/users/:me data.
+# Keyed by a SHA-256 fingerprint, never the token itself. Successes only —
+# a failure (bad token, network) returns None and retries next time.
+# Collection roles share the lock with a (base_url, fingerprint, alias) key.
+_ME_CACHE: Dict[tuple, Dict[str, Any]] = {}
+_ROLE_CACHE: Dict[tuple, List[str]] = {}
+_ME_LOCK = threading.Lock()
+
+
+def _me_cache_key(base_url: str, api_token: str) -> tuple:
+    try:
+        base = (base_url or "").rstrip("/").lower()
+    except Exception:
+        base = ""
+    try:
+        fp = hashlib.sha256((api_token or "").encode("utf-8")).hexdigest()[:16]
+    except Exception:
+        fp = ""
+    return (base, fp)
+
+
+# In-process allowed-labels cache: (base_url, top_level) -> labels.
+# The endpoint needs PublishDataset permission and the list is identical
+# for every dataset under a first-level collection, so one network call
+# per top-level collection per process is enough; [] is a valid negative
+# entry (none configured) — None means "unknown, may fetch".
+_ALLOWED_LABELS_CACHE: Dict[tuple, List[str]] = {}
+_ALLOWED_LABELS_LOCK = threading.Lock()
+
+_ALLOWED_LABELS_FILE = "curation_labels.json"
+
+
+def allowed_labels_cache_key(base_url: str, collection: str) -> tuple:
+    """Memory-cache key: normalized (instance, first-level collection)."""
+    try:
+        base = (base_url or "").rstrip("/").lower()
+    except Exception:
+        base = ""
+    return (base, top_level_collection(collection or "").lower())
+
+
+def get_cached_allowed_labels(base_url: str, collection: str) -> Optional[List[str]]:
+    """Cached allowed labels, or None when unknown (caller may fetch once)."""
+    try:
+        with _ALLOWED_LABELS_LOCK:
+            hit = _ALLOWED_LABELS_CACHE.get(allowed_labels_cache_key(base_url, collection))
+        return list(hit) if hit is not None else None
+    except Exception:
+        return None
+
+
+def set_cached_allowed_labels(base_url: str, collection: str, labels: List[str]) -> None:
+    """Store allowed labels (including []) for a top-level collection."""
+    try:
+        clean = [str(l).strip() for l in (labels or []) if str(l).strip()]
+        with _ALLOWED_LABELS_LOCK:
+            _ALLOWED_LABELS_CACHE[allowed_labels_cache_key(base_url, collection)] = clean
+    except Exception:
+        pass
+
+
+def _allowed_labels_disk_key(base_url: str, collection: str) -> str:
+    try:
+        base = (base_url or "").rstrip("/").lower()
+    except Exception:
+        base = ""
+    top = top_level_collection(collection or "") or "whole repository"
+    return f"{base}|{top}"
+
+
+def read_allowed_labels_cache(
+    workspace, base_url: str, collection: str
+) -> Optional[List[str]]:
+    """Allowed labels from disk for a top-level collection (None = unknown).
+
+    Only slots stamped "probed" at format v2 by a real discovery round
+    count as hits: the allowed set is probed exactly once per collection
+    (the first time its alias is used) and served from cache afterwards.
+    Older slots — unstamped, or v1 stamps written from the filter union
+    rather than a probe — read as unknown so they get one fresh probe,
+    then carry the v2 stamp going forward. A hit warms the memory cache.
+    Falls back to the legacy bare-instance key written by older versions.
+    Never raises.
+    """
+    try:
+        path = Path(workspace) / _ALLOWED_LABELS_FILE
+        if not path.exists():
+            return None
+        import json as _json
+
+        raw = _json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return None
+        entry = raw.get(_allowed_labels_disk_key(base_url, collection))
+        if not isinstance(entry, dict):
+            # Legacy key: bare instance URL (pre-top-level cache).
+            try:
+                legacy = (base_url or "").rstrip("/").lower()
+                entry = raw.get(legacy)
+            except Exception:
+                entry = None
+        if not isinstance(entry, dict):
+            return None
+        if entry.get("probed") is not True or entry.get("v") != 2:
+            # Unstamped, or v1-stamped from the filter union rather than a
+            # probe: not a hit — one fresh discovery round happens, then
+            # the slot carries the v2 stamp.
+            return None
+        labels = entry.get("labels", [])
+        if not isinstance(labels, list):
+            return None
+        clean = [str(l) for l in labels if str(l).strip()]
+        set_cached_allowed_labels(base_url, collection, clean)
+        return clean
+    except Exception:
+        return None
+
+
+def write_allowed_labels_cache(
+    workspace, base_url: str, collection: str, labels: List[str]
+) -> None:
+    """Persist allowed labels for a top-level collection (best-effort).
+
+    Stamps the slot v2/"probed": this write records the one discovery
+    round for the collection, so later sessions serve the cache with zero
+    calls. Callers must pass PURE probe results here — never the filter
+    union (in-use labels ride in the dashboard cache instead).
+    """
+    try:
+        import json as _json
+
+        path = Path(workspace) / _ALLOWED_LABELS_FILE
+        try:
+            raw = _json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except Exception:
+            raw = {}
+        if not isinstance(raw, dict):
+            raw = {}
+        try:
+            coll = (collection or "").strip()
+        except Exception:
+            coll = ""
+        raw[_allowed_labels_disk_key(base_url, collection)] = {
+            "labels": [str(l) for l in (labels or []) if str(l).strip()],
+            "collection": coll,
+            "probed": True,
+            "v": 2,
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_json.dumps(raw, indent=2), encoding="utf-8")
+        set_cached_allowed_labels(base_url, collection, labels or [])
+    except Exception:
+        pass
+
+
+# -- metadata blocks (field catalog broadcast by Dataverse) -------------------
+# The Review-configuration page lists every metadata field the connected
+# Dataverse knows about (block + field + display name), so curators can mark
+# fields required / optional / unchecked. Endpoints:
+#   GET /api/metadatablocks            -> [{id, name, displayName}, ...]
+#   GET /api/metadatablocks/{name}     -> {metadataFields: {field: {...}}}
+# Cached per instance on disk (metadatablocks_cache.json); never raises.
+
+_METADATABLOCKS_FILE = "metadatablocks_cache.json"
+
+_METADATABLOCKS_MEMO: Dict[tuple, List[Dict[str, str]]] = {}
+_METADATABLOCKS_LOCK = threading.Lock()
+
+
+def _metadatablocks_disk_key(base_url: str) -> str:
+    try:
+        return (base_url or "").rstrip("/").lower()
+    except Exception:
+        return ""
+
+
+def parse_metadatablock_names(payload: Dict[str, Any]) -> List[str]:
+    """Block names from a GET /api/metadatablocks payload. Never raises."""
+    try:
+        data = (payload or {}).get("data")
+        items = data if isinstance(data, list) else []
+        out = []
+        for entry in items:
+            if isinstance(entry, dict) and str(entry.get("name") or "").strip():
+                out.append(str(entry["name"]).strip())
+        return out
+    except Exception:
+        return []
+
+
+def parse_metadatablock_display_names(payload: Dict[str, Any]) -> Dict[str, str]:
+    """{block name: display name} from a GET /api/metadatablocks payload."""
+    out: Dict[str, str] = {}
+    try:
+        data = (payload or {}).get("data")
+        items = data if isinstance(data, list) else []
+        for entry in items:
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name") or "").strip()
+            if not name:
+                continue
+            out[name] = str(entry.get("displayName") or name).strip() or name
+    except Exception:
+        pass
+    return out
+
+
+def parse_metadatablock_fields(payload: Dict[str, Any]) -> List[Dict[str, str]]:
+    """[{block, field, label}] from a GET /api/metadatablocks/{name} payload.
+
+    Field map lives under data.metadataFields on older servers and under
+    data.fields (dict keyed by field name, or a list) on newer ones
+    (verified on 6.8: {"name": ..., "fields": {"geographicCoverage":
+    {"name": ..., "displayName": ...}}}). Missing/unknown shapes yield [].
+    """
+    out: List[Dict[str, str]] = []
+    try:
+        data = (payload or {}).get("data") or {}
+        block = str(data.get("name") or "").strip()
+        fields = data.get("metadataFields")
+        if fields is None:
+            fields = data.get("fields")
+        fields = fields or {}
+        if isinstance(fields, dict):
+            for fname, spec in fields.items():
+                if not isinstance(fname, str) or not fname.strip():
+                    continue
+                label = fname.strip()
+                if isinstance(spec, dict):
+                    label = str(spec.get("displayName") or spec.get("displayname") or label)
+                out.append({"block": block or "citation", "field": fname.strip(), "label": label.strip() or fname.strip()})
+        elif isinstance(fields, list):
+            for spec in fields:
+                if not isinstance(spec, dict):
+                    continue
+                fname = str(spec.get("name") or spec.get("typeName") or "").strip()
+                if not fname:
+                    continue
+                label = str(spec.get("displayName") or spec.get("displayname") or fname)
+                out.append({"block": block or "citation", "field": fname, "label": label})
+    except Exception:
+        pass
+    return out
+
+
+def get_cached_metadata_fields(base_url: str) -> Optional[List[Dict[str, str]]]:
+    try:
+        with _METADATABLOCKS_LOCK:
+            hit = _METADATABLOCKS_MEMO.get((_metadatablocks_disk_key(base_url),))
+        return [dict(f) for f in hit] if hit is not None else None
+    except Exception:
+        return None
+
+
+def set_cached_metadata_fields(base_url: str, fields: List[Dict[str, str]]) -> None:
+    try:
+        clean = [dict(f) for f in (fields or []) if isinstance(f, dict) and f.get("field")]
+        with _METADATABLOCKS_LOCK:
+            _METADATABLOCKS_MEMO[(_metadatablocks_disk_key(base_url),)] = clean
+    except Exception:
+        pass
+
+
+def read_metadata_fields_cache(workspace, base_url: str) -> Optional[List[Dict[str, str]]]:
+    """Field catalog from disk for an instance (None = unknown). Never raises."""
+    try:
+        path = Path(workspace) / _METADATABLOCKS_FILE
+        if not path.exists():
+            return None
+        import json as _json
+
+        raw = _json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return None
+        entry = raw.get(_metadatablocks_disk_key(base_url))
+        if not isinstance(entry, dict):
+            return None
+        fields = entry.get("fields", [])
+        if not isinstance(fields, list):
+            return None
+        clean = [f for f in fields if isinstance(f, dict) and f.get("field")]
+        set_cached_metadata_fields(base_url, clean)
+        return clean
+    except Exception:
+        return None
+
+
+def write_metadata_fields_cache(workspace, base_url: str, fields: List[Dict[str, str]]) -> None:
+    """Persist an instance's field catalog (best-effort)."""
+    try:
+        import json as _json
+
+        path = Path(workspace) / _METADATABLOCKS_FILE
+        try:
+            raw = _json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except Exception:
+            raw = {}
+        if not isinstance(raw, dict):
+            raw = {}
+        raw[_metadatablocks_disk_key(base_url)] = {
+            "fields": [dict(f) for f in (fields or []) if isinstance(f, dict) and f.get("field")],
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_json.dumps(raw, indent=2), encoding="utf-8")
+        set_cached_metadata_fields(base_url, fields or [])
+    except Exception:
+        pass
 
 
 def parse_curation_status(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -456,11 +831,12 @@ def parse_curation_states_csv(text: str) -> List[Dict[str, Any]]:
                 "assigner": _clean_curation_value(_cell(4)) if label else "",
             }
         )
-    # Drop an obvious header row (no PID and title cell without hyperlink).
-    rows = [
-        r for r in rows
-        if r["persistent_id"] or r["title"].startswith("=HYPERLINK")
-    ]
+    # Drop only the leading header row (no PID and no hyperlink). Other
+    # PID-less rows are kept for title fallback per the docstring — a
+    # format change to plain-title cells must not silently vanish.
+    if rows and not rows[0]["persistent_id"] and not rows[0]["title"].startswith("=HYPERLINK"):
+        rows = rows[1:]
+    rows = [r for r in rows if r["persistent_id"] or r["title"]]
     return rows
 
 
@@ -606,6 +982,12 @@ class DataverseClient:
         self._base_url = base_url.rstrip("/")
         self._api_token = api_token
         self._timeout = timeout
+        # Probe-round bookkeeping for allowedCurationLabels (see
+        # get_allowed_curation_labels / fetch_allowed_labels_shared):
+        # _last_allowed_got_200 tracks the latest single attempt,
+        # _last_fetch_answered aggregates the latest shared round.
+        self._last_allowed_got_200 = False
+        self._last_fetch_answered = False
 
     # -- low level -----------------------------------------------------------
 
@@ -635,15 +1017,36 @@ class DataverseClient:
                 )
                 elapsed_ms = int((time.monotonic() - start) * 1000)
                 summary = ""
+                body = None
                 if response.ok:
-                    body = response.json()
-                    n = len(body.get("data", {}).get("items", [])) if path == "/api/search" else None
-                    summary = f"{n} item(s)" if n else ""
+                    try:
+                        body = response.json()
+                    except ValueError:
+                        # Non-JSON 200 (e.g. HTML error page): surface body
+                        # snippet instead of raw JSONDecodeError.
+                        get_app_log().error(
+                            f"GET {response.url} → {response.status_code}: "
+                            f"non-JSON response: {response.text[:300]}"
+                        )
+                        response.raise_for_status()
+                        raise RuntimeError(
+                            f"GET {path} returned non-JSON response "
+                            f"({response.status_code})"
+                        )
+                    if path == "/api/search" and isinstance(body, dict):
+                        try:
+                            n = len(body.get("data", {}).get("items", []))
+                        except Exception:
+                            n = 0
+                        summary = f"{n} item(s)" if n else ""
                 status = response.status_code
                 log_response("GET", str(response.url), status, elapsed_ms, summary)
                 if not response.ok:
                     get_app_log().error(f"GET {response.url} → {status}: {response.text[:300]}")
                 response.raise_for_status()
+                # Reuse already-parsed body when available.
+                if body is not None:
+                    return body
                 return response.json()
             except requests.HTTPError as exc:
                 delay = _throttle_delay(exc)
@@ -733,9 +1136,21 @@ class DataverseClient:
     # -- discovery -----------------------------------------------------------
 
     def _crawl(self, subtree: str, workdir: Optional[Path] = None) -> Path:
-        """Run the dvmeta CLI at version=draft; returns the export JSON path."""
+        """Run the dvmeta CLI at version=draft; returns the export JSON path.
+
+        When `workdir` is None a temp dir is created. It is intentionally
+        NOT auto-deleted here because the caller reads the export file
+        afterwards — see `list_draft_datasets` which cleans up auto-created
+        dirs after parsing.
+        """
+        auto_created = workdir is None
         workdir = Path(workdir or tempfile.mkdtemp(prefix="dvmeta-"))
         workdir.mkdir(parents=True, exist_ok=True)
+        # Tag auto-created dirs so the caller can clean them up.
+        try:
+            (workdir / ".dvmeta-auto-tmp").touch(exist_ok=True) if auto_created else None
+        except OSError:
+            pass
         command = [
             sys.executable,
             str(_dvmeta_cli_path()),
@@ -840,12 +1255,36 @@ class DataverseClient:
         the native Search API so the dashboard gets ALL datasets.
         """
         if _dvmeta_available():
+            export_path = None
+            auto_tmp = workdir is None
             try:
                 export_path = self._crawl(subtree, workdir)
+                # Guard huge exports: stream-parse size check before full load.
+                try:
+                    if export_path.stat().st_size > 200 << 20:
+                        get_app_log().error(
+                            f"dvmeta export {export_path.stat().st_size} bytes exceeds "
+                            "200MB cap — falling back to Search API"
+                        )
+                        raise ValueError("dvmeta export too large")
+                except OSError:
+                    pass
                 payload = json.loads(export_path.read_text(encoding="utf-8"))
                 return parse_ds_metadata_payload(payload)
             except Exception as exc:
                 get_app_log().error(f"dvmeta crawl failed ({exc}) — falling back to Search API")
+            finally:
+                # Clean up auto-created temp dirs (success or Search-fallback).
+                if auto_tmp and export_path is not None:
+                    try:
+                        import shutil
+
+                        tmp_root = export_path.parents[2] if len(export_path.parents) >= 3 else export_path.parent
+                        # Only delete dirs we created (marker file present).
+                        if (tmp_root / ".dvmeta-auto-tmp").exists():
+                            shutil.rmtree(tmp_root, ignore_errors=True)
+                    except Exception:
+                        pass
         all_datasets: List[Dict[str, Any]] = []
         seen: Dict[str, int] = {}
         hit_page_cap = False
@@ -901,6 +1340,147 @@ class DataverseClient:
         """Drafts from the crawl, kept only when locked IN_REVIEW."""
         drafts = self.list_draft_datasets(subtree, workdir)
         return [d for d in drafts if self.dataset_in_review(d["persistent_id"])]
+
+    # -- authenticated identity --------------------------------------------
+    # GET /api/users/:me answers for ANY valid token with the caller's
+    # profile, including the `superuser` flag. Used to pick the superuser
+    # vs curator code path (bulk CSV report vs per-draft label reads) once
+    # per session instead of burning a doomed 403 first.
+
+    def get_me(self) -> Optional[Dict[str, Any]]:
+        """Authenticated user's profile (identity + superuser flag), or None.
+
+        One network call per (instance, token) per process: successes are
+        cached; failures return None without caching (a later retry may
+        succeed). Never raises.
+        """
+        key = _me_cache_key(self._base_url, self._api_token)
+        try:
+            with _ME_LOCK:
+                hit = _ME_CACHE.get(key)
+            if isinstance(hit, dict):
+                return dict(hit)
+        except Exception:
+            pass
+        try:
+            payload = self._get_json("/api/users/:me")
+        except requests.HTTPError as exc:
+            resp = getattr(exc, "response", None)
+            status = resp.status_code if resp is not None else 0
+            if status in (400, 401, 403, 404):
+                try:
+                    get_app_log().info(
+                        f"users/:me unavailable (HTTP {status}) — "
+                        "continuing without identity"
+                    )
+                except Exception:
+                    pass
+                return None
+            raise
+        except _RETRYABLE_NETWORK as exc:
+            try:
+                get_app_log().info(f"users/:me network error — continuing without identity ({exc})")
+            except Exception:
+                pass
+            return None
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            return None
+        try:
+            with _ME_LOCK:
+                _ME_CACHE[key] = dict(data)
+        except Exception:
+            pass
+        return dict(data)
+
+    def user_is_superuser(self) -> Optional[bool]:
+        """True/False from /api/users/:me; None when identity is unknown."""
+        try:
+            me = self.get_me()
+        except Exception:
+            return None
+        if not isinstance(me, dict):
+            return None
+        return bool(me.get("superuser"))
+
+    def get_collection_roles(self, alias: str) -> Optional[List[str]]:
+        """Role names the calling user holds on one collection, or None.
+
+        Matches the /api/users/:me identifier against
+        GET /api/dataverses/{alias}/assignments (e.g. "@pratti" -> Admin).
+        Cached per (instance, token, alias); denials and network failures
+        return None without caching. Never raises for 4xx/network; other
+        HTTP errors propagate like the other client methods.
+        """
+        alias = (alias or "").strip()
+        if not alias:
+            return None
+        key = _me_cache_key(self._base_url, self._api_token) + (alias.lower(),)
+        try:
+            with _ME_LOCK:
+                hit = _ROLE_CACHE.get(key)
+            if isinstance(hit, list):
+                return list(hit)
+        except Exception:
+            pass
+        try:
+            me = self.get_me()
+        except Exception:
+            return None
+        identifier = str((me or {}).get("identifier") or "").strip()
+        if not identifier:
+            return None
+        try:
+            from urllib.parse import quote as _quote
+
+            payload = self._get_json(
+                f"/api/dataverses/{_quote(alias, safe='')}/assignments"
+            )
+        except requests.HTTPError as exc:
+            resp = getattr(exc, "response", None)
+            status = resp.status_code if resp is not None else 0
+            if status in (400, 401, 403, 404):
+                try:
+                    get_app_log().info(
+                        f"assignments for '{alias}' unavailable (HTTP {status}) — "
+                        "continuing without collection role"
+                    )
+                except Exception:
+                    pass
+                return None
+            raise
+        except _RETRYABLE_NETWORK as exc:
+            try:
+                get_app_log().info(
+                    f"assignments for '{alias}' network error — "
+                    f"continuing without collection role ({exc})"
+                )
+            except Exception:
+                pass
+            return None
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, list):
+            return None
+        roles: List[str] = []
+        for entry in data:
+            try:
+                if not isinstance(entry, dict):
+                    continue
+                if str(entry.get("assignee") or "").strip() != identifier:
+                    continue
+                name = str(
+                    entry.get("roleName") or entry.get("_roleAlias") or ""
+                ).strip()
+                if name and name not in roles:
+                    roles.append(name)
+            except Exception:
+                continue
+        try:
+            with _ME_LOCK:
+                _ROLE_CACHE[key] = list(roles)
+        except Exception:
+            pass
+        return roles
 
     # -- curation labels ---------------------------------------------------
     # See https://guides.dataverse.org/en/latest/api/curation-labels.html
@@ -967,18 +1547,54 @@ class DataverseClient:
         return out
 
     def get_allowed_curation_labels(self, identifier: str) -> List[str]:
-        """Allowed labels for one dataset (instance/collection-specific)."""
+        """Allowed labels for one dataset (instance/collection-specific).
+
+        Reports what the server answered to the app log: the received list
+        on success, or the denial status when this dataset yields no answer
+        (403/404/400 = no PublishDataset permission or not a draft — the
+        caller probes further datasets in that case).
+        """
         path, params = self._curation_paths(identifier, "allowedCurationLabels")
         try:
             payload = self._get_json(path, params=params)
+            # A 200 answer (even an empty allowed set) is a DEFINITIVE
+            # server answer — recorded so callers can tell "the server
+            # said nothing is configured" apart from transport/server
+            # errors, which must never freeze an empty cache in place.
+            try:
+                self._last_allowed_got_200 = True
+            except Exception:
+                pass
         except requests.HTTPError as exc:
             resp = getattr(exc, "response", None)
-            if resp is not None and resp.status_code in (400, 401, 403, 404):
+            status = resp.status_code if resp is not None else 0
+            if status in (400, 401, 403, 404):
+                try:
+                    get_app_log().info(
+                        f"allowedCurationLabels for {identifier}: HTTP {status} — "
+                        "no answer from this dataset"
+                    )
+                except Exception:
+                    pass
                 return []
             raise
         except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, ConnectionResetError):
+            try:
+                get_app_log().info(
+                    f"allowedCurationLabels for {identifier}: network error — no answer"
+                )
+            except Exception:
+                pass
             return []
-        return parse_allowed_labels(payload.get("data"))
+        labels = parse_allowed_labels(payload.get("data"))
+        try:
+            get_app_log().info(
+                f"allowedCurationLabels for {identifier}: received "
+                + (", ".join(f"'{l}'" for l in labels) if labels else "(empty — none configured)")
+            )
+        except Exception:
+            pass
+        return labels
 
     def discover_curation_labels(
         self, persistent_ids: List[str], sample_size: int = 5
@@ -1012,13 +1628,159 @@ class DataverseClient:
                     break
         return labels
 
+    def fetch_allowed_labels_shared(
+        self, collection: str, probe_pids: List[str], max_attempts: int = 3
+    ) -> List[str]:
+        """Allowed labels via the top-level shared cache (probed once).
+
+        Memory cache first; on miss, probe drafts in order and stop at the
+        first non-empty answer, so one discovery round costs a single API
+        call. A stamped disk entry (first alias use) serves every later
+        session with zero calls; only a new top-level collection (or an
+        unstamped legacy entry, once) misses the cache. A 200-confirmed
+        empty answer stamps [] exactly once; transport/server errors
+        (nothing answered) are cached in memory only and retried next
+        session — never frozen to disk. See last_allowed_probe_answered().
+        """
+        try:
+            cached = get_cached_allowed_labels(self._base_url, collection)
+        except Exception:
+            cached = None
+        if cached is not None:
+            try:
+                get_app_log().info(
+                    "allowedCurationLabels: cache hit for "
+                    f"'{collection or 'whole repository'}': "
+                    + (", ".join(f"'{l}'" for l in cached) if cached else "(empty)")
+                )
+            except Exception:
+                pass
+            return list(cached)
+        labels: List[str] = []
+        try:
+            attempts = max(1, int(max_attempts or 1))
+        except Exception:
+            attempts = 3
+        probed = 0
+        answered = False
+        for pid in (probe_pids or [])[:attempts]:
+            if not pid:
+                continue
+            probed += 1
+            try:
+                self._last_allowed_got_200 = False
+                found = self.get_allowed_curation_labels(pid)
+                if self._last_allowed_got_200:
+                    answered = True
+            except Exception:
+                found = []
+            for label in found or []:
+                if label not in labels:
+                    labels.append(label)
+            if labels:
+                break
+        try:
+            self._last_fetch_answered = bool(answered)
+        except Exception:
+            pass
+        try:
+            get_app_log().info(
+                f"allowedCurationLabels: probed {probed} dataset(s), "
+                + (", ".join(f"'{l}'" for l in labels) if labels
+                   else ("no dataset answered — will retry next session"
+                         if not answered else "none configured"))
+            )
+        except Exception:
+            pass
+        try:
+            set_cached_allowed_labels(self._base_url, collection, labels)
+        except Exception:
+            pass
+        return labels
+
+    def last_allowed_probe_answered(self) -> bool:
+        """Whether the latest shared probe round got a server answer.
+
+        True when at least one attempt returned HTTP 200 (labels found or
+        confirmed-empty). False after transport/server errors or when no
+        round ran — callers must not stamp the disk slot in that case.
+        """
+        try:
+            return bool(getattr(self, "_last_fetch_answered", False))
+        except Exception:
+            return False
+
+    # -- metadata blocks (field catalog) ------------------------------------
+
+    def get_metadatablock_names(self) -> List[str]:
+        """Block names from GET /api/metadatablocks ([] when unavailable)."""
+        try:
+            payload = self._get_json("/api/metadatablocks")
+        except Exception:
+            return []
+        return parse_metadatablock_names(payload)
+
+    def get_metadatablock_display_names(self) -> Dict[str, str]:
+        """{block name: display name} from GET /api/metadatablocks ({} on miss)."""
+        try:
+            payload = self._get_json("/api/metadatablocks")
+        except Exception:
+            return {}
+        return parse_metadatablock_display_names(payload)
+
+    def get_metadatablock_fields(self, block: str) -> List[Dict[str, str]]:
+        """[{block, field, label}] for one block ([] when unavailable)."""
+        try:
+            payload = self._get_json(f"/api/metadatablocks/{block}")
+        except Exception:
+            return []
+        return parse_metadatablock_fields(payload)
+
+    def fetch_metadata_field_catalog(self) -> List[Dict[str, str]]:
+        """Full field catalog across blocks (memory/disk cache first).
+
+        One /api/metadatablocks call plus one per block on miss; cached per
+        instance, so the Review-configuration page costs zero calls on
+        repeat opens. Each field carries block_label (the block's display
+        name) alongside block/field/label. Empty results are NOT served
+        from memory — [] means the fetch failed, so the next call retries
+        instead of freezing an empty catalog in the process. Never raises.
+        """
+        try:
+            cached = get_cached_metadata_fields(self._base_url)
+        except Exception:
+            cached = None
+        if cached:
+            return list(cached)
+        fields: List[Dict[str, str]] = []
+        try:
+            labels = self.get_metadatablock_display_names()
+        except Exception:
+            labels = {}
+        try:
+            names = list(labels) if labels else self.get_metadatablock_names()
+            for block in names:
+                try:
+                    for entry in self.get_metadatablock_fields(block):
+                        if isinstance(entry, dict) and entry.get("field"):
+                            entry["block_label"] = labels.get(block, "")
+                            fields.append(entry)
+                except Exception:
+                    continue
+        except Exception:
+            fields = []
+        try:
+            set_cached_metadata_fields(self._base_url, fields)
+        except Exception:
+            pass
+        return fields
+
     def list_curation_states(self) -> Optional[List[Dict[str, Any]]]:
         """Bulk curation-status report for ALL draft datasets (one CSV call).
 
         Returns parsed rows on success (possibly empty), or None when the
-        caller lacks permission (superuser-only endpoint → 401/403/404) or
-        the network fails — callers should fall back to per-dataset
-        get_curation_status() in that case. Other HTTP errors propagate.
+        caller lacks permission or the network fails — callers fall back to
+        per-dataset curationStatus in that case. Other HTTP errors propagate.
         """
         try:
             text = self._get_text("/api/datasets/listCurationStates")
@@ -1244,7 +2006,11 @@ class DataverseClient:
     def get_file_inventory(
         self, identifier: str, version: str = "draft"
     ) -> List[Dict[str, Any]]:
-        # Try draft first (with correct lowercase ":draft"), fall back to :latest for published datasets or when auth missing
+        # Try draft first (with correct lowercase ":draft"), fall back to
+        # :latest for published datasets. Auth failures (401/403) fail fast
+        # — retrying other versions would mask a bad token and risk running
+        # checks on the wrong version silently.
+        tried: list[str] = []
         for ver in (version, "latest", "latest-published"):
             api_version = ver if ver.startswith(":") else f":{ver.lower()}"
             try:
@@ -1263,11 +2029,21 @@ class DataverseClient:
                 # files may be at version_data.files or data.files
                 if not version_data.get("files") and data.get("files"):
                     version_data = {"files": data.get("files", [])}
+                if api_version != f":{version.lstrip(':').lower()}":
+                    get_app_log().error(
+                        f"Inventory for {identifier}: requested :{version} "
+                        f"unavailable, using {api_version} (tried {tried}) — "
+                        "verify you are reviewing the intended version"
+                    )
                 return normalize_files(version_data)
             except requests.HTTPError as exc:
                 resp = getattr(exc, "response", None)
                 status = resp.status_code if resp is not None else 0
-                if status in (400, 401, 403, 404):
+                tried.append(f"{api_version}={status}")
+                if status in (401, 403):
+                    # Auth failure: do not silently try other versions.
+                    raise
+                if status in (400, 404):
                     get_app_log().info(f"Version {api_version} not available for {identifier} ({status}), trying next")
                     continue
                 raise
@@ -1294,10 +2070,12 @@ class DataverseClient:
     ) -> int | None:
         """One version attempt of a streaming download, with retries.
 
-        Returns bytes received, or None when the server answers 400/401/
-        403/404 (version unavailable — caller tries the next version).
-        Raises on persistent network/HTTP failure. `dest` is truncated at
-        the start of every attempt, so callers must pass a .part path.
+        Returns bytes received, or None when the server answers 400/404
+        (version unavailable — caller tries the next version). Auth failures
+        (401/403) raise immediately so a bad token is not masked by version
+        fallback. Raises on persistent network/HTTP failure. `dest` is
+        truncated at the start of every attempt, so callers must pass a
+        .part path.
         """
         from applog import log_response
 
@@ -1311,24 +2089,50 @@ class DataverseClient:
                     stream=True,
                     timeout=self._timeout,
                 ) as response:
-                    if response.status_code in (400, 401, 403, 404):
+                    if response.status_code in (401, 403):
+                        get_app_log().error(
+                            f"Download {label} denied ({response.status_code}) — "
+                            "check API token, not trying other versions"
+                        )
+                        response.raise_for_status()
+                    if response.status_code in (400, 404):
                         get_app_log().info(f"Download {label} not available ({response.status_code}), trying next")
                         return None
                     log_response("GET", str(response.url), response.status_code, 0, "streaming…")
                     response.raise_for_status()
+                    # Pre-flight disk-space check when the server advertises size.
+                    try:
+                        total_hdr = response.headers.get("Content-Length")
+                        if total_hdr:
+                            need = int(total_hdr)
+                            free = __import__("shutil").disk_usage(str(dest.parent)).free
+                            if need and free < need:
+                                raise OSError(
+                                    f"insufficient disk space for {label}: "
+                                    f"need {need} bytes, {free} free"
+                                )
+                    except (TypeError, ValueError):
+                        pass
                     received = 0
                     with open(dest, "wb") as handle:
                         for chunk in response.iter_content(chunk_size=_STREAM_CHUNK):
+                            if not chunk:
+                                continue
                             handle.write(chunk)
                             received += len(chunk)
                             if progress:
-                                progress(received)
+                                try:
+                                    progress(received)
+                                except Exception:
+                                    pass
                 elapsed_ms = int((time.monotonic() - start) * 1000)
                 get_app_log().info(f"Downloaded {received} bytes in {elapsed_ms} ms ({label})")
                 return received
             except requests.HTTPError as exc:
                 resp = getattr(exc, "response", None)
-                if resp is not None and resp.status_code in (400, 401, 403, 404):
+                if resp is not None and resp.status_code in (401, 403):
+                    raise
+                if resp is not None and resp.status_code in (400, 404):
                     get_app_log().info(f"Download {label} failed ({resp.status_code}), trying next")
                     return None
                 delay = _throttle_delay(exc)
@@ -1411,19 +2215,42 @@ class DataverseClient:
                             f"({response.status_code})"
                         )
                     log_response("GET", str(response.url), response.status_code, 0, "streaming original…")
-                    response.raise_for_status()
+                    try:
+                        response.raise_for_status()
+                    except requests.HTTPError as http_exc:
+                        # Honor Retry-After on throttle / transient overload.
+                        delay = _throttle_delay(http_exc)
+                        if delay is not None and attempt < 2:
+                            wait = delay or 1.5 * (attempt + 1)
+                            get_app_log().error(
+                                f"GET datafile/{file_id} throttled, retrying in "
+                                f"{wait:.1f}s (attempt {attempt + 1}/3)"
+                            )
+                            time.sleep(wait)
+                            # Retry without truncating a prior partial twice:
+                            # loop re-opens dest with "wb".
+                            raise _RetryOriginal()
+                        raise
                     received = 0
                     with open(dest, "wb") as handle:
                         for chunk in response.iter_content(chunk_size=_STREAM_CHUNK):
+                            if not chunk:
+                                continue
                             handle.write(chunk)
                             received += len(chunk)
                             if progress:
-                                progress(received)
+                                try:
+                                    progress(received)
+                                except Exception:
+                                    pass
                 elapsed_ms = int((time.monotonic() - start) * 1000)
                 get_app_log().info(f"Downloaded original ({received} bytes) in {elapsed_ms} ms")
                 return dest
             except RuntimeError:
                 raise
+            except _RetryOriginal:
+                last_exc = RuntimeError("throttled")
+                continue
             except _RETRYABLE_NETWORK as exc:
                 last_exc = exc
                 get_app_log().error(f"GET datafile/{file_id} network error (attempt {attempt + 1}/3): {exc}")

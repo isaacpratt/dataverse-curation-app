@@ -19,13 +19,24 @@ _STRIPPABLE = {".gz", ".bz2", ".xz"}
 def _match_suffixes(path: Path) -> set[str]:
     """Suffixes to match against check extensions.
 
-    Compound names shed one outer compression layer so the inner format
-    wins: sample.fq.gz -> {.fq} (fastq, not containers), a.tar.gz -> {.tar}.
+    Compound names shed one outer compression layer ONLY when the inner
+    check handles compression transparently (fastq sniffs gzip magic,
+    tarfile opens "r:*"). Otherwise the outer layer wins so
+    a.csv.bz2 does not mis-dispatch to CsvCheck (which cannot decompress)
+    — it falls through to containers/unmatched instead.
+    sample.fq.gz -> {.fq}, a.tar.gz -> {.tar}, a.csv.bz2 -> {.bz2}.
     Bare data.gz keeps {.gz} so it still reaches the containers check.
     """
     suffixes = [s.lower() for s in path.suffixes]
     if len(suffixes) > 1 and suffixes[-1] in _STRIPPABLE:
-        suffixes = suffixes[:-1]
+        inner = suffixes[-2]
+        # fastq handles .fq/.fastq(+.gz); tar handles .tar(+any compression).
+        if inner in {".fq", ".fastq", ".tar"} or ".tar" in suffixes[:-1]:
+            suffixes = suffixes[:-1]
+        else:
+            # Keep only the outer compression suffix so containers or the
+            # unmatched-types warning handles it honestly.
+            return {suffixes[-1]}
     return set(suffixes) or {path.suffix.lower()}
 
 

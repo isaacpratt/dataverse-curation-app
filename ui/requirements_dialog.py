@@ -8,10 +8,12 @@ from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QTextEdit,
     QVBoxLayout,
 )
+
+from ui.dialogs import show_critical, show_info, show_warning
+from ui.theme import action_button_style
 
 from ui.widgets import AppButton, make_combo
 
@@ -33,7 +35,24 @@ def load_profiles() -> dict:
 
 
 def save_profiles(profiles: dict) -> None:
-    PROFILES_PATH.write_text(json.dumps(profiles, indent=2, ensure_ascii=False), encoding="utf-8")
+    import os
+    import tempfile
+
+    PROFILES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    data = json.dumps(profiles, indent=2, ensure_ascii=False)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(PROFILES_PATH.parent), prefix=PROFILES_PATH.name + ".", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(data)
+        os.replace(tmp_name, PROFILES_PATH)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
 
 
 class RequirementsDialog(QDialog):
@@ -71,10 +90,15 @@ class RequirementsDialog(QDialog):
         buttons = QHBoxLayout()
         buttons.setSpacing(8)
         buttons.addStretch(1)
+        # Inline faces (see download_dialog.py): QSS alone can leave the
+        # white primary text unpainted-background inside QDialog subtrees.
         cancel_btn = AppButton("Cancel", kind="secondary")
+        cancel_btn.setStyleSheet(action_button_style(False))
         cancel_btn.clicked.connect(self.reject)
         buttons.addWidget(cancel_btn)
         save_btn = AppButton("Save", kind="primary")
+        save_btn.setStyleSheet(action_button_style(True))
+        save_btn.setDefault(True)
         save_btn.clicked.connect(self._save)
         buttons.addWidget(save_btn)
         layout.addLayout(buttons)
@@ -88,7 +112,7 @@ class RequirementsDialog(QDialog):
             try:
                 self._profiles = json.loads(PROFILES_PATH.read_text(encoding="utf-8"))
             except Exception as exc:
-                QMessageBox.warning(self, "Profiles", f"Could not load {PROFILES_PATH}:\n{exc}")
+                show_warning(self, "Profiles", f"Could not load {PROFILES_PATH}:\n{exc}")
                 self._profiles = {k: v for k, v in PROFILES.items()}
         else:
             # Seed file from built-ins on first open
@@ -118,7 +142,7 @@ class RequirementsDialog(QDialog):
             return
         key = name.strip()
         if key in self._profiles:
-            QMessageBox.warning(self, "Profiles", f"Profile '{key}' already exists.")
+            show_warning(self, "Profiles", f"Profile '{key}' already exists.")
             return
         self._profiles[key] = {"label": key, "description": "", "rules": []}
         self.profile_combo.addItem(f"{key} — {key}", key)
@@ -129,7 +153,7 @@ class RequirementsDialog(QDialog):
         if not key:
             return
         if key == "McMaster":
-            QMessageBox.warning(self, "Profiles", "Cannot delete the built-in McMaster profile.")
+            show_warning(self, "Profiles", "Cannot delete the built-in McMaster profile.")
             return
         del self._profiles[key]
         self._load()
@@ -139,9 +163,11 @@ class RequirementsDialog(QDialog):
         if key:
             try:
                 data = json.loads(self._editor.toPlainText() or "{}")
+                if not isinstance(data, dict):
+                    raise ValueError("profile JSON must be an object")
                 self._profiles[key] = data
             except Exception as exc:
-                QMessageBox.critical(self, "Profiles", f"Invalid JSON:\n{exc}")
+                show_critical(self, "Profiles", f"Invalid JSON:\n{exc}")
                 return
         try:
             save_profiles(self._profiles)
@@ -153,7 +179,7 @@ class RequirementsDialog(QDialog):
                 metadata_check.PROFILES.update(self._profiles)
             except Exception:
                 pass
-            QMessageBox.information(self, "Profiles", f"Saved to {PROFILES_PATH.resolve()}")
+            show_info(self, "Profiles", f"Saved to {PROFILES_PATH.resolve()}")
             self.accept()
         except Exception as exc:
-            QMessageBox.critical(self, "Profiles", f"Could not save:\n{exc}")
+            show_critical(self, "Profiles", f"Could not save:\n{exc}")

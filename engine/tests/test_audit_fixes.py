@@ -67,6 +67,7 @@ def test_missing_library_contract():
     assert result.level == "warning"
     assert result.passed is True
     assert "Missing" in result.message
+    assert result.details.get("skipped") is True
 
 
 @pytest.mark.parametrize(
@@ -75,9 +76,11 @@ def test_missing_library_contract():
         ("openpyxl", XlsxCheck, ".xlsx", "format.xlsx.openable"),
         ("h5py", Hdf5Check, ".h5", "format.hdf5.openable"),
         ("tifffile", TiffCheck, ".tif", "format.tiff.valid"),
-        ("PIL", ImagesCheck, ".png", "format.images.valid"),
         ("pypdf", PdfCheck, ".pdf", "format.pdf.openable"),
         ("lxml", XmlCheck, ".xml", "format.xml.valid"),
+        # NOTE: PIL/preset ImagesCheck intentionally excluded — images have a
+        # pure-stdlib header fallback, so a missing Pillow no longer yields a
+        # "Missing" warning (see test_images_stdlib_fallback_* below).
     ],
 )
 def test_optional_import_guard(tmp_path, monkeypatch, module, cls, file_suffix, result_id):
@@ -85,10 +88,51 @@ def test_optional_import_guard(tmp_path, monkeypatch, module, cls, file_suffix, 
     target = tmp_path / f"sample{file_suffix}"
     target.write_bytes(b"\x00\x01\x02")
     results = cls().run([target])
+    # Always-emit: missing-lib openable + skipped siblings (never a lone row).
+    by_id = {r.check_id: r for r in results}
+    assert result_id in by_id
+    assert by_id[result_id].level == "warning"
+    assert by_id[result_id].passed is True
+    assert by_id[result_id].details.get("skipped") is True
+    for r in results:
+        if r.check_id != result_id:
+            assert r.details.get("skipped") is True
+            assert r.passed is True
+
+
+def test_images_stdlib_fallback_without_pillow(tmp_path, monkeypatch):
+    """JPG/PNG still validate via stdlib headers when Pillow is absent."""
+    import struct
+
+    monkeypatch.setitem(sys.modules, "PIL", None)
+    monkeypatch.setitem(sys.modules, "PIL.Image", None)
+    monkeypatch.setitem(sys.modules, "PIL.ImageFile", None)
+    # Minimal 1x1 PNG: signature + IHDR (width=1, height=1, color type 2).
+    png = tmp_path / "tiny.png"
+    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    png.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + struct.pack(">I", 13) + b"IHDR" + ihdr
+        + b"\x00\x00\x00\x00"
+    )
+    results = ImagesCheck().run([png])
     assert len(results) == 1
-    assert results[0].check_id == result_id
-    assert results[0].level == "warning"
+    assert results[0].check_id == "format.images.valid"
+    assert "Missing" not in results[0].message
     assert results[0].passed is True
+    assert results[0].details.get("width") == 1
+
+
+def test_images_stdlib_fallback_rejects_garbage(tmp_path, monkeypatch):
+    monkeypatch.setitem(sys.modules, "PIL", None)
+    monkeypatch.setitem(sys.modules, "PIL.Image", None)
+    monkeypatch.setitem(sys.modules, "PIL.ImageFile", None)
+    bad = tmp_path / "bad.png"
+    bad.write_bytes(b"\x00\x01\x02")
+    results = ImagesCheck().run([bad])
+    assert results[0].check_id == "format.images.valid"
+    assert results[0].passed is False
+    assert results[0].level == "error"
 
 
 def test_chardet_fallback(tmp_path, monkeypatch):

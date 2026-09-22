@@ -49,10 +49,57 @@ class DtaCheck(Check):
             import pyreadstat
         except ImportError:
             from engine.checks._util import missing_library
+            from engine.checks._util import skipped as _skipped
 
-            return [missing_library("format.stata.openable", "pyreadstat")]
+            return [
+                missing_library("format.stata.openable", "pyreadstat"),
+                _skipped(
+                    "format.stata.dictionary",
+                    f"{path.name}: dictionary skipped (pyreadstat not installed)",
+                ),
+                _skipped(
+                    "format.stata.labels",
+                    f"{path.name}: label scan skipped (pyreadstat not installed)",
+                ),
+                _skipped(
+                    "format.stata.encoding",
+                    f"{path.name}: encoding scan skipped (pyreadstat not installed)",
+                ),
+                _skipped(
+                    "format.stata.pii",
+                    f"{path.name}: PII scan skipped (pyreadstat not installed)",
+                ),
+            ]
         name = path.name
-        frame, meta = pyreadstat.read_dta(str(path), row_limit=_ROW_LIMIT)
+        try:
+            frame, meta = pyreadstat.read_dta(str(path), row_limit=_ROW_LIMIT)
+        except Exception as exc:
+            from engine.checks._util import skipped as _skipped2
+
+            return [
+                CheckResult(
+                    check_id="format.stata.openable",
+                    level="error",
+                    passed=False,
+                    message=f"{name}: failed to read ({exc})",
+                ),
+                _skipped2(
+                    "format.stata.dictionary",
+                    f"{name}: dictionary skipped (unreadable file)",
+                ),
+                _skipped2(
+                    "format.stata.labels",
+                    f"{name}: label scan skipped (unreadable file)",
+                ),
+                _skipped2(
+                    "format.stata.encoding",
+                    f"{name}: encoding scan skipped (unreadable file)",
+                ),
+                _skipped2(
+                    "format.stata.pii",
+                    f"{name}: PII scan skipped (unreadable file)",
+                ),
+            ]
 
         labels = list(meta.column_labels or [])
         types = list(meta.original_variable_types or [])

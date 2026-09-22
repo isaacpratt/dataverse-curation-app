@@ -13,6 +13,7 @@ import pytest
 from dataverse_client import (
     DataverseClient,
     extract_file_restrictions,
+    get_cached_allowed_labels,
     locks_indicate_review,
     normalize_files,
     note_review_submission,
@@ -23,7 +24,11 @@ from dataverse_client import (
     parse_ds_metadata_payload,
     parse_timestamps,
     parse_version_compare,
+    read_allowed_labels_cache,
     search_item_state,
+    set_cached_allowed_labels,
+    top_level_collection,
+    write_allowed_labels_cache,
 )
 from download_manager import DownloadManager
 
@@ -121,8 +126,13 @@ def test_parse_allowed_labels():
     ]
     assert parse_allowed_labels("") == []
     assert parse_allowed_labels(None) == []
-    assert parse_allowed_labels(["not", "a", "string"]) == []
-    # dupes dropped, order kept
+    assert parse_allowed_labels(123) == []
+    # some Dataverse versions answer a JSON array instead of a CSV string
+    assert parse_allowed_labels(["Author contacted", " Needs review ", "", "Author contacted"]) == [
+        "Author contacted",
+        "Needs review",
+    ]
+    assert parse_allowed_labels(("A", "B")) == ["A", "B"]
     assert parse_allowed_labels("A, B, A") == ["A", "B"]
 
 
@@ -589,6 +599,382 @@ def test_download_originals_skips_staged_and_nontabular(tmp_path):
     assert (staged / "new.sav").read_bytes() == b"orig-bytes"
 
 
+def test_top_level_collection():
+    assert top_level_collection("mcmaster") == "mcmaster"
+    assert top_level_collection("mcmaster/sub") == "mcmaster"
+    assert top_level_collection("mcmaster/sub/deep") == "mcmaster"
+    assert top_level_collection("  /mcmaster/  ") == "mcmaster"
+    assert top_level_collection("") == ""
+    assert top_level_collection("   ") == ""
+    assert top_level_collection(None) == ""
+
+
+def test_allowed_labels_shared_cache_isolation(monkeypatch):
+    import dataverse_client as _dc
+
+    monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
+    set_cached_allowed_labels("https://demo.test", "mcmaster", ["A", "B"])
+    # same top-level, sub-collection and case variants share the entry
+    assert get_cached_allowed_labels("https://demo.test", "mcmaster/sub") == ["A", "B"]
+    assert get_cached_allowed_labels("https://DEMO.test/", "McMaster") == ["A", "B"]
+    # other top-level / instance / unknown miss
+    assert get_cached_allowed_labels("https://demo.test", "other") is None
+    assert get_cached_allowed_labels("https://other.test", "mcmaster") is None
+    assert get_cached_allowed_labels("https://demo.test", "") is None
+    # negative entries cache (no refetch) but stay distinct from unknown
+    set_cached_allowed_labels("https://demo.test", "empty-coll", [])
+    assert get_cached_allowed_labels("https://demo.test", "empty-coll") == []
+    # callers get a copy, not the live list
+    hit = get_cached_allowed_labels("https://demo.test", "mcmaster")
+    hit.append("MUT")
+    assert get_cached_allowed_labels("https://demo.test", "mcmaster") == ["A", "B"]
+
+
+def test_fetch_allowed_labels_shared_single_call(monkeypatch):
+    import dataverse_client as _dc
+
+    monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
+    calls: list[str] = []
+
+    def fake_allowed(self, identifier):
+        calls.append(identifier)
+        return ["X", "Y"] if identifier == "pid-2" else []
+
+    monkeypatch.setattr(DataverseClient, "get_allowed_curation_labels", fake_allowed)
+    client = DataverseClient("https://demo.test", "tok")
+    # first probe empty -> exactly one more request, then stop
+    assert client.fetch_allowed_labels_shared("mcmaster", ["pid-1", "pid-2", "pid-3"]) == ["X", "Y"]
+    assert calls == ["pid-1", "pid-2"]
+    # cached now: sub-collection and repeats cost zero calls
+    assert client.fetch_allowed_labels_shared("mcmaster/sub", ["pid-9"]) == ["X", "Y"]
+    assert calls == ["pid-1", "pid-2"]
+
+
+def test_fetch_allowed_labels_shared_bounds_attempts(monkeypatch):
+    import dataverse_client as _dc
+
+    monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
+    calls: list[str] = []
+    monkeypatch.setattr(
+        DataverseClient, "get_allowed_curation_labels",
+        lambda self, pid: calls.append(pid) or [],
+    )
+    client = DataverseClient("https://demo.test", "tok")
+    assert client.fetch_allowed_labels_shared("c", ["a", "b", "c", "d", "e"], max_attempts=3) == []
+    assert calls == ["a", "b", "c"]
+    # negative result cached: no further calls
+    assert client.fetch_allowed_labels_shared("c", ["a", "z"]) == []
+    assert calls == ["a", "b", "c"]
+
+
+def test_allowed_labels_disk_cache_roundtrip(tmp_path):
+    import dataverse_client as _dc
+
+    _dc._ALLOWED_LABELS_CACHE.pop(("https://demo.test", "mcmaster"), None)
+    write_allowed_labels_cache(tmp_path, "https://demo.test", "mcmaster", ["A", "B"])
+    # composite key + sub-collection sharing + memory warming
+    assert read_allowed_labels_cache(tmp_path, "https://demo.test", "mcmaster") == ["A", "B"]
+    assert read_allowed_labels_cache(tmp_path, "https://demo.test", "mcmaster/sub") == ["A", "B"]
+    assert get_cached_allowed_labels("https://demo.test", "mcmaster") == ["A", "B"]
+    assert read_allowed_labels_cache(tmp_path, "https://demo.test", "other") is None
+    # writes are stamped v2/probed (the once-per-alias discovery round)
+    import json as _json
+
+    raw = _json.loads((tmp_path / "curation_labels.json").read_text(encoding="utf-8"))
+    slot = raw["https://demo.test|mcmaster"]
+    assert slot.get("probed") is True
+    assert slot.get("v") == 2
+    # legacy bare-instance key is adopted when stamped at v2 …
+    (tmp_path / "curation_labels.json").write_text(
+        _json.dumps({"https://legacy.test": {"labels": ["L"], "collection": "mcmaster", "probed": True, "v": 2}})
+    )
+    _dc._ALLOWED_LABELS_CACHE.pop(("https://legacy.test", "mcmaster"), None)
+    assert read_allowed_labels_cache(tmp_path, "https://legacy.test", "mcmaster") == ["L"]
+    # … but an unstamped (pre-probe-once) slot reads as unknown so the
+    # collection gets one fresh discovery round
+    (tmp_path / "curation_labels.json").write_text(
+        _json.dumps({"https://legacy.test": {"labels": ["L"], "collection": "mcmaster"}})
+    )
+    _dc._ALLOWED_LABELS_CACHE.pop(("https://legacy.test", "mcmaster"), None)
+    assert read_allowed_labels_cache(tmp_path, "https://legacy.test", "mcmaster") is None
+    # … and so does a v1 stamp written from the filter union rather than
+    # a probe (probed without v2 carries no discovery guarantee)
+    (tmp_path / "curation_labels.json").write_text(
+        _json.dumps({"https://legacy.test": {"labels": ["L"], "collection": "mcmaster", "probed": True}})
+    )
+    _dc._ALLOWED_LABELS_CACHE.pop(("https://legacy.test", "mcmaster"), None)
+    assert read_allowed_labels_cache(tmp_path, "https://legacy.test", "mcmaster") is None
+
+
+def test_allowed_probe_answered_tracks_server_answers(monkeypatch):
+    """Only HTTP-200 rounds count as answered (stamp-worthy)."""
+    import dataverse_client as _dc
+
+    monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
+
+    def fake_200(self, path, params=None):
+        # Real 6.8 envelope shape: data.message carries the CSV list.
+        return {"status": "OK", "data": {"message": "A,B"}}
+
+    monkeypatch.setattr(DataverseClient, "_get_json", fake_200)
+    client = DataverseClient("https://demo.test", "tok")
+    assert client.fetch_allowed_labels_shared("c", ["p1", "p2"]) == ["A", "B"]
+    assert client.last_allowed_probe_answered() is True
+
+    def fake_403(self, path, params=None):
+        import requests
+
+        resp = requests.Response()
+        resp.status_code = 403
+        raise requests.HTTPError("denied", response=resp)
+
+    monkeypatch.setattr(DataverseClient, "_get_json", fake_403)
+    monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
+    client2 = DataverseClient("https://demo.test", "tok")
+    assert client2.fetch_allowed_labels_shared("c", ["p1", "p2"]) == []
+    assert client2.last_allowed_probe_answered() is False
+
+    def fake_boom(self, path, params=None):
+        import requests
+
+        raise requests.exceptions.ConnectionError("down")
+
+    monkeypatch.setattr(DataverseClient, "_get_json", fake_boom)
+    monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
+    client3 = DataverseClient("https://demo.test", "tok")
+    assert client3.fetch_allowed_labels_shared("c", ["p1"]) == []
+    assert client3.last_allowed_probe_answered() is False
+
+
+def test_parse_allowed_labels_shapes():
+    from dataverse_client import parse_allowed_labels
+
+    assert parse_allowed_labels("A, B,A,, ") == ["A", "B"]
+    assert parse_allowed_labels(["A", "B", "A"]) == ["A", "B"]
+    # Dataverse 6.8 envelope: the CSV (or array) rides under "message".
+    assert parse_allowed_labels({"message": "A,B,A"}) == ["A", "B"]
+    assert parse_allowed_labels({"message": ["A", "B"]}) == ["A", "B"]
+    assert parse_allowed_labels({"message": ""}) == []
+    assert parse_allowed_labels({"other": "x"}) == []
+    assert parse_allowed_labels(None) == []
+
+
+def test_snapshot_apply_clear_table_view(tmp_path):
+    """Reset reproduces construction state; clear drops the persisted entry."""
+    import json as _json
+
+    from storage import (
+        apply_table_view,
+        clear_table_state,
+        snapshot_table_view,
+    )
+
+    class FakeViewHeader:
+        def __init__(self):
+            self._widths = [100, 200, 300]
+            self._hidden = [False, False, False]
+            self._slots = [0, 1, 2]
+            self._sort_shown = False
+            self._sort_section = 0
+            self._sort_order = 0
+
+        def count(self):
+            return 3
+
+        def blockSignals(self, b):
+            return False
+
+        def sectionSize(self, i):
+            return self._widths[i]
+
+        def resizeSection(self, i, w):
+            self._widths[i] = w
+
+        def isSectionHidden(self, i):
+            return self._hidden[i]
+
+        def setSectionHidden(self, i, flag):
+            self._hidden[i] = bool(flag)
+
+        def visualIndex(self, i):
+            return self._slots.index(i)
+
+        def moveSection(self, frm, to):
+            self._slots.insert(to, self._slots.pop(frm))
+
+        def isSortIndicatorShown(self):
+            return self._sort_shown
+
+        def sortIndicatorSection(self):
+            return self._sort_section
+
+        def sortIndicatorOrder(self):
+            return self._sort_order
+
+        def setSortIndicator(self, section, order):
+            self._sort_section = int(section)
+            try:
+                self._sort_order = int(order)
+            except TypeError:
+                self._sort_order = int(getattr(order, "value", 0))
+
+        def setSortIndicatorShown(self, flag):
+            self._sort_shown = bool(flag)
+
+    header = FakeViewHeader()
+    snap = snapshot_table_view(header)
+    assert snap["widths"] == [100, 200, 300]
+    assert snap["sort_shown"] is False
+
+    # Mutate everything (user drags/sorts/hides), persist, then reset.
+    header.resizeSection(0, 55)
+    header.setSectionHidden(1, True)
+    header.moveSection(2, 0)
+    header.setSortIndicator(2, 1)
+    header.setSortIndicatorShown(True)
+    assert header.sectionSize(0) == 55
+
+    from storage import save_table_state
+
+    save_table_state(tmp_path, "reset_me", header)
+    raw = _json.loads((tmp_path / "table_layout.json").read_text(encoding="utf-8"))
+    assert raw["reset_me"]["widths"][0] == 55
+
+    clear_table_state(tmp_path, "reset_me")
+    raw = _json.loads((tmp_path / "table_layout.json").read_text(encoding="utf-8"))
+    assert "reset_me" not in raw
+    # clearing a missing entry never raises
+    clear_table_state(tmp_path, "reset_me")
+
+    apply_table_view(header, snap)
+    assert header._widths == [100, 200, 300]
+    assert header._hidden == [False, False, False]
+    assert header._slots == [0, 1, 2]
+    assert header._sort_shown is False
+
+
+def test_is_draft_dataset():
+    from dataverse_client import is_draft_dataset
+
+    assert is_draft_dataset({"state": "DRAFT"}) is True
+    assert is_draft_dataset({"state": "draft"}) is True
+    assert is_draft_dataset({"state": "In Review"}) is True
+    assert is_draft_dataset({"state": "RELEASED", "has_draft": True}) is True
+    assert is_draft_dataset({"state": "RELEASED"}) is False
+    assert is_draft_dataset({"state": "DEACCESSIONED"}) is False
+    assert is_draft_dataset({}) is False
+    assert is_draft_dataset(None) is False
+    assert is_draft_dataset("DRAFT") is False
+
+
+def test_get_me_returns_profile_and_caches(monkeypatch):
+    import dataverse_client as _dc
+
+    monkeypatch.setattr(_dc, "_ME_CACHE", {})
+    calls: list[str] = []
+    payload = {
+        "status": "OK",
+        "data": {"identifier": "@u", "displayName": "U", "superuser": True},
+    }
+
+    def fake_get_json(self, path, params=None):
+        calls.append(path)
+        return dict(payload)
+
+    monkeypatch.setattr(DataverseClient, "_get_json", fake_get_json)
+    client = DataverseClient("https://demo.test", "tok")
+    me = client.get_me()
+    assert me == {"identifier": "@u", "displayName": "U", "superuser": True}
+    assert client.user_is_superuser() is True
+    # second call served from cache — one HTTP hit total
+    assert client.get_me() == me
+    assert calls == ["/api/users/:me"]
+    # distinct tokens do not share identity
+    other = DataverseClient("https://demo.test", "tok2")
+    assert other.user_is_superuser() is True
+    assert calls == ["/api/users/:me", "/api/users/:me"]
+
+
+def test_get_me_denied_is_none_without_caching(monkeypatch):
+    import dataverse_client as _dc
+
+    import requests
+
+    monkeypatch.setattr(_dc, "_ME_CACHE", {})
+
+    def fake_denied(self, path, params=None):
+        resp = requests.Response()
+        resp.status_code = 401
+        raise requests.HTTPError("denied", response=resp)
+
+    monkeypatch.setattr(DataverseClient, "_get_json", fake_denied)
+    client = DataverseClient("https://demo.test", "bad")
+    assert client.get_me() is None
+    assert client.user_is_superuser() is None
+    assert _dc._ME_CACHE == {}
+
+
+def test_get_collection_roles_matches_me_identifier(monkeypatch):
+    import dataverse_client as _dc
+
+    monkeypatch.setattr(_dc, "_ME_CACHE", {})
+    monkeypatch.setattr(_dc, "_ROLE_CACHE", {})
+    calls: list[str] = []
+
+    def fake_get_json(self, path, params=None):
+        calls.append(path)
+        if path == "/api/users/:me":
+            return {"status": "OK", "data": {"identifier": "@u", "superuser": False}}
+        assert path == "/api/dataverses/mcmaster/assignments"
+        return {"status": "OK", "data": [
+            {"assignee": "@other", "roleName": "Admin", "_roleAlias": "admin"},
+            {"assignee": "@u", "roleName": "Curator", "_roleAlias": "curator"},
+            {"assignee": "@u", "roleName": "Curator", "_roleAlias": "curator"},
+        ]}
+
+    monkeypatch.setattr(DataverseClient, "_get_json", fake_get_json)
+    client = DataverseClient("https://demo.test", "tok")
+    assert client.get_collection_roles("mcmaster") == ["Curator"]
+    # cached: identity + assignments each hit once total
+    assert client.get_collection_roles("mcmaster") == ["Curator"]
+    assert calls == ["/api/users/:me", "/api/dataverses/mcmaster/assignments"]
+    # empty alias never calls
+    assert client.get_collection_roles("  ") is None
+    assert calls == ["/api/users/:me", "/api/dataverses/mcmaster/assignments"]
+
+
+def test_get_collection_roles_denied_or_empty(monkeypatch):
+    import dataverse_client as _dc
+
+    import requests
+
+    monkeypatch.setattr(_dc, "_ME_CACHE", {})
+    monkeypatch.setattr(_dc, "_ROLE_CACHE", {})
+
+    def fake_ok_me(self, path, params=None):
+        if path == "/api/users/:me":
+            return {"status": "OK", "data": {"identifier": "@u"}}
+        resp = requests.Response()
+        resp.status_code = 403
+        raise requests.HTTPError("denied", response=resp)
+
+    monkeypatch.setattr(DataverseClient, "_get_json", fake_ok_me)
+    client = DataverseClient("https://demo.test", "tok")
+    assert client.get_collection_roles("mcmaster") is None
+    assert _dc._ROLE_CACHE == {}
+
+    def fake_no_match(self, path, params=None):
+        if path == "/api/users/:me":
+            return {"status": "OK", "data": {"identifier": "@nobody"}}
+        return {"status": "OK", "data": [
+            {"assignee": "@someone", "roleName": "Admin"},
+        ]}
+
+    monkeypatch.setattr(DataverseClient, "_get_json", fake_no_match)
+    client2 = DataverseClient("https://demo.test", "tok2")
+    assert client2.get_collection_roles("mcmaster") == []
+
+
 def test_table_layout_roundtrip(tmp_path):
     from storage import restore_table_state, save_table_state
 
@@ -613,10 +999,87 @@ def test_table_layout_roundtrip(tmp_path):
     header = FakeHeader([100, 200, 300])
     save_table_state(tmp_path, "dataset_files", header)
     header2 = FakeHeader([50, 50, 50])
-    restore_table_state(tmp_path, "dataset_files", header2)
+    assert restore_table_state(tmp_path, "dataset_files", header2) is True
     assert header2._widths == [100, 200, 300]
     assert header2.blocked is False
-    # unknown name / corrupt file never raise
-    restore_table_state(tmp_path, "nope", FakeHeader([1]))
+    # unknown name / corrupt file never raise; both report "nothing applied"
+    assert restore_table_state(tmp_path, "nope", FakeHeader([1])) is False
     (tmp_path / "table_layout.json").write_text("{bad", encoding="utf-8")
-    restore_table_state(tmp_path, "dataset_files", FakeHeader([1]))
+    assert restore_table_state(tmp_path, "dataset_files", FakeHeader([1])) is False
+
+
+def test_table_view_state_roundtrip(tmp_path):
+    """Widths + sort + hidden columns + visual order all persist."""
+    from storage import restore_table_state, save_table_state
+
+    class FakeViewHeader:
+        def __init__(self, widths):
+            self._widths = list(widths)
+            self._hidden = [False] * len(widths)
+            self._slots = list(range(len(widths)))  # slots[visual] = logical
+            self._sort_shown = False
+            self._sort_section = -1
+            self._sort_order = 0
+
+        def count(self):
+            return len(self._widths)
+
+        def blockSignals(self, b):
+            return False
+
+        def sectionSize(self, i):
+            return self._widths[i]
+
+        def resizeSection(self, i, w):
+            self._widths[i] = w
+
+        def isSortIndicatorShown(self):
+            return self._sort_shown
+
+        def sortIndicatorSection(self):
+            return self._sort_section
+
+        def sortIndicatorOrder(self):
+            return self._sort_order
+
+        def isSectionHidden(self, i):
+            return self._hidden[i]
+
+        def setSectionHidden(self, i, flag):
+            self._hidden[i] = bool(flag)
+
+        def visualIndex(self, i):
+            return self._slots.index(i)
+
+        def moveSection(self, from_visual, to_visual):
+            self._slots.insert(to_visual, self._slots.pop(from_visual))
+
+        def setSortIndicator(self, section, order):
+            self._sort_shown = True
+            self._sort_section = int(section)
+            self._sort_order = int(order)
+
+    src = FakeViewHeader([100, 200, 300, 40])
+    src.setSectionHidden(2, True)
+    src.moveSection(3, 0)  # logical 3 first
+    src.setSortIndicator(1, 1)
+    save_table_state(tmp_path, "full_view", src)
+
+    dst = FakeViewHeader([55, 55, 55, 55])
+    assert restore_table_state(tmp_path, "full_view", dst) is True
+    assert dst._widths == [100, 200, 300, 40]
+    assert dst._hidden == [False, False, True, False]
+    assert dst._slots == [3, 0, 1, 2]
+    assert dst._sort_shown is True
+    assert dst._sort_section == 1
+    assert dst._sort_order == 1
+
+    # A fresh save with no sort / default visibility omits the extra keys.
+    plain = FakeViewHeader([7, 8, 9])
+    save_table_state(tmp_path, "plain_view", plain)
+    raw = (tmp_path / "table_layout.json").read_text(encoding="utf-8")
+    import json as _json
+
+    entry = _json.loads(raw)["plain_view"]
+    assert "sort" not in entry
+    assert entry["hidden"] == [False, False, False]

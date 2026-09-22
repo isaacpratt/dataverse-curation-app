@@ -71,19 +71,48 @@ class NcCheck(Check):
             from netCDF4 import Dataset
         except ImportError:
             from engine.checks._util import missing_library
+            from engine.checks._util import skipped as _skipped
 
-            return [missing_library("format.netcdf.openable", "netCDF4")]
+            return [
+                missing_library("format.netcdf.openable", "netCDF4"),
+                _skipped(
+                    "format.netcdf.metadata",
+                    f"{path.name}: metadata skipped (netCDF4 not installed)",
+                ),
+                _skipped(
+                    "format.netcdf.spatial",
+                    f"{path.name}: spatial scan skipped (netCDF4 not installed)",
+                ),
+                _skipped(
+                    "format.netcdf.data_health",
+                    f"{path.name}: data-health skipped (netCDF4 not installed)",
+                ),
+            ]
         name = path.name
         try:
             ds = Dataset(str(path), "r")
         except Exception as exc:
+            from engine.checks._util import skipped as _skipped2
+
             return [
                 CheckResult(
                     check_id="format.netcdf.openable",
                     level="error",
                     passed=False,
                     message=f"{name}: corrupt/unreadable ({exc})",
-                )
+                ),
+                _skipped2(
+                    "format.netcdf.metadata",
+                    f"{name}: metadata skipped (unreadable file)",
+                ),
+                _skipped2(
+                    "format.netcdf.spatial",
+                    f"{name}: spatial scan skipped (unreadable file)",
+                ),
+                _skipped2(
+                    "format.netcdf.data_health",
+                    f"{name}: data-health skipped (unreadable file)",
+                ),
             ]
 
         with ds:

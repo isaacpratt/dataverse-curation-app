@@ -22,16 +22,29 @@ _MAX_UNCOMPRESSED_BYTES = 2 << 30
 
 
 def _unsafe_entry(name: str) -> bool:
-    """Zip-slip style traversal: absolute path or `..` segment."""
-    parts = Path(name).parts
-    return Path(name).is_absolute() or any(p == ".." for p in parts)
+    """Zip-slip style traversal: absolute path or `..` segment.
+
+    Covers POSIX + Windows forms: drive-absolute (C:\\…), backslash
+    separators, and leading ~/.
+    """
+    if not name:
+        return True
+    # Normalize backslashes so Windows traversal is caught on any OS.
+    normalized = name.replace("\\", "/")
+    # Drive-absolute (C:/…) or UNC (//…).
+    if len(normalized) >= 2 and normalized[1] == ":":
+        return True
+    parts = normalized.split("/")
+    if any(p == ".." for p in parts):
+        return True
+    return Path(name).is_absolute() or Path(normalized).is_absolute()
 
 
 class ContainersCheck(Check):
     """Archive check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.containers"
-    extensions = {".zip", ".tar", ".tgz", ".tbz2", ".7z", ".rar", ".gz"}
+    extensions = {".zip", ".tar", ".tgz", ".tbz2", ".7z", ".rar", ".gz", ".bz2", ".xz"}
 
     def run(self, files: List[Path]) -> List[CheckResult]:
         from engine.checks._util import run_per_file
@@ -49,6 +62,8 @@ class ContainersCheck(Check):
         if suffix in {".tar", ".tgz", ".tbz2"} or ".tar" in suffixes:
             return self._inspect_tar(path)
 
+        from engine.checks._util import skipped as _skipped
+
         return [
             CheckResult(
                 check_id="format.containers.valid",
@@ -58,10 +73,20 @@ class ContainersCheck(Check):
                     f"{name}: no native reader for '{suffix}' - "
                     "manual verification required"
                 ),
-            )
+            ),
+            _skipped(
+                "format.containers.unsafe_entry",
+                f"{name}: entry scan skipped (no native reader)",
+            ),
+            _skipped(
+                "format.containers.encrypted",
+                f"{name}: encryption scan skipped (no native reader)",
+            ),
         ]
 
     def _inspect_zip(self, path: Path) -> List[CheckResult]:
+        from engine.checks._util import skipped as _skipped
+
         name = path.name
         with zipfile.ZipFile(str(path)) as archive:
             infos = archive.infolist()
@@ -76,7 +101,15 @@ class ContainersCheck(Check):
                             "inspect — manual verification required"
                         ),
                         details={"members": len(infos)},
-                    )
+                    ),
+                    _skipped(
+                        "format.containers.unsafe_entry",
+                        f"{name}: entry scan skipped (member cap exceeded)",
+                    ),
+                    _skipped(
+                        "format.containers.encrypted",
+                        f"{name}: encryption scan skipped (member cap exceeded)",
+                    ),
                 ]
             total = sum(info.file_size for info in infos)
             if total > _MAX_UNCOMPRESSED_BYTES:
@@ -90,7 +123,15 @@ class ContainersCheck(Check):
                             "inspection cap — manual verification required"
                         ),
                         details={"uncompressed_bytes": total},
-                    )
+                    ),
+                    _skipped(
+                        "format.containers.unsafe_entry",
+                        f"{name}: entry scan skipped (size cap exceeded)",
+                    ),
+                    _skipped(
+                        "format.containers.encrypted",
+                        f"{name}: encryption scan skipped (size cap exceeded)",
+                    ),
                 ]
             entries = [info.filename for info in infos]
             unsafe = sorted({e for e in entries if _unsafe_entry(e)})
@@ -124,6 +165,16 @@ class ContainersCheck(Check):
                     details={"entries": unsafe[:_MAX_ENTRIES_LISTED]},
                 )
             )
+        else:
+            results.append(
+                CheckResult(
+                    check_id="format.containers.unsafe_entry",
+                    level="info",
+                    passed=True,
+                    message=f"{name}: no traversal entries ({len(entries)} entries checked)",
+                    details={"members_checked": len(entries)},
+                )
+            )
         if encrypted:
             results.append(
                 CheckResult(
@@ -133,9 +184,21 @@ class ContainersCheck(Check):
                     message=f"{name}: zip contains encrypted members",
                 )
             )
+        else:
+            results.append(
+                CheckResult(
+                    check_id="format.containers.encrypted",
+                    level="info",
+                    passed=True,
+                    message=f"{name}: no encrypted members",
+                    details={"members_checked": len(entries)},
+                )
+            )
         return results
 
     def _inspect_tar(self, path: Path) -> List[CheckResult]:
+        from engine.checks._util import skipped as _skipped
+
         name = path.name
         with tarfile.open(str(path), "r:*") as archive:
             members = archive.getmembers()
@@ -150,7 +213,15 @@ class ContainersCheck(Check):
                         "inspect — manual verification required"
                     ),
                     details={"members": len(members)},
-                )
+                ),
+                _skipped(
+                    "format.containers.unsafe_entry",
+                    f"{name}: entry scan skipped (member cap exceeded)",
+                ),
+                _skipped(
+                    "format.containers.encrypted",
+                    f"{name}: encryption scan skipped (tar has no encryption flag)",
+                ),
             ]
         total = sum(m.size for m in members)
         if total > _MAX_UNCOMPRESSED_BYTES:
@@ -164,10 +235,26 @@ class ContainersCheck(Check):
                         "inspection cap — manual verification required"
                     ),
                     details={"uncompressed_bytes": total},
-                )
+                ),
+                _skipped(
+                    "format.containers.unsafe_entry",
+                    f"{name}: entry scan skipped (size cap exceeded)",
+                ),
+                _skipped(
+                    "format.containers.encrypted",
+                    f"{name}: encryption scan skipped (tar has no encryption flag)",
+                ),
             ]
         names = [m.name for m in members]
         unsafe = sorted({n for n in names if _unsafe_entry(n)})
+        # Symlink / hardlink members can redirect extraction outside dest
+        # even when the name itself looks safe.
+        try:
+            link_names = sorted({m.name for m in members if m.issym() or m.islnk()})
+        except Exception:
+            link_names = []
+        if link_names:
+            unsafe = sorted(set(unsafe) | set(link_names))
         results = [
             CheckResult(
                 check_id="format.containers.valid",
@@ -192,4 +279,23 @@ class ContainersCheck(Check):
                     details={"entries": unsafe[:_MAX_ENTRIES_LISTED]},
                 )
             )
+        else:
+            results.append(
+                CheckResult(
+                    check_id="format.containers.unsafe_entry",
+                    level="info",
+                    passed=True,
+                    message=f"{name}: no traversal entries ({len(members)} members checked)",
+                    details={"members_checked": len(members)},
+                )
+            )
+        results.append(
+            CheckResult(
+                check_id="format.containers.encrypted",
+                level="info",
+                passed=True,
+                message=f"{name}: tar has no encryption flag — nothing to check",
+                details={"members_checked": len(members)},
+            )
+        )
         return results

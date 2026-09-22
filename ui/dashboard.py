@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMenu,
@@ -25,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from config import Config
 from ui.theme import ERROR, OUTLINE_VARIANT, PRIMARY, SURFACE_CONTAINER_LOWEST, TERTIARY, enable_table_copy, selectable_labels
-from ui.widgets import AppButton, AppTable, make_combo, make_search_field
+from ui.widgets import AppButton, AppTable, flush_table_style, make_combo, make_search_field
 from ui.workers import CrawlWorker
 
 # Full column model. `key` maps to dataset dict + enriched local dates.
@@ -74,7 +75,47 @@ def _human_size(n: int) -> str:
 
 
 def _sanitize(pid: str) -> str:
-    return (pid or "").replace(":", "_").replace("/", "_").replace("\\", "_")
+    s = (pid or "").replace(":", "_").replace("/", "_").replace("\\", "_")
+    s = s.replace("..", "__").strip().lstrip(".")
+    return (s or "_dataset")[:120]
+
+
+def _parse_date_epoch(s: str) -> float:
+    """Parse dashboard dates once (not per keystroke per cell).
+
+    Handles YYYY-MM-DD, YYYY-MM-DD HH:MM, ISO-8601 with timezone, and
+    year-only fallback. Returns 0.0 for empty/unparseable.
+    """
+    if not s:
+        return 0.0
+    text = str(s).strip()
+    if not text:
+        return 0.0
+    try:
+        from datetime import datetime, timezone
+
+        # ISO-8601 first (handles TZ suffixes the old loop ignored).
+        try:
+            iso = text.replace("Z", "+00:00") if text.endswith("Z") else text
+            dt = datetime.fromisoformat(iso)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.timestamp()
+        except ValueError:
+            pass
+        for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                dt = datetime.strptime(text[: len(fmt)], fmt)
+                return dt.replace(tzinfo=timezone.utc).timestamp()
+            except ValueError:
+                continue
+        # Year-only fallback preserves rough ordering.
+        try:
+            return float(text[:4] or 0)
+        except ValueError:
+            return 0.0
+    except Exception:
+        return 0.0
 
 
 def _local_downloaded_batch(workspace: Path, pids: list[str]) -> dict[str, str]:
@@ -90,7 +131,7 @@ def _local_downloaded_batch(workspace: Path, pids: list[str]) -> dict[str, str]:
         if db.exists():
             import sqlite3
 
-            conn = sqlite3.connect(str(db))
+            conn = sqlite3.connect(str(db), timeout=30.0)
             try:
                 cur = conn.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' "
@@ -113,10 +154,13 @@ def _local_downloaded_batch(workspace: Path, pids: list[str]) -> dict[str, str]:
             if out[pid] or not pid:
                 continue
             staged = ws / "downloads" / _sanitize(pid) / "files"
-            if staged.exists():
-                out[pid] = datetime.datetime.fromtimestamp(
-                    staged.stat().st_mtime
-                ).strftime("%Y-%m-%d %H:%M")
+            try:
+                if staged.exists():
+                    out[pid] = datetime.datetime.fromtimestamp(
+                        staged.stat().st_mtime
+                    ).strftime("%Y-%m-%d %H:%M")
+            except OSError:
+                continue
     except Exception:
         pass
     return out
@@ -144,7 +188,7 @@ def _decided_ids(workspace: Path) -> set[str]:
             return set()
         import sqlite3
 
-        conn = sqlite3.connect(str(db))
+        conn = sqlite3.connect(str(db), timeout=30.0)
         try:
             cur = conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' "
@@ -286,10 +330,16 @@ def load_dashboard_cache(workspace: Path, key: str) -> dict | None:
 
 
 def save_dashboard_cache(workspace: Path, key: str, datasets: list[dict], labels: list) -> None:
-    """Persist one dashboard slot (best-effort, never raises)."""
+    """Persist one dashboard slot (best-effort, never raises).
+
+    Strips per-row `_sort_*` caches and caps stored slots to avoid unbounded
+    growth (dvmeta rows embed full file arrays).
+    """
     try:
         import datetime as _dt
         import json as _json
+        import os
+        import tempfile
 
         path = Path(workspace) / _DASHBOARD_CACHE_NAME
         try:
@@ -298,13 +348,44 @@ def save_dashboard_cache(workspace: Path, key: str, datasets: list[dict], labels
             raw = {}
         if not isinstance(raw, dict):
             raw = {}
+        clean_rows = []
+        for d in (datasets or []):
+            if not isinstance(d, dict):
+                continue
+            clean_rows.append({k: v for k, v in d.items() if not k.startswith("_sort_")})
         raw[key] = {
             "saved_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
-            "datasets": [d for d in (datasets or []) if isinstance(d, dict)],
+            "datasets": clean_rows,
             "labels": [str(l) for l in (labels or []) if str(l).strip()],
         }
+        # Prune oldest slots beyond 10 to bound file size.
+        try:
+            if len(raw) > 10:
+                # Keep current key + 9 most recent by saved_at.
+                items = sorted(
+                    raw.items(), key=lambda kv: str((kv[1] or {}).get("saved_at") or ""), reverse=True
+                )
+                raw = dict(items[:10])
+                if key not in raw:
+                    raw[key] = {
+                        "saved_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+                        "datasets": clean_rows,
+                        "labels": [str(l) for l in (labels or []) if str(l).strip()],
+                    }
+        except Exception:
+            pass
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(_json.dumps(raw, indent=2), encoding="utf-8")
+        data = _json.dumps(raw, indent=2)
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(data)
+            os.replace(tmp_name, path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
     except Exception:
         pass
 
@@ -338,12 +419,19 @@ class DashboardView(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 24, 24, 24)
         outer.setSpacing(20)
-        self.setStyleSheet("background: #faf8ff;")
+        # Scoped to self: a bare `background` rule acts subtree-wide and
+        # would override app-level backgrounds (e.g. the queue table face).
+        self.setObjectName("DashboardView")
+        self.setStyleSheet("QWidget#DashboardView { background: #faf8ff; }")
 
-        # ---- Title row ----
-        h = QLabel("Dashboard Overview")
-        h.setStyleSheet("font-size: 22px; font-weight: 700; color: #131b2e;")
-        outer.addWidget(h)
+        # ---- Title row: repository scope lives here --------------------
+        # "Datasets: <base URL> · <collection alias>" (moved up from the
+        # old bottom subtitle so the scope reads with the title).
+        self._title_lbl = QLabel("Datasets")
+        self._title_lbl.setStyleSheet("font-size: 22px; font-weight: 700; color: #131b2e;")
+        self._title_lbl.setWordWrap(True)
+        outer.addWidget(self._title_lbl)
+        self._refresh_title()
 
         # ---- Metrics cards (values always from real data; 0 when empty) ----
         self._metrics_row = QHBoxLayout()
@@ -364,16 +452,17 @@ class DashboardView(QWidget):
         queue_card.setObjectName("Card")
         queue_card.setStyleSheet(
             f"QFrame#Card {{ background: {SURFACE_CONTAINER_LOWEST}; "
-            f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 12px; }}"
+            f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; }}"
         )
         queue_layout = QVBoxLayout(queue_card)
         queue_layout.setContentsMargins(0, 0, 0, 0)
         queue_layout.setSpacing(0)
 
         header = QFrame()
+        header.setObjectName("QueueHeaderBar")
         header.setStyleSheet(
-            f"QFrame {{ background: #eaedff; border-bottom: 1px solid {OUTLINE_VARIANT}; "
-            "border-top-left-radius: 12px; border-top-right-radius: 12px; }}"
+            f"QFrame#QueueHeaderBar {{ background: #eaedff; border-bottom: 1px solid {OUTLINE_VARIANT}; "
+            "border-top-left-radius: 8px; border-top-right-radius: 8px; }}"
         )
         header.setFixedHeight(64)
         hdr_layout = QHBoxLayout(header)
@@ -388,7 +477,8 @@ class DashboardView(QWidget):
         hdr_layout.addWidget(hdr_title)
 
         search_wrap = QWidget()
-        search_wrap.setStyleSheet("background: transparent;")
+        search_wrap.setObjectName("QueueSearchWrap")
+        search_wrap.setStyleSheet("QWidget#QueueSearchWrap { background: transparent; }")
         search_layout = QHBoxLayout(search_wrap)
         search_layout.setContentsMargins(0, 0, 0, 0)
         search_layout.setSpacing(0)
@@ -444,15 +534,44 @@ class DashboardView(QWidget):
             widths={i: _COLUMN_WIDTHS.get(key, 120) for i, (key, _h, _v) in enumerate(COLUMNS)},
             row_height=40,
         )
+        # No horizontal scrollbar on the dashboard: the queue reads at
+        # window width (the stretch column absorbs any slack).
+        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Flush under the banner header (last child: square top meets the
+        # banner, 8px bottom meets the card border — see flush_table_style).
+        self._table.setStyleSheet(flush_table_style())
         self._table.cellDoubleClicked.connect(self._on_double_click)
+        # Split header: the table's own header is hidden so its vertical
+        # scrollbar spans rows only (starting underneath the header row).
+        # This display header shares the table model and renders the
+        # full-width header bar edge to edge above it.
+        self._syncing_header = False
+        self._table.horizontalHeader().setVisible(False)
+        self._queue_header = QHeaderView(Qt.Horizontal)
+        self._queue_header.setModel(self._table.model())
+        self._queue_header.setSectionsMovable(True)
+        self._queue_header.setSectionsClickable(True)
+        self._queue_header.setStretchLastSection(True)
+        self._queue_header.setFocusPolicy(Qt.NoFocus)
+        self._queue_header.setFixedHeight(
+            self._table.horizontalHeader().sizeHint().height()
+        )
+        # Same flush section rules as the table's own header had.
+        self._queue_header.setStyleSheet(flush_table_style())
+        self._sync_header_from_table()
+        self._queue_header.sectionResized.connect(self._on_display_header_resized)
+        self._table.horizontalHeader().sectionResized.connect(self._on_table_header_resized)
+        self._queue_header.sectionMoved.connect(self._on_display_header_moved)
+        self._table.horizontalHeader().sectionMoved.connect(self._on_table_header_moved)
+        self._queue_header.sectionClicked.connect(self._on_header_clicked)
+        # Content fit runs on the table header; mirror sizes to the display
+        # header (sync flag keeps the mirror from persisting as a user drag).
+        self._table.columns_fitted.connect(self._sync_header_from_table)
+        queue_layout.addWidget(self._queue_header)
         queue_layout.addWidget(self._table, 1)
         # Status renders as plain text like every other column.
 
         outer.addWidget(queue_card, 1)
-
-        self._subtitle = QLabel("")
-        self._subtitle.setStyleSheet("font-size: 11px; color: #424656;")
-        outer.addWidget(self._subtitle)
 
         self._progress = QLabel("")
         self._progress.setStyleSheet(
@@ -463,6 +582,21 @@ class DashboardView(QWidget):
         outer.addWidget(self._progress)
 
         self._apply_default_column_visibility()
+        # Snapshot the construction view for the Columns-menu reset, then
+        # restore the user's saved queue view (widths/sort/hidden/order)
+        # after defaults and mirror it onto the display header.
+        try:
+            from storage import restore_table_state, snapshot_table_view
+
+            self._queue_snap = snapshot_table_view(self._table.horizontalHeader())
+            if restore_table_state(
+                self._config.app.workspace, "dashboard_queue",
+                self._table.horizontalHeader(),
+            ):
+                self._table.disable_auto_fit()
+            self._sync_header_from_table()
+        except Exception:
+            pass
         self._load_labels_cache()
         selectable_labels(self)
         # Cache-first paint: last crawl renders instantly so reopening the
@@ -484,56 +618,52 @@ class DashboardView(QWidget):
 
     # -- curation labels (per-instance set, remembered with each pull) -----
 
-    def _labels_cache_path(self) -> Path:
+    def _current_collection(self) -> str:
+        """Configured collection alias ("" = whole repository)."""
         try:
-            ws = Path(getattr(getattr(self._config, "app", None), "workspace", Path.home()))
+            return (
+                getattr(self._config.dataverse, "collection", "")
+                or getattr(self._config.dataverse, "subtree", "")
+                or ""
+            ).strip()
         except Exception:
-            ws = Path.home()
-        return ws / "curation_labels.json"
+            return ""
 
-    def _labels_cache_key(self) -> str:
-        return (self._config.dataverse.base_url or "").rstrip("/").lower()
+    def _refresh_title(self) -> None:
+        """Title carries the repository scope: Datasets: <URL> · <alias>."""
+        try:
+            base = (self._config.dataverse.base_url or "").rstrip("/")
+            alias = self._current_collection() or "whole repository"
+            self._title_lbl.setText(f"Datasets: {base}  ·  {alias}")
+            self._title_lbl.setToolTip(f"Active Dataverse: {base}\nCollection: {alias}")
+        except Exception:
+            pass
+
+    def _seed_labels_from_cache(self) -> None:
+        """Labels for the current top-level collection from disk (no network).
+
+        Seeds the filter AND the shared memory cache, so the dropdown shows
+        the full allowed list — including labels no pulled dataset carries —
+        before any crawl runs. Unknown top-levels reset to [] (stale labels
+        from another collection must not linger); the crawl refills them.
+        """
+        try:
+            from dataverse_client import read_allowed_labels_cache
+
+            ws = Path(getattr(getattr(self._config, "app", None), "workspace", Path.home()))
+            labels = read_allowed_labels_cache(
+                Path(ws), self._config.dataverse.base_url, self._current_collection()
+            )
+            # read_* warms memory on hit; on miss the crawl fetches once.
+            self._curation_labels = list(labels) if labels is not None else []
+            self._curation_labels_cached = labels is not None
+            self._rebuild_label_filter()
+        except Exception:
+            pass
 
     def _load_labels_cache(self) -> None:
-        """Seed the label filter from the last pull for this instance."""
-        try:
-            import json
-
-            path = self._labels_cache_path()
-            if not path.exists():
-                return
-            data = json.loads(path.read_text(encoding="utf-8"))
-            labels = data.get(self._labels_cache_key(), {}).get("labels", [])
-            if isinstance(labels, list) and labels:
-                self._curation_labels = [str(l) for l in labels if str(l).strip()]
-                self._curation_labels_cached = True
-                self._rebuild_label_filter()
-        except Exception:
-            pass
-
-    def _save_labels_cache(self) -> None:
-        try:
-            import json
-
-            path = self._labels_cache_path()
-            try:
-                data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-            except Exception:
-                data = {}
-            if not isinstance(data, dict):
-                data = {}
-            data[self._labels_cache_key()] = {
-                "labels": self._curation_labels,
-                "collection": (
-                    getattr(self._config.dataverse, "collection", "")
-                    or getattr(self._config.dataverse, "subtree", "")
-                    or ""
-                ),
-            }
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        except Exception:
-            pass
+        """Seed the label filter from the last pull (startup path)."""
+        self._seed_labels_from_cache()
 
     # -- dashboard table cache (instant paint + change-only refresh) --------
 
@@ -556,8 +686,15 @@ class DashboardView(QWidget):
             if not entry or not entry.get("datasets"):
                 return False
             cached_labels = entry.get("labels") or []
-            if cached_labels and not self._curation_labels:
-                self._curation_labels = list(cached_labels)
+            # Union (not fill-if-empty): the disk seed is now probe-pure,
+            # so the last session's in-use union must merge back in rather
+            # than being dropped whenever the seed is non-empty.
+            merged = list(self._curation_labels)
+            for lab in cached_labels:
+                if lab and lab not in merged:
+                    merged.append(lab)
+            if merged != self._curation_labels:
+                self._curation_labels = merged
                 self._curation_labels_cached = True
                 try:
                     self._rebuild_label_filter()
@@ -586,10 +723,7 @@ class DashboardView(QWidget):
             except Exception:
                 pass
             saved = (entry.get("saved_at") or "")[:16].replace("T", " ")
-            self._subtitle.setText(
-                f"{self._config.dataverse.base_url}  ·  "
-                f"{(getattr(self._config.dataverse, 'collection', '') or getattr(self._config.dataverse, 'subtree', '') or '').strip() or 'whole repository'}"
-            )
+            self._refresh_title()
             self._progress.setText(
                 f"Showing {len(self._all_datasets)} cached dataset(s)"
                 f"{(' from ' + saved) if saved else ''} — checking for changes…"
@@ -657,7 +791,45 @@ class DashboardView(QWidget):
         self._curation_labels = seen
         self._curation_labels_cached = False
         self._rebuild_label_filter()
-        self._save_labels_cache()
+        # NOTE: the union is NOT written to curation_labels.json here — that
+        # slot holds pure probe results only (see _on_allowed_probed). The
+        # union persists via the dashboard cache at crawl end.
+        try:
+            from applog import get_app_log
+
+            get_app_log().info(
+                "Curation label filter options: "
+                + (", ".join(f"'{l}'" for l in seen) if seen else "(none)")
+            )
+        except Exception:
+            pass
+
+    def _on_allowed_probed(self, payload: dict) -> None:
+        """Stamp the disk slot — but only for a REAL probe round.
+
+        The worker reports {"labels", "probed", "collection"} where probed
+        is True only when it actually hit the network AND got a server
+        answer (200, labels or confirmed-empty). Cache hits, empty pid
+        lists, and transport/server-error rounds report probed=False and
+        change nothing, so neither a stale union nor an outage can freeze
+        a wrong [] into permanence.
+        """
+        try:
+            if not isinstance(payload, dict) or payload.get("probed") is not True:
+                return
+            labels = payload.get("labels") or []
+            collection = payload.get("collection", self._current_collection())
+            from dataverse_client import write_allowed_labels_cache
+
+            ws = Path(getattr(getattr(self._config, "app", None), "workspace", Path.home()))
+            write_allowed_labels_cache(
+                Path(ws),
+                self._config.dataverse.base_url,
+                collection,
+                list(labels),
+            )
+        except Exception:
+            pass
 
     # -- header helpers --------------------------------------------------
 
@@ -669,19 +841,19 @@ class DashboardView(QWidget):
         border_color = {"tertiary": TERTIARY, "primary": PRIMARY, "error": ERROR}[accent]
         card.setStyleSheet(
             f"QFrame#MetricCard {{ background: #ffffff; border: 1px solid {OUTLINE_VARIANT}; "
-            "border-radius: 12px; }}"
+            "border-radius: 8px; }}"
         )
         card.setMinimumHeight(52)
         card.setToolTip(sub)
         lay = QHBoxLayout(card)
         lay.setContentsMargins(14, 8, 14, 8)
         lay.setSpacing(8)
-        icon_map = {"tertiary": "◧", "primary": "◎", "error": "⚠"}
-        icon = QLabel(icon_map.get(accent, "•"))
-        icon.setStyleSheet(
-            f"font-size: 16px; color: {border_color}; border: none; background: transparent;"
+        from ui.icons import icon_label as _metric_icon
+
+        icon_map = {"tertiary": "clock", "primary": "eye", "error": "octagon-alert"}
+        lay.addWidget(
+            _metric_icon(icon_map.get(accent, "circle"), size=18, color=border_color), 0
         )
-        lay.addWidget(icon, 0)
         lbl = QLabel(f"{label.upper()}  ·  {sub}")
         lbl.setStyleSheet(
             "font-size: 11px; font-weight: 600; color: #424656; "
@@ -700,9 +872,113 @@ class DashboardView(QWidget):
 
     # -- column visibility -------------------------------------------------
 
+    def _sync_header_from_table(self) -> None:
+        """Copy sizes/hidden state from the table header to the display header."""
+        try:
+            table_hdr = self._table.horizontalHeader()
+            self._syncing_header = True
+            count = self._table.columnCount()
+            for i in range(count):
+                self._queue_header.resizeSection(i, table_hdr.sectionSize(i))
+                self._queue_header.setSectionHidden(i, table_hdr.isSectionHidden(i))
+            # Visual order too (restore/moves must reflect on both headers).
+            for target in range(count):
+                logical = next(
+                    (l for l in range(count)
+                     if table_hdr.visualIndex(l) == target),
+                    None,
+                )
+                if logical is None:
+                    continue
+                try:
+                    current = self._queue_header.visualIndex(logical)
+                    if current != target:
+                        self._queue_header.moveSection(current, target)
+                except Exception:
+                    continue
+        finally:
+            self._syncing_header = False
+
+    def _save_queue_layout(self) -> None:
+        """Persist the queue table's view (widths/sort/hidden/order)."""
+        try:
+            from storage import save_table_state
+
+            save_table_state(
+                self._config.app.workspace, "dashboard_queue",
+                self._table.horizontalHeader(),
+            )
+        except Exception:
+            pass
+
+    def _on_display_header_resized(self, logical: int, _old: int, new: int) -> None:
+        if self._syncing_header:
+            return
+        self._syncing_header = True
+        try:
+            self._table.horizontalHeader().resizeSection(logical, new)
+        finally:
+            self._syncing_header = False
+        self._save_queue_layout()
+
+    def _on_table_header_resized(self, logical: int, _old: int, new: int) -> None:
+        if self._syncing_header:
+            return
+        self._syncing_header = True
+        try:
+            self._queue_header.resizeSection(logical, new)
+        finally:
+            self._syncing_header = False
+
+    def _on_display_header_moved(self, logical: int, old_visual: int, new_visual: int) -> None:
+        if self._syncing_header:
+            return
+        self._syncing_header = True
+        try:
+            self._table.horizontalHeader().moveSection(old_visual, new_visual)
+        finally:
+            self._syncing_header = False
+        self._save_queue_layout()
+
+    def _on_table_header_moved(self, logical: int, old_visual: int, new_visual: int) -> None:
+        if self._syncing_header:
+            return
+        self._syncing_header = True
+        try:
+            self._queue_header.moveSection(old_visual, new_visual)
+        finally:
+            self._syncing_header = False
+
+    def _on_header_clicked(self, logical: int) -> None:
+        """Sort the table like its own header click would (toggle on repeat)."""
+        table_hdr = self._table.horizontalHeader()
+        if table_hdr.sortIndicatorSection() == logical and table_hdr.isSortIndicatorShown():
+            order = Qt.DescendingOrder if table_hdr.sortIndicatorOrder() == Qt.AscendingOrder else Qt.AscendingOrder
+        else:
+            order = Qt.AscendingOrder
+        self._table.sortItems(logical, order)
+        table_hdr.setSortIndicator(logical, order)
+        self._queue_header.setSortIndicator(logical, order)
+        self._queue_header.setSortIndicatorShown(True)
+        self._save_queue_layout()
+
+    def _set_column_visible(self, idx: int, visible: bool) -> None:
+        """Hide/show a column on the table and the display header together.
+
+        No save here on purpose: __init__ calls this for defaults, and a
+        save during defaults would clobber the persisted view before
+        restore_table_state reads it. The Columns… menu (the only user
+        surface) saves after toggling.
+        """
+        self._table.setColumnHidden(idx, not visible)
+        try:
+            self._queue_header.setSectionHidden(idx, not visible)
+        except Exception:
+            pass
+
     def _apply_default_column_visibility(self) -> None:
         for i, (_key, _h, visible) in enumerate(COLUMNS):
-            self._table.setColumnHidden(i, not visible)
+            self._set_column_visible(i, visible)
 
     def _show_columns_menu(self) -> None:
         self._show_columns_menu_at(
@@ -716,10 +992,54 @@ class DashboardView(QWidget):
             action.setCheckable(True)
             action.setChecked(not self._table.isColumnHidden(idx))
             action.toggled.connect(
-                lambda checked, i=idx: self._table.setColumnHidden(i, not checked)
+                lambda checked, i=idx: (
+                    self._set_column_visible(i, checked),
+                    self._save_queue_layout(),
+                )
             )
             menu.addAction(action)
+        menu.addSeparator()
+        try:
+            from ui.icons import icon as _menu_icon
+
+            reset_action = QAction(
+                _menu_icon("rotate-ccw"), "Reset columns && sorting", menu
+            )
+        except Exception:
+            reset_action = QAction("Reset columns && sorting", menu)
+        reset_action.setToolTip("Restore default widths, order, visibility and sort")
+        reset_action.triggered.connect(self._reset_queue_layout)
+        menu.addAction(reset_action)
         menu.exec(pos)
+
+    def _reset_queue_layout(self) -> None:
+        """Reset the queue table to its construction view, then repaint."""
+        try:
+            from storage import apply_table_view, clear_table_state
+
+            snap = getattr(self, "_queue_snap", None)
+            clear_table_state(self._config.app.workspace, "dashboard_queue")
+            self._table.enable_auto_fit()
+            if isinstance(snap, dict):
+                apply_table_view(self._table.horizontalHeader(), snap)
+            self._sync_header_from_table()
+            # Mirror the sort indicator onto the display header, then
+            # repaint rows (repopulation re-sorts exactly like a fresh
+            # table, so reset reproduces startup order precisely).
+            try:
+                table_hdr = self._table.horizontalHeader()
+                self._queue_header.setSortIndicator(
+                    table_hdr.sortIndicatorSection(),
+                    table_hdr.sortIndicatorOrder(),
+                )
+                self._queue_header.setSortIndicatorShown(
+                    table_hdr.isSortIndicatorShown()
+                )
+            except Exception:
+                pass
+            self._apply_filter()
+        except Exception:
+            pass
 
     # -- data --------------------------------------------------------------
 
@@ -738,14 +1058,12 @@ class DashboardView(QWidget):
         if self._worker is not None and self._worker.isRunning():
             self._progress.setText("Already loading — please wait…")
             return
-        alias = (
-            getattr(self._config.dataverse, "collection", "")
-            or getattr(self._config.dataverse, "subtree", "")
-            or ""
-        ).strip() or "whole repository"
-        self._subtitle.setText(
-            f"{self._config.dataverse.base_url}  ·  {alias}"
-        )
+        # The collection may have changed in Settings: reseed the label
+        # filter for the new top-level collection from disk (no network).
+        # A new top-level with no cache resets the combo; the crawl refills
+        # it with one shared call. Sub-collections reuse the cached list.
+        self._seed_labels_from_cache()
+        self._refresh_title()
         # Cache-first: keep the painted rows on screen while the background
         # crawl checks for changes — never wipe to an empty table on open.
         # Exception: the instance/collection switched (different cache slot),
@@ -798,6 +1116,7 @@ class DashboardView(QWidget):
         )
         self._worker.progress.connect(lambda msg: self._progress.setText(msg))
         self._worker.labelsDiscovered.connect(self._on_labels_discovered)
+        self._worker.allowedProbed.connect(self._on_allowed_probed)
         self._worker.finished.connect(self._on_crawl_finished)
         self._worker.error.connect(self._on_crawl_error)
         self._worker.finished.connect(lambda: setattr(self, "_worker", None))
@@ -861,7 +1180,9 @@ class DashboardView(QWidget):
         if seen != self._curation_labels:
             self._curation_labels = seen
             self._rebuild_label_filter()
-            self._save_labels_cache()
+            # Union only; the probe-pure slot is stamped by
+            # _on_allowed_probed, and the union persists via
+            # save_dashboard_cache at crawl end.
 
     def _on_crawl_finished(self, datasets: list[dict]) -> None:
         try:
@@ -987,29 +1308,30 @@ class DashboardView(QWidget):
         return "" if v is None else str(v)
 
     def _cell_sort_key(self, ds: dict, key: str) -> float | str:
+        # Fast path: precomputed epoch cached at ingest (avoids 12k
+        # strptime calls per keystroke on 1000-row tables).
+        if key in ("date_created", "date_published", "downloaded_at"):
+            cached = ds.get(f"_sort_{key}")
+            if isinstance(cached, (int, float)):
+                return float(cached)
+            raw = ds.get(key, "")
+            if raw is None or raw == "":
+                return 0.0
+            epoch = _parse_date_epoch(str(raw))
+            try:
+                ds[f"_sort_{key}"] = epoch
+            except Exception:
+                pass
+            return epoch
         raw = ds.get(key, "")
         if key in ("file_count", "total_size_bytes"):
-            if raw is None:
-                # Unknown size (None from search) sorts below real sizes.
+            if raw is None or raw == "":
+                # Unknown size (None/"—") sorts below real sizes.
                 return -1.0
             try:
                 return float(raw or 0)
             except Exception:
-                return 0.0
-        if key in ("date_created", "date_published", "downloaded_at"):
-            s = str(raw or "")
-            if not s:
-                return 0.0
-            try:
-                from datetime import datetime
-                for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S"):
-                    try:
-                        return datetime.strptime(s[:16], fmt).timestamp() if fmt == "%Y-%m-%d %H:%M" else datetime.strptime(s[:10], "%Y-%m-%d").timestamp()
-                    except Exception:
-                        continue
-                return float(s[:4] or 0)
-            except Exception:
-                return s.lower()
+                return -1.0
         return str(raw or "").lower()
 
     def _apply_filter(self) -> None:
@@ -1106,6 +1428,9 @@ class DashboardView(QWidget):
                         item.setFont(f)
                     self._table.setItem(row, col, item)
             self._table.setSortingEnabled(True)
+            # Content-width columns first (no-op once fitted/locked); the
+            # columns_fitted signal mirrors sizes onto the display header.
+            self._table.fit_columns_to_content()
             self._table.viewport().update()
         except Exception as exc:
             import traceback

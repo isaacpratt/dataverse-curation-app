@@ -31,39 +31,55 @@ class Hdf5Check(Check):
             import h5py
         except ImportError:
             from engine.checks._util import missing_library
+            from engine.checks._util import skipped as _skipped
 
-            return [missing_library("format.hdf5.openable", "h5py")]
+            return [
+                missing_library("format.hdf5.openable", "h5py"),
+                _skipped(
+                    "format.hdf5.external_links",
+                    f"{path.name}: external-link scan skipped (h5py not installed)",
+                ),
+            ]
 
         name = path.name
-        items = []
+        items: list[str] = []
+        datasets: list[dict] = []
         external_links = []
         truncated = False
-        with h5py.File(str(path), "r") as handle:
+        with h5py.File(str(path), "r", locking=False) as handle:
             def _visit(obj_path, obj):
                 nonlocal truncated
                 if truncated:
                     return
-                if len(items) + len(external_links) >= _MAX_OBJECTS_VISITED:
+                if len(items) + len(external_links) + len(datasets) >= _MAX_OBJECTS_VISITED:
                     truncated = True
                     return
-                if isinstance(obj, h5py.ExternalLink):
-                    external_links.append(obj_path)
-                else:
-                    items.append(obj_path)
+                try:
+                    if isinstance(obj, h5py.ExternalLink):
+                        external_links.append(obj_path)
+                        return
+                    if isinstance(obj, h5py.Dataset):
+                        # Collect shape/dtype/compression inline (was: second
+                        # pass re-opening 200 objects by path).
+                        if len(datasets) < _MAX_ITEMS_LISTED:
+                            try:
+                                datasets.append(
+                                    {
+                                        "path": obj_path,
+                                        "shape": list(obj.shape),
+                                        "dtype": str(obj.dtype),
+                                        "compression": obj.compression or "none",
+                                    }
+                                )
+                            except Exception:
+                                pass
+                        items.append(obj_path)
+                    else:
+                        items.append(obj_path)
+                except Exception:
+                    return
 
             handle.visititems(_visit)
-            datasets = []
-            for obj_path in items[:_MAX_ITEMS_LISTED]:
-                obj = handle[obj_path]
-                if isinstance(obj, h5py.Dataset):
-                    datasets.append(
-                        {
-                            "path": obj_path,
-                            "shape": list(obj.shape),
-                            "dtype": str(obj.dtype),
-                            "compression": obj.compression or "none",
-                        }
-                    )
 
         results = [
             CheckResult(
@@ -88,6 +104,17 @@ class Hdf5Check(Check):
                         f"{name}: external link(s) - dependency on other files: "
                         + ", ".join(external_links)
                     ),
+                    details={"links": external_links},
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    check_id="format.hdf5.external_links",
+                    level="info",
+                    passed=True,
+                    message=f"{name}: no external links ({len(items)} objects walked)",
+                    details={"objects_walked": len(items), "truncated": truncated},
                 )
             )
         return results

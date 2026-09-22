@@ -11,13 +11,13 @@
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-copy config.example.json config.json     # Borealis demo preset is the default; edit base_url/api_token/collection if needed
+copy config.example.json config.json     # cmd; PowerShell: Copy-Item config.example.json config.json — Borealis demo preset is the default; edit base_url/api_token/collection if needed
 ```
 
 Run tests:
 
 ```bash
-pytest -q   # 84 tests (engine + dataverse + runner + storage + audit regressions) — 1 RuntimeWarning from numpy binary is expected
+pytest -q   # 101 tests (engine + dataverse + runner + storage + audit regressions; run pytest --collect-only -q for current count) — warning suppressed via pyproject filterwarnings
 ```
 
 Launch the GUI:
@@ -46,7 +46,7 @@ python -c "import compileall; compileall.compile_dir('ui',quiet=1)"
 
 ## Layout
 
-- `main.py` — entry: `argparse` for `--headless`/`--out`/`--persistent-id`/`--config`/`--dataverse` (the last two are GUI-only; headless rejects them); top-level `from PySide6…` / `import ui.*` imports so `pyi_rth_pyside6` is collected; sibling-folder loader for heavy libs; `MainWindow` (`ui/main_window.py`) with TopNav + `QStackedWidget` (dashboard/detail/settings/about) + log strip.
+- `main.py` — entry: `argparse` for `--headless`/`--out`/`--persistent-id`/`--config`/`--dataverse` (the last two are GUI-only; headless rejects them); Qt/UI imports lazy under GUI branch (TYPE_CHECKING-only at import so `--headless` stays fast; PyInstaller collects via hidden-imports); sibling-folder loader for heavy libs; exit codes 0 clean / 1 error-findings / 2 usage-IO; `MainWindow` (`ui/main_window.py`) with TopNav + `QStackedWidget` (dashboard/detail/settings/about) + log strip.
 - `config.py` — `DataverseConfig` (`base_url`, `api_token`, `collection` alias `subtree`/`collection_alias` compat), `AppConfig(workspace)`, `Config.load/save`, `PRESETS` (includes `Borealis Demo — demo.borealisdata.ca`).
 - `dataverse_client.py` — `DataverseClient` (see `docs/dataverse-integration.md`), `normalize_files` (keeps UNF/tabular/original-format fields), `parse_ds_metadata_payload`, `search_item_state` (draft-aware) + draft-preferring dedup, curation/version/timestamp/notification parsers, retry on 10054.
 - `download_manager.py` — `DownloadManager: quote/quote_from`, `inventory`, `missing_files`/`is_fully_staged`, `approve_and_download` (+ `download_originals` for tabular originals), `verify` → `(ok, problems, warnings)`, `hash_file`, zip-slip guard, streaming downloads, `save/load_metadata` per-dataset cache.
@@ -61,7 +61,7 @@ python -c "import compileall; compileall.compile_dir('ui',quiet=1)"
 - `engine/dispatcher.py` — maps file path to checks (compound names shed one compression layer: `.fq.gz` → fastq, `.tar.gz` → tar); dataset-level checks have empty `extensions`.
 - `engine/runner.py` — `run_report(staged_dir, pid, label)` and `list_planned_checks(files)` (used by the Auto-Checks card); symlinks skipped, per-file isolation via `_safe_run`, `inventory.unchecked_types` hint for formats without a check.
 - `engine/tests/test_audit_fixes.py` — 31 regression tests for the audit batches (dispatch, missing-lib contract, traversal/atomicity, caps, taxonomy).
-- `ui/` — `widgets.py` kit (`AppButton` kinds primary/secondary/ghost/chip/nav + sizes sm/md/lg, `AppTable` movable/resizable/sortable/copy, `make_card`, `make_search_field`/`make_line_edit`, `make_combo`) used by every view; `main_window.py` (TopNav with dataset chips + close buttons, stack, status bar, shortcuts), `dashboard.py` (`COLUMNS` 12, `_SortItem` numeric/date sort, status/label/collection filters + Columns… menu; Status is plain text; `dashboard_cache.json` cache-first paint + `diff_dashboard_datasets` change-only refresh), `dataset_detail.py` (main column: completeness/manifest/auto-checks/version-log cards; sticky sidebar: sections nav/dataset timeline/assessment), `settings_dialog.py:SettingsPane` (General/Extensions tabs, install/uninstall + sizes + tool rows), `about_pane.py`, `workers.py` (parented QThread workers with `progress`/`finished`/`error`, `MetadataWorker` fetching metadata/inventory/curation/diff/versions/timestamps/notifications), `dialogs.py` (selectable), `log_panel.py` (QWidget strip under nav with Live toggle, `QSyntaxHighlighter` INAV-style), `download_dialog.py`, `requirements_dialog.py`, `theme.py` (tokens, QSS incl. chevron asset + pill radii, `selectable_labels`, table/list copy filters, app-wide hover cursor).
+- `ui/` — `widgets.py` kit (`AppButton` kinds primary/secondary/ghost/chip/nav + sizes sm/md/lg, `AppTable` movable/resizable/sortable/copy, `make_card`, `make_search_field`/`make_line_edit`, `make_combo`) used by every view; `main_window.py` (TopNav with dataset chips + close buttons, stack, status bar, shortcuts), `dashboard.py` (`COLUMNS` 12, `_SortItem` numeric/date sort, status/label/collection filters + Columns… menu; Status is plain text; `dashboard_cache.json` cache-first paint + `diff_dashboard_datasets` change-only refresh), `dataset_detail.py` (main column: completeness/manifest/auto-checks/version-log cards; sticky sidebar: sections nav/dataset timeline/assessment), `settings_dialog.py:SettingsPane` (General/Extensions tabs, install/uninstall + sizes + tool rows), `about_pane.py`, `workers.py` (parented QThread workers with `progress`/`finished`/`error`, `MetadataWorker` fetching metadata/inventory/curation/diff/versions/timestamps/notifications), `dialogs.py` (selectable), `log_panel.py` (QWidget strip under nav with Live toggle, `QSyntaxHighlighter` INAV-style), `download_dialog.py`, `requirements_dialog.py`, `theme.py` (tokens, QSS incl. chevron asset + unified 8px radius, `selectable_labels`, table/list copy filters, app-wide hover cursor).
 
 ## Adding a check
 

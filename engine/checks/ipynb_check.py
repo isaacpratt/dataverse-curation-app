@@ -26,6 +26,8 @@ class IpynbCheck(Check):
         return run_per_file(self, files, self._run_one)
 
     def _run_one(self, path: Path) -> List[CheckResult]:
+        from engine.checks._util import skipped as _skipped
+
         name = path.name
         try:
             size = path.stat().st_size
@@ -36,7 +38,15 @@ class IpynbCheck(Check):
                     level="error",
                     passed=False,
                     message=f"{name}: unreadable ({exc})",
-                )
+                ),
+                _skipped(
+                    "format.ipynb.cells",
+                    f"{name}: cell scan skipped (unreadable file)",
+                ),
+                _skipped(
+                    "format.ipynb.executed",
+                    f"{name}: execution scan skipped (unreadable file)",
+                ),
             ]
         if size > _MAX_FULL_PARSE_BYTES:
             return [
@@ -49,7 +59,15 @@ class IpynbCheck(Check):
                         "manual verification required"
                     ),
                     details={"size_bytes": size},
-                )
+                ),
+                _skipped(
+                    "format.ipynb.cells",
+                    f"{name}: cell scan skipped (file too large)",
+                ),
+                _skipped(
+                    "format.ipynb.executed",
+                    f"{name}: execution scan skipped (file too large)",
+                ),
             ]
         try:
             notebook = json.loads(path.read_text(encoding="utf-8"))
@@ -60,7 +78,15 @@ class IpynbCheck(Check):
                     level="error",
                     passed=False,
                     message=f"{name}: invalid notebook JSON ({exc})",
-                )
+                ),
+                _skipped(
+                    "format.ipynb.cells",
+                    f"{name}: cell scan skipped (invalid JSON)",
+                ),
+                _skipped(
+                    "format.ipynb.executed",
+                    f"{name}: execution scan skipped (invalid JSON)",
+                ),
             ]
 
         cells = notebook.get("cells")
@@ -72,7 +98,15 @@ class IpynbCheck(Check):
                     level="error",
                     passed=False,
                     message=f"{name}: missing cells/nbformat - not a notebook",
-                )
+                ),
+                _skipped(
+                    "format.ipynb.cells",
+                    f"{name}: cell scan skipped (not a notebook)",
+                ),
+                _skipped(
+                    "format.ipynb.executed",
+                    f"{name}: execution scan skipped (not a notebook)",
+                ),
             ]
 
         code_cells = [c for c in cells if c.get("cell_type") == "code"]
@@ -114,6 +148,7 @@ class IpynbCheck(Check):
                     message=(
                         f"{name}: {len(unexecuted)} code cell(s) never executed"
                     ),
+                    details={"unexecuted": len(unexecuted), "code_cells": len(code_cells)},
                 )
             )
         elif code_cells:
@@ -123,6 +158,16 @@ class IpynbCheck(Check):
                     level="info",
                     passed=True,
                     message=f"{name}: all code cells executed",
+                    details={"code_cells": len(code_cells)},
+                )
+            )
+        else:
+            from engine.checks._util import skipped as _skipped2
+
+            results.append(
+                _skipped2(
+                    "format.ipynb.executed",
+                    f"{name}: execution scan not applicable (no code cells)",
                 )
             )
         return results

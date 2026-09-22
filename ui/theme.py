@@ -48,6 +48,10 @@ FONT_FAMILY = "Inter, 'Segoe UI', sans-serif"
 MONO_FAMILY = "'JetBrains Mono', Consolas, monospace"
 
 # --- Radii / Sizes ---
+# Unified app-wide corner radius: everything (cards, inputs, tables, panes,
+# buttons, badges, menus) uses RADIUS_LG, matching the dropdown menus. The
+# smaller tokens stay defined for reference; only structural square junctions
+# (combo-popup seam, tab-pane seam, caption buttons) keep 0px corners.
 RADIUS_XL = "12px"
 RADIUS_LG = "8px"
 RADIUS_MD = "6px"
@@ -99,8 +103,10 @@ def asset_path(name: str) -> str:
 
 
 def _chevron_qss() -> str:
-    """Down-arrow rule: real chevron glyph when bundled, CSS triangle fallback."""
-    arrow = asset_path("chevron-down.png")
+    """Down-arrow rule: Lucide chevron when bundled, CSS triangle fallback."""
+    arrow = asset_path("lucide/chevron-down-grey.svg")
+    if not arrow:
+        arrow = asset_path("chevron-down.png")
     if arrow:
         return f"""QComboBox::down-arrow {{
     image: url({arrow});
@@ -173,12 +179,12 @@ QMainWindow, QStackedWidget, QScrollArea {{
 #Card {{
     background: {SURFACE_CONTAINER_LOWEST};
     border: {CARD_BORDER};
-    border-radius: {RADIUS_XL};
+    border-radius: {RADIUS_LG};
 }}
 #MetricCard {{
     background: {SURFACE_CONTAINER_LOWEST};
     border: {CARD_BORDER};
-    border-radius: {RADIUS_XL};
+    border-radius: {RADIUS_LG};
 }}
 
 #SectionHeader {{
@@ -186,12 +192,12 @@ QMainWindow, QStackedWidget, QScrollArea {{
     border-bottom: 1px solid {SURFACE_CONTAINER_LOW};
 }}
 
-/* ===== Buttons: pill shape (stadium ends), clear hover highlight ===== */
+/* ===== Buttons: 8px rounded rectangles (unified radius), clear hover highlight ===== */
 QPushButton#PrimaryButton {{
     background: {PRIMARY};
     color: {ON_PRIMARY};
     border: none;
-    border-radius: 18px;
+    border-radius: {RADIUS_LG};
     padding: 8px 16px;
     font-weight: 600;
     font-size: 12px;
@@ -206,7 +212,7 @@ QPushButton#SecondaryButton {{
     background: {SURFACE_CONTAINER_LOWEST};
     color: {ON_SURFACE};
     border: 1px solid {OUTLINE_VARIANT};
-    border-radius: 18px;
+    border-radius: {RADIUS_LG};
     padding: 7px 14px;
     font-weight: 600;
     font-size: 12px;
@@ -218,7 +224,7 @@ QPushButton#GhostButton {{
     background: transparent;
     color: {ON_SURFACE_VARIANT};
     border: none;
-    border-radius: 6px;
+    border-radius: {RADIUS_LG};
     padding: 6px 10px;
 }}
 QPushButton#GhostButton:hover {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; }}
@@ -227,7 +233,7 @@ QPushButton#GhostButton:hover {{ background: {SURFACE_CONTAINER}; color: {ON_SUR
 QPushButton#FilterChip {{
     background: {SURFACE_CONTAINER_LOWEST};
     border: 1px solid {OUTLINE_VARIANT};
-    border-radius: 18px;
+    border-radius: {RADIUS_LG};
     padding: 6px 10px;
     font-size: 12px;
     font-weight: 600;
@@ -239,7 +245,7 @@ QPushButton#FilterChip:hover {{ background: {SURFACE_CONTAINER_HIGH}; border: 1p
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox {{
     background: {SURFACE_CONTAINER_LOWEST};
     border: 1px solid {OUTLINE_VARIANT};
-    border-radius: {RADIUS_MD};
+    border-radius: {RADIUS_LG};
     padding: 7px 10px;
     selection-background-color: {PRIMARY_FIXED};
 }}
@@ -268,16 +274,24 @@ QComboBox::drop-down {{
     subcontrol-position: top right;
 }}
 {_chevron_qss()}
+/* Popup descends straight from the button: square top corners meet the
+   (squared when open) button flush, 8px rounds only the bottom. Item
+   metrics are pinned (not font-implied) so every menu spaces choices
+   identically no matter which card hosts the combo. */
 QComboBox QAbstractItemView {{
     background: {SURFACE_CONTAINER_LOWEST};
     border: 1px solid {OUTLINE_VARIANT};
-    border-radius: 8px;
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-left-radius: {RADIUS_LG};
+    border-bottom-right-radius: {RADIUS_LG};
     selection-background-color: {SECONDARY_CONTAINER};
     selection-color: {ON_SURFACE};
     outline: 0;
 }}
 QComboBox QAbstractItemView::item {{
     border: none;
+    min-height: 22px;
     padding: 6px 10px;
 }}
 QComboBox QAbstractItemView::item:selected {{
@@ -307,23 +321,46 @@ QTableWidget::item {{
 QHeaderView::section {{
     background: {SURFACE_CONTAINER};
     color: {ON_SURFACE_VARIANT};
-    padding: 8px 12px;
+    padding: 8px 14px 8px 12px;
     border: none;
     border-bottom: 1px solid {OUTLINE_VARIANT};
+    border-right: 1px solid {OUTLINE_VARIANT};
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }}
+QHeaderView::section:hover {{
+    background: {SURFACE_CONTAINER_HIGH};
+    border-right: 1px solid {OUTLINE};
+}}
+QHeaderView::section:pressed {{
+    background: {PRIMARY_FIXED};
+    border-right: 2px solid {PRIMARY};
+}}
 QHeaderView::section:first {{
-    border-top-left-radius: 11px;
+    border-top-left-radius: {RADIUS_LG};
 }}
 QHeaderView::section:last {{
-    border-top-right-radius: 11px;
+    border-top-right-radius: {RADIUS_LG};
+    border-right: none;
 }}
 QTableWidget::item:selected {{
     background: {SECONDARY_CONTAINER};
     color: {ON_SURFACE};
+}}
+
+/* ===== Tooltips ===== */
+/* Explicit light face for EVERY tooltip app-wide: without this, the global
+   QWidget text color leaks into system-drawn (dark) tooltip backgrounds and
+   renders black unreadable boxes (seen on dataset log + metadata table). */
+QToolTip {{
+    background: {SURFACE_CONTAINER_LOWEST};
+    color: {ON_SURFACE};
+    border: 1px solid {OUTLINE_VARIANT};
+    border-radius: {RADIUS_LG};
+    padding: 6px 8px;
+    font-size: 12px;
 }}
 
 /* ===== Labels ===== */
@@ -359,7 +396,7 @@ QLabel#PillInReview {{
     background: {SECONDARY_CONTAINER};
     color: #1a2e4a;
     border: 1px solid #b9c7df;
-    border-radius: 6px;
+    border-radius: {RADIUS_LG};
     padding: 2px 8px;
     font-size: 11px;
     font-weight: 700;
@@ -368,7 +405,7 @@ QLabel#PillDraft {{
     background: {SURFACE_VARIANT};
     color: {ON_SURFACE_VARIANT};
     border: 1px solid {OUTLINE_VARIANT};
-    border-radius: 6px;
+    border-radius: {RADIUS_LG};
     padding: 2px 8px;
     font-size: 11px;
     font-weight: 700;
@@ -377,7 +414,7 @@ QLabel#PillAuthorContacted {{
     background: {ERROR_CONTAINER};
     color: {ON_ERROR_CONTAINER};
     border: 1px solid #ffb4ab;
-    border-radius: 6px;
+    border-radius: {RADIUS_LG};
     padding: 2px 8px;
     font-size: 11px;
     font-weight: 700;
@@ -386,7 +423,7 @@ QLabel#PillReady {{
     background: {TERTIARY};
     color: {ON_PRIMARY};
     border: 1px solid {TERTIARY};
-    border-radius: 6px;
+    border-radius: {RADIUS_LG};
     padding: 2px 8px;
     font-size: 11px;
     font-weight: 700;
@@ -415,34 +452,55 @@ QLabel#PillFlagged {{
 }}
 
 /* ===== ScrollBar (subtle) ===== */
+/* Opaque table-surface gutters: transparent tracks failed to composite and
+   left the scrollbar lanes + the bottom-right meeting corner page-colored
+   ("unfilled"). White matches every table/list surface in the app. */
 QScrollBar:vertical {{
-    background: transparent;
+    background: {SURFACE_CONTAINER_LOWEST};
     width: 8px;
     margin: 0;
 }}
 QScrollBar::handle:vertical {{
     background: {OUTLINE_VARIANT};
-    border-radius: 4px;
+    border-radius: {RADIUS_LG};
     min-height: 24px;
+}}
+QScrollBar::groove:vertical {{
+    background: {SURFACE_CONTAINER_LOWEST};
+    border: none;
+    margin: 0px;
 }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 QScrollBar:horizontal {{
-    background: transparent;
+    background: {SURFACE_CONTAINER_LOWEST};
     height: 8px;
+    margin: 0;
+}}
+QScrollBar::groove:horizontal {{
+    background: {SURFACE_CONTAINER_LOWEST};
+    border: none;
+    margin: 0px;
 }}
 QScrollBar::handle:horizontal {{
     background: {OUTLINE_VARIANT};
-    border-radius: 4px;
+    border-radius: {RADIUS_LG};
     min-width: 24px;
 }}
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
 
 /* ===== TabWidget ===== */
+/* The pane itself draws NO outline: QTabWidget::pane is painted by Qt's
+   special tab-frame primitive, which ignores border-radius (it shortens
+   straight edges for the radius but never paints the corner arcs, leaving
+   open corners — verified by pixel-probe against a QFrame control).
+   The outline + rounded corners come from a plain QFrame#Card wrapper
+   around the tab widget (see settings_dialog.py), which uses the generic
+   frame renderer where arcs work. Pane stays transparent so the card's
+   white face shows through; tab-bar rules below are unaffected. */
 QTabWidget::pane {{
-    border: 1px solid {OUTLINE_VARIANT};
-    border-radius: {RADIUS_LG};
-    background: {SURFACE_CONTAINER_LOWEST};
-    top: -1px;
+    border: none;
+    border-radius: 0px;
+    background: transparent;
 }}
 QTabBar::tab {{
     background: transparent;
@@ -463,14 +521,14 @@ QTabBar::tab:hover {{ color: {ON_SURFACE}; }}
 /* ===== Progress ===== */
 QProgressBar {{
     border: 1px solid {OUTLINE_VARIANT};
-    border-radius: 6px;
+    border-radius: {RADIUS_LG};
     background: {SURFACE_CONTAINER_LOW};
     text-visible: false;
     height: 6px;
 }}
 QProgressBar::chunk {{
     background: {PRIMARY};
-    border-radius: 6px;
+    border-radius: {RADIUS_LG};
 }}
 
 /* ===== Menu bar ===== */
@@ -482,10 +540,16 @@ QMenuBar::item:selected {{ background: {SURFACE_CONTAINER}; }}
 QMenu {{
     background: {SURFACE_CONTAINER_LOWEST};
     border: 1px solid {OUTLINE_VARIANT};
-    border-radius: 8px;
+    /* Square top corners: a menu opens directly under its button, so the
+       popup connects flush into the element that opened it (same junction
+       contract as QComboBox popups above). Only the bottom rounds. */
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-left-radius: {RADIUS_LG};
+    border-bottom-right-radius: {RADIUS_LG};
     padding: 4px;
 }}
-QMenu::item:selected {{ background: {SECONDARY_CONTAINER}; border-radius: 6px; }}
+QMenu::item:selected {{ background: {SECONDARY_CONTAINER}; border-radius: {RADIUS_LG}; }}
 
 /* ===== Status bar ===== */
 QStatusBar {{
@@ -527,7 +591,7 @@ def apply_theme(app) -> None:
 
 
 def action_button_style(primary: bool = False) -> str:
-    """Self-contained pill styling for critical action buttons.
+    """Self-contained rounded-rectangle styling for critical action buttons.
 
     Inline styles always win and always paint (unlike app-level rules,
     which demonstrably fail to render QPushButton faces inside some
@@ -536,18 +600,79 @@ def action_button_style(primary: bool = False) -> str:
     if primary:
         return (
             "QPushButton { background: #004ccd; color: #ffffff; border: none; "
-            "border-radius: 18px; padding: 8px 16px; font-weight: 600; font-size: 12px; }"
+            "border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 12px; }"
             "QPushButton:hover { background: #003da9; }"
             "QPushButton:pressed { background: #002a78; }"
             "QPushButton:disabled { background: #8aa9e8; color: #ffffff; }"
         )
     return (
         "QPushButton { background: #ffffff; color: #131b2e; "
-        "border: 1px solid #c3c6d8; border-radius: 18px; padding: 7px 14px; "
+        "border: 1px solid #c3c6d8; border-radius: 8px; padding: 7px 14px; "
         "font-weight: 600; font-size: 12px; }"
         "QPushButton:hover { background: #e2e7ff; border: 1px solid #004ccd; }"
         "QPushButton:pressed { background: #d5e3fc; }"
         "QPushButton:disabled { background: #f2f3ff; color: #57657a; }"
+    )
+
+
+# Per-label badge colors (background, text, border): every distinct status /
+# curation label gets its own color so dataset-page badges scan at a glance.
+# Order matters — substring match on the lowered label, specific phrases
+# first ("hold for internal review" must beat bare "review").
+_LABEL_BADGE_KNOWN: list[tuple[str, tuple[str, str, str]]] = [
+    ("deaccessioned", ("#515F74", "#FFFFFF", "#515F74")),
+    ("reject", ("#BA1A1A", "#FFFFFF", "#BA1A1A")),
+    ("revisions", ("#FFDAD6", "#93000A", "#FFB4AB")),
+    ("needs review", ("#FFEDD5", "#9A3412", "#FDBA74")),
+    ("hold", ("#E7E4FF", "#4142CF", "#C0C1FF")),
+    ("author contacted", ("#FEF3C7", "#92400E", "#FCD34D")),
+    ("contact author", ("#FEF3C7", "#92400E", "#FCD34D")),
+    ("approve", ("#16A34A", "#FFFFFF", "#16A34A")),
+    ("ready", ("#D7F3F0", "#0F766E", "#99E4DC")),
+    ("publish", ("#DFF5E1", "#14532D", "#A7E3B5")),
+    ("released", ("#DFF5E1", "#14532D", "#A7E3B5")),
+    ("review", ("#D5E3FC", "#1A2E4A", "#B9C7DF")),
+    ("draft", ("#E4E7F2", "#424656", "#C3C6D8")),
+]
+
+# Fallback for custom instance labels: deterministic (md5, not hash() which
+# is salted per process) light bg / dark text pairs.
+_LABEL_BADGE_FALLBACK: list[tuple[str, str, str]] = [
+    ("#D7F3F0", "#0F766E", "#99E4DC"),
+    ("#E2E8FF", "#3730A3", "#C7D2FE"),
+    ("#FCE7F3", "#9D174D", "#F9A8D4"),
+    ("#ECFCCB", "#3F6212", "#BEF264"),
+    ("#E0F2FE", "#0C4A6E", "#BAE6FD"),
+    ("#F5EFE6", "#713F12", "#E7D5B7"),
+]
+
+
+def label_badge_colors(label: str) -> tuple[str, str, str]:
+    """(background, text, border) for a status/curation label. Never raises."""
+    try:
+        lowered = (label or "").strip().lower()
+    except Exception:
+        lowered = ""
+    for phrase, colors in _LABEL_BADGE_KNOWN:
+        if phrase and phrase in lowered:
+            return colors
+    try:
+        import hashlib
+
+        digest = hashlib.md5(lowered.encode("utf-8")).digest()
+        return _LABEL_BADGE_FALLBACK[digest[0] % len(_LABEL_BADGE_FALLBACK)]
+    except Exception:
+        return _LABEL_BADGE_FALLBACK[0]
+
+
+def label_badge_style(label: str) -> str:
+    """Inline badge face with DOI-badge chrome (bordered 8px box) in the
+    label's own colors. Inline so it always paints (see action_button_style).
+    """
+    bg, fg, border = label_badge_colors(label)
+    return (
+        f"QLabel {{ background: {bg}; color: {fg}; border: 1px solid {border}; "
+        "border-radius: 8px; padding: 3px 8px; font-size: 12px; font-weight: 700; }}"
     )
 
 

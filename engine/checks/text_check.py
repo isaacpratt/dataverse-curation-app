@@ -29,6 +29,8 @@ class TextCheck(Check):
         return run_per_file(self, files, self._run_one)
 
     def _run_one(self, path: Path) -> List[CheckResult]:
+        from engine.checks._util import skipped as _skipped
+
         name = path.name
         if path.stat().st_size == 0:
             return [
@@ -37,7 +39,15 @@ class TextCheck(Check):
                     level="error",
                     passed=False,
                     message=f"{name}: file is empty",
-                )
+                ),
+                _skipped(
+                    "format.text.line_endings",
+                    f"{name}: line-ending scan skipped (empty file)",
+                ),
+                _skipped(
+                    "format.text.control_chars",
+                    f"{name}: control-char scan skipped (empty file)",
+                ),
             ]
 
         encoding = detect_encoding(path)
@@ -73,6 +83,18 @@ class TextCheck(Check):
                         f"{name}: mixed line endings "
                         f"(CRLF={crlf}, LF={lone_lf}, CR={lone_cr})"
                     ),
+                    details={"CRLF": crlf, "LF": lone_lf, "CR": lone_cr},
+                )
+            )
+        else:
+            dominant = "CRLF" if crlf else ("CR" if lone_cr and not lone_lf else "LF")
+            results.append(
+                CheckResult(
+                    check_id="format.text.line_endings",
+                    level="info",
+                    passed=True,
+                    message=f"{name}: consistent {dominant} line endings",
+                    details={"CRLF": crlf, "LF": lone_lf, "CR": lone_cr},
                 )
             )
         if control_chars:
@@ -82,6 +104,17 @@ class TextCheck(Check):
                     level="warning",
                     passed=False,
                     message=f"{name}: {control_chars} non-printable control byte(s)",
+                    details={"count": control_chars},
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    check_id="format.text.control_chars",
+                    level="info",
+                    passed=True,
+                    message=f"{name}: no control characters (1 MiB sample)",
+                    details={"count": 0},
                 )
             )
         return results
