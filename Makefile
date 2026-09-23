@@ -48,13 +48,15 @@ typecheck:
 # builds until you explicitly `rm -rf dist/curation-app-full`.
 # ------------------------------------------------------------------
 # PyInstaller flags shared by lite recipes: heavy binary libs excluded;
-# hush/piigex are pure-Python secret/PII scanners and always ship (hidden
-# imports because checks load them inside functions).
+# hush/piigex are pure-Python secret/PII scanners and always ship.
+# --collect-all piigex is required: its detectors package walks the on-disk
+# tree at import (pkgutil/pathlib), which is invisible when modules only
+# live in the PYZ archive — collecting data+submodules materialises the tree.
 LITE_EXCLUDES = --exclude-module pyreadstat --exclude-module netCDF4 \
 	--exclude-module h5py --exclude-module scipy
 SECRET_HIDDENS = --hidden-import hush --hidden-import hush.scanner \
 	--hidden-import hush.rules --hidden-import hush.entropy \
-	--hidden-import piigex --hidden-import stdnum
+	--collect-all piigex --hidden-import stdnum
 
 build:
 	$(PYTHON) -m PyInstaller --noconfirm --clean --name curation-app-lite --windowed --onefile \

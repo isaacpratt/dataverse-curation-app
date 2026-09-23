@@ -394,17 +394,35 @@ def make_line_edit(placeholder: str = "", parent: QWidget | None = None, *,
 
 
 class _NoWheelCombo(QComboBox):
-    """QComboBox that ignores mouse-wheel unless it holds focus.
+    """QComboBox that ignores the mouse-wheel until it has been clicked.
 
-    Stops scroll-over accidents: wheeling over an unfocused dropdown (e.g.
-    the Required/Optional level combos while scrolling the page) passes
-    the event to the parent scroll area instead of flipping the value.
-    Once clicked/tabbed into, the wheel works as usual.
+    Stops scroll-over accidents: wheeling over a dropdown you never
+    opened (e.g. the Required/Optional level combos while scrolling the
+    page) would otherwise flip the value. First click arms the wheel
+    (and opens the popup); focus-out disarms it again.
     """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._wheel_armed = False
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        self._wheel_armed = True
+        try:
+            super().mousePressEvent(event)
+        except Exception:
+            pass
+
+    def focusOutEvent(self, event) -> None:  # type: ignore[override]
+        self._wheel_armed = False
+        try:
+            super().focusOutEvent(event)
+        except Exception:
+            pass
 
     def wheelEvent(self, event) -> None:  # type: ignore[override]
         try:
-            if not self.hasFocus():
+            if not self._wheel_armed:
                 event.ignore()
                 return
         except Exception:
@@ -419,8 +437,8 @@ def make_combo(items=None, parent: QWidget | None = None, *, height: int = 36,
                min_width: int = 130, tip: str = "") -> QComboBox:
     """Build a standard dropdown (themed chevron, 12px semibold entries).
 
-    items: list of labels or (label, data) tuples. Wheel-safe: scrolling
-    over an unfocused combo scrolls the page, never the value.
+    items: list of labels or (label, data) tuples. Wheel-safe: the wheel
+    only scrolls the value after the dropdown has been clicked open once.
     """
     combo = _NoWheelCombo(parent)
     combo.setFixedHeight(height)

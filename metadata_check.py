@@ -331,7 +331,62 @@ def _check_mcmaster(metadata: dict, blocks: dict[str, Any], inventory: list[dict
 
     orcid_val = _extract_orcid_value(blocks)
     orcid_ok = bool(ORCID_RE.match(orcid_val)) if orcid_val else False
+    # Per-author ORCID (matches review_rules orcid handler): every author
+    # must carry a valid ORCID; display mirrors the rule engine (first valid
+    # IDs + missing names, or "—" when none found).
+    _orcid_authors = _field(blocks, "citation", "author") or []
+    _orcid_list = [a for a in _orcid_authors if isinstance(a, dict)] if isinstance(_orcid_authors, list) else []
+    _orcid_found: list[str] = []
+    _orcid_missing: list[str] = []
+    for _i, _oa in enumerate(_orcid_list):
+        _on = str(
+            (_oa.get("authorName") or {}).get("value", "")
+            if isinstance(_oa.get("authorName"), dict)
+            else _oa.get("authorName") or ""
+        ).strip() or f"author {_i + 1}"
+        _oid = _oa.get("authorIdentifier", {})
+        _osch = _oa.get("authorIdentifierScheme", {})
+        _oid_s = _oid.get("value", "") if isinstance(_oid, dict) else str(_oid or "")
+        _osch_s = _osch.get("value", "") if isinstance(_osch, dict) else str(_osch or "")
+        if "orcid" in str(_osch_s).lower() and _oid_s.strip() and ORCID_RE.match(_oid_s.strip()):
+            _orcid_found.append(f"{_on}: {_oid_s.strip()}")
+        else:
+            _orcid_missing.append(_on)
+    if _orcid_list:
+        orcid_ok = not _orcid_missing
+        if _orcid_found:
+            orcid_val = "; ".join(_orcid_found[:3])
+            if len(_orcid_found) > 3:
+                orcid_val += f" (+{len(_orcid_found) - 3} more)"
+            if _orcid_missing:
+                orcid_val += f" [missing: {', '.join(_orcid_missing[:3])}]"
+        else:
+            orcid_val = ""
     add("ORCiD for authors", "McMaster — Recommended (Checklist: Researcher ID; Curation Log: optional)", orcid_val or "—", orcid_ok)
+
+    # Author count (optional): mirrors the review_rules author_count handler.
+    _raw_authors = _field(blocks, "citation", "author") or []
+    _author_list = [a for a in _raw_authors if isinstance(a, dict)] if isinstance(_raw_authors, list) else []
+    _n_auth = len(_author_list)
+    _auth_names = []
+    for _a in _author_list[:3]:
+        _nm = _a.get("authorName", {})
+        _auth_names.append(str(_nm.get("value", "") if isinstance(_nm, dict) else _nm or "").strip())
+    _auth_names = [x for x in _auth_names if x]
+    if _n_auth <= 3:
+        _count_val = f"{_n_auth} author(s)" + (f": {'; '.join(_auth_names)}" if _auth_names else "")
+    else:
+        _count_val = f"{_n_auth} authors: {'; '.join(_auth_names)} (+{_n_auth - len(_auth_names)} more)"
+    add("Author count", "McMaster — Recommended (check the number of authors)", _count_val or "—", _n_auth > 0)
+
+    # License + Terms of Use / Access (optional): latestVersion surface.
+    _tou = latest.get("termsOfUse") or metadata.get("termsOfUse") or ""
+    _toa = latest.get("termsOfAccess") or metadata.get("termsOfAccess") or ""
+    _tou_s = _tou.get("value", "") if isinstance(_tou, dict) else str(_tou or "")
+    _toa_s = _toa.get("value", "") if isinstance(_toa, dict) else str(_toa or "")
+    _lt_parts = [p for p in (license_val, _tou_s, _toa_s) if p]
+    _lt_val = " · ".join(_lt_parts) if _lt_parts else "—"
+    add("License and Terms of Use", "McMaster — Recommended (Checklist: Data License)", _lt_val, bool(license_val))
 
     time_ok = has("citation", "timePeriodCovered") or has("citation", "dateOfCollection")
     add("Time Period / Date of Collection", "McMaster — Recommended (Checklist: More Metadata — Time)", f"{val('citation','timePeriodCovered')} / {val('citation','dateOfCollection')}".strip(" /") or "—", time_ok)

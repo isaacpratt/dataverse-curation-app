@@ -15,6 +15,7 @@ from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
@@ -54,6 +55,20 @@ class LogPage(QWidget):
         title.setStyleSheet("font-size: 14px; font-weight: 600; color: #131b2e; background: transparent; border: none;")
         header.addWidget(title)
         header.addStretch(1)
+        # Search box: filter visible lines (case-insensitive substring).
+        self._search = QLineEdit()
+        self._search.setObjectName("LogSearch")
+        self._search.setPlaceholderText("Search log…")
+        self._search.setClearButtonEnabled(True)
+        self._search.setFixedHeight(28)
+        self._search.setMinimumWidth(180)
+        self._search.setStyleSheet(
+            "QLineEdit#LogSearch { background: #ffffff; border: 1px solid #c3c6d8; "
+            "border-radius: 8px; padding-left: 10px; font-size: 12px; }"
+            "QLineEdit#LogSearch:focus { border: 1px solid #004ccd; }"
+        )
+        self._search.textChanged.connect(self._on_search_changed)
+        header.addWidget(self._search)
         # Live toggle
         self._live_btn = QPushButton("Live")
         self._live_btn.setCheckable(True)
@@ -119,6 +134,7 @@ class LogPage(QWidget):
         if checked:
             self._live_btn.setToolTip("Follow new log lines as they arrive (click to pause)")
             self._last_len = -1  # force a catch-up refresh
+            self._last_display = None
             if not self._timer.isActive():
                 self._timer.start(800)
         else:
@@ -127,14 +143,39 @@ class LogPage(QWidget):
 
     def _refresh(self) -> None:
         lines = applog.lines()
-        if len(lines) != self._last_len:
-            self._view.setPlainText("\n".join(lines) or "(log is empty)")
-            if self._live_btn.isChecked():
+        needle = ""
+        try:
+            needle = self._search.text().strip().lower()
+        except Exception:
+            pass
+        if needle:
+            lines = [ln for ln in lines if needle in ln.lower()]
+            display = "\n".join(lines) or "(no matching lines)"
+        else:
+            display = "\n".join(lines) or "(log is empty)"
+        # Length alone no longer tracks the buffer when filtering — compare text.
+        if display != getattr(self, "_last_display", None) or len(lines) != self._last_len:
+            self._view.setPlainText(display)
+            if self._live_btn.isChecked() and not needle:
                 self._view.verticalScrollBar().setValue(self._view.verticalScrollBar().maximum())
             self._last_len = len(lines)
-            self._live_btn.setToolTip(
-                f"Follow new log lines as they arrive — {len(lines)} line(s) buffered (click to pause)"
-            )
+            self._last_display = display
+            try:
+                total = len(applog.lines())
+                if needle:
+                    self._live_btn.setToolTip(
+                        f"Showing {len(lines)} of {total} line(s) matching “{self._search.text().strip()}”"
+                    )
+                else:
+                    self._live_btn.setToolTip(
+                        f"Follow new log lines as they arrive — {total} line(s) buffered (click to pause)"
+                    )
+            except Exception:
+                pass
+
+    def _on_search_changed(self, _text: str) -> None:
+        self._last_display = None
+        self._refresh()
 
     def _clear(self) -> None:
         applog.clear()
@@ -296,6 +337,20 @@ class LogPanel(QWidget):
         title.setSizePolicy(title.sizePolicy().horizontalPolicy(), title.sizePolicy().verticalPolicy())
         header.addWidget(title)
         header.addStretch(1)
+        # Search box: filter visible lines (case-insensitive substring).
+        self._search = QLineEdit()
+        self._search.setObjectName("LogSearch")
+        self._search.setPlaceholderText("Search log…")
+        self._search.setClearButtonEnabled(True)
+        self._search.setFixedHeight(26)
+        self._search.setMinimumWidth(160)
+        self._search.setStyleSheet(
+            "QLineEdit#LogSearch { background: #ffffff; border: 1px solid #c3c6d8; "
+            "border-radius: 8px; padding-left: 10px; font-size: 12px; }"
+            "QLineEdit#LogSearch:focus { border: 1px solid #004ccd; }"
+        )
+        self._search.textChanged.connect(self._on_search_changed)
+        header.addWidget(self._search)
         # NOTE: stateful Live toggle one-off (see ui/widgets.py) — not AppButton by design.
         self._live_btn = QPushButton("Live")
         self._live_btn.setCheckable(True)
@@ -376,6 +431,7 @@ class LogPanel(QWidget):
         if checked:
             self._live_btn.setToolTip("Follow new log lines as they arrive (click to pause)")
             self._last_len = -1  # force a catch-up refresh
+            self._last_display = None
             if not self._timer.isActive():
                 self._timer.start(800)
         else:
@@ -384,14 +440,38 @@ class LogPanel(QWidget):
 
     def _refresh(self) -> None:
         lines = applog.lines()
-        if len(lines) != self._last_len:
-            self._view.setPlainText("\n".join(lines) or "(log is empty)")
-            if self._live_btn.isChecked():
+        needle = ""
+        try:
+            needle = self._search.text().strip().lower()
+        except Exception:
+            pass
+        if needle:
+            lines = [ln for ln in lines if needle in ln.lower()]
+            display = "\n".join(lines) or "(no matching lines)"
+        else:
+            display = "\n".join(lines) or "(log is empty)"
+        if display != getattr(self, "_last_display", None) or len(lines) != self._last_len:
+            self._view.setPlainText(display)
+            if self._live_btn.isChecked() and not needle:
                 self._view.verticalScrollBar().setValue(self._view.verticalScrollBar().maximum())
             self._last_len = len(lines)
-            self._live_btn.setToolTip(
-                f"Follow new log lines as they arrive — {len(lines)} line(s) buffered (click to pause)"
-            )
+            self._last_display = display
+            try:
+                total = len(applog.lines())
+                if needle:
+                    self._live_btn.setToolTip(
+                        f"Showing {len(lines)} of {total} line(s) matching “{self._search.text().strip()}”"
+                    )
+                else:
+                    self._live_btn.setToolTip(
+                        f"Follow new log lines as they arrive — {total} line(s) buffered (click to pause)"
+                    )
+            except Exception:
+                pass
+
+    def _on_search_changed(self, _text: str) -> None:
+        self._last_display = None
+        self._refresh()
 
     def _clear(self) -> None:
         applog.clear()

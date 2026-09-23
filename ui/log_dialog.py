@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
+    QLineEdit,
     QTextEdit,
     QVBoxLayout,
 )
@@ -20,6 +21,21 @@ class LogDialog(QDialog):
         self.setWindowTitle("Dataverse communication log")
         self.resize(860, 560)
         layout = QVBoxLayout(self)
+
+        search_row = QHBoxLayout()
+        self._search = QLineEdit()
+        self._search.setObjectName("LogSearch")
+        self._search.setPlaceholderText("Search log…")
+        self._search.setClearButtonEnabled(True)
+        self._search.setFixedHeight(32)
+        self._search.setStyleSheet(
+            "QLineEdit#LogSearch { background: #ffffff; border: 1px solid #c3c6d8; "
+            "border-radius: 8px; padding-left: 10px; font-size: 13px; }"
+            "QLineEdit#LogSearch:focus { border: 1px solid #004ccd; }"
+        )
+        self._search.textChanged.connect(self._refresh)
+        search_row.addWidget(self._search, 1)
+        layout.addLayout(search_row)
 
         self._view = QTextEdit()
         self._view.setReadOnly(True)
@@ -49,7 +65,16 @@ class LogDialog(QDialog):
 
     def _refresh(self) -> None:
         lines = applog.lines()
-        self._view.setPlainText("\n".join(lines) or "(log is empty)")
+        try:
+            needle = self._search.text().strip().lower()
+        except Exception:
+            needle = ""
+        if needle:
+            lines = [ln for ln in lines if needle in ln.lower()]
+            text = "\n".join(lines) or "(no matching lines)"
+        else:
+            text = "\n".join(lines) or "(log is empty)"
+        self._view.setPlainText(text)
         scrollbar = self._view.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 

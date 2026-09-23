@@ -117,6 +117,74 @@ def test_field_rule_ids_unique_per_handler():
     assert len(ids) == len(set(ids)), ids
 
 
+def test_author_count_handler_bounds_and_display():
+    rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
+    # Configure min/max on the Author count rule.
+    for fr in rs["field_rules"]:
+        if fr.get("handler") == "author_count":
+            fr["min"] = 2
+            fr["max"] = 5
+    meta = _meta([
+        _f("author", [
+            {"authorName": {"value": "A"}},
+            {"authorName": {"value": "B"}},
+        ]),
+    ])
+    res = rr.evaluate_ruleset(meta, rs, [])
+    ac = next(r for r in res if r["rule_id"].endswith(":author_count"))
+    assert ac["status"] == "complete"
+    assert "2 author" in ac["value"]
+    # Below min → incomplete.
+    meta1 = _meta([_f("author", [{"authorName": {"value": "A"}}])])
+    res1 = rr.evaluate_ruleset(meta1, rs, [])
+    ac1 = next(r for r in res1 if r["rule_id"].endswith(":author_count"))
+    assert ac1["status"] == "incomplete"
+    assert ac1["level"] == "optional"
+
+
+def test_license_terms_handler_reads_version_surface():
+    rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
+    meta = _meta([])
+    meta["latestVersion"]["termsOfUse"] = {"value": "CC BY 4.0 attribution"}
+    meta["latestVersion"]["termsOfAccess"] = {"value": "contact curator"}
+    res = rr.evaluate_ruleset(meta, rs, [])
+    lt = next(r for r in res if r["rule_id"].endswith(":license_terms"))
+    assert lt["status"] == "complete"  # license CC0 present in _meta()
+    assert "CC0" in lt["value"]
+    assert "CC BY 4.0" in lt["value"]
+    assert "contact curator" in lt["value"]
+
+
+def test_orcid_handler_requires_every_author():
+    rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
+    meta = _meta([
+        _f("author", [
+            {"authorName": {"value": "A"},
+             "authorIdentifierScheme": {"value": "ORCID"},
+             "authorIdentifier": {"value": "0000-0002-1825-0097"}},
+            {"authorName": {"value": "B"}},
+        ]),
+    ])
+    res = rr.evaluate_ruleset(meta, rs, [])
+    orc = next(r for r in res if r["rule_id"].endswith(":orcid"))
+    assert orc["status"] == "incomplete"
+    assert "B" in orc["value"]  # missing author named
+    # Both valid → complete.
+    meta2 = _meta([
+        _f("author", [
+            {"authorName": {"value": "A"},
+             "authorIdentifierScheme": {"value": "ORCID"},
+             "authorIdentifier": {"value": "0000-0002-1825-0097"}},
+            {"authorName": {"value": "B"},
+             "authorIdentifierScheme": {"value": "ORCID"},
+             "authorIdentifier": {"value": "0000-0001-5109-3700"}},
+        ]),
+    ])
+    res2 = rr.evaluate_ruleset(meta2, rs, [])
+    orc2 = next(r for r in res2 if r["rule_id"].endswith(":orcid"))
+    assert orc2["status"] == "complete"
+
+
 def test_rulesets_for_dataverse_wildcard():
     pool = rr.load_rulesets()
     assert any(k == "mcmaster-default" for k, _ in rr.rulesets_for_dataverse("https://demo.borealisdata.ca", pool))

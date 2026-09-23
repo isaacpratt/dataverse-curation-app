@@ -21,9 +21,12 @@ Heavy optional libraries (`pyreadstat`, `netCDF4`, `h5py`, `tifffile`, `Pillow`,
 the check reports `level="warning"` + `passed=True` +
 "Missing: pip install … — check not executed"
 instead of failing (shown as `MISSING`/`WARN` in the Curation checks tab).
-(`scipy`/`.mat` has no check module at all — see `unchecked_types` above.)
 Secret and PII scanners (`hush-scan`, `piigex`) are **required** and bundled in
-both lite and full builds — they never report as missing.
+both lite and full builds — they never report as missing. Structured PII uses
+piigex with `regions=["intl"]` only (email, cards, IBAN, IP, …) plus the local
+Canadian pack (postal/SIN); foreign national IDs (`be_eid`, `es_nss`, `us_ssn`, …)
+are disabled by policy. MATLAB `.mat` has no check module — see
+`inventory.unchecked_types` above.
 
 ## What PASS means (two contexts)
 

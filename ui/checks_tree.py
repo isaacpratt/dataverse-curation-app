@@ -157,12 +157,14 @@ def _new_item(text: str, tooltip: str = "") -> QStandardItem:
     return item
 
 
-def build_tree_model(rows, report=None, is_staged=None, human_size=None) -> QStandardItemModel:
+def build_tree_model(rows, report=None, is_staged=None, human_size=None,
+                     inventory=None) -> QStandardItemModel:
     """Build the folder>file>check model.
 
     rows: list of (path, size_bytes, fmt, original) like _all_file_rows.
     report: DatasetReport or None (pre-run: file nodes only, no checks).
     is_staged: callable(path) -> bool (staged files render ink, others muted).
+    inventory: optional raw inventory list (adds restricted/embargo/ingest notes).
     """
     model = QStandardItemModel()
     model.setHorizontalHeaderLabels(COLUMNS)
@@ -170,6 +172,11 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None) -> QSta
     by_path = {}
     if report is not None:
         by_path = {f.path: f for f in report.files}
+    inv_by_path = {}
+    if isinstance(inventory, list):
+        for e in inventory:
+            if isinstance(e, dict) and e.get("path"):
+                inv_by_path[str(e["path"])] = e
 
     folders: dict[str, list] = {}
     for row in rows or []:
@@ -209,6 +216,24 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None) -> QSta
                 if derivative and derivative != path
                 else ""
             )
+            # Restricted / embargo / retention / ingest notes from inventory.
+            inv_entry = inv_by_path.get(path)
+            if isinstance(inv_entry, dict):
+                if inv_entry.get("restricted"):
+                    note += "\nAccess: restricted"
+                embargo = str(inv_entry.get("embargo_date") or "").strip()
+                if embargo:
+                    note += f"\nEmbargo until {embargo[:10]}"
+                retention = str(inv_entry.get("retention") or "").strip()
+                if retention:
+                    note += f"\nRetention: {retention}"
+                ingest_status = str(inv_entry.get("ingest_status") or "").strip()
+                ingest_error = str(inv_entry.get("ingest_error") or "").strip()
+                if ingest_status or ingest_error:
+                    bits = [f"Tabular ingest status: {ingest_status}"] if ingest_status else []
+                    if ingest_error:
+                        bits.append(f"ingest error: {ingest_error}")
+                    note += "\n" + " — ".join(bits)
             entry = by_path.get(path)
             checks = list(entry.checks) if entry else []
             if report is None:
@@ -225,8 +250,11 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None) -> QSta
                 tip = path + "\n" + "\n".join(
                     f"[{c.level}] {c.check_id}: {c.message}" for c in checks
                 )[:2000]
+            # Append restriction/ingest notes to the Scan tooltip too.
+            if note:
+                tip = tip + note
             base = path.split("/")[-1]
-            name_item = _new_item(base, tip + note)
+            name_item = _new_item(base, tip)
             try:
                 name_item.setIcon(file_icon(path, staged=staged))
             except Exception:

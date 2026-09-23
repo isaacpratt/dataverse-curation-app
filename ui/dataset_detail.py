@@ -185,6 +185,23 @@ class DatasetDetailView(QWidget):
     # emitted when the real title is known (header/metadata), so TopNav chips show titles
     titleChanged = Signal(str, str)
 
+    def minimumSizeHint(self):  # noqa: N802 (Qt naming)
+        """Never let the stacked layout force-grow the main window.
+
+        QStackedWidget's minimum is the max over ALL pages — the tall
+        DetailTopBar + Response-page editors would otherwise expand the
+        window the first time a dataset opens. Every page scrolls its own
+        content, so a modest floor is safe.
+        """
+        from PySide6.QtCore import QSize
+
+        return QSize(720, 480)
+
+    def sizeHint(self):  # noqa: N802 (Qt naming)
+        from PySide6.QtCore import QSize
+
+        return QSize(1200, 760)
+
     def __init__(
         self,
         config: Config,
@@ -273,7 +290,9 @@ class DatasetDetailView(QWidget):
         canvas_lay = QVBoxLayout(canvas)
         canvas_lay.setContentsMargins(24, 12, 12, 24)
         canvas_lay.setSpacing(20)
-        content_row.addWidget(main_scroll, 2)
+        # Main column takes the lion's share so the File Manifest tree
+        # gets real horizontal room (sidebar stays 280–400 on its own).
+        content_row.addWidget(main_scroll, 5)
 
         # ---- Sticky sidebar (own scroll so Sections never scrolls away) ----
         side_scroll = QScrollArea()
@@ -283,7 +302,7 @@ class DatasetDetailView(QWidget):
         side_scroll.setMinimumWidth(280)
         side_scroll.setMaximumWidth(400)
         side_scroll.setStyleSheet("QScrollArea { background: #faf8ff; border: none; }")
-        content_row.addWidget(side_scroll, 1)
+        content_row.addWidget(side_scroll, 2)
 
         # ---- Page header (ID badge + status, title, depositor, actions) ----
         header_row = QHBoxLayout()
@@ -633,18 +652,20 @@ class DatasetDetailView(QWidget):
         header_lay.addWidget(self._meta_reset_btn)
         # Every check with its status — visible table
         # (Field | Block | Value | Status). Requirement text lives in the
-        # Field cell's tooltip. Value (the longest content) absorbs slack;
-        # Status fits its icon + label without stretching.
+        # Field cell's tooltip. Value is Interactive so its right edge
+        # (the Value↔Status boundary) can be drag-resized — Stretch mode
+        # makes that handle dead. Status stretches last and absorbs slack.
         self._meta_check_table = AppTable(
             ["Check", "Block", "Value", "Status"],
-            widths={0: 150, 1: 180, 2: 150, 3: 110},
+            widths={0: 150, 1: 180, 2: 220, 3: 110},
             row_height=28,
         )
         from PySide6.QtWidgets import QHeaderView as _QHV
 
         _meta_hdr = self._meta_check_table.horizontalHeader()
-        _meta_hdr.setStretchLastSection(False)
-        _meta_hdr.setSectionResizeMode(2, _QHV.Stretch)
+        _meta_hdr.setStretchLastSection(True)
+        for _i in range(self._meta_check_table.columnCount()):
+            _meta_hdr.setSectionResizeMode(_i, _QHV.Interactive)
         self._meta_check_table.setStyleSheet(flush_table_style())
         self._track_table_widths("dataset_meta", self._meta_check_table.horizontalHeader())
         # No internal scrollbars: the card always fits every row; the page
@@ -771,9 +792,24 @@ class DatasetDetailView(QWidget):
     def _build_response_page(self) -> QWidget:
         from PySide6.QtWidgets import QListWidget, QListWidgetItem  # noqa: F401
 
+        # Scroll-wrapped so the page's own minimum stays small: the stacked
+        # layout takes the max of all page minimums, and the editors below
+        # (240 + 280 px) used to force the main window taller on first open.
+        outer = QWidget()
+        outer.setObjectName("DetailResponsePage")
+        outer.setStyleSheet("QWidget#DetailResponsePage { background: #faf8ff; border: none; }")
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0, 0, 0, 0)
+        outer_lay.setSpacing(0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: #faf8ff; border: none; }")
+        outer_lay.addWidget(scroll)
         page = QWidget()
-        page.setObjectName("DetailResponsePage")
-        page.setStyleSheet("QWidget#DetailResponsePage { background: #faf8ff; border: none; }")
+        page.setObjectName("DetailResponseInner")
+        page.setStyleSheet("QWidget#DetailResponseInner { background: #faf8ff; border: none; }")
+        scroll.setWidget(page)
         lay = QVBoxLayout(page)
         lay.setContentsMargins(24, 12, 24, 24)
         lay.setSpacing(12)
@@ -839,7 +875,8 @@ class DatasetDetailView(QWidget):
         # checklist → draft → decision — so the commit step lives here.
         self._assessment_card = self._build_assessment_card()
         lay.addWidget(self._assessment_card)
-        return page
+        lay.addStretch(1)
+        return outer
 
     def _show_review_page(self) -> None:
         try:
@@ -2299,7 +2336,13 @@ class DatasetDetailView(QWidget):
             if not matches_status_filter(_scan_text(path), _row_badges(path), status_filt):
                 continue
             rows.append(r)
-        model = build_tree_model(rows, self._report, self._is_staged, _human_size)
+        model = build_tree_model(
+            rows,
+            self._report,
+            self._is_staged,
+            _human_size,
+            inventory=self._inventory if isinstance(self._inventory, list) else None,
+        )
         self._file_tree.setModel(model)
         try:
             self._file_tree.expandToDepth(0)
@@ -2317,6 +2360,19 @@ class DatasetDetailView(QWidget):
                     if scan.startswith(("Error", "Warning")):
                         self._file_tree.expand(model.index(r, 0))
             self._file_tree.resizeColumnToContents(0)
+            # Give Size/Format/Scan real width too (defaults truncate long
+            # formats like application/x-spss-sav and ingest notes).
+            for _c in (1, 2, 3):
+                try:
+                    self._file_tree.resizeColumnToContents(_c)
+                except Exception:
+                    pass
+            try:
+                self._file_tree.setColumnWidth(
+                    0, max(self._file_tree.columnWidth(0), 260)
+                )
+            except Exception:
+                pass
             self._sync_tree_carets()
         except Exception:
             pass

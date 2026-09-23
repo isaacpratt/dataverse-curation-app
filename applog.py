@@ -8,7 +8,7 @@ Bridged to stdlib `logging` so `pytest -q` and file handlers work.
 import logging
 import threading
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime
 
 _LOCK = threading.Lock()
 _BUFFER: deque[str] = deque(maxlen=2000)
@@ -32,7 +32,8 @@ def _redact(message: str) -> str:
 
 
 def log(message: str) -> None:
-    line = f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {_redact(message)}"
+    # Local time (was UTC): curators read the strip against their clock.
+    line = f"[{datetime.now().strftime('%H:%M:%S')}] {_redact(message)}"
     with _LOCK:
         _BUFFER.append(line)
     try:

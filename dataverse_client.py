@@ -136,6 +136,21 @@ def normalize_files(dataset_version: dict[str, Any]) -> list[dict[str, Any]]:
             data_file.get("UNF") or data_file.get("unf")
             or entry.get("UNF") or entry.get("unf") or ""
         )
+        # Tabular ingest status/errors surfaced from the API (when present).
+        ingest_status = str(
+            data_file.get("ingestStatus") or entry.get("ingestStatus") or ""
+        )
+        ingest_error = str(
+            data_file.get("ingestErrorMessage")
+            or data_file.get("ingestError")
+            or entry.get("ingestErrorMessage")
+            or entry.get("ingestError")
+            or ""
+        )
+        # Access restrictions (restricted files, embargo, retention).
+        restricted = bool(
+            entry.get("restricted", data_file.get("restricted", False))
+        )
         try:
             original_size = int(
                 data_file.get("originalFileSize") or entry.get("originalFileSize") or 0
@@ -156,8 +171,11 @@ def normalize_files(dataset_version: dict[str, Any]) -> list[dict[str, Any]]:
                 "checksum_value": checksum_value,
                 "embargo_date": restrictions["embargo_date"],
                 "retention": restrictions["retention"],
+                "restricted": restricted,
                 "tabular": bool(data_file.get("tabularData", entry.get("tabularData", False))),
                 "unf": str(unf or ""),
+                "ingest_status": ingest_status,
+                "ingest_error": ingest_error,
                 "original_format": str(
                     data_file.get("originalFileFormat") or entry.get("originalFileFormat") or ""
                 ),
@@ -2178,6 +2196,30 @@ class DataverseClient:
         if self._stream_download(path, params, dl_headers, dest, progress, "unversioned") is None:
             raise requests.HTTPError("Dataset bundle download not available (404)")
         return dest
+
+    def get_tabular_ingest_status(self, file_id: str) -> dict[str, Any]:
+        """Tabular ingest status for one file (GET /api/files/{id}/ingestStatus).
+
+        Returns {"status": str, "error": str} with "" on unavailable/failed
+        calls — never raises (ingest status is advisory UI data).
+        """
+        try:
+            payload = self._get_json(f"/api/files/{file_id}/ingestStatus")
+        except Exception:
+            return {"status": "", "error": ""}
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            return {"status": "", "error": ""}
+        status = str(
+            data.get("status") or data.get("ingestStatus") or data.get("state") or ""
+        )
+        error = str(
+            data.get("errorMessage")
+            or data.get("error")
+            or data.get("ingestError")
+            or ""
+        )
+        return {"status": status, "error": error}
 
     def download_datafile_original(
         self,

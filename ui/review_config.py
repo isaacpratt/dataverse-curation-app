@@ -469,9 +469,13 @@ class ReviewConfigView(QWidget):
     def _block_display_name(block: str, label: str = "") -> str:
         """Proper block name: catalog display name, else capitalized id."""
         try:
+            b = str(block or "").strip()
+            # License / terms rules live under a synthetic "license" block so
+            # they group under one heading in the field tree.
+            if b == "license" and not str(label or "").strip():
+                return "License and Terms of Use"
             if str(label or "").strip():
                 return str(label).strip()
-            b = str(block or "").strip()
             return (b[:1].upper() + b[1:]) if b else "Other"
         except Exception:
             return str(block or "Other")

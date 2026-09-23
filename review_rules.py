@@ -79,6 +79,9 @@ FIELD_CATALOG: list[dict[str, str]] = [
     {"block": "citation", "field": "distributor", "label": "Distributor"},
     {"block": "citation", "field": "notesText", "label": "Notes"},
     {"block": "dataset", "field": "license", "label": "License"},
+    {"block": "license", "field": "license", "label": "License"},
+    {"block": "license", "field": "termsOfUse", "label": "Terms of Use"},
+    {"block": "license", "field": "termsOfAccess", "label": "Terms of Access"},
     {"block": "geospatial", "field": "geographicCoverage", "label": "Geographic Coverage"},
     {"block": "geospatial", "field": "geographicBoundingBox", "label": "Geographic Bounding Box"},
     {"block": "socialscience", "field": "unitOfAnalysis", "label": "Unit of Analysis"},
@@ -170,6 +173,14 @@ def _builtin_mcmaster() -> dict[str, Any]:
            _mc_req("McMaster — Recommended (Checklist: Researcher ID; Curation Log: optional)"),
            "orcid",
            "Consider adding ORCiDs for the authors to improve attribution ({value})."),
+        fr("citation", "author", "Author count", "optional",
+           _mc_req("McMaster — Recommended (check the number of authors)"),
+           "author_count",
+           "The dataset has {value} authors — confirm this is the expected list."),
+        fr("license", "license", "License and Terms of Use", "optional",
+           _mc_req("McMaster — Recommended (Checklist: Data License)"),
+           "license_terms",
+           "No data license is set. Please choose an appropriate license for the dataset."),
         fr("citation", "timePeriodCovered", "Time Period / Date of Collection", "optional",
            _mc_req("McMaster — Recommended (Checklist: More Metadata — Time)"),
            "time_anyof",
@@ -420,8 +431,9 @@ def _blocks(metadata: dict[str, Any]) -> dict[str, Any]:
 
 
 def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any],
-                  block: str, field: str) -> tuple[bool, str]:
+                  block: str, field: str, rule: dict[str, Any] | None = None) -> tuple[bool, str]:
     m = _mc()
+    rule = rule if isinstance(rule, dict) else {}
     if handler == "nonempty":
         raw = m._field(blocks, block, field)
         return m._nonempty(raw), m._display_value(raw)
@@ -487,8 +499,93 @@ def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any]
                 return True, str(idv)
         return False, "—"
     if handler == "orcid":
-        val = m._extract_orcid_value(blocks)
-        return (bool(m.ORCID_RE.match(val)) if val else False), val or "—"
+        # Per-author ORCID: every author must carry a valid ORCID when the
+        # rule is enabled (empty author list → incomplete, value "—").
+        raw = m._field(blocks, "citation", "author") or []
+        authors = [a for a in raw if isinstance(a, dict)] if isinstance(raw, list) else []
+        if not authors:
+            return False, "—"
+        missing: list[str] = []
+        found: list[str] = []
+        for i, author in enumerate(authors):
+            name = str(
+                (author.get("authorName") or {}).get("value", "")
+                if isinstance(author.get("authorName"), dict)
+                else author.get("authorName") or ""
+            ).strip() or f"author {i + 1}"
+            id_val = author.get("authorIdentifier", {})
+            scheme = author.get("authorIdentifierScheme", {})
+            id_str = id_val.get("value", "") if isinstance(id_val, dict) else str(id_val or "")
+            scheme_str = scheme.get("value", "") if isinstance(scheme, dict) else str(scheme or "")
+            if "orcid" in str(scheme_str).lower() and id_str.strip() and m.ORCID_RE.match(id_str.strip()):
+                found.append(f"{name}: {id_str.strip()}")
+            else:
+                missing.append(name)
+        val = "; ".join(found[:3]) if found else "—"
+        if len(found) > 3:
+            val += f" (+{len(found) - 3} more)"
+        if missing and found:
+            val += f" [missing: {', '.join(missing[:3])}]"
+        elif missing and not found:
+            # Preserve the legacy single-value display ("—") for parity when
+            # no author has an ORCID yet; the ok flag still tracks per-author.
+            val = "—"
+        return (not missing), val
+    if handler == "author_count":
+        raw = m._field(blocks, "citation", "author") or []
+        authors = [a for a in raw if isinstance(a, dict)] if isinstance(raw, list) else []
+        n = len(authors)
+        names: list[str] = []
+        for a in authors[:3]:
+            nm = a.get("authorName", {})
+            names.append(
+                str(nm.get("value", "") if isinstance(nm, dict) else nm or "").strip()
+            )
+        names = [x for x in names if x]
+        if n <= 3:
+            val = f"{n} author(s)" + (f": {'; '.join(names)}" if names else "")
+        else:
+            val = f"{n} authors: {'; '.join(names)} (+{n - len(names)} more)"
+        # Optional bounds via rule config (min/max keys on the field rule).
+        min_authors = rule.get("min")
+        max_authors = rule.get("max")
+        ok = n > 0
+        if min_authors is not None:
+            try:
+                if n < int(min_authors):
+                    ok = False
+            except (TypeError, ValueError):
+                pass
+        if max_authors is not None:
+            try:
+                if n > int(max_authors):
+                    ok = False
+            except (TypeError, ValueError):
+                pass
+        return ok, val or "—"
+    if handler == "license_terms":
+        # License + Terms of Use / Access from latestVersion (API surface).
+        latest = metadata.get("latestVersion") or {}
+        lic = latest.get("license") or metadata.get("license")
+        lic_name = lic.get("name", "") if isinstance(lic, dict) else m._display_value(lic)
+        tou = latest.get("termsOfUse") or metadata.get("termsOfUse") or ""
+        toa = latest.get("termsOfAccess") or metadata.get("termsOfAccess") or ""
+        tou_s = tou.get("value", "") if isinstance(tou, dict) else str(tou or "")
+        toa_s = toa.get("value", "") if isinstance(toa, dict) else str(toa or "")
+        parts = [p for p in (lic_name, tou_s, toa_s) if p]
+        val = " · ".join(parts) if parts else "—"
+        ok = bool(lic_name)  # license required; terms are optional context
+        return ok, val
+    if handler == "terms_of_use":
+        latest = metadata.get("latestVersion") or {}
+        tou = latest.get("termsOfUse") or metadata.get("termsOfUse") or ""
+        val = tou.get("value", "") if isinstance(tou, dict) else str(tou or "")
+        return bool(val.strip()), val or "—"
+    if handler == "terms_of_access":
+        latest = metadata.get("latestVersion") or {}
+        toa = latest.get("termsOfAccess") or metadata.get("termsOfAccess") or ""
+        val = toa.get("value", "") if isinstance(toa, dict) else str(toa or "")
+        return bool(val.strip()), val or "—"
     if handler == "time_anyof":
         has = m._nonempty(m._field(blocks, "citation", "timePeriodCovered")) or \
             m._nonempty(m._field(blocks, "citation", "dateOfCollection"))
@@ -813,7 +910,7 @@ def evaluate_ruleset(metadata: dict[str, Any], ruleset: dict[str, Any],
             req = str(fr.get("requirement") or "")
             level = fr.get("level") if fr.get("level") in ("required", "optional") else "required"
             handler = str(fr.get("handler") or "nonempty")
-            ok, val = _eval_handler(handler, metadata or {}, blocks, block, field)
+            ok, val = _eval_handler(handler, metadata or {}, blocks, block, field, fr)
             # rule_id carries the handler: several rules may share one field
             # (author names vs ORCiDs both live on citation.author) and the
             # Response findings list keys off rule_id.

@@ -57,6 +57,21 @@ def test_find_emails_backward_compat():
     assert find_emails("a@b.co") == ["a@b.co"]
 
 
+def test_foreign_national_ids_disabled():
+    # be_eid / es_nss style detectors are region-specific and off by policy;
+    # only region="intl" piigex detectors run alongside the CA pack.
+    found = find_pii("Belgian eID 74060416628 · Spanish NSS 12345678Z · US SSN 078-05-1120")
+    types = {f["type"] for f in found}
+    assert not any(t.startswith(("be_", "es_", "us_")) for t in types)
+
+
+def test_intl_detectors_still_run():
+    found = find_pii("contact jane@example.com card 4111 1111 1111 1111")
+    types = {f["type"] for f in found}
+    assert "intl_email" in types
+    assert "intl_credit_card" in types
+
+
 def test_pii_result_clean():
     r = pii_result("format.csv.pii", "a.csv", [], scope="in first 1000 rows")
     assert r.passed is True

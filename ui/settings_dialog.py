@@ -77,7 +77,10 @@ class SettingsPane(QWidget):
     saved = Signal()
     discarded = Signal()
 
-    # Optional curation dependencies that are lazy-loaded; lite build excludes them
+    # Format-check libraries (pip name, import name, description).
+    # Heavy binary libs are excluded from the lite build; pure-Python format
+    # helpers ship in lite. Required scanners (piigex, hush-scan) are bundled
+    # in both builds and listed here so install status stays visible.
     EXTENSIONS = [
         ("pyreadstat", "pyreadstat", "SPSS/Stata/SAS checks (sav, dta, sas7bdat)"),
         ("netCDF4", "netCDF4", "NetCDF scientific data"),
@@ -87,9 +90,9 @@ class SettingsPane(QWidget):
         ("pypdf", "pypdf", "PDF checks"),
         ("lxml", "lxml", "XML validation"),
         ("openpyxl", "openpyxl", "Excel workbooks"),
-        ("scipy", "scipy", "MATLAB .mat"),
         ("chardet", "chardet", "Text encoding detection"),
-        ("pandas", "pandas", "Tabular helpers"),
+        ("piigex", "piigex", "Structured PII scanning (email, cards, CA SIN/postal)"),
+        ("hush-scan", "hush", "Secret/credential scanning"),
     ]
 
     def __init__(self, config: Config, parent=None) -> None:

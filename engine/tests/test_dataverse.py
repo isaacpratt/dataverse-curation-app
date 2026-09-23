@@ -570,6 +570,7 @@ def test_download_originals_skips_staged_and_nontabular(tmp_path):
     staged = tmp_path / "ws" / "downloads" / "pid" / "files"
     staged.mkdir(parents=True)
     (staged / "eco.sav").write_bytes(b"already here")
+    (staged / "new.tab").write_bytes(b"server-tab")
 
     class OrigClient(FakeClient):
         def __init__(self, inventory):
@@ -597,6 +598,57 @@ def test_download_originals_skips_staged_and_nontabular(tmp_path):
     assert client.fetched == ["11"]
     assert got == ["eco.sav", "new.sav"]
     assert (staged / "new.sav").read_bytes() == b"orig-bytes"
+    # Originals-only: staged .tab derivatives are removed once originals land.
+    assert not (staged / "new.tab").exists()
+
+
+def test_quote_prefers_original_size_for_tabular():
+    from download_manager import DownloadManager as DM
+
+    inv = [
+        {"path": "a.tab", "tabular": True, "original_name": "a.sav",
+         "original_size": 100, "size_bytes": 999},
+        {"path": "b.csv", "tabular": False, "size_bytes": 50},
+    ]
+    q = DM.quote_from(inv, "pid")
+    assert q.file_count == 2
+    assert q.total_size_bytes == 150
+
+
+def test_missing_files_uses_original_path_for_tabular(tmp_path):
+    staged = tmp_path / "ws" / "downloads" / "pid" / "files"
+    staged.mkdir(parents=True)
+    (staged / "eco.sav").write_bytes(b"x" * 12)
+    inventory = [
+        {"path": "eco.tab", "tabular": True, "original_name": "eco.sav",
+         "original_size": 12, "size_bytes": 99},
+    ]
+    manager = DownloadManager(FakeClient(inventory), tmp_path / "ws")
+    assert manager.missing_files("pid", inventory) == []
+    assert manager.is_fully_staged("pid", inventory)
+
+
+def test_normalize_files_captures_restricted_and_ingest():
+    records = normalize_files(
+        {
+            "files": [
+                {
+                    "filename": "secret.csv",
+                    "restricted": True,
+                    "dataFile": {
+                        "id": 42,
+                        "filesize": 10,
+                        "tabularData": True,
+                        "ingestStatus": "completed",
+                        "ingestErrorMessage": "",
+                    },
+                }
+            ]
+        }
+    )
+    assert records[0]["restricted"] is True
+    assert records[0]["ingest_status"] == "completed"
+    assert records[0]["ingest_error"] == ""
 
 
 def test_top_level_collection():

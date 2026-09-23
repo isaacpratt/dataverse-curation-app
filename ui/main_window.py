@@ -185,6 +185,10 @@ class MainWindow(QMainWindow):
         self._open_pids: list[tuple[str, str]] = []
         self.setWindowTitle("Dataverse Curation App")
         self.resize(1320, 860)
+        # Floor the window so layout minimums (tall detail header, Response
+        # page editors) cannot force-grow it past a usable size; content
+        # that needs more room scrolls inside its pane instead.
+        self.setMinimumSize(960, 640)
         # Custom frame, standard behavior: keep the normal window styles
         # (caption + thick frame) so DWM draws the border/shadow/snap, and
         # strip the native caption via WM_NCCALCSIZE in nativeEvent — the
@@ -1024,12 +1028,23 @@ class MainWindow(QMainWindow):
                         global_pt = QPoint(x, y)
                         if not self.rect().contains(self.mapFromGlobal(global_pt)):
                             return super().nativeEvent(eventType, message)
-                        # Caption buttons and nav controls keep clicks.
+                        # Caption buttons and nav controls keep clicks —
+                        # and the three window buttons report native
+                        # HTMINBUTTON/HTMAXBUTTON/HTCLOSE so Windows
+                        # treats them as real caption buttons (hover
+                        # previews, Aero, accessibility).
                         try:
                             for btn in self._topnav.findChildren(QPushButton):
                                 try:
-                                    if btn.isVisible() and btn.rect().contains(btn.mapFromGlobal(global_pt)):
-                                        return True, HTCLIENT
+                                    if not (btn.isVisible() and btn.rect().contains(btn.mapFromGlobal(global_pt))):
+                                        continue
+                                    if btn is getattr(self, "_btn_min", None):
+                                        return True, 8   # HTMINBUTTON
+                                    if btn is getattr(self, "_btn_max", None):
+                                        return True, 9   # HTMAXBUTTON
+                                    if btn is getattr(self, "_btn_close", None):
+                                        return True, 20  # HTCLOSE
+                                    return True, HTCLIENT
                                 except Exception:
                                     continue
                         except Exception:

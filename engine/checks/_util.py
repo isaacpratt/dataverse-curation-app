@@ -20,6 +20,8 @@ EXECUTABLE_EXTS = {".exe", ".bat", ".sh", ".bin", ".jar", ".msi", ".com"}
 JUNK_NAMES = {".ds_store", "thumbs.db", "__macosx"}
 
 # piigex types that are shape-only (no checksum) — always kept when matched.
+# Only intl detectors can fire (regions=["intl"] scrubber below); regional
+# phone/ID names are omitted on purpose.
 _PIIGEX_SHAPE_TYPES = frozenset(
     {
         "intl_email",
@@ -28,16 +30,14 @@ _PIIGEX_SHAPE_TYPES = frozenset(
         "intl_mac",
         "intl_bic",
         "intl_phone_e164",
-        "us_phone",
-        "es_phone",
-        "it_phone",
-        "fr_phone",
-        "de_phone",
-        "pt_phone",
-        "nl_phone",
-        "be_phone",
     }
 )
+
+# Cached piigex Scrubber: intl detectors only (email, cards, IBAN, IP, …).
+# Region-specific national IDs (be_eid, es_nss, us_ssn, …) are off by policy —
+# Canadian postal/SIN live in the local pack below. Built once; regexes are
+# recompiled per Scrubber(), so never construct per-row.
+_PII_SCRUBBER = None
 
 
 def missing_library(check_id: str, lib: str) -> CheckResult:
@@ -142,22 +142,28 @@ def _ca_sin_luhn_ok(value: str) -> bool:
     return checksum % 10 == 0
 
 
-def _find_pii_row(text: str) -> list[dict[str, Any]]:
-    """One string cell/line → list of {"type", "value"} dicts (raw values)."""
-    out: list[dict[str, Any]] = []
-    try:
-        from piigex import scan as piigex_scan
-    except ImportError:  # pragma: no cover - piigex ships with every build
-        # Defensive only: still catch emails so a broken install degrades
-        # to baseline coverage rather than a hard crash mid-check.
-        for email in find_emails(text):
-            out.append({"type": "intl_email", "value": email})
-        return out
+def _get_pii_scrubber():
+    """Return the cached piigex Scrubber (intl detectors only)."""
+    global _PII_SCRUBBER
+    if _PII_SCRUBBER is None:
+        from piigex import Scrubber
 
-    for match in piigex_scan(text):
+        _PII_SCRUBBER = Scrubber(regions=["intl"])
+    return _PII_SCRUBBER
+
+
+def _find_pii_row(text: str) -> list[dict[str, Any]]:
+    """One string cell/line → list of {"type", "value"} dicts (raw values).
+
+    piigex is required (bundled in every build) — import failures propagate
+    to run_per_file as a per-file finding rather than degrading coverage.
+    """
+    out: list[dict[str, Any]] = []
+    for match in _get_pii_scrubber().scan(text):
         if match.valid or match.name in _PIIGEX_SHAPE_TYPES:
             out.append({"type": match.name, "value": match.value})
 
+    # Canadian pack (piigex has no CA region).
     for m in _CA_POSTAL_RE.finditer(text):
         out.append({"type": "ca_postal_code", "value": m.group(1)})
     for m in _CA_SIN_RE.finditer(text):
@@ -177,9 +183,11 @@ def _find_pii_row(text: str) -> list[dict[str, Any]]:
 
 
 def find_pii(text: str) -> list[dict[str, Any]]:
-    """Structured PII matches across a text blob: piigex detectors + CA pack.
+    """Structured PII matches: piigex intl detectors + Canadian pack.
 
-    Returns [{"type": ..., "value": ...}, ...] — raw values (report contract).
+    Foreign national IDs (be_eid, es_nss, us_ssn, …) are disabled — only
+    region="intl" piigex detectors run. Returns [{"type", "value"}, ...]
+    with raw values (report contract).
     """
     return _find_pii_row(text)
 

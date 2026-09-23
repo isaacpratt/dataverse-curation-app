@@ -76,6 +76,12 @@ class DownloadManager:
                 continue
             count += 1
             try:
+                # Originals-only: quote the depositor upload size when known.
+                if f.get("tabular") and str(f.get("original_name") or "").strip():
+                    size = int(f.get("original_size", 0) or 0)
+                    if size:
+                        total += size
+                        continue
                 total += int(f.get("size_bytes", 0) or 0)
             except (TypeError, ValueError):
                 continue
@@ -124,12 +130,26 @@ class DownloadManager:
             path = item.get("path", "")
             if not path or not isinstance(path, str):
                 continue
-            local = self._contained(staged_root, path)
+            # Originals-only downloads: for tabular files the staged copy is
+            # the original name (parent/original_name), not the .tab path.
+            expected_path = path
+            expected_size_key = "size_bytes"
+            try:
+                if item.get("tabular") and str(item.get("original_name") or "").strip():
+                    original_name = Path(str(item["original_name"])).name
+                    if "/" in path:
+                        expected_path = path.rpartition("/")[0] + "/" + original_name
+                    else:
+                        expected_path = original_name
+                    expected_size_key = "original_size"
+            except Exception:
+                pass
+            local = self._contained(staged_root, expected_path)
             if local is not None:
                 try:
                     if local.is_file():
                         try:
-                            expected = int(item.get("size_bytes", 0) or 0)
+                            expected = int(item.get(expected_size_key, 0) or 0)
                         except (TypeError, ValueError):
                             expected = 0
                         try:
@@ -139,7 +159,7 @@ class DownloadManager:
                             continue
                         if not expected or actual == expected:
                             continue
-                        # Size mismatch on the exact path — still missing.
+                        # Size mismatch on the expected path — still missing.
                         missing.append(path)
                         continue
                 except OSError:
@@ -149,10 +169,10 @@ class DownloadManager:
             # anywhere under files_dir as staged, but still enforce size
             # when the inventory knows it (avoids same-name false-staged).
             try:
-                base = _Path(path).name
+                base = _Path(expected_path).name
                 if base and base in staged_basenames:
                     try:
-                        expected_fb = int(item.get("size_bytes", 0) or 0)
+                        expected_fb = int(item.get(expected_size_key, 0) or 0)
                     except (TypeError, ValueError):
                         expected_fb = 0
                     if not expected_fb:
@@ -334,6 +354,33 @@ class DownloadManager:
                 rel = _fetch_one(item)
                 if rel:
                     staged.append(rel)
+        # Originals-only: drop the server-generated .tab derivatives once
+        # the depositor's upload is staged (checks match the original path).
+        for item in tabular_items:
+            if not isinstance(item, dict):
+                continue
+            original_name = str(item.get("original_name") or "")
+            if not original_name:
+                continue
+            try:
+                rel_tab = str(item.get("path", "") or "")
+                if not rel_tab or not rel_tab.lower().endswith(".tab"):
+                    continue
+                # Only remove when the original actually landed beside it
+                # (or anywhere under files_dir under its basename).
+                orig_base = Path(original_name).name
+                original_staged = False
+                for rel in staged:
+                    if Path(rel).name == orig_base:
+                        original_staged = True
+                        break
+                if not original_staged:
+                    continue
+                tab_local = self._contained(root, rel_tab)
+                if tab_local is not None and tab_local.is_file():
+                    tab_local.unlink()
+            except Exception:
+                continue
         return staged
 
     @staticmethod
@@ -377,17 +424,65 @@ class DownloadManager:
             rel = str(item.get("path", "") or "")
             if not rel:
                 return ("malformed inventory entry (missing path)", None)
-            local = self._contained(staged_root, rel)
+            # Originals-only: verify the staged original (not the .tab path).
+            check_rel = rel
+            expected_size_key = "size_bytes"
+            is_tab_orig = False
+            try:
+                if item.get("tabular") and str(item.get("original_name") or "").strip():
+                    original_name = Path(str(item["original_name"])).name
+                    if "/" in rel:
+                        check_rel = rel.rpartition("/")[0] + "/" + original_name
+                    else:
+                        check_rel = original_name
+                    expected_size_key = "original_size"
+                    is_tab_orig = True
+            except Exception:
+                pass
+            local = self._contained(staged_root, check_rel)
             if local is None:
-                return (f"unsafe path (outside workspace): {rel}", None)
+                return (f"unsafe path (outside workspace): {check_rel}", None)
+            # Exact path may be absent when a bundle flattened folders —
+            # accept a same-basename file under files_dir before "missing".
             try:
                 if not local.exists():
-                    return (f"missing: {rel}", None)
+                    base_name = Path(check_rel).name
+                    if base_name:
+                        for candidate in staged_root.rglob(base_name):
+                            try:
+                                if candidate.is_file():
+                                    local = candidate
+                                    break
+                            except OSError:
+                                continue
+            except OSError:
+                pass
+            try:
+                if not local.exists():
+                    return (f"missing: {check_rel}", None)
                 # A directory masquerading as a file is a problem, not a crash.
                 if not local.is_file():
-                    return (f"not a file: {rel}", None)
+                    return (f"not a file: {check_rel}", None)
             except OSError as exc:
-                return (f"unreadable: {rel} ({exc})", None)
+                return (f"unreadable: {check_rel} ({exc})", None)
+            if is_tab_orig:
+                # Original-format download: inventory checksum covers the
+                # server .tab, not the depositor upload — size is the check.
+                try:
+                    expected_sz = int(item.get(expected_size_key, 0) or 0)
+                except (TypeError, ValueError):
+                    expected_sz = 0
+                try:
+                    actual_sz = local.stat().st_size
+                except OSError as exc:
+                    return (f"unreadable: {check_rel} ({exc})", None)
+                if expected_sz and actual_sz != expected_sz:
+                    return (
+                        f"size mismatch (original): {check_rel} "
+                        f"(expected {expected_sz}, got {actual_sz} bytes)",
+                        None,
+                    )
+                return (None, None)
             if not item.get("checksum_value"):
                 return (None, f"no checksum recorded for {rel} — integrity unverified")
             algorithm = item.get("checksum_type") or "md5"
