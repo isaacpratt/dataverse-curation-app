@@ -10,7 +10,9 @@ palette as the rest of the app while staying deliberately distinct (high
 contrast, dark-on-light backgrounds for ERROR/WARN rows).
 """
 
-from PySide6.QtCore import Qt, QTimer, Signal
+import hashlib
+
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -32,7 +34,6 @@ from ui.theme import (
     OUTLINE_VARIANT,
     PRIMARY,
     SURFACE_CONTAINER_LOW,
-    SURFACE_CONTAINER_LOWEST,
     TERTIARY,
     action_button_style,
 )
@@ -83,11 +84,13 @@ class LogPage(QWidget):
         clear_btn = AppButton("Clear log", kind="secondary")
         clear_btn.setStyleSheet(action_button_style(False))
         clear_btn.setToolTip("Clear the log buffer")
+        clear_btn.setAccessibleName("Clear log buffer")
         clear_btn.clicked.connect(self._clear)
         header.addWidget(clear_btn)
         refresh_btn = AppButton("Refresh", kind="secondary")
         refresh_btn.setStyleSheet(action_button_style(False))
         refresh_btn.setToolTip("Refresh log now")
+        refresh_btn.setAccessibleName("Refresh log now")
         refresh_btn.clicked.connect(self._refresh)
         header.addWidget(refresh_btn)
         layout.addLayout(header)
@@ -108,6 +111,28 @@ class LogPage(QWidget):
         self._timer.timeout.connect(self._refresh)
         self._timer.start(800)
         self._last_len = 0
+        # Debounce search: re-filter at most every 200 ms (matches dashboard).
+        self._search_debounce = QTimer(self)
+        self._search_debounce.setSingleShot(True)
+        self._search_debounce.setInterval(200)
+        self._search_debounce.timeout.connect(self._refresh)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # Only poll while visible — a permanent QStackedWidget child would
+        # otherwise re-join the full log every 800 ms forever.
+        try:
+            if self._live_btn.isChecked() and not self._timer.isActive():
+                self._timer.start(800)
+        except Exception:
+            pass
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        try:
+            self._timer.stop()
+        except Exception:
+            pass
 
     def _style_live_btn(self) -> None:
         from ui.icons import icon as _live_icon
@@ -175,7 +200,12 @@ class LogPage(QWidget):
 
     def _on_search_changed(self, _text: str) -> None:
         self._last_display = None
-        self._refresh()
+        # Debounce: typing "error" would otherwise re-join the full buffer
+        # five times; match the 200 ms pattern used by dashboard/review.
+        if hasattr(self, "_search_debounce"):
+            self._search_debounce.start()
+        else:
+            self._refresh()
 
     def _clear(self) -> None:
         applog.clear()
@@ -259,7 +289,7 @@ class LogHighlighter(QSyntaxHighlighter):
     def _format_for_identifier(self, ident: str) -> QTextCharFormat:
         if ident in self._identifier_formats:
             return self._identifier_formats[ident]
-        h = hash(ident)
+        h = int.from_bytes(hashlib.md5(ident.encode("utf-8")).digest()[:4], "big")
         color = self._palette[h % len(self._palette)]
         fmt = QTextCharFormat()
         fmt.setForeground(QColor(color))
@@ -308,171 +338,3 @@ class LogHighlighter(QSyntaxHighlighter):
                 continue
             self.setFormat(m.start(), m.end() - m.start(), self._format_for_identifier(word))
 
-
-class LogPanel(QWidget):
-    """Card strip shown/hidden under the top nav bar (no native title bar)."""
-
-    closed = Signal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("LogCard")
-        self.setStyleSheet(
-            f"QWidget#LogCard {{ background: {SURFACE_CONTAINER_LOWEST}; "
-            f"border-bottom: 1px solid {OUTLINE_VARIANT}; }}"
-        )
-        # Fixed strip height so open/close never reflows the page oddly.
-        self.setFixedHeight(240)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 10, 20, 10)
-        layout.setSpacing(8)
-
-        # White header bar: title + live toggle + clear + close.
-        # Generous fixed heights + expanding spacer so nothing clips.
-        header = QHBoxLayout()
-        header.setSpacing(8)
-        title = QLabel("Curation Log")
-        title.setStyleSheet("font-size: 12px; font-weight: 600; color: #131b2e; background: transparent; border: none;")
-        title.setSizePolicy(title.sizePolicy().horizontalPolicy(), title.sizePolicy().verticalPolicy())
-        header.addWidget(title)
-        header.addStretch(1)
-        # Search box: filter visible lines (case-insensitive substring).
-        self._search = QLineEdit()
-        self._search.setObjectName("LogSearch")
-        self._search.setPlaceholderText("Search log…")
-        self._search.setClearButtonEnabled(True)
-        self._search.setFixedHeight(26)
-        self._search.setMinimumWidth(160)
-        self._search.setStyleSheet(
-            "QLineEdit#LogSearch { background: #ffffff; border: 1px solid #c3c6d8; "
-            "border-radius: 8px; padding-left: 10px; font-size: 12px; }"
-            "QLineEdit#LogSearch:focus { border: 1px solid #004ccd; }"
-        )
-        self._search.textChanged.connect(self._on_search_changed)
-        header.addWidget(self._search)
-        # NOTE: stateful Live toggle one-off (see ui/widgets.py) — not AppButton by design.
-        self._live_btn = QPushButton("Live")
-        self._live_btn.setCheckable(True)
-        self._live_btn.setChecked(True)
-        self._live_btn.setCursor(Qt.PointingHandCursor)
-        self._live_btn.setFixedHeight(26)
-        self._live_btn.setMinimumWidth(80)
-        self._live_btn.setToolTip("Follow new log lines as they arrive (click to pause)")
-        self._live_btn.toggled.connect(self._on_live_toggled)
-        self._style_live_btn()
-        header.addWidget(self._live_btn)
-        # Standard secondary button (md/36px): the sm face uses md padding,
-        # so a 28px Clear squeezed its text — conform to the kit instead.
-        clear_btn = AppButton("Clear", kind="secondary")
-        clear_btn.setStyleSheet(action_button_style(False))
-        clear_btn.setToolTip("Clear the log buffer")
-        clear_btn.clicked.connect(self._clear)
-        header.addWidget(clear_btn)
-        close_btn = AppButton("", kind="ghost", size="sm")
-        close_btn.setFixedSize(26, 26)
-        try:
-            from ui.icons import icon as _close_icon
-
-            close_btn.setIcon(_close_icon("x"))
-        except Exception:
-            close_btn.setText("×")
-        close_btn.setToolTip("Hide the log (Ctrl+L to show again)")
-        close_btn.clicked.connect(self._on_close)
-        header.addWidget(close_btn)
-        layout.addLayout(header)
-
-        self._view = QPlainTextEdit()
-        self._view.setReadOnly(True)
-        font = QFont("Consolas")
-        font.setStyleHint(QFont.Monospace)
-        self._view.setFont(font)
-        self._view.setPlaceholderText("Log will appear here as the app talks to Dataverse…")
-        self._view.setStyleSheet(
-            f"QPlainTextEdit {{ background: {SURFACE_CONTAINER_LOW}; color: {ON_SURFACE}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 6px 8px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; }}"
-        )
-        self._highlighter = LogHighlighter(self._view.document())
-        layout.addWidget(self._view, 1)
-
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._refresh)
-        self._timer.start(800)
-        self._last_len = 0
-
-    def _on_close(self) -> None:
-        self.hide()
-        try:
-            self.closed.emit()
-        except Exception:
-            pass
-
-    def _style_live_btn(self) -> None:
-        from ui.icons import icon as _live_icon
-
-        live = self._live_btn.isChecked()
-        self._live_btn.setText("Live" if live else "Paused")
-        try:
-            self._live_btn.setIcon(
-                _live_icon("circle-dot", color="#00174c")
-                if live else _live_icon("circle", color="#57657a")
-            )
-        except Exception:
-            pass
-        self._live_btn.setStyleSheet(
-            "QPushButton { background: #dbe1ff; color: #00174c; border: 1px solid #c3c6d8; "
-            "border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 700; }"
-            if live else
-            "QPushButton { background: #ffffff; color: #57657a; border: 1px solid #c3c6d8; "
-            "border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 700; }"
-        )
-
-    def _on_live_toggled(self, checked: bool) -> None:
-        self._style_live_btn()
-        if checked:
-            self._live_btn.setToolTip("Follow new log lines as they arrive (click to pause)")
-            self._last_len = -1  # force a catch-up refresh
-            self._last_display = None
-            if not self._timer.isActive():
-                self._timer.start(800)
-        else:
-            self._live_btn.setToolTip("Paused — new lines are buffered (click to resume)")
-            self._timer.stop()
-
-    def _refresh(self) -> None:
-        lines = applog.lines()
-        needle = ""
-        try:
-            needle = self._search.text().strip().lower()
-        except Exception:
-            pass
-        if needle:
-            lines = [ln for ln in lines if needle in ln.lower()]
-            display = "\n".join(lines) or "(no matching lines)"
-        else:
-            display = "\n".join(lines) or "(log is empty)"
-        if display != getattr(self, "_last_display", None) or len(lines) != self._last_len:
-            self._view.setPlainText(display)
-            if self._live_btn.isChecked() and not needle:
-                self._view.verticalScrollBar().setValue(self._view.verticalScrollBar().maximum())
-            self._last_len = len(lines)
-            self._last_display = display
-            try:
-                total = len(applog.lines())
-                if needle:
-                    self._live_btn.setToolTip(
-                        f"Showing {len(lines)} of {total} line(s) matching “{self._search.text().strip()}”"
-                    )
-                else:
-                    self._live_btn.setToolTip(
-                        f"Follow new log lines as they arrive — {total} line(s) buffered (click to pause)"
-                    )
-            except Exception:
-                pass
-
-    def _on_search_changed(self, _text: str) -> None:
-        self._last_display = None
-        self._refresh()
-
-    def _clear(self) -> None:
-        applog.clear()
-        self._refresh()

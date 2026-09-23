@@ -295,6 +295,7 @@ class ReviewConfigView(QWidget):
         header_lay.addWidget(self._blocks_btn)
         self._fields_reset_btn = AppButton("", kind="ghost", size="sm")
         self._fields_reset_btn.setFixedSize(28, 28)
+        self._fields_reset_btn.setAccessibleName("Reset metadata fields columns")
         try:
             from ui.icons import icon as _reset_icon
 

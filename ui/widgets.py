@@ -136,7 +136,10 @@ class AppTable(QTableWidget):
         self.setWordWrap(False)
         self.verticalHeader().setVisible(False)
         self.verticalHeader().setDefaultSectionSize(row_height)
-        self.setFocusPolicy(Qt.NoFocus)
+        # StrongFocus (not NoFocus): the copy KeyPress filter is installed
+        # on the table itself, so it only sees events when the table has
+        # focus. Visual outline stays off via the stylesheet.
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setSortingEnabled(sortable)
         self._auto_fit = True
         self._fitting = False
@@ -366,6 +369,7 @@ def make_search_field(placeholder: str, parent: QWidget | None = None, *, height
     field.setPlaceholderText(placeholder)
     field.setFixedHeight(height)
     field.setMinimumWidth(min_width)
+    field.setClearButtonEnabled(True)
     field.setStyleSheet(
         f"QLineEdit#SearchField {{ background: {SURFACE_CONTAINER_LOWEST}; "
         f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; "

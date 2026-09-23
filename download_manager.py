@@ -7,13 +7,30 @@ Qt worker threads; see docs/architecture.md.
 """
 
 import hashlib
+import os
 import shutil
+import threading
 import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 _STREAM_CHUNK = 1 << 20
+
+# Per-dataset staging locks: concurrent DownloadWorkers (or download+verify)
+# for the same PID must not interleave rmtree/extract/rename on files/.
+_STAGE_LOCKS: dict[str, threading.Lock] = {}
+_STAGE_LOCKS_GUARD = threading.Lock()
+
+
+def _stage_lock(persistent_id: str) -> threading.Lock:
+    key = persistent_id.replace(":", "_").replace("/", "_").replace("\\", "_")
+    with _STAGE_LOCKS_GUARD:
+        lock = _STAGE_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _STAGE_LOCKS[key] = lock
+        return lock
 
 
 @dataclass
@@ -193,7 +210,10 @@ class DownloadManager:
         try:
             inv = inventory if inventory is not None else self.inventory(persistent_id)
             return bool(inv) and not self.missing_files(persistent_id, inv)
-        except Exception:
+        except Exception as exc:
+            from applog import get_app_log
+
+            get_app_log().error(f"is_fully_staged({persistent_id}): {exc}")
             return False
 
     # -- on-disk metadata / manifest / reports --------------------------------
@@ -225,8 +245,10 @@ class DownloadManager:
             base.mkdir(parents=True, exist_ok=True)
             _atomic_write(self.metadata_path(persistent_id), metadata or {})
             _atomic_write(self.manifest_path(persistent_id), inventory or [])
-        except Exception:
-            pass
+        except Exception as exc:
+            from applog import get_app_log
+
+            get_app_log().error(f"save_metadata({persistent_id}): {exc}")
 
     def load_metadata(self, persistent_id: str) -> tuple:
         """Load cached (metadata, inventory) or (None, None) — never raises."""
@@ -255,22 +277,32 @@ class DownloadManager:
         Afterwards, original-format uploads are fetched per tabular file
         (the bundle only carries server-generated .tab derivatives).
         """
-        dest_dir = self.dataset_dir(persistent_id)
-        part = dest_dir / "_bundle.zip.part"
-        bundle = dest_dir / "_bundle.zip"
-        self._client.download_dataset_zip(
-            persistent_id, part, progress=progress
-        )
-        # Only publish the bundle on a complete download — a killed run
-        # leaves .part behind, never a truncated _bundle.zip.
-        part.replace(bundle)
-        self._extract(bundle, self.files_dir(persistent_id))
-        bundle.unlink()
-        try:
-            self.download_originals(persistent_id, progress=progress)
-        except Exception:
-            pass
-        return self.files_dir(persistent_id)
+        with _stage_lock(persistent_id):
+            dest_dir = self.dataset_dir(persistent_id)
+            part = dest_dir / "_bundle.zip.part"
+            bundle = dest_dir / "_bundle.zip"
+            self._client.download_dataset_zip(
+                persistent_id, part, progress=progress
+            )
+            # Only publish the bundle on a complete download — a killed run
+            # leaves .part behind, never a truncated _bundle.zip.
+            part.replace(bundle)
+            try:
+                self._extract(bundle, self.files_dir(persistent_id))
+            finally:
+                try:
+                    bundle.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            try:
+                self.download_originals(
+                    persistent_id, progress=progress, max_workers=min(4, os.cpu_count() or 4)
+                )
+            except Exception as exc:
+                from applog import get_app_log
+
+                get_app_log().error(f"download_originals after bundle ({persistent_id}): {exc}")
+            return self.files_dir(persistent_id)
 
     def download_originals(
         self,
@@ -392,6 +424,7 @@ class DownloadManager:
         persistent_id: str,
         progress: Callable[[int, int], None] | None = None,
         max_workers: int = 1,
+        inventory: list | None = None,
     ) -> tuple[bool, list[str], list[str]]:
         """Rehash staged files against the Dataverse inventory checksums.
 
@@ -402,19 +435,23 @@ class DownloadManager:
         the download — the message carries hashes, size and the file's UNF
         for manual comparison (see docs/user-guide.md "Checksum problems").
         """
-        inventory = self._client.get_file_inventory(persistent_id)
+        if inventory is None:
+            inventory = self._client.get_file_inventory(persistent_id)
         staged_root = self.files_dir(persistent_id)
         problems: list[str] = []
         warnings: list[str] = []
         total = len(inventory) if isinstance(inventory, list) else 0
         done = 0
+        done_lock = threading.Lock()
 
         def _bump() -> None:
             nonlocal done
-            done += 1
+            with done_lock:
+                done += 1
+                current = done
             if progress:
                 try:
-                    progress(done, total)
+                    progress(current, total)
                 except Exception:
                     pass
 

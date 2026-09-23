@@ -1,10 +1,8 @@
 PySide6>=6.6
 requests>=2.31
 # Dataset discovery: bulk crawl of draft datasets in a collection.
-# TODO: pin to a tag/commit (e.g. @<sha>) — unpinned git URLs break
-# offline/reproducible installs. Kept unpinned until upstream tags a release.
-dataverse-metadata-crawler @ git+https://github.com/scholarsportal/dataverse-metadata-crawler.git
-pandas>=2.0
+# Pinned to a known-good commit for reproducible installs.
+dataverse-metadata-crawler @ git+https://github.com/scholarsportal/dataverse-metadata-crawler.git@958698cd420a088435d805d12d21c19bc003d286
 openpyxl>=3.1
 pyreadstat>=1.2
 h5py>=3.10

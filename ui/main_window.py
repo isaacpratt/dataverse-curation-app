@@ -302,6 +302,7 @@ class MainWindow(QMainWindow):
         self._btn_min.setFixedSize(46, 32)
         self._btn_min.setCursor(Qt.PointingHandCursor)
         self._btn_min.setToolTip("Minimize")
+        self._btn_min.setAccessibleName("Minimize window")
         self._btn_min.setStyleSheet(win_base)
         self._btn_min.clicked.connect(self.showMinimized)
         win_lay.addWidget(self._btn_min)
@@ -309,6 +310,7 @@ class MainWindow(QMainWindow):
         self._btn_max.setFixedSize(46, 32)
         self._btn_max.setCursor(Qt.PointingHandCursor)
         self._btn_max.setToolTip("Maximize")
+        self._btn_max.setAccessibleName("Maximize window")
         self._btn_max.setStyleSheet(win_base)
         self._btn_max.clicked.connect(self._on_max_restore)
         win_lay.addWidget(self._btn_max)
@@ -316,6 +318,7 @@ class MainWindow(QMainWindow):
         self._btn_close.setFixedSize(46, 32)
         self._btn_close.setCursor(Qt.PointingHandCursor)
         self._btn_close.setToolTip("Close")
+        self._btn_close.setAccessibleName("Close window")
         self._btn_close.setStyleSheet(
             "QPushButton { background: transparent; color: #131b2e; border: none; "
             "border-radius: 0px; font-size: 13px; }"
@@ -632,6 +635,7 @@ class MainWindow(QMainWindow):
             close_btn = QPushButton()
             close_btn.setCursor(Qt.PointingHandCursor)
             close_btn.setToolTip(f"Close {label}")
+            close_btn.setAccessibleName(f"Close {label}")
             close_btn.setFixedSize(28, 28)
             try:
                 from PySide6.QtCore import QSize as _QSize

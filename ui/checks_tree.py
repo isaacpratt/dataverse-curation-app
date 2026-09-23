@@ -138,15 +138,18 @@ def format_details_tooltip(result) -> str:
 
 
 def _human_size(n: int) -> str:
+    """Human-readable size with B/KB/MB/GB/TB (shared with dashboard/detail)."""
     try:
         n = int(n)
     except Exception:
         return str(n)
     if n < 1024:
         return f"{n} B"
-    if n < 1024 * 1024:
-        return f"{n / 1024:.1f} KB"
-    return f"{n / 1024**2:.1f} MB"
+    for unit in ("KB", "MB", "GB", "TB"):
+        n /= 1024.0
+        if n < 1024 or unit == "TB":
+            return f"{n:.1f} {unit}"
+    return f"{n:.1f} TB"
 
 
 def _new_item(text: str, tooltip: str = "") -> QStandardItem:

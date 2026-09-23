@@ -1000,12 +1000,29 @@ class DataverseClient:
         self._base_url = base_url.rstrip("/")
         self._api_token = api_token
         self._timeout = timeout
+        # Connection pooling: one Session reuses TCP+TLS across calls
+        # (crawl locks, metadata, inventory) instead of handshaking per GET.
+        self._session = requests.Session()
+        try:
+            from requests.adapters import HTTPAdapter
+
+            adapter = HTTPAdapter(pool_connections=4, pool_maxsize=16)
+            self._session.mount("https://", adapter)
+            self._session.mount("http://", adapter)
+        except Exception:
+            pass
         # Probe-round bookkeeping for allowedCurationLabels (see
         # get_allowed_curation_labels / fetch_allowed_labels_shared):
         # _last_allowed_got_200 tracks the latest single attempt,
         # _last_fetch_answered aggregates the latest shared round.
         self._last_allowed_got_200 = False
         self._last_fetch_answered = False
+
+    def close(self) -> None:
+        try:
+            self._session.close()
+        except Exception:
+            pass
 
     # -- low level -----------------------------------------------------------
 
@@ -1027,7 +1044,7 @@ class DataverseClient:
         for attempt in range(3):
             try:
                 start = time.monotonic()
-                response = requests.get(
+                response = self._session.get(
                     self._api(path),
                     params=params,
                     headers=self._headers(),
@@ -1110,7 +1127,7 @@ class DataverseClient:
         for attempt in range(3):
             try:
                 start = time.monotonic()
-                response = requests.get(
+                response = self._session.get(
                     self._api(path),
                     params=params,
                     headers=headers,
@@ -1181,6 +1198,10 @@ class DataverseClient:
         ]
         env = dict(os.environ)
         env["BASE_URL"] = self._base_url.rstrip("/") + "/"
+        # SECURITY: API_KEY is visible in the child's environment to same-user
+        # process inspectors for the crawl duration (up to timeout below).
+        # Prefer DATAVERSE_API_TOKEN env-only (no config.json) when crawling
+        # untrusted machines. Full fix needs dvmeta stdin/file key support.
         env["API_KEY"] = self._api_token or "none"
         completed = subprocess.run(
             command,
@@ -1970,7 +1991,7 @@ class DataverseClient:
         params["label"] = label
         try:
             start = time.monotonic()
-            response = requests.put(
+            response = self._session.put(
                 self._api(path),
                 params=params,
                 headers=self._headers(),
@@ -1993,7 +2014,7 @@ class DataverseClient:
         path, params = self._curation_paths(identifier, "curationStatus")
         try:
             start = time.monotonic()
-            response = requests.delete(
+            response = self._session.delete(
                 self._api(path),
                 params=params,
                 headers=self._headers(),
@@ -2100,7 +2121,7 @@ class DataverseClient:
         for attempt in range(3):
             try:
                 start = time.monotonic()
-                with requests.get(
+                with self._session.get(
                     self._api(path),
                     params=params,
                     headers=dl_headers,
@@ -2244,7 +2265,7 @@ class DataverseClient:
         for attempt in range(3):
             try:
                 start = time.monotonic()
-                with requests.get(
+                with self._session.get(
                     self._api(f"/api/access/datafile/{file_id}"),
                     params={"format": "original"},
                     headers=dl_headers,

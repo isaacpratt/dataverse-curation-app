@@ -60,13 +60,18 @@ from ui.workers import CheckWorker, DownloadWorker, MetadataWorker
 
 
 def _human_size(n: int) -> str:
+    """Human-readable size with B/KB/MB/GB/TB (shared with dashboard)."""
     try:
         n = int(n)
     except Exception:
         return str(n)
-    if n < 1024 * 1024:
-        return f"{n / 1024:.1f} KB"
-    return f"{n / 1024**2:.1f} MB"
+    if n < 1024:
+        return f"{n} B"
+    for unit in ("KB", "MB", "GB", "TB"):
+        n /= 1024.0
+        if n < 1024 or unit == "TB":
+            return f"{n:.1f} {unit}"
+    return f"{n:.1f} TB"
 
 
 def _icon_for_ext(path: str) -> str:
@@ -641,6 +646,7 @@ class DatasetDetailView(QWidget):
         header_lay.addWidget(self._profile_combo)
         self._meta_reset_btn = AppButton("", kind="ghost", size="sm")
         self._meta_reset_btn.setFixedSize(28, 28)
+        self._meta_reset_btn.setAccessibleName("Reset metadata table columns")
         try:
             from ui.icons import icon as _reset_icon
 
@@ -736,28 +742,6 @@ class DatasetDetailView(QWidget):
         commit.clicked.connect(self._on_commit)
         row.addWidget(commit)
         body.addLayout(row)
-        return card
-
-    def _build_nav_card(self) -> QFrame:
-        """Sidebar section navigation — jumps the main column to each box."""
-        card, body, _title, _header = make_card("Sections")
-        body.setSpacing(6)
-        self._nav_buttons: list = []
-        for label, attr in [
-            ("Metadata check", "_meta_card"),
-            ("File Manifest", "_file_card"),
-            ("Auto-Checks", "_auto_card"),
-            ("Version log", "_version_card"),
-        ]:
-            btn = AppButton(f"  →  {label}", kind="ghost", size=None)
-            btn.setStyleSheet(
-                "QPushButton { text-align: left; padding: 7px 8px; font-size: 12px; "
-                "color: #004ccd; background: transparent; border: none; border-radius: 8px; }"
-                "QPushButton:hover { background: #eaedff; }"
-            )
-            btn.clicked.connect(lambda _c, a=attr: self._goto_section(a))
-            body.addWidget(btn)
-            self._nav_buttons.append(btn)
         return card
 
     def _build_nav_card(self) -> QFrame:
@@ -1316,14 +1300,20 @@ class DatasetDetailView(QWidget):
             return None
 
     def _log_action(self, action: str, notes: str = "", details: dict | None = None) -> None:
+        st = None
         try:
             st = self._state()
             if st is None:
                 return
             st.log_action(self._pid, action, notes=notes, details=details or {})
-            st.close()
         except Exception:
             pass
+        finally:
+            if st is not None:
+                try:
+                    st.close()
+                except Exception:
+                    pass
         try:
             self._refresh_dataset_log()
         except Exception:
@@ -1440,13 +1430,18 @@ class DatasetDetailView(QWidget):
             who = str(h.get("assigner") or "").strip()
             _add(h.get("time", ""), f"Curation label '{label}' assigned" + (f" by {who}" if who else ""))
 
+        st = None
         try:
             st = self._state()
             actions = st.list_actions(self._pid, limit=50) if st is not None else []
-            if st is not None:
-                st.close()
         except Exception:
             actions = []
+        finally:
+            if st is not None:
+                try:
+                    st.close()
+                except Exception:
+                    pass
         _local_text = {
             "downloaded": "Dataset downloaded for curation",
             "checks_run": "Automated checks run",
@@ -1502,6 +1497,7 @@ class DatasetDetailView(QWidget):
         header_lay.addWidget(self._version_summary)
         self._version_reset_btn = AppButton("", kind="ghost", size="sm")
         self._version_reset_btn.setFixedSize(28, 28)
+        self._version_reset_btn.setAccessibleName("Reset version log columns")
         try:
             from ui.icons import icon as _reset_icon2
 

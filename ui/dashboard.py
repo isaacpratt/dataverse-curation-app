@@ -68,15 +68,18 @@ _COLUMN_WIDTHS = {
 
 
 def _human_size(n: int) -> str:
+    """Human-readable size with B/KB/MB/GB/TB (shared with detail)."""
     try:
         n = int(n)
     except Exception:
         return str(n)
-    for unit in ("B", "KB", "MB", "GB"):
-        if abs(n) < 1024 or unit == "GB":
-            return f"{n:.1f} {unit}" if unit != "B" else f"{n} B"
-        n /= 1024  # type: ignore[assignment]
-    return f"{n:.1f} GB"
+    if n < 1024:
+        return f"{n} B"
+    for unit in ("KB", "MB", "GB", "TB"):
+        n /= 1024.0
+        if n < 1024 or unit == "TB":
+            return f"{n:.1f} {unit}"
+    return f"{n:.1f} TB"
 
 
 def _sanitize(pid: str) -> str:

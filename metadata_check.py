@@ -444,8 +444,12 @@ def check_metadata_completeness(
                  "value": r.get("value", "—"), "status": r["status"]}
                 for r in evaluated
             ]
-    except Exception:
-        pass
+    except Exception as exc:
+        from applog import get_app_log
+
+        get_app_log().error(
+            f"ruleset engine failed for profile={profile!r} ({exc}); using legacy fallback"
+        )
     latest = metadata.get("latestVersion") or {}
     blocks = latest.get("metadataBlocks") or metadata.get("metadataBlocks") or {}
     if profile == "Minimal":

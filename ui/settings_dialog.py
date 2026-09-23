@@ -15,6 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import requests
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -66,6 +67,23 @@ class _ShellWorker(QThread):
         except Exception as exc:  # never leave the UI hanging silently
             ok, title, message = False, "Extensions", f"Failed:\n{exc}"
         self.done.emit(ok, title, message)
+
+
+class _SizeWorker(QThread):
+    """Compute package sizes off the GUI thread; emits dict[size-key → human size]."""
+
+    done = Signal(dict)
+
+    def __init__(self, func, parent=None):
+        super().__init__(parent)
+        self._func = func
+
+    def run(self) -> None:
+        try:
+            result = self._func()
+        except Exception:
+            result = {}
+        self.done.emit(result if isinstance(result, dict) else {})
 
 
 class SettingsPane(QWidget):
@@ -264,7 +282,7 @@ class SettingsPane(QWidget):
         except Exception:
             pass
         ext_layout.addWidget(self.ext_table, 1)
-        ext_hint = QLabel("External binaries (Tesseract for OCR, ExifTool for deep metadata) live in the table below — use Browse… to point at them.")
+        ext_hint = QLabel("External binaries (Tesseract for OCR, ExifTool for deep metadata) live in the table below — use Browse… to point at them. Paths are stored in config.json for the engine’s optional OCR/exif stubs.")
         ext_hint.setWordWrap(True)
         bottom = QWidget()
         bottom_lay = QVBoxLayout(bottom)
@@ -317,15 +335,61 @@ class SettingsPane(QWidget):
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
         self._tool_paths: dict = {}
         self._shell_worker: _ShellWorker | None = None
+        self._size_worker: _SizeWorker | None = None
         # Package-size cache: os.walk per package is seconds-slow, so sizes
         # are computed once per pane lifetime; Refresh re-walks on demand.
+        # First paint shows "…" and fills in from a background worker so the
+        # GUI thread never blocks on importlib.metadata + os.walk.
         self._size_cache: dict[str, str] = {}
         self.reload()
+        self._start_size_worker()
         try:
             selectable_labels(self)
             enable_table_copy(self.ext_table)
         except Exception:
             pass
+
+    def _start_size_worker(self) -> None:
+        """Compute package sizes off the GUI thread; patch rows when done."""
+        if getattr(self, "_size_worker", None) is not None and self._size_worker.isRunning():
+            return
+        rows = list(self.EXTENSIONS)
+
+        def _work() -> dict[str, str]:
+            out: dict[str, str] = {}
+            for pip_name, import_name, _desc in rows:
+                out[import_name or pip_name] = SettingsPane._package_size(pip_name, import_name)
+            return out
+
+        def _done(sizes: dict[str, str]) -> None:
+            self._size_cache.update(sizes)
+            try:
+                self._apply_size_cache()
+            except Exception:
+                pass
+
+        worker = _SizeWorker(_work, self)
+        worker.done.connect(_done)
+        worker.finished.connect(self._clear_size_worker)
+        worker.finished.connect(worker.deleteLater)
+        self._size_worker = worker
+        worker.start()
+
+    def _clear_size_worker(self) -> None:
+        self._size_worker = None
+
+    def _apply_size_cache(self) -> None:
+        """Write cached sizes into the extensions table Size column (index 2)."""
+        for row, (pip_name, import_name, _desc) in enumerate(self.EXTENSIONS):
+            key = import_name or pip_name
+            size = self._size_cache.get(key)
+            if size:
+                item = self.ext_table.item(row, 2)
+                if item is None:
+                    item = QTableWidgetItem(size)
+                    self.ext_table.setItem(row, 2, item)
+                else:
+                    item.setText(size)
 
     def reload(self) -> None:
         """Re-read config + extension state (called each time the pane opens)."""
@@ -337,6 +401,7 @@ class SettingsPane(QWidget):
         """Clear the size cache and re-walk installed packages on demand."""
         self._size_cache = {}
         self._refresh_extensions()
+        self._start_size_worker()
 
     def _on_reset_ext_view(self) -> None:
         """Reset the extensions table to its construction view."""
@@ -480,11 +545,12 @@ class SettingsPane(QWidget):
         return "—"
 
     def _refresh_extensions(self) -> None:
+        from ui.icons import icon as _ext_icon  # hoisted: also used in TOOLS rows below
+
         frozen = bool(getattr(sys, "frozen", False))
         self.ext_table.setRowCount(len(self.EXTENSIONS))
         for row, (pip_name, import_name, desc) in enumerate(self.EXTENSIONS):
             self.ext_table.setItem(row, 0, QTableWidgetItem(pip_name))
-            from ui.icons import icon as _ext_icon
 
             try:
                 ver = importlib.metadata.version(pip_name if pip_name != "Pillow" else "Pillow")
@@ -512,10 +578,12 @@ class SettingsPane(QWidget):
             except Exception:
                 pass
             self.ext_table.setItem(row, 1, inst_item)
-            if is_installed and import_name not in self._size_cache:
-                self._size_cache[import_name] = self._package_size(pip_name, import_name)
+            # Sizes come from the background _SizeWorker — never walk here
+            # (importlib.metadata + os.walk on the GUI thread froze Settings).
+            size_key = import_name or pip_name
+            cached = self._size_cache.get(size_key, "…")
             self.ext_table.setItem(
-                row, 2, QTableWidgetItem(self._size_cache.get(import_name, "—") if is_installed else "—")
+                row, 2, QTableWidgetItem(cached if is_installed else "—")
             )
             self.ext_table.setItem(row, 3, QTableWidgetItem(desc))
             # Action cell: padded container so buttons never clip ("mangled" text fix)
@@ -615,11 +683,17 @@ class SettingsPane(QWidget):
         worker = _ShellWorker(func, self)
         self._shell_worker = worker
         worker.done.connect(self._on_shell_done)
+        # Clear the ref only after the thread has fully finished — `done`
+        # fires before termination, so clearing there let a second worker
+        # start while the first was still winding down.
+        worker.finished.connect(self._on_shell_finished)
         worker.finished.connect(worker.deleteLater)
         worker.start()
 
-    def _on_shell_done(self, ok: bool, title: str, message: str) -> None:
+    def _on_shell_finished(self) -> None:
         self._shell_worker = None
+
+    def _on_shell_done(self, ok: bool, title: str, message: str) -> None:
         self.ext_status.setText(message.splitlines()[0] if message else "")
         try:
             self._test_btn.setEnabled(True)
@@ -867,8 +941,6 @@ class SettingsPane(QWidget):
             return
 
         def _probe() -> tuple:
-            import requests
-
             try:
                 r = requests.get(f"{base}/api/info/version", timeout=12)
                 r.raise_for_status()

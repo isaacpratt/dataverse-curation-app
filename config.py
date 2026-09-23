@@ -153,6 +153,27 @@ class Config:
             os.chmod(cfg_path, 0o600)
         except OSError:
             pass
+        # Windows: chmod is a no-op for ACLs — apply a user-only ACL so
+        # other local accounts cannot read the API token.
+        if os.name == "nt" and self.dataverse.api_token:
+            try:
+                import subprocess
+
+                # Remove inheritance + grant only the current user.
+                subprocess.run(
+                    [
+                        "icacls",
+                        str(cfg_path),
+                        "/inheritance:r",
+                        "/grant:r",
+                        f"{os.environ.get('USERNAME', 'Everyone')}:F",
+                    ],
+                    capture_output=True,
+                    timeout=10,
+                    check=False,
+                )
+            except Exception:
+                pass
 
     def preset_label(self) -> str:
         for label, url in PRESETS.items():

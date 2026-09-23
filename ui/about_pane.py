@@ -101,6 +101,7 @@ class AboutPane(QWidget):
         row = QHBoxLayout()
         row.setSpacing(8)
         back_btn = AppButton("Close", kind="secondary")
+        back_btn.setAccessibleName("Close about")
         back_btn.clicked.connect(lambda: self.discarded.emit())
         try:
             from ui.icons import icon as _about_icon
