@@ -11,13 +11,13 @@ from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer  # noqa: F401 (forces PyInstaller to bundle QtSvg)
 from PySide6.QtWidgets import QLabel
 
-from ui.theme import asset_path
+from ui.theme import ERROR, ON_SECONDARY_CONTAINER, ON_SURFACE, SUCCESS, WARNING, asset_path
 
-INK = "#131b2e"
-MUTED = "#57657a"
-GREEN = "#16a34a"
-AMBER = "#d97706"
-RED = "#ba1a1a"
+INK = ON_SURFACE
+MUTED = ON_SECONDARY_CONTAINER
+GREEN = SUCCESS
+AMBER = WARNING
+RED = ERROR
 
 _ICON_CACHE: dict = {}
 _SVG_CACHE: dict = {}

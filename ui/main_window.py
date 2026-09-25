@@ -37,6 +37,20 @@ from ui.dataset_detail import DatasetDetailView
 from ui.dialogs import show_warning
 from ui.log_panel import LogPage
 from ui.settings_dialog import SettingsPane
+from ui.theme import (
+    BACKGROUND,
+    ERROR,
+    ON_ERROR_CONTAINER,
+    ON_PRIMARY,
+    ON_SECONDARY_CONTAINER,
+    ON_SURFACE,
+    OUTLINE_VARIANT,
+    PRIMARY,
+    SECONDARY_CONTAINER,
+    SURFACE_CONTAINER,
+    SURFACE_CONTAINER_HIGH,
+    SURFACE_CONTAINER_LOWEST,
+)
 from ui.widgets import AppButton
 
 
@@ -231,7 +245,7 @@ class MainWindow(QMainWindow):
 
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
-        sep.setStyleSheet("color: #c3c6d8;")
+        sep.setStyleSheet(f"color: {OUTLINE_VARIANT};")
         sep.setFixedWidth(1)
         nav_lay.addWidget(sep)
 
@@ -269,7 +283,7 @@ class MainWindow(QMainWindow):
 
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.VLine)
-        sep2.setStyleSheet("color: #c3c6d8;")
+        sep2.setStyleSheet(f"color: {OUTLINE_VARIANT};")
         sep2.setFixedWidth(1)
         nav_lay.addWidget(sep2)
 
@@ -293,10 +307,10 @@ class MainWindow(QMainWindow):
         win_lay.setContentsMargins(6, 0, 0, 0)
         win_lay.setSpacing(0)
         win_base = (
-            "QPushButton { background: transparent; color: #131b2e; border: none; "
+            f"QPushButton {{ background: transparent; color: {ON_SURFACE}; border: none; "
             "border-radius: 0px; font-size: 13px; }"
-            "QPushButton:hover { background: #e2e7ff; }"
-            "QPushButton:pressed { background: #d5e3fc; }"
+            f"QPushButton:hover {{ background: {SURFACE_CONTAINER_HIGH}; }}"
+            f"QPushButton:pressed {{ background: {SECONDARY_CONTAINER}; }}"
         )
         self._btn_min = QPushButton("–")
         self._btn_min.setFixedSize(46, 32)
@@ -320,10 +334,10 @@ class MainWindow(QMainWindow):
         self._btn_close.setToolTip("Close")
         self._btn_close.setAccessibleName("Close window")
         self._btn_close.setStyleSheet(
-            "QPushButton { background: transparent; color: #131b2e; border: none; "
+            f"QPushButton {{ background: transparent; color: {ON_SURFACE}; border: none; "
             "border-radius: 0px; font-size: 13px; }"
-            "QPushButton:hover { background: #ba1a1a; color: #ffffff; }"
-            "QPushButton:pressed { background: #93000a; color: #ffffff; }"
+            f"QPushButton:hover {{ background: {ERROR}; color: {ON_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background: {ON_ERROR_CONTAINER}; color: {ON_PRIMARY}; }}"
         )
         self._btn_close.clicked.connect(self.close)
         win_lay.addWidget(self._btn_close)
@@ -364,6 +378,8 @@ class MainWindow(QMainWindow):
 
         self._dashboard = DashboardView(config)
         self._dashboard.openRequested.connect(self._open_dataset)
+        # First-run empty-state card: "Open Settings" jumps to the API key pane.
+        self._dashboard.settingsRequested.connect(self._open_settings)
         self._stack.addWidget(self._dashboard)
         try:
             from ui.review_config import ReviewConfigView
@@ -407,7 +423,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet("QScrollArea { background: #faf8ff; border: none; }")
+        scroll.setStyleSheet(f"QScrollArea {{ background: {BACKGROUND}; border: none; }}")
         scroll.setWidget(pane)
         return scroll
 
@@ -586,7 +602,7 @@ class MainWindow(QMainWindow):
         if not self._open_pids:
             hint = QLabel("No dataset open")
             hint.setStyleSheet(
-                "font-size: 11px; color: #57657a; background: transparent; border: none;"
+                f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;"
             )
             self._chips_lay.addWidget(hint)
             self._chips_lay.addStretch()
@@ -621,14 +637,14 @@ class MainWindow(QMainWindow):
             open_btn.setMaximumWidth(220)
             open_btn.setMinimumWidth(60)
             open_btn.setStyleSheet(
-                "QPushButton { background: #eaedff; color: #131b2e; border: 1px solid #004ccd; "
+                f"QPushButton {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; border: 1px solid {PRIMARY}; "
                 "border-top-left-radius: 8px; border-bottom-left-radius: 8px; "
                 "padding: 0 10px 0 10px; font-size: 11px; font-weight: 700; text-align: left; }"
                 if is_active else
-                "QPushButton { background: #ffffff; color: #131b2e; border: 1px solid #c3c6d8; "
+                f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; border: 1px solid {OUTLINE_VARIANT}; "
                 "border-top-left-radius: 8px; border-bottom-left-radius: 8px; "
                 "padding: 0 10px 0 10px; font-size: 11px; font-weight: 600; text-align: left; }"
-                "QPushButton:hover { border: 1px solid #004ccd; }"
+                f"QPushButton:hover {{ border: 1px solid {PRIMARY}; }}"
             )
             open_btn.clicked.connect(lambda _c, p=pid, t=title: self._open_dataset(p, t))
             lay.addWidget(open_btn)
@@ -643,20 +659,20 @@ class MainWindow(QMainWindow):
                 from ui.icons import icon as _chip_icon
 
                 close_btn.setIcon(
-                    _chip_icon("x", color="#131b2e" if is_active else "#57657a")
+                    _chip_icon("x", color=ON_SURFACE if is_active else ON_SECONDARY_CONTAINER)
                 )
                 close_btn.setIconSize(_QSize(12, 12))
             except Exception:
                 close_btn.setText("×")
             close_btn.setStyleSheet(
-                "QPushButton { background: #eaedff; color: #131b2e; border: 1px solid #004ccd; "
+                f"QPushButton {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; border: 1px solid {PRIMARY}; "
                 "border-left: none; border-top-right-radius: 8px; border-bottom-right-radius: 8px; "
                 "font-size: 13px; font-weight: 700; }"
                 if is_active else
-                "QPushButton { background: #ffffff; color: #57657a; border: 1px solid #c3c6d8; "
+                f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SECONDARY_CONTAINER}; border: 1px solid {OUTLINE_VARIANT}; "
                 "border-left: none; border-top-right-radius: 8px; border-bottom-right-radius: 8px; "
                 "font-size: 13px; font-weight: 700; }"
-                "QPushButton:hover { color: #ba1a1a; border: 1px solid #ba1a1a; border-left: none; }"
+                f"QPushButton:hover {{ color: {ERROR}; border: 1px solid {ERROR}; border-left: none; }}"
             )
             close_btn.clicked.connect(lambda _c, p=pid: self._close_dataset(p))
             lay.addWidget(close_btn)

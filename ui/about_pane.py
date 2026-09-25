@@ -9,6 +9,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.theme import (
+    BACKGROUND,
+    ON_SECONDARY_CONTAINER,
+    ON_SURFACE,
+    ON_SURFACE_VARIANT,
+    OUTLINE_VARIANT,
+    SURFACE_CONTAINER_LOWEST,
+)
 from ui.widgets import AppButton
 
 
@@ -31,7 +39,7 @@ class AboutPane(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds below this pane.
         self.setObjectName("AboutPane")
-        self.setStyleSheet("QWidget#AboutPane { background: #faf8ff; }")
+        self.setStyleSheet(f"QWidget#AboutPane {{ background: {BACKGROUND}; }}")
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 24, 24, 24)
@@ -39,7 +47,7 @@ class AboutPane(QWidget):
 
         heading = QLabel("About")
         heading.setStyleSheet(
-            "font-size: 22px; font-weight: 600; color: #131b2e; "
+            f"font-size: 22px; font-weight: 600; color: {ON_SURFACE}; "
             "border: none; background: transparent;"
         )
         outer.addWidget(heading)
@@ -47,16 +55,16 @@ class AboutPane(QWidget):
         card = QFrame()
         card.setObjectName("Card")
         card.setStyleSheet(
-            "QFrame#Card { background: #ffffff; border: 1px solid #c3c6d8; border-radius: 8px; }"
+            f"QFrame#Card {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; }}"
         )
         body = QVBoxLayout(card)
         body.setContentsMargins(20, 20, 20, 20)
         body.setSpacing(10)
 
-        title = QLabel(f"Dataverse Curation App <span style='color:#57657a'>v{_app_version()}</span>")
+        title = QLabel(f"Dataverse Curation App <span style='color:{ON_SECONDARY_CONTAINER}'>v{_app_version()}</span>")
         title.setTextFormat(Qt.RichText)
         title.setStyleSheet(
-            "font-size: 16px; font-weight: 600; color: #131b2e; "
+            f"font-size: 16px; font-weight: 600; color: {ON_SURFACE}; "
             "border: none; background: transparent;"
         )
         title.setWordWrap(True)
@@ -71,7 +79,7 @@ class AboutPane(QWidget):
         )
         blurb.setWordWrap(True)
         blurb.setStyleSheet(
-            "font-size: 13px; color: #424656; border: none; background: transparent;"
+            f"font-size: 13px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;"
         )
         body.addWidget(blurb)
 
@@ -85,7 +93,7 @@ class AboutPane(QWidget):
         bullets.setTextFormat(Qt.RichText)
         bullets.setWordWrap(True)
         bullets.setStyleSheet(
-            "font-size: 13px; color: #424656; border: none; background: transparent;"
+            f"font-size: 13px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;"
         )
         body.addWidget(bullets)
 

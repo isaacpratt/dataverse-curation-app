@@ -40,7 +40,19 @@ from PySide6.QtWidgets import (
 
 from config import Config
 from ui.dialogs import show_critical, show_info, show_warning
-from ui.theme import action_button_style, selectable_labels
+from ui.theme import (
+    AMBER_700,
+    BACKGROUND,
+    ON_SECONDARY_CONTAINER,
+    ON_SURFACE,
+    ON_SURFACE_VARIANT,
+    SURFACE_CONTAINER,
+    SURFACE_CONTAINER_HIGH,
+    SURFACE_CONTAINER_LOW,
+    SURFACE_CONTAINER_LOWEST,
+    action_button_style,
+    selectable_labels,
+)
 from ui.widgets import AppButton, make_card, make_combo, make_search_field
 
 _LEVELS = ["required", "optional", "unchecked"]
@@ -156,6 +168,9 @@ class ReviewConfigView(QWidget):
         self._sel_kind: str = "field"  # field | content | header | footer
         self._sel_key: str = ""
         self._loading = False
+        # Unsaved-chip: any in-memory ruleset edit sets it, Save/Revert clear
+        # it. Guards against losing edits by navigating away unnoticed.
+        self._dirty = False
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 24, 24, 24)
@@ -163,10 +178,10 @@ class ReviewConfigView(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds below this view.
         self.setObjectName("ReviewConfigView")
-        self.setStyleSheet("QWidget#ReviewConfigView { background: #faf8ff; }")
+        self.setStyleSheet(f"QWidget#ReviewConfigView {{ background: {BACKGROUND}; }}")
 
         title = QLabel("Review configuration")
-        title.setStyleSheet("font-size: 22px; font-weight: 700; color: #131b2e;")
+        title.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {ON_SURFACE};")
         outer.addWidget(title)
 
         outer.addWidget(self._build_topbar())
@@ -179,7 +194,7 @@ class ReviewConfigView(QWidget):
         outer.addWidget(split, 1)
 
         self._status = QLabel("")
-        self._status.setStyleSheet("font-size: 11px; color: #424656;")
+        self._status.setStyleSheet(f"font-size: 11px; color: {ON_SURFACE_VARIANT};")
         outer.addWidget(self._status)
 
         selectable_labels(self)
@@ -238,6 +253,12 @@ class ReviewConfigView(QWidget):
         self._ruleset_combo = make_combo(min_width=260)
         self._ruleset_combo.currentIndexChanged.connect(self._on_ruleset_changed)
         row.addWidget(self._ruleset_combo, 1)
+        self._dirty_chip = QLabel("● unsaved")
+        self._dirty_chip.setStyleSheet(
+            f"font-size: 11px; font-weight: 600; color: {AMBER_700};"
+        )
+        self._dirty_chip.hide()
+        row.addWidget(self._dirty_chip)
         for text, slot in [("New…", self._on_new), ("Duplicate", self._on_duplicate), ("Delete", self._on_delete)]:
             b = AppButton(text, kind="secondary", size="sm")
             b.clicked.connect(slot)
@@ -307,7 +328,7 @@ class ReviewConfigView(QWidget):
         header_lay.addWidget(self._fields_reset_btn)
         hint = QLabel("Required / Optional / Not checked — per metadata field broadcast by the Dataverse, grouped by block.")
         hint.setWordWrap(True)
-        hint.setStyleSheet("font-size: 11px; color: #57657a;")
+        hint.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER};")
         body.addWidget(hint)
         # Block-grouped tree (replaces the flat table): block parents with
         # native expand/collapse, one child row per field rule with its
@@ -322,11 +343,11 @@ class ReviewConfigView(QWidget):
         self._field_tree.setIndentation(18)
         self._field_tree.setMinimumHeight(260)
         self._field_tree.setStyleSheet(
-            "QTreeWidget { background: #ffffff; border: 1px solid #e2e7ff; border-radius: 8px; "
-            "font-size: 12px; color: #131b2e; }"
+            f"QTreeWidget {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {SURFACE_CONTAINER_HIGH}; border-radius: 8px; "
+            f"font-size: 12px; color: {ON_SURFACE}; }}"
             "QTreeWidget::item { border: none; }"
-            "QTreeWidget::item:hover { background: #f2f3ff; }"
-            "QTreeWidget::item:selected { background: #eaedff; color: #131b2e; }"
+            f"QTreeWidget::item:hover {{ background: {SURFACE_CONTAINER_LOW}; }}"
+            f"QTreeWidget::item:selected {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; }}"
         )
         try:
             from ui.icons import tree_branch_qss as _branch_qss
@@ -381,7 +402,7 @@ class ReviewConfigView(QWidget):
         card, body, _t, _h = make_card("Response text")
         self._sel_label = QLabel("Select a field or text rule to edit its response text.")
         self._sel_label.setWordWrap(True)
-        self._sel_label.setStyleSheet("font-size: 12px; font-weight: 600; color: #131b2e;")
+        self._sel_label.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {ON_SURFACE};")
         body.addWidget(self._sel_label)
         self._template_edit = QTextEdit()
         self._template_edit.setPlaceholderText("Standard sentence inserted into the Response draft when this check fails…\nPlaceholders: {field} {value} {dataset_title} {persistent_id} {path} {message}")
@@ -400,7 +421,7 @@ class ReviewConfigView(QWidget):
         body.addWidget(self._footer_edit, 1)
         note = QLabel("File-check findings (warnings/errors) use these templates too — edit per-check text under the ruleset JSON for now; the common cases are covered by the default “{check_id}: {message}” template.")
         note.setWordWrap(True)
-        note.setStyleSheet("font-size: 11px; color: #57657a;")
+        note.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER};")
         body.addWidget(note)
         return card
 
@@ -740,6 +761,19 @@ class ReviewConfigView(QWidget):
     def _rule_sel_key(block: str, field: str, handler: str) -> str:
         return f"{block}\x1ffield\x1f{handler}"
 
+    def _mark_dirty(self) -> None:
+        """Surface that an edit landed in memory but not on disk."""
+        if self._loading or self._dirty:
+            return
+        self._dirty = True
+        self._dirty_chip.show()
+
+    def _clear_dirty(self) -> None:
+        if not self._dirty:
+            return
+        self._dirty = False
+        self._dirty_chip.hide()
+
     def _on_field_selected(self) -> None:
         """Point the template editor at the selected field row."""
         if self._loading:
@@ -786,6 +820,7 @@ class ReviewConfigView(QWidget):
                     handler = "nonempty"
                 found["level"] = level
             rs["field_rules"] = rules
+            self._mark_dirty()
             self._sel_kind = "field"
             self._sel_key = self._rule_sel_key(block, field, handler)
             # Update this row in place (never rebuild the tree here: the
@@ -876,6 +911,7 @@ class ReviewConfigView(QWidget):
                     fr = self._find_field_rule(parts[0], parts[1], parts[2])
                     if fr is not None:
                         fr["response_template"] = text
+            self._mark_dirty()
         except Exception:
             pass
 
@@ -885,6 +921,7 @@ class ReviewConfigView(QWidget):
         try:
             self._current_ruleset()["response_header"] = self._header_edit.toPlainText()
             self._current_ruleset()["response_footer"] = self._footer_edit.toPlainText()
+            self._mark_dirty()
         except Exception:
             pass
 
@@ -893,6 +930,7 @@ class ReviewConfigView(QWidget):
             raw = self._dataverses_edit.text() or "*"
             dvs = [d.strip().rstrip("/") for d in raw.split(",") if d.strip()]
             self._current_ruleset()["dataverses"] = dvs or ["*"]
+            self._mark_dirty()
         except Exception:
             pass
 
@@ -911,6 +949,7 @@ class ReviewConfigView(QWidget):
             n += 1
         self._current_ruleset().setdefault("content_rules", []).append(rule)
         self._sel_kind, self._sel_key = "content", rule["id"]
+        self._mark_dirty()
         self._refresh_content_list()
         self._show_template_for_selection()
 
@@ -927,6 +966,7 @@ class ReviewConfigView(QWidget):
             show_warning(self, "Content rule", "Label and pattern are required.")
             return
         cr.update(updated)
+        self._mark_dirty()
         self._refresh_content_list()
         self._show_template_for_selection()
 
@@ -941,6 +981,7 @@ class ReviewConfigView(QWidget):
         except Exception:
             pass
         self._refresh_content_list()
+        self._mark_dirty()
 
     def _on_new(self) -> None:
         from PySide6.QtWidgets import QInputDialog
@@ -959,6 +1000,7 @@ class ReviewConfigView(QWidget):
             self._rulesets[key] = src
             self._current = key
             self._refresh_all()
+            self._mark_dirty()
         except Exception as exc:
             show_critical(self, "Ruleset", f"Could not create ruleset:\n{exc}")
 
@@ -976,6 +1018,7 @@ class ReviewConfigView(QWidget):
         self._rulesets[key]["label"] = key
         self._current = key
         self._refresh_all()
+        self._mark_dirty()
 
     def _on_delete(self) -> None:
         if self._current in ("mcmaster-default", "minimal"):
@@ -984,19 +1027,42 @@ class ReviewConfigView(QWidget):
         if len(self._rulesets or {}) <= 1:
             show_warning(self, "Ruleset", "Cannot delete the last ruleset.")
             return
+        from ui.dialogs import confirm
+        deleted = self._current
+        n_rules = len(((self._rulesets.get(self._current) or {}).get("field_rules")) or [])
+        if not confirm(
+            self,
+            "Delete ruleset",
+            f"Delete '{deleted}' and its {n_rules} field rule(s)? "
+            "This cannot be undone.",
+            confirm_label="Delete",
+        ):
+            return
         try:
             del self._rulesets[self._current]
             self._current = "mcmaster-default" if "mcmaster-default" in self._rulesets else sorted(self._rulesets.keys())[0]
             self._refresh_all()
+            self._status.setText(f"Deleted '{deleted}'.")
+            self._mark_dirty()
         except Exception as exc:
             show_critical(self, "Ruleset", f"Could not delete ruleset:\n{exc}")
 
     def _on_revert(self) -> None:
+        from ui.dialogs import confirm
+        if not confirm(
+            self,
+            "Revert changes",
+            "Discard every unsaved edit and reload the last saved rules? "
+            "This cannot be undone.",
+            confirm_label="Revert",
+        ):
+            return
         try:
             self._rulesets = copy.deepcopy(self._rr.load_rulesets())
             self._current = self._pick_initial_key()
             self._refresh_all()
             self._status.setText("Reverted to saved rules.")
+            self._clear_dirty()
         except Exception:
             pass
 
@@ -1013,6 +1079,7 @@ class ReviewConfigView(QWidget):
         except Exception:
             pass
         self._status.setText(f"Saved to {path}")
+        self._clear_dirty()
         show_info(self, "Review configuration", f"Saved to {Path(path).resolve()}")
         try:
             self.saved.emit()

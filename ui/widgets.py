@@ -30,8 +30,11 @@ from PySide6.QtWidgets import (
 )
 
 from ui.theme import (
+    BACKGROUND,
     ON_SURFACE,
+    ON_SURFACE_VARIANT,
     OUTLINE_VARIANT,
+    PRIMARY,
     SURFACE_CONTAINER_LOW,
     SURFACE_CONTAINER_LOWEST,
     enable_table_copy,
@@ -308,11 +311,11 @@ def flush_list_style(last: bool = True) -> str:
     """Edge-to-edge QListWidget face, same corner contract as flush tables."""
     bottom = "8px" if last else "0px"
     return (
-        "QListWidget { background: #ffffff; border: none; "
+        f"QListWidget {{ background: {SURFACE_CONTAINER_LOWEST}; border: none; "
         "border-top-left-radius: 0px; border-top-right-radius: 0px; "
         "border-bottom-left-radius: " + bottom + "; "
         "border-bottom-right-radius: " + bottom + "; "
-        "font-size: 12px; color: #424656; }"
+        f"font-size: 12px; color: {ON_SURFACE_VARIANT}; }}"
     )
 
 
@@ -336,7 +339,7 @@ def make_card(title: str, parent: QWidget | None = None) -> tuple:
     # below this bar — inline scope beats app-level rules subtree-wide.
     top.setObjectName("CardTopBar")
     top.setStyleSheet(
-        f"QFrame#CardTopBar {{ background: #faf8ff; border-bottom: 1px solid {SURFACE_CONTAINER_LOW}; "
+        f"QFrame#CardTopBar {{ background: {BACKGROUND}; border-bottom: 1px solid {SURFACE_CONTAINER_LOW}; "
         "border-top-left-radius: 8px; border-top-right-radius: 8px; }"
     )
     top_lay = QHBoxLayout(top)
@@ -374,7 +377,7 @@ def make_search_field(placeholder: str, parent: QWidget | None = None, *, height
         f"QLineEdit#SearchField {{ background: {SURFACE_CONTAINER_LOWEST}; "
         f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; "
         "padding-left: 12px; font-size: 13px; }"
-        "QLineEdit#SearchField:focus { border: 1px solid #004ccd; }"
+        f"QLineEdit#SearchField:focus {{ border: 1px solid {PRIMARY}; }}"
     )
     return field
 
@@ -392,7 +395,7 @@ def make_line_edit(placeholder: str = "", parent: QWidget | None = None, *,
         f"QLineEdit#SearchField {{ background: {SURFACE_CONTAINER_LOWEST}; "
         f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; "
         "padding-left: 12px; font-size: 13px; }"
-        "QLineEdit#SearchField:focus { border: 1px solid #004ccd; }"
+        f"QLineEdit#SearchField:focus {{ border: 1px solid {PRIMARY}; }}"
     )
     return field
 

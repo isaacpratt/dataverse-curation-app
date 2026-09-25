@@ -44,6 +44,43 @@ ON_SECONDARY_FIXED = "#0d1c2e"
 SECONDARY_CONTAINER = "#d5e3fc"
 SECONDARY = "#515f74"
 
+# --- State / accent additions (token pass: every ui colour lives here) ---
+SUCCESS = "#16a34a"
+SUCCESS_DARK = "#15803d"          # green-700 — "string" tone in the log
+WARNING = "#d97706"               # amber-600
+WARNING_DARK = "#b45309"          # amber-700 — large-download caution
+AMBER_700 = "#a16207"             # log java tokens, identifier palette
+PRIMARY_DEEP = "#00174c"          # deepest brand blue — live badge text
+PRIMARY_PRESSED = "#002a78"
+PRIMARY_DISABLED = "#8aa9e8"
+ERROR_OUTLINE = "#ffb4ab"         # light-red borders (pill / fail rows)
+ERROR_SURFACE = "#fff0ef"         # fail-row face
+MUTED_BG = "#f4f5f7"              # disabled cell-button face
+MUTED_TEXT = "#9aa3b5"
+MUTED_BORDER = "#dfe3ea"
+PILL_BLUE_TEXT = "#1a2e4a"        # in-review pill text
+PILL_BLUE_BORDER = "#b9c7df"
+
+# Deterministic identifier-colour palette for the syntax-highlighting log
+# (cyan/amber/blue/violet/pink tints; md5-selected, never random per run).
+LOG_IDENTIFIER_PALETTE = (
+    "#0e7490",  # cyan-700
+    AMBER_700,
+    "#1d4ed8",  # blue-700
+    "#7c3aed",  # violet-600
+    "#be185d",  # pink-700
+    "#0369a1",  # sky-700
+    SUCCESS_DARK,
+    WARNING_DARK,
+    "#6d28d9",  # violet-700
+    "#9d174d",  # pink-800
+    "#155e75",  # cyan-800
+    "#b91c1c",  # red-700
+    "#166534",  # green-800
+    "#92400e",  # amber-800
+    "#1e40af",  # blue-800
+)
+
 # --- Typography (Qt QSS uses px) ---
 FONT_FAMILY = "Inter, 'Segoe UI', sans-serif"
 MONO_FAMILY = "'JetBrains Mono', Consolas, monospace"
@@ -142,7 +179,7 @@ QMainWindow, QStackedWidget, QScrollArea {{
 }}
 #TopNav QPushButton#NavActive {{
     background: {SECONDARY_CONTAINER};
-    color: #0d1c2e;
+    color: {ON_SECONDARY_FIXED};
     border: none;
     border-radius: 8px;
     padding: 6px 12px;
@@ -167,7 +204,7 @@ QMainWindow, QStackedWidget, QScrollArea {{
    and identical for Log and Settings. */
 #TopNav QPushButton#NavItem:checked {{
     background: {SECONDARY_CONTAINER};
-    color: #0d1c2e;
+    color: {ON_SECONDARY_FIXED};
     font-weight: 600;
 }}
 #TopNav QLabel#Brand {{
@@ -204,10 +241,10 @@ QPushButton#PrimaryButton {{
     font-size: 12px;
 }}
 QPushButton#PrimaryButton:hover {{ background: {ON_PRIMARY_FIXED_VARIANT}; }}
-QPushButton#PrimaryButton:pressed {{ background: #002a78; }}
+QPushButton#PrimaryButton:pressed {{ background: {PRIMARY_PRESSED}; }}
 /* Disabled primary stays readable (muted blue, white text) so the action
    still reads as present-but-unavailable instead of vanishing. */
-QPushButton#PrimaryButton:disabled {{ background: #8aa9e8; color: {ON_PRIMARY}; }}
+QPushButton#PrimaryButton:disabled {{ background: {PRIMARY_DISABLED}; color: {ON_PRIMARY}; }}
 
 QPushButton#SecondaryButton {{
     background: {SURFACE_CONTAINER_LOWEST};
@@ -252,6 +289,21 @@ QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox {{
 }}
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{
     border: 1px solid {PRIMARY};
+}}
+/* ===== Focus (WCAG 2.4.7): keyboard focus must always be visible =====
+   Qt draws the stylesheet `outline` inside the widget's focus-rect slot,
+   so nothing reflows. Buttons/tables/tabs previously had NO focus cue at
+   all — keyboard users could not tell which control was armed. */
+QPushButton:focus {{
+    outline: 2px solid {ON_SURFACE};
+    outline-radius: {RADIUS_LG};
+}}
+QTableWidget:focus, QTreeWidget:focus, QListWidget:focus {{
+    outline: 2px solid {PRIMARY};
+    outline-radius: {RADIUS_LG};
+}}
+QTabBar::tab:focus {{
+    outline: 2px solid {PRIMARY};
 }}
 QLineEdit#SearchField {{
     padding-left: 32px;
@@ -395,8 +447,8 @@ QLabel#MonoSM {{
 /* ===== Status pills (QLabel with objectName) ===== */
 QLabel#PillInReview {{
     background: {SECONDARY_CONTAINER};
-    color: #1a2e4a;
-    border: 1px solid #b9c7df;
+    color: {PILL_BLUE_TEXT};
+    border: 1px solid {PILL_BLUE_BORDER};
     border-radius: {RADIUS_LG};
     padding: 2px 8px;
     font-size: 11px;
@@ -414,7 +466,7 @@ QLabel#PillDraft {{
 QLabel#PillAuthorContacted {{
     background: {ERROR_CONTAINER};
     color: {ON_ERROR_CONTAINER};
-    border: 1px solid #ffb4ab;
+    border: 1px solid {ERROR_OUTLINE};
     border-radius: {RADIUS_LG};
     padding: 2px 8px;
     font-size: 11px;
@@ -447,8 +499,8 @@ QLabel#PillFlagged {{
     border-radius: 8px;
 }}
 #CheckRowFail {{
-    background: #fff0ef;
-    border: 1px solid #ffb4ab;
+    background: {ERROR_SURFACE};
+    border: 1px solid {ERROR_OUTLINE};
     border-radius: 8px;
 }}
 
@@ -600,19 +652,19 @@ def action_button_style(primary: bool = False) -> str:
     """
     if primary:
         return (
-            "QPushButton { background: #004ccd; color: #ffffff; border: none; "
+            f"QPushButton {{ background: {PRIMARY}; color: {ON_PRIMARY}; border: none; "
             "border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 12px; }"
-            "QPushButton:hover { background: #003da9; }"
-            "QPushButton:pressed { background: #002a78; }"
-            "QPushButton:disabled { background: #8aa9e8; color: #ffffff; }"
+            f"QPushButton:hover {{ background: {ON_PRIMARY_FIXED_VARIANT}; }}"
+            f"QPushButton:pressed {{ background: {PRIMARY_PRESSED}; }}"
+            f"QPushButton:disabled {{ background: {PRIMARY_DISABLED}; color: {ON_PRIMARY}; }}"
         )
     return (
-        "QPushButton { background: #ffffff; color: #131b2e; "
-        "border: 1px solid #c3c6d8; border-radius: 8px; padding: 7px 14px; "
+        f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; "
+        f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 7px 14px; "
         "font-weight: 600; font-size: 12px; }"
-        "QPushButton:hover { background: #e2e7ff; border: 1px solid #004ccd; }"
-        "QPushButton:pressed { background: #d5e3fc; }"
-        "QPushButton:disabled { background: #f2f3ff; color: #57657a; }"
+        f"QPushButton:hover {{ background: {SURFACE_CONTAINER_HIGH}; border: 1px solid {PRIMARY}; }}"
+        f"QPushButton:pressed {{ background: {SECONDARY_CONTAINER}; }}"
+        f"QPushButton:disabled {{ background: {SURFACE_CONTAINER_LOW}; color: {ON_SECONDARY_CONTAINER}; }}"
     )
 
 

@@ -26,14 +26,22 @@ from PySide6.QtWidgets import (
 
 import applog
 from ui.theme import (
+    AMBER_700,
     ERROR,
     ERROR_CONTAINER,
+    LOG_IDENTIFIER_PALETTE,
+    ON_ERROR,
     ON_ERROR_CONTAINER,
+    ON_SECONDARY_CONTAINER,
     ON_SURFACE,
     ON_SURFACE_VARIANT,
     OUTLINE_VARIANT,
     PRIMARY,
+    PRIMARY_DEEP,
+    PRIMARY_FIXED,
+    SUCCESS_DARK,
     SURFACE_CONTAINER_LOW,
+    SURFACE_CONTAINER_LOWEST,
     TERTIARY,
     action_button_style,
 )
@@ -53,7 +61,7 @@ class LogPage(QWidget):
         header = QHBoxLayout()
         header.setSpacing(8)
         title = QLabel("Dataverse Communication Log")
-        title.setStyleSheet("font-size: 14px; font-weight: 600; color: #131b2e; background: transparent; border: none;")
+        title.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {ON_SURFACE}; background: transparent; border: none;")
         header.addWidget(title)
         header.addStretch(1)
         # Search box: filter visible lines (case-insensitive substring).
@@ -64,9 +72,9 @@ class LogPage(QWidget):
         self._search.setFixedHeight(28)
         self._search.setMinimumWidth(180)
         self._search.setStyleSheet(
-            "QLineEdit#LogSearch { background: #ffffff; border: 1px solid #c3c6d8; "
+            f"QLineEdit#LogSearch {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {OUTLINE_VARIANT}; "
             "border-radius: 8px; padding-left: 10px; font-size: 12px; }"
-            "QLineEdit#LogSearch:focus { border: 1px solid #004ccd; }"
+            f"QLineEdit#LogSearch:focus {{ border: 1px solid {PRIMARY}; }}"
         )
         self._search.textChanged.connect(self._on_search_changed)
         header.addWidget(self._search)
@@ -141,16 +149,16 @@ class LogPage(QWidget):
         self._live_btn.setText("Live" if live else "Paused")
         try:
             self._live_btn.setIcon(
-                _live_icon("circle-dot", color="#00174c")
-                if live else _live_icon("circle", color="#57657a")
+                _live_icon("circle-dot", color=PRIMARY_DEEP)
+                if live else _live_icon("circle", color=ON_SECONDARY_CONTAINER)
             )
         except Exception:
             pass
         self._live_btn.setStyleSheet(
-            "QPushButton { background: #dbe1ff; color: #00174c; border: 1px solid #c3c6d8; "
+            f"QPushButton {{ background: {PRIMARY_FIXED}; color: {PRIMARY_DEEP}; border: 1px solid {OUTLINE_VARIANT}; "
             "border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 700; }"
             if live else
-            "QPushButton { background: #ffffff; color: #57657a; border: 1px solid #c3c6d8; "
+            f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SECONDARY_CONTAINER}; border: 1px solid {OUTLINE_VARIANT}; "
             "border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 700; }"
         )
 
@@ -220,7 +228,7 @@ class LogHighlighter(QSyntaxHighlighter):
 
         # Whole-line ERROR (uses brand error colour for foreground, light bg for legibility)
         self.error_format = QTextCharFormat()
-        self.error_format.setForeground(QColor("#ffffff"))
+        self.error_format.setForeground(QColor(ON_ERROR))
         self.error_format.setBackground(QColor(ERROR))
         self.error_format.setFontWeight(QFont.Bold)
 
@@ -244,10 +252,10 @@ class LogHighlighter(QSyntaxHighlighter):
         self.xml_format.setFontItalic(True)
 
         self.java_format = QTextCharFormat()
-        self.java_format.setForeground(QColor("#a16207"))  # amber-700 — distinct from brand
+        self.java_format.setForeground(QColor(AMBER_700))  # amber-700 — distinct from brand
 
         self.string_format = QTextCharFormat()
-        self.string_format.setForeground(QColor("#15803d"))  # green-700 — "string" feel
+        self.string_format.setForeground(QColor(SUCCESS_DARK))  # green-700 — "string" feel
 
         # SQL keywords (case-insensitive)
         self._sql_keywords = {
@@ -260,23 +268,7 @@ class LogHighlighter(QSyntaxHighlighter):
 
         # Cache for random identifier colours (deterministic per identifier)
         self._identifier_formats: dict[str, QTextCharFormat] = {}
-        self._palette = [
-            "#0e7490",  # cyan-700
-            "#a16207",  # amber-700
-            "#1d4ed8",  # blue-700
-            "#7c3aed",  # violet-600
-            "#be185d",  # pink-700
-            "#0369a1",  # sky-700
-            "#15803d",  # green-700
-            "#b45309",  # amber-700 (darker)
-            "#6d28d9",  # violet-700
-            "#9d174d",  # pink-800
-            "#155e75",  # cyan-800
-            "#b91c1c",  # red-700
-            "#166534",  # green-800
-            "#92400e",  # amber-800
-            "#1e40af",  # blue-800
-        ]
+        self._palette = list(LOG_IDENTIFIER_PALETTE)
 
         import re
 

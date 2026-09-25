@@ -3,7 +3,7 @@
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QVBoxLayout
 
 from download_manager import DownloadQuote
-from ui.theme import action_button_style
+from ui.theme import WARNING_DARK, action_button_style
 from ui.widgets import AppButton
 
 
@@ -41,11 +41,11 @@ class DownloadApprovalDialog(QDialog):
             warn_row = QHBoxLayout()
             warn_row.setSpacing(8)
             try:
-                warn_row.addWidget(_warn_icon("triangle-alert", size=16, color="#b45309"))
+                warn_row.addWidget(_warn_icon("triangle-alert", size=16, color=WARNING_DARK))
             except Exception:
                 pass
             warn = QLabel("Large dataset — download may take a while.")
-            warn.setStyleSheet("color: #b45309; border: none; background: transparent;")
+            warn.setStyleSheet(f"color: {WARNING_DARK}; border: none; background: transparent;")
             warn_row.addWidget(warn, 1)
             layout.addLayout(warn_row)
         buttons = QHBoxLayout()

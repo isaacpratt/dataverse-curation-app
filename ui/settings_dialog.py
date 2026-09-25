@@ -34,7 +34,25 @@ from PySide6.QtWidgets import (
 from config import PRESETS, Config
 from dataverse_client import DataverseClient
 from ui.dialogs import show_critical, show_info, show_warning
-from ui.theme import ERROR, PRIMARY, action_button_style, enable_table_copy, selectable_labels
+from ui.theme import (
+    BACKGROUND,
+    ERROR,
+    MUTED_BG,
+    MUTED_BORDER,
+    MUTED_TEXT,
+    ON_SECONDARY_CONTAINER,
+    ON_SURFACE,
+    ON_SURFACE_VARIANT,
+    OUTLINE_VARIANT,
+    PRIMARY,
+    SECONDARY_CONTAINER,
+    SUCCESS_DARK,
+    SURFACE_CONTAINER_HIGH,
+    SURFACE_CONTAINER_LOWEST,
+    action_button_style,
+    enable_table_copy,
+    selectable_labels,
+)
 from ui.widgets import AppButton, AppTable, flush_table_style, make_combo, make_line_edit
 
 # Compact face for buttons living inside table action cells: the standard
@@ -42,13 +60,13 @@ from ui.widgets import AppButton, AppTable, flush_table_style, make_combo, make_
 # 294px against a 240px column, clipping both buttons. Same kit look, cell-
 # sized padding.
 _CELL_BTN_STYLE = (
-    "QPushButton { background: #ffffff; color: #131b2e; "
-    "border: 1px solid #c3c6d8; border-radius: 6px; padding: 0 8px; "
+    f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; "
+    f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 6px; padding: 0 8px; "
     "font-weight: 600; font-size: 12px; }"
-    "QPushButton:hover { background: #e2e7ff; border: 1px solid #004ccd; }"
-    "QPushButton:pressed { background: #d5e3fc; }"
-    "QPushButton:disabled { background: #f4f5f7; color: #9aa3b5; "
-    "border: 1px solid #dfe3ea; }"
+    f"QPushButton:hover {{ background: {SURFACE_CONTAINER_HIGH}; border: 1px solid {PRIMARY}; }}"
+    f"QPushButton:pressed {{ background: {SECONDARY_CONTAINER}; }}"
+    f"QPushButton:disabled {{ background: {MUTED_BG}; color: {MUTED_TEXT}; "
+    f"border: 1px solid {MUTED_BORDER}; }}"
 )
 
 
@@ -119,17 +137,17 @@ class SettingsPane(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds (e.g. the extensions table).
         self.setObjectName("SettingsDialog")
-        self.setStyleSheet("QWidget#SettingsDialog { background: #faf8ff; }")
+        self.setStyleSheet(f"QWidget#SettingsDialog {{ background: {BACKGROUND}; }}")
 
         outer = QVBoxLayout()
         outer.setContentsMargins(24, 24, 24, 24)
         outer.setSpacing(16)
 
         heading = QLabel("Settings")
-        heading.setStyleSheet("font-size: 22px; font-weight: 600; color: #131b2e; border: none; background: transparent;")
+        heading.setStyleSheet(f"font-size: 22px; font-weight: 600; color: {ON_SURFACE}; border: none; background: transparent;")
         outer.addWidget(heading)
         sub = QLabel("Dataverse connection, workspace, and optional curation libraries.")
-        sub.setStyleSheet("font-size: 13px; color: #57657a; border: none; background: transparent;")
+        sub.setStyleSheet(f"font-size: 13px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
         sub.setWordWrap(True)
         outer.addWidget(sub)
 
@@ -192,7 +210,7 @@ class SettingsPane(QWidget):
         self._conn_status.setTextInteractionFlags(
             Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
         )
-        self._conn_status.setStyleSheet("font-size: 12px; color: #57657a; border: none; background: transparent;")
+        self._conn_status.setStyleSheet(f"font-size: 12px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
         conn_row.addWidget(self._conn_status, 1)
         
         # Vertical layout for test + save stacked
@@ -213,7 +231,7 @@ class SettingsPane(QWidget):
         # role by matching that identifier in the alias assignments).
         user_heading = QLabel("Signed in user")
         user_heading.setStyleSheet(
-            "font-size: 12px; font-weight: 600; color: #424656; "
+            f"font-size: 12px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
             "border: none; background: transparent; padding-top: 8px;"
         )
         form.addRow(user_heading)
@@ -229,7 +247,7 @@ class SettingsPane(QWidget):
         form.addRow("Collection role", self._user_role)
         self._user_status = QLabel("")
         self._user_status.setWordWrap(True)
-        self._user_status.setStyleSheet("font-size: 11px; color: #57657a; border: none; background: transparent;")
+        self._user_status.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
         form.addRow("", self._user_status)
 
         tabs.addTab(general, "General")
@@ -574,7 +592,7 @@ class SettingsPane(QWidget):
                 elif is_installed:
                     inst_item.setIcon(_ext_icon("check", color=PRIMARY))
                 else:
-                    inst_item.setIcon(_ext_icon("minus", color="#57657a"))
+                    inst_item.setIcon(_ext_icon("minus", color=ON_SECONDARY_CONTAINER))
             except Exception:
                 pass
             self.ext_table.setItem(row, 1, inst_item)
@@ -765,7 +783,7 @@ class SettingsPane(QWidget):
         lbl.setTextInteractionFlags(
             Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
         )
-        lbl.setStyleSheet("font-size: 12px; color: #424656; border: none; background: transparent;")
+        lbl.setStyleSheet(f"font-size: 12px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;")
         return lbl
 
     def _clear_collection_role(self) -> None:
@@ -815,7 +833,7 @@ class SettingsPane(QWidget):
                 if lbl is not None:
                     lbl.setText("—")
                     lbl.setStyleSheet(
-                        "font-size: 12px; color: #424656; "
+                        f"font-size: 12px; color: {ON_SURFACE_VARIANT}; "
                         "border: none; background: transparent;"
                     )
             if getattr(self, "_user_status", None) is not None:
@@ -846,7 +864,7 @@ class SettingsPane(QWidget):
             )
             self._user_super.setStyleSheet(
                 "font-size: 12px; font-weight: 600; "
-                f"color: {'#16a34a' if is_super else ('#424656' if is_super is None else '#57657a')}; "
+                f"color: {SUCCESS_DARK if is_super else (ON_SURFACE_VARIANT if is_super is None else ON_SECONDARY_CONTAINER)}; "
                 "border: none; background: transparent;"
             )
             self._user_affil.setText(str((me or {}).get("affiliation") or "—"))
@@ -925,7 +943,7 @@ class SettingsPane(QWidget):
         in-progress tone. No dialog — the result lives where the test ran.
         """
         try:
-            color = "#16a34a" if ok is True else (ERROR if ok is False else "#57657a")
+            color = SUCCESS_DARK if ok is True else (ERROR if ok is False else ON_SECONDARY_CONTAINER)
             self._conn_status.setStyleSheet(
                 f"font-size: 12px; color: {color}; border: none; background: transparent;"
             )

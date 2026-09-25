@@ -9,10 +9,11 @@ date sourced from the workspace state.db + staged folders.
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -24,9 +25,13 @@ from PySide6.QtWidgets import (
 
 from config import Config
 from ui.theme import (
+    BACKGROUND,
     ERROR,
+    ON_SURFACE,
+    ON_SURFACE_VARIANT,
     OUTLINE_VARIANT,
     PRIMARY,
+    SURFACE_CONTAINER,
     SURFACE_CONTAINER_LOWEST,
     TERTIARY,
     selectable_labels,
@@ -402,6 +407,8 @@ class DashboardView(QWidget):
     """Lists datasets. Emits openRequested(pid, title) on double-click."""
 
     openRequested = Signal(str, str)
+    # Empty-state CTA: "Open Settings" reaches the main window's pane switch.
+    settingsRequested = Signal()
 
     def __init__(self, config: Config) -> None:
         super().__init__()
@@ -409,6 +416,9 @@ class DashboardView(QWidget):
         self._worker: CrawlWorker | None = None
         self._all_datasets: list[dict] = []
         self._datasets: list[dict] = []
+        # Metrics read "-" until real data exists (first crawl / cache paint);
+        # zeros before that would claim knowledge we don't have.
+        self._crawled = False
         self._col_index = {key: i for i, (key, _h, _v) in enumerate(COLUMNS)}
         # Curation labels for the connected Dataverse, remembered with each
         # pull (refreshed on every reload; cached per instance on disk).
@@ -430,13 +440,13 @@ class DashboardView(QWidget):
         # Scoped to self: a bare `background` rule acts subtree-wide and
         # would override app-level backgrounds (e.g. the queue table face).
         self.setObjectName("DashboardView")
-        self.setStyleSheet("QWidget#DashboardView { background: #faf8ff; }")
+        self.setStyleSheet(f"QWidget#DashboardView {{ background: {BACKGROUND}; }}")
 
         # ---- Title row: repository scope lives here --------------------
         # "Datasets: <base URL> · <collection alias>" (moved up from the
         # old bottom subtitle so the scope reads with the title).
         self._title_lbl = QLabel("Datasets")
-        self._title_lbl.setStyleSheet("font-size: 22px; font-weight: 700; color: #131b2e;")
+        self._title_lbl.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {ON_SURFACE};")
         self._title_lbl.setWordWrap(True)
         outer.addWidget(self._title_lbl)
         self._refresh_title()
@@ -469,7 +479,7 @@ class DashboardView(QWidget):
         header = QFrame()
         header.setObjectName("QueueHeaderBar")
         header.setStyleSheet(
-            f"QFrame#QueueHeaderBar {{ background: #eaedff; border-bottom: 1px solid {OUTLINE_VARIANT}; "
+            f"QFrame#QueueHeaderBar {{ background: {SURFACE_CONTAINER}; border-bottom: 1px solid {OUTLINE_VARIANT}; "
             "border-top-left-radius: 8px; border-top-right-radius: 8px; }}"
         )
         header.setFixedHeight(64)
@@ -479,7 +489,7 @@ class DashboardView(QWidget):
 
         hdr_title = QLabel("Curation Queue")
         hdr_title.setStyleSheet(
-            "font-size: 16px; font-weight: 600; color: #131b2e; "
+            f"font-size: 16px; font-weight: 600; color: {ON_SURFACE}; "
             "background: transparent; border: none;"
         )
         hdr_layout.addWidget(hdr_title)
@@ -549,6 +559,10 @@ class DashboardView(QWidget):
         # banner, 8px bottom meets the card border — see flush_table_style).
         self._table.setStyleSheet(flush_table_style())
         self._table.cellDoubleClicked.connect(self._on_double_click)
+        # Keyboard parity for the queue: Enter/Return opens the focused row
+        # (double-click alone locks out keyboard-only users), F5 refreshes,
+        # Escape clears the search. See _on_table_key.
+        self._table.installEventFilter(self)
         # Split header: the table's own header is hidden so its vertical
         # scrollbar spans rows only (starting underneath the header row).
         # This display header shares the table model and renders the
@@ -576,15 +590,28 @@ class DashboardView(QWidget):
         # header (sync flag keeps the mirror from persisting as a user drag).
         self._table.columns_fitted.connect(self._sync_header_from_table)
         queue_layout.addWidget(self._queue_header)
-        queue_layout.addWidget(self._table, 1)
+        # Table + first-run overlay occupy the same grid cell so the card
+        # floats over the (empty) table without any layout surgery when
+        # datasets arrive.
+        queue_stack = QWidget()
+        queue_stack.setObjectName("QueueStack")
+        queue_stack.setStyleSheet("QWidget#QueueStack { background: transparent; }")
+        stack_lay = QGridLayout(queue_stack)
+        stack_lay.setContentsMargins(0, 0, 0, 0)
+        stack_lay.setSpacing(0)
+        stack_lay.addWidget(self._table, 0, 0)
+        self._empty_overlay = self._build_empty_overlay()
+        stack_lay.addWidget(self._empty_overlay, 0, 0)
+        self._empty_overlay.hide()
+        queue_layout.addWidget(queue_stack, 1)
         # Status renders as plain text like every other column.
 
         outer.addWidget(queue_card, 1)
 
         self._progress = QLabel("")
         self._progress.setStyleSheet(
-            "font-size: 11px; color: #424656; background: #ffffff; "
-            "border: 1px solid #c3c6d8; border-radius: 8px; padding: 8px 12px;"
+            f"font-size: 11px; color: {ON_SURFACE_VARIANT}; background: {SURFACE_CONTAINER_LOWEST}; "
+            f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 8px 12px;"
         )
         self._progress.setWordWrap(True)
         outer.addWidget(self._progress)
@@ -612,6 +639,8 @@ class DashboardView(QWidget):
         # changes/new datasets in the background and diffs into this view.
         self._shown_cache_key = ""
         self._cache_loaded = self._show_cached_dashboard()
+        # First paint: "-" metrics + first-run card until a crawl lands.
+        self._update_metrics()
 
         if not (self._config.dataverse.api_token or "").strip():
             if not self._cache_loaded:
@@ -725,6 +754,7 @@ class DashboardView(QWidget):
             self._apply_size_cache(self._all_datasets)
             self._merge_row_labels()
             self._rebuild_collection_filter()
+            self._crawled = True
             self._apply_filter()
             try:
                 self._shown_cache_key = self._dashboard_cache_key()
@@ -841,6 +871,100 @@ class DashboardView(QWidget):
 
     # -- header helpers --------------------------------------------------
 
+    def _build_empty_overlay(self) -> QWidget:
+        """First-run card shown over the empty queue.
+
+        Answers the only question a new user has — "where's my data?" — and
+        routes them to Settings (API key lives there) with one primary click.
+        """
+        from ui.icons import icon_label as _empty_icon
+
+        wrap = QWidget()
+        wrap.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        lay = QVBoxLayout(wrap)
+        lay.setContentsMargins(24, 32, 24, 32)
+        lay.setSpacing(0)
+
+        card = QFrame()
+        card.setObjectName("EmptyStateCard")
+        card.setStyleSheet(
+            f"QFrame#EmptyStateCard {{ background: {SURFACE_CONTAINER_LOWEST}; "
+            f"border: 1px dashed {OUTLINE_VARIANT}; border-radius: 8px; }}"
+        )
+        inner = QVBoxLayout(card)
+        inner.setContentsMargins(32, 32, 32, 28)
+        inner.setSpacing(8)
+
+        icon = _empty_icon("database", size=28, color=PRIMARY)
+        head_wrap = QHBoxLayout()
+        head_wrap.setSpacing(10)
+        head_wrap.addWidget(icon, 0, Qt.AlignVCenter)
+        self._empty_head = QLabel("No datasets loaded yet")
+        self._empty_head.setStyleSheet(
+            f"font-size: 15px; font-weight: 700; color: {ON_SURFACE}; "
+            "background: transparent; border: none;"
+        )
+        head_wrap.addWidget(self._empty_head, 1, Qt.AlignVCenter)
+        inner.addLayout(head_wrap)
+
+        self._empty_body = QLabel(
+            "Add a Dataverse API key in Settings, then refresh to pull "
+            "drafts and in-review datasets into the curation queue."
+        )
+        self._empty_body.setWordWrap(True)
+        self._empty_body.setStyleSheet(
+            f"font-size: 12px; color: {ON_SURFACE_VARIANT}; "
+            "background: transparent; border: none;"
+        )
+        inner.addWidget(self._empty_body)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        btn_row.addStretch(1)
+        settings_btn = AppButton("Open Settings", kind="primary", size="md")
+        settings_btn.clicked.connect(self.settingsRequested)
+        btn_row.addWidget(settings_btn)
+        inner.addLayout(btn_row)
+        inner.addStretch(1)
+
+        lay.addStretch(1)
+        lay.addWidget(card)
+        lay.addStretch(1)
+        return wrap
+
+    def _update_empty_state(self) -> None:
+        """Show the first-run card whenever the queue itself is empty.
+
+        Covers both the never-configured first run (no token) and a crawl
+        that legitimately returned zero rows — never a filtered-out view
+        (then _all_datasets is non-empty and the status line explains it).
+        """
+        try:
+            has_token = bool((self._config.dataverse.api_token or "").strip())
+        except Exception:
+            has_token = False
+        loading = self._worker is not None and self._worker.isRunning()
+        show = not self._all_datasets and not loading
+        try:
+            if show:
+                if has_token:
+                    self._empty_head.setText("No datasets in this collection")
+                    self._empty_body.setText(
+                        "The connected collection returned no datasets. "
+                        "Check the collection alias in Settings, or refresh "
+                        "once more."
+                    )
+                else:
+                    self._empty_head.setText("No datasets loaded yet")
+                    self._empty_body.setText(
+                        "Add a Dataverse API key in Settings, then refresh to "
+                        "pull drafts and in-review datasets into the curation "
+                        "queue."
+                    )
+            self._empty_overlay.setVisible(show)
+        except Exception:
+            pass
+
     def _make_metric_card(self, accent: str, label: str, sub: str) -> QFrame:
         """Slim single-line metric: icon + label on the left, value on the right."""
         card = QFrame()
@@ -848,7 +972,7 @@ class DashboardView(QWidget):
         card.setProperty("accent", accent)
         border_color = {"tertiary": TERTIARY, "primary": PRIMARY, "error": ERROR}[accent]
         card.setStyleSheet(
-            f"QFrame#MetricCard {{ background: #ffffff; border: 1px solid {OUTLINE_VARIANT}; "
+            f"QFrame#MetricCard {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {OUTLINE_VARIANT}; "
             "border-radius: 8px; }}"
         )
         card.setMinimumHeight(52)
@@ -864,14 +988,14 @@ class DashboardView(QWidget):
         )
         lbl = QLabel(f"{label.upper()}  ·  {sub}")
         lbl.setStyleSheet(
-            "font-size: 11px; font-weight: 600; color: #424656; "
+            f"font-size: 11px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
             "letter-spacing: 0.5px; border: none; background: transparent;"
         )
         lay.addWidget(lbl, 1)
         v = QLabel("0")
         v.setObjectName("metricValue")
         v.setStyleSheet(
-            "font-size: 22px; font-weight: 700; color: #131b2e; "
+            f"font-size: 22px; font-weight: 700; color: {ON_SURFACE}; "
             "border: none; background: transparent;"
         )
         v.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -1223,6 +1347,7 @@ class DashboardView(QWidget):
                 self._decided_cache = set()
             self._apply_size_cache(datasets)
             self._all_datasets = datasets
+            self._crawled = True
             self._merge_row_labels()
             self._rebuild_collection_filter()
             # Persist this crawl so the next app open paints instantly.
@@ -1267,7 +1392,8 @@ class DashboardView(QWidget):
             from ui.dialogs import show_warning
             show_warning(
                 self, "Dashboard",
-                f"Failed to display datasets:\n{exc}\n\n{traceback.format_exc()}",
+                "Couldn't display the dataset list.",
+                details=f"{exc}\n\n{traceback.format_exc()}",
             )
 
     def _update_metrics(self) -> None:
@@ -1276,7 +1402,17 @@ class DashboardView(QWidget):
         - Pending Datasets: versionState DRAFT (plain drafts awaiting triage)
         - In Review: locked for review (confirmed via the locks endpoint)
         - Needs Action: drafts + in-review items with no logged decision yet
+
+        Before the first crawl finishes every card reads "-" (no data yet,
+        not "zero of everything").
         """
+        if not self._crawled:
+            for card in self._metric_cards:
+                v_lbl = card.findChild(QLabel, "metricValue")
+                if v_lbl:
+                    v_lbl.setText("—")
+            self._update_empty_state()
+            return
         in_review = sum(
             1 for d in self._all_datasets if "REVIEW" in (d.get("state") or "").upper()
         )
@@ -1303,6 +1439,7 @@ class DashboardView(QWidget):
             v_lbl = card.findChild(QLabel, "metricValue")
             if v_lbl:
                 v_lbl.setText(str(val))
+        self._update_empty_state()
 
     def _cell_text(self, ds: dict, key: str) -> str:
         if key == "total_size_bytes":
@@ -1447,15 +1584,46 @@ class DashboardView(QWidget):
             from ui.dialogs import show_warning
             show_warning(
                 self, "Dashboard",
-                f"Failed to display datasets:\n{exc}\n\n{traceback.format_exc()}",
+                "Couldn't display the dataset list.",
+                details=f"{exc}\n\n{traceback.format_exc()}",
             )
 
     def _on_crawl_error(self, msg: str) -> None:
-        from ui.dialogs import show_warning
+        from ui.dialogs import describe_error, show_warning
         self._worker = None
         self._refresh_btn.setEnabled(True)
-        self._progress.setText("Error — details in dialog (text is selectable/copyable)")
-        show_warning(self, "Dataverse", f"Could not fetch datasets:\n{msg}")
+        self._progress.setText("Error — details in dialog (Retry available)")
+        headline, details = describe_error(msg)
+        show_warning(
+            self,
+            "Can't load datasets",
+            headline,
+            details=details,
+            retry=self.reload,
+        )
+        self._update_empty_state()
+
+    def eventFilter(self, obj, event):
+        """Keyboard parity for the queue table (P0).
+
+        Enter/Return opens the focused row (double-click alone locks out
+        keyboard-only users), F5 refreshes, Escape clears the search box.
+        """
+        if obj is self._table and event.type() == QEvent.Type.KeyPress:
+            key = event.key()
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                row = self._table.currentRow()
+                if row >= 0 and self._table.rowCount():
+                    self._on_double_click(row, 0)
+                return True
+            if key == Qt.Key.Key_F5:
+                self.reload()
+                return True
+            if key == Qt.Key.Key_Escape:
+                if self._filter_edit.text():
+                    self._filter_edit.clear()
+                    return True
+        return super().eventFilter(obj, event)
 
     def _on_double_click(self, row: int, _col: int) -> None:
         # Visual row == filtered row order only when sorting is off; with
