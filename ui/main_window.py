@@ -15,8 +15,8 @@ collection alias).
 # this is safe on every platform; all real Win32 calls stay Windows-gated.
 import ctypes
 
-from PySide6.QtCore import QEvent, QPoint, Qt
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
+    QStyle,
     QVBoxLayout,
     QWidget,
 )
@@ -35,6 +36,7 @@ from ui.about_pane import AboutPane
 from ui.dashboard import DashboardView
 from ui.dataset_detail import DatasetDetailView
 from ui.dialogs import show_warning
+from ui.icons import icon as lucide_icon
 from ui.log_panel import LogPage
 from ui.settings_dialog import SettingsPane
 from ui.theme import (
@@ -43,7 +45,9 @@ from ui.theme import (
     ON_ERROR_CONTAINER,
     ON_PRIMARY,
     ON_SECONDARY_CONTAINER,
+    ON_SECONDARY_FIXED,
     ON_SURFACE,
+    ON_SURFACE_VARIANT,
     OUTLINE_VARIANT,
     PRIMARY,
     SECONDARY_CONTAINER,
@@ -191,6 +195,144 @@ def _maximized_client_rect(hwnd: int):
         return None
 
 
+# Caption-button chrome (the only widgets styled inline in this module).
+# [hovered="true"] mirrors :hover because the background must repaint
+# deterministically: a cursor that teleports onto the button (SetCursorPos,
+# remote sessions) can have its first paint run before Qt settles the
+# :hover state, leaving the background white while the cursor sits still.
+# The property forces a restyle from enter/leaveEvent instead of relying
+# on the state-driven paint.
+_WIN_BTN_QSS = (
+    f"QPushButton {{ background: transparent; color: {ON_SURFACE}; border: none; "
+    "border-radius: 0px; }"
+    f"QPushButton:hover, QPushButton[hovered=\"true\"] {{ "
+    f"background: {SURFACE_CONTAINER_HIGH}; }}"
+    f"QPushButton:pressed {{ background: {SECONDARY_CONTAINER}; }}"
+)
+_WIN_CLOSE_QSS = (
+    f"QPushButton {{ background: transparent; color: {ON_SURFACE}; border: none; "
+    "border-radius: 0px; }"
+    f"QPushButton:hover, QPushButton[hovered=\"true\"] {{ "
+    f"background: {ERROR}; color: {ON_PRIMARY}; }}"
+    f"QPushButton:pressed {{ background: {ON_ERROR_CONTAINER}; color: {ON_PRIMARY}; }}"
+)
+
+# QStyle standard pixmaps: the exact glyphs Windows paints in a native
+# caption (text characters never matched them, especially restore).
+_CAPTION_GLYPHS = {
+    "min": QStyle.SP_TitleBarMinButton,
+    "max": QStyle.SP_TitleBarMaxButton,
+    "restore": QStyle.SP_TitleBarNormalButton,
+    "close": QStyle.SP_TitleBarCloseButton,
+}
+_CAPTION_TIPS = {"min": "Minimize", "max": "Maximize", "restore": "Restore", "close": "Close"}
+_CAPTION_A11Y = {
+    "min": "Minimize window",
+    "max": "Maximize window",
+    "restore": "Restore window",
+    "close": "Close window",
+}
+
+
+def _tinted_icon(source: QIcon, color: str, size: int = 16) -> QIcon:
+    """Recolour an icon to a solid colour, keeping its alpha shape.
+
+    QStyle's caption glyphs are baked in a fixed dark colour; the close
+    button needs the native white glyph once its hover fill turns red.
+    """
+    try:
+        pm = source.pixmap(size, size)
+        out = QPixmap(pm.size())
+        out.fill(Qt.transparent)
+        painter = QPainter(out)
+        try:
+            # Draw the glyph first, then recolour it: SourceIn keeps the
+            # source's alpha but replaces its RGB with the fill colour.
+            painter.drawPixmap(0, 0, pm)
+            painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+            painter.fillRect(out.rect(), QColor(color))
+        finally:
+            painter.end()
+        return QIcon(out)
+    except Exception:
+        return source
+
+
+class _CaptionButton(QPushButton):
+    """Windows caption button (minimize / maximize / restore / close).
+
+    Glyphs are QStyle standard pixmaps — the same artwork a native title
+    bar draws — instead of text characters. The close glyph flips to
+    white-on-red on hover/press, like the real thing.
+    """
+
+    def __init__(self, kind: str, parent: QWidget | None = None) -> None:
+        super().__init__("", parent)
+        self._kind = kind
+        self._hovered = False
+        self.setFixedSize(46, 32)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip(_CAPTION_TIPS[kind])
+        self.setAccessibleName(_CAPTION_A11Y[kind])
+        self.setIconSize(QSize(14, 14))
+        self.setStyleSheet(_WIN_CLOSE_QSS if kind == "close" else _WIN_BTN_QSS)
+        self._apply_icon()
+
+    def set_glyph(self, kind: str) -> None:
+        """Swap the glyph (maximize <-> restore) and its tooltip."""
+        if kind == self._kind:
+            return
+        self._kind = kind
+        self.setToolTip(_CAPTION_TIPS[kind])
+        self._apply_icon()
+
+    def _apply_icon(self) -> None:
+        try:
+            glyph = self.style().standardIcon(_CAPTION_GLYPHS[self._kind])
+            if self._kind == "close" and (
+                self._hovered or self.underMouse() or self.isDown()
+            ):
+                glyph = _tinted_icon(glyph, ON_PRIMARY, 14)
+            self.setIcon(glyph)
+        except Exception:
+            pass
+
+    def set_hovered(self, on: bool) -> None:
+        """Mirror hover into a dynamic property and force the restyle.
+
+        Qt's :hover state paint can be left stale when the cursor
+        teleports onto the button (see _WIN_CLOSE_QSS); the property
+        rule repaints deterministically from enter/leaveEvent instead.
+        """
+        on = bool(on)
+        if on == self._hovered:
+            return
+        self._hovered = on
+        try:
+            self.setProperty("hovered", "true" if on else "false")
+            self.style().unpolish(self)
+            self.style().polish(self)
+        except Exception:
+            pass
+        self._apply_icon()
+
+    def enterEvent(self, event) -> None:
+        super().enterEvent(event)
+        self.set_hovered(True)
+
+    def leaveEvent(self, event) -> None:
+        super().leaveEvent(event)
+        self.set_hovered(False)
+
+    def mousePressEvent(self, event) -> None:
+        super().mousePressEvent(event)
+        self._apply_icon()
+
+    def mouseReleaseEvent(self, event) -> None:
+        super().mouseReleaseEvent(event)
+        self._apply_icon()
+
+
 class MainWindow(QMainWindow):
     def __init__(self, config: Config) -> None:
         super().__init__()
@@ -249,37 +391,43 @@ class MainWindow(QMainWindow):
         sep.setFixedWidth(1)
         nav_lay.addWidget(sep)
 
-        # Nav group: Settings, Review configuration, Log, Help (moved left)
-        self._nav_settings = AppButton("Settings", kind="nav", size=None)
+        # Nav group: Settings, Review configuration, Log, About (moved
+        # left). Icon-only: Lucide glyph, label lives in the tooltip.
+        self._nav_settings = AppButton("", kind="nav", size=None)
         self._nav_settings.setCheckable(True)
         self._nav_settings.setCursor(Qt.PointingHandCursor)
-        self._nav_settings.setFixedHeight(32)
-        self._nav_settings.setToolTip("Dataverse, API token, workspace (Ctrl+,)")
+        self._nav_settings.setFixedSize(32, 32)
+        self._nav_settings.setToolTip("Settings")
+        self._nav_settings.setAccessibleName("Settings")
         self._nav_settings.toggled.connect(self._on_settings_toggled)
         nav_lay.addWidget(self._nav_settings)
 
-        self._nav_requirements = AppButton("Review configuration", kind="nav", size=None)
+        self._nav_requirements = AppButton("", kind="nav", size=None)
         self._nav_requirements.setCursor(Qt.PointingHandCursor)
-        self._nav_requirements.setFixedHeight(32)
-        self._nav_requirements.setToolTip("Edit review rules and depositor response templates")
+        self._nav_requirements.setFixedSize(32, 32)
+        self._nav_requirements.setToolTip("Configure Rules")
+        self._nav_requirements.setAccessibleName("Configure Rules")
         self._nav_requirements.clicked.connect(self._show_review_config)
         nav_lay.addWidget(self._nav_requirements)
 
-        self._nav_log = AppButton("Log", kind="nav", size=None)
+        self._nav_log = AppButton("", kind="nav", size=None)
         self._nav_log.setCheckable(True)
         self._nav_log.setCursor(Qt.PointingHandCursor)
-        self._nav_log.setFixedHeight(32)
-        self._nav_log.setToolTip("Show/hide curation log (Ctrl+L)")
+        self._nav_log.setFixedSize(32, 32)
+        self._nav_log.setToolTip("Log")
+        self._nav_log.setAccessibleName("Log")
         self._nav_log.toggled.connect(self._on_log_toggled)
         nav_lay.addWidget(self._nav_log)
 
-        self._nav_help = AppButton("?", kind="nav", size=None)
+        self._nav_help = AppButton("", kind="nav", size=None)
         self._nav_help.setCheckable(True)
         self._nav_help.setFixedSize(32, 32)
         self._nav_help.setCursor(Qt.PointingHandCursor)
-        self._nav_help.setToolTip("About this app")
+        self._nav_help.setToolTip("About")
+        self._nav_help.setAccessibleName("About")
         self._nav_help.toggled.connect(self._on_about_toggled)
         nav_lay.addWidget(self._nav_help)
+        self._sync_nav_icons()
 
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.VLine)
@@ -306,39 +454,13 @@ class MainWindow(QMainWindow):
         win_lay = QHBoxLayout(self._win_controls)
         win_lay.setContentsMargins(6, 0, 0, 0)
         win_lay.setSpacing(0)
-        win_base = (
-            f"QPushButton {{ background: transparent; color: {ON_SURFACE}; border: none; "
-            "border-radius: 0px; font-size: 13px; }"
-            f"QPushButton:hover {{ background: {SURFACE_CONTAINER_HIGH}; }}"
-            f"QPushButton:pressed {{ background: {SECONDARY_CONTAINER}; }}"
-        )
-        self._btn_min = QPushButton("–")
-        self._btn_min.setFixedSize(46, 32)
-        self._btn_min.setCursor(Qt.PointingHandCursor)
-        self._btn_min.setToolTip("Minimize")
-        self._btn_min.setAccessibleName("Minimize window")
-        self._btn_min.setStyleSheet(win_base)
+        self._btn_min = _CaptionButton("min", self)
         self._btn_min.clicked.connect(self.showMinimized)
         win_lay.addWidget(self._btn_min)
-        self._btn_max = QPushButton("▢")
-        self._btn_max.setFixedSize(46, 32)
-        self._btn_max.setCursor(Qt.PointingHandCursor)
-        self._btn_max.setToolTip("Maximize")
-        self._btn_max.setAccessibleName("Maximize window")
-        self._btn_max.setStyleSheet(win_base)
+        self._btn_max = _CaptionButton("max", self)
         self._btn_max.clicked.connect(self._on_max_restore)
         win_lay.addWidget(self._btn_max)
-        self._btn_close = QPushButton("✕")
-        self._btn_close.setFixedSize(46, 32)
-        self._btn_close.setCursor(Qt.PointingHandCursor)
-        self._btn_close.setToolTip("Close")
-        self._btn_close.setAccessibleName("Close window")
-        self._btn_close.setStyleSheet(
-            f"QPushButton {{ background: transparent; color: {ON_SURFACE}; border: none; "
-            "border-radius: 0px; font-size: 13px; }"
-            f"QPushButton:hover {{ background: {ERROR}; color: {ON_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background: {ON_ERROR_CONTAINER}; color: {ON_PRIMARY}; }}"
-        )
+        self._btn_close = _CaptionButton("close", self)
         self._btn_close.clicked.connect(self.close)
         win_lay.addWidget(self._btn_close)
         nav_lay.addWidget(self._win_controls, 0)
@@ -491,6 +613,32 @@ class MainWindow(QMainWindow):
                     btn.blockSignals(False)
                 except Exception:
                     pass
+        self._sync_nav_icons()
+
+    def _set_nav_icon(self, btn, name: str, active: bool) -> None:
+        """Lucide glyph for a nav button, tinted to its active state."""
+        try:
+            color = ON_SECONDARY_FIXED if active else ON_SURFACE_VARIANT
+            btn.setIcon(lucide_icon(name, color=color, size=16))
+            btn.setIconSize(QSize(16, 16))
+        except Exception:
+            pass
+
+    def _sync_nav_icons(self) -> None:
+        """Match each icon's tint to the text colour its state uses."""
+        try:
+            self._set_nav_icon(
+                self._nav_settings, "settings", self._nav_settings.isChecked()
+            )
+            self._set_nav_icon(
+                self._nav_requirements,
+                "square-pen",
+                self._nav_requirements.objectName() == "NavActive",
+            )
+            self._set_nav_icon(self._nav_log, "square-text", self._nav_log.isChecked())
+            self._set_nav_icon(self._nav_help, "info", self._nav_help.isChecked())
+        except Exception:
+            pass
 
     def _show_pane(self, name) -> None:
         """Show one pane exclusively (settings/about) or switch to log page."""
@@ -799,17 +947,15 @@ class MainWindow(QMainWindow):
                 self.showMaximized()
         except Exception:
             pass
-        self._update_max_glyph()
+        self._update_max_icon()
         self._apply_dwm_frame()
 
-    def _update_max_glyph(self) -> None:
+    def _update_max_icon(self) -> None:
         try:
             if self.isMaximized():
-                self._btn_max.setText("❐")
-                self._btn_max.setToolTip("Restore")
+                self._btn_max.set_glyph("restore")
             else:
-                self._btn_max.setText("▢")
-                self._btn_max.setToolTip("Maximize")
+                self._btn_max.set_glyph("max")
         except Exception:
             pass
 
@@ -820,8 +966,9 @@ class MainWindow(QMainWindow):
             pass
         try:
             if event.type() == QEvent.WindowStateChange:
-                self._update_max_glyph()
+                self._update_max_icon()
                 self._apply_dwm_frame()
+                QTimer.singleShot(300, self._heal_caption_strip)
         except Exception:
             pass
 
@@ -833,6 +980,51 @@ class MainWindow(QMainWindow):
         # HWND + DWM are ready here; also re-applied on every
         # maximize/restore (see _on_max_restore/changeEvent).
         self._apply_dwm_frame()
+        QTimer.singleShot(300, self._heal_caption_strip)
+
+    def _heal_caption_strip(self) -> None:
+        """Re-assert the stripped frame if Windows ever re-adds a caption.
+
+        WM_NCCALCSIZE must strip non-client space on every recalculation;
+        if any path misses it (window recreation, restore from maximized),
+        a native title bar reappears above TopNav — the "two bars" bug.
+        Measures the real client origin while restored and, when the client
+        is inset from the window edge, nudges the frame calculation with
+        SWP_FRAMECHANGED so our handler strips it again. No-op off Windows
+        or when already correct — never raises.
+        """
+        try:
+            import sys as _sys
+
+            if not _sys.platform.startswith("win") or self.isMaximized():
+                return
+            hwnd = int(getattr(self, "_hwnd", 0) or 0) or int(self.winId())
+            if not hwnd:
+                return
+            import ctypes
+            from ctypes import wintypes
+
+            user32 = _user32()
+            wr = wintypes.RECT()
+            pt = wintypes.POINT(0, 0)
+            user32.GetWindowRect(wintypes.HWND(hwnd), ctypes.byref(wr))
+            user32.ClientToScreen(wintypes.HWND(hwnd), ctypes.byref(pt))
+            if (pt.y - wr.top) <= 0:
+                return  # client starts at the window edge: already stripped
+            SWP_NOSIZE, SWP_NOMOVE, SWP_NOZORDER = 0x0001, 0x0002, 0x0004
+            SWP_NOACTIVATE, SWP_FRAMECHANGED = 0x0010, 0x0020
+            user32.SetWindowPos(
+                wintypes.HWND(hwnd),
+                wintypes.HWND(0),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER
+                | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            )
+        except Exception:
+            pass
 
     def _apply_dwm_frame(self) -> None:
         """Restore the standard Windows border + drop shadow.
@@ -1010,28 +1202,35 @@ class MainWindow(QMainWindow):
                         # Use the cached handle from _apply_dwm_frame; when
                         # it is not known yet, strip without insetting (the
                         # window cannot be maximized before first show).
-                        if msg.wParam:
-                            try:
-                                hwnd = int(getattr(self, "_hwnd", 0) or 0)
-                                target = _maximized_client_rect(hwnd) if hwnd else None
-                            except Exception:
-                                target = None
+                        #
+                        # BOTH wParam forms are handled here and every path
+                        # returns True, 0: wParam FALSE (lParam = plain RECT)
+                        # used to fall through to super(), whose default
+                        # processing subtracts a full native caption — the
+                        # "two bars" regression (a system title bar drawn
+                        # above TopNav). A stripped frame beats a duplicate
+                        # bar in every fallback case.
+                        try:
+                            hwnd = int(getattr(self, "_hwnd", 0) or 0)
+                            target = _maximized_client_rect(hwnd) if hwnd else None
                             if target is not None:
                                 # Maximized caption windows overscan the
                                 # screen edges; inset the client rect to the
                                 # monitor work area so content never slides
                                 # under the taskbar or off-screen.
-                                try:
-                                    params = ctypes.cast(
+                                if msg.wParam:
+                                    rct = ctypes.cast(
                                         int(msg.lParam),
                                         ctypes.POINTER(_NCCALCSIZE_PARAMS),
+                                    ).contents.rgrc[0]
+                                else:
+                                    rct = ctypes.cast(
+                                        int(msg.lParam), ctypes.POINTER(_RECT)
                                     ).contents
-                                    (params.rgrc[0].left, params.rgrc[0].top,
-                                     params.rgrc[0].right, params.rgrc[0].bottom) = target
-                                except Exception:
-                                    pass
-                            return True, 0
-                        return super().nativeEvent(eventType, message)
+                                (rct.left, rct.top, rct.right, rct.bottom) = target
+                        except Exception:
+                            pass
+                        return True, 0
                     WM_NCHITTEST = 0x84
                     if msg.message == WM_NCHITTEST:
                         HTCLIENT, HTCAPTION = 1, 2
@@ -1048,22 +1247,24 @@ class MainWindow(QMainWindow):
                         global_pt = QPoint(x, y)
                         if not self.rect().contains(self.mapFromGlobal(global_pt)):
                             return super().nativeEvent(eventType, message)
-                        # Caption buttons and nav controls keep clicks —
-                        # and the three window buttons report native
-                        # HTMINBUTTON/HTMAXBUTTON/HTCLOSE so Windows
-                        # treats them as real caption buttons (hover
-                        # previews, Aero, accessibility).
+                        # Buttons under the point stay HTCLIENT: that is
+                        # what keeps them out of the HTCAPTION drag path
+                        # below, and it gives standard client behavior.
+                        # The three window buttons used to report
+                        # HTMINBUTTON/HTMAXBUTTON/HTCLOSE for "native
+                        # caption" semantics, but non-client hits route
+                        # the cursor as NC — Qt then never delivers client
+                        # enter/move, so :hover never fired (no red close,
+                        # no glyph tint, no tooltips) and NC presses
+                        # stalled inside system processing (a posted
+                        # WM_NCLBUTTONDOWN blocked for 30s+). Real caption
+                        # affordances (drag/snap) come from HTCAPTION on
+                        # empty TopNav space, which is unchanged.
                         try:
                             for btn in self._topnav.findChildren(QPushButton):
                                 try:
                                     if not (btn.isVisible() and btn.rect().contains(btn.mapFromGlobal(global_pt))):
                                         continue
-                                    if btn is getattr(self, "_btn_min", None):
-                                        return True, 8   # HTMINBUTTON
-                                    if btn is getattr(self, "_btn_max", None):
-                                        return True, 9   # HTMAXBUTTON
-                                    if btn is getattr(self, "_btn_close", None):
-                                        return True, 20  # HTCLOSE
                                     return True, HTCLIENT
                                 except Exception:
                                     continue

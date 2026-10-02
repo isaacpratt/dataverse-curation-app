@@ -290,21 +290,10 @@ QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox {{
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{
     border: 1px solid {PRIMARY};
 }}
-/* ===== Focus (WCAG 2.4.7): keyboard focus must always be visible =====
-   Qt draws the stylesheet `outline` inside the widget's focus-rect slot,
-   so nothing reflows. Buttons/tables/tabs previously had NO focus cue at
-   all — keyboard users could not tell which control was armed. */
-QPushButton:focus {{
-    outline: 2px solid {ON_SURFACE};
-    outline-radius: {RADIUS_LG};
-}}
-QTableWidget:focus, QTreeWidget:focus, QListWidget:focus {{
-    outline: 2px solid {PRIMARY};
-    outline-radius: {RADIUS_LG};
-}}
-QTabBar::tab:focus {{
-    outline: 2px solid {PRIMARY};
-}}
+/* No focus outlines: clicking a button/table/tab must not ring the
+   control (2026-10-02 — reverses the 2026-09-25 outline batch).
+   Focused inputs still signal focus via the border-colour change above. */
+
 QLineEdit#SearchField {{
     padding-left: 32px;
     background: {SURFACE_CONTAINER_LOWEST};

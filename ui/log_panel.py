@@ -12,14 +12,12 @@ contrast, dark-on-light backgrounds for ERROR/WARN rows).
 
 import hashlib
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPlainTextEdit,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -38,14 +36,12 @@ from ui.theme import (
     OUTLINE_VARIANT,
     PRIMARY,
     PRIMARY_DEEP,
-    PRIMARY_FIXED,
     SUCCESS_DARK,
     SURFACE_CONTAINER_LOW,
-    SURFACE_CONTAINER_LOWEST,
     TERTIARY,
     action_button_style,
 )
-from ui.widgets import AppButton
+from ui.widgets import AppButton, make_search_field
 
 
 class LogPage(QWidget):
@@ -65,26 +61,17 @@ class LogPage(QWidget):
         header.addWidget(title)
         header.addStretch(1)
         # Search box: filter visible lines (case-insensitive substring).
-        self._search = QLineEdit()
-        self._search.setObjectName("LogSearch")
-        self._search.setPlaceholderText("Search log…")
-        self._search.setClearButtonEnabled(True)
-        self._search.setFixedHeight(28)
-        self._search.setMinimumWidth(180)
-        self._search.setStyleSheet(
-            f"QLineEdit#LogSearch {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {OUTLINE_VARIANT}; "
-            "border-radius: 8px; padding-left: 10px; font-size: 12px; }"
-            f"QLineEdit#LogSearch:focus {{ border: 1px solid {PRIMARY}; }}"
-        )
+        # Standard search field — same 36px box + 13px text as the
+        # dashboard/detail/review filters (was a bespoke 28px/12px box).
+        self._search = make_search_field("Search log…", min_width=180)
         self._search.textChanged.connect(self._on_search_changed)
         header.addWidget(self._search)
-        # Live toggle
-        self._live_btn = QPushButton("Live")
+        # Live toggle — standard secondary button, same face/height as the
+        # Clear log + Refresh buttons beside it (was a bespoke 28px/10px box).
+        self._live_btn = AppButton("Live", kind="secondary")
         self._live_btn.setCheckable(True)
         self._live_btn.setChecked(True)
-        self._live_btn.setCursor(Qt.PointingHandCursor)
-        self._live_btn.setFixedHeight(28)
-        self._live_btn.setMinimumWidth(90)
+        self._live_btn.setStyleSheet(action_button_style(False))
         self._live_btn.setToolTip("Follow new log lines as they arrive (click to pause)")
         self._live_btn.toggled.connect(self._on_live_toggled)
         self._style_live_btn()
@@ -143,6 +130,7 @@ class LogPage(QWidget):
             pass
 
     def _style_live_btn(self) -> None:
+        """Sync the Live/Paused label + dot icon (face stays standard)."""
         from ui.icons import icon as _live_icon
 
         live = self._live_btn.isChecked()
@@ -154,13 +142,6 @@ class LogPage(QWidget):
             )
         except Exception:
             pass
-        self._live_btn.setStyleSheet(
-            f"QPushButton {{ background: {PRIMARY_FIXED}; color: {PRIMARY_DEEP}; border: 1px solid {OUTLINE_VARIANT}; "
-            "border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 700; }"
-            if live else
-            f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SECONDARY_CONTAINER}; border: 1px solid {OUTLINE_VARIANT}; "
-            "border-radius: 8px; padding: 0 8px; font-size: 10px; font-weight: 700; }"
-        )
 
     def _on_live_toggled(self, checked: bool) -> None:
         self._style_live_btn()
