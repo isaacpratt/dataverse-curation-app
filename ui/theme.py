@@ -195,6 +195,13 @@ QMainWindow, QStackedWidget, QScrollArea {{
     font-weight: 500;
     font-size: 12px;
 }}
+/* Keyboard focus tint (focus-visible) — a colour change, never an outline.
+   Sits before :hover/:checked so hover feedback wins when both apply. */
+#TopNav QPushButton#NavActive[focusVisible="true"],
+#TopNav QPushButton#NavItem[focusVisible="true"] {{
+    background: {PRIMARY_FIXED_DIM};
+    color: {ON_SURFACE};
+}}
 #TopNav QPushButton#NavItem:hover {{
     background: {SURFACE_CONTAINER_HIGH};
     color: {ON_SURFACE};
@@ -240,6 +247,7 @@ QPushButton#PrimaryButton {{
     font-weight: 600;
     font-size: 12px;
 }}
+QPushButton#PrimaryButton[focusVisible="true"] {{ background: {PRIMARY_CONTAINER}; }}
 QPushButton#PrimaryButton:hover {{ background: {ON_PRIMARY_FIXED_VARIANT}; }}
 QPushButton#PrimaryButton:pressed {{ background: {PRIMARY_PRESSED}; }}
 /* Disabled primary stays readable (muted blue, white text) so the action
@@ -255,6 +263,7 @@ QPushButton#SecondaryButton {{
     font-weight: 600;
     font-size: 12px;
 }}
+QPushButton#SecondaryButton[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; }}
 QPushButton#SecondaryButton:hover {{ background: {SURFACE_CONTAINER_HIGH}; border: 1px solid {PRIMARY}; }}
 QPushButton#SecondaryButton:pressed {{ background: {SECONDARY_CONTAINER}; }}
 
@@ -265,6 +274,7 @@ QPushButton#GhostButton {{
     border-radius: {RADIUS_LG};
     padding: 6px 10px;
 }}
+QPushButton#GhostButton[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; color: {ON_SURFACE}; }}
 QPushButton#GhostButton:hover {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; }}
 
 /* Column chooser / filter chip */
@@ -277,6 +287,7 @@ QPushButton#FilterChip {{
     font-weight: 600;
     color: {ON_SURFACE_VARIANT};
 }}
+QPushButton#FilterChip[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; color: {ON_SURFACE}; }}
 QPushButton#FilterChip:hover {{ background: {SURFACE_CONTAINER_HIGH}; border: 1px solid {PRIMARY}; }}
 
 /* ===== Inputs ===== */
@@ -290,9 +301,19 @@ QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox {{
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{
     border: 1px solid {PRIMARY};
 }}
-/* No focus outlines: clicking a button/table/tab must not ring the
-   control (2026-10-02 — reverses the 2026-09-25 outline batch).
-   Focused inputs still signal focus via the border-colour change above. */
+/* Keyboard focus (Tab/arrow navigation) paints a colour tint — never an
+   outline (2026-10-02 — replaces both the outline batch and its removal).
+   focusVisible is set only when focus arrives from the keyboard
+   (theme._install_focus_visible); mouse clicks set no tint. Focused inputs
+   still signal focus via the border-colour change above. */
+QPushButton[focusVisible="true"] {{
+    background: {PRIMARY_FIXED_DIM};
+    color: {ON_SURFACE};
+}}
+QTabBar[focusVisible="true"]::tab:selected {{
+    background: {PRIMARY_FIXED_DIM};
+    color: {ON_SURFACE};
+}}
 
 QLineEdit#SearchField {{
     padding-left: 32px;
@@ -630,6 +651,7 @@ def apply_theme(app) -> None:
     app.setFont(font)
     app.setStyleSheet(global_qss())
     _install_hover_cursor(app)
+    _install_focus_visible(app)
 
 
 def action_button_style(primary: bool = False) -> str:
@@ -643,6 +665,7 @@ def action_button_style(primary: bool = False) -> str:
         return (
             f"QPushButton {{ background: {PRIMARY}; color: {ON_PRIMARY}; border: none; "
             "border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 12px; }"
+            f"QPushButton[focusVisible=\"true\"] {{ background: {PRIMARY_CONTAINER}; }}"
             f"QPushButton:hover {{ background: {ON_PRIMARY_FIXED_VARIANT}; }}"
             f"QPushButton:pressed {{ background: {PRIMARY_PRESSED}; }}"
             f"QPushButton:disabled {{ background: {PRIMARY_DISABLED}; color: {ON_PRIMARY}; }}"
@@ -651,6 +674,7 @@ def action_button_style(primary: bool = False) -> str:
         f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; "
         f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 7px 14px; "
         "font-weight: 600; font-size: 12px; }"
+        f"QPushButton[focusVisible=\"true\"] {{ background: {PRIMARY_FIXED_DIM}; }}"
         f"QPushButton:hover {{ background: {SURFACE_CONTAINER_HIGH}; border: 1px solid {PRIMARY}; }}"
         f"QPushButton:pressed {{ background: {SECONDARY_CONTAINER}; }}"
         f"QPushButton:disabled {{ background: {SURFACE_CONTAINER_LOW}; color: {ON_SECONDARY_CONTAINER}; }}"
@@ -748,6 +772,73 @@ def _install_hover_cursor(app) -> None:
             app._hover_cursor_ref = filt
         except Exception:
             pass
+    except Exception:
+        pass
+
+
+def _install_focus_visible(app) -> None:
+    """Keyboard-focus tint: focusVisible is set only when focus came from the keyboard.
+
+    Tab/arrow key presses arm the flag; any mouse press disarms it and drops the
+    tint from the widget that has focus (a click on the already-focused widget
+    fires no focusChanged, so the tint must be cleared directly). On focus change
+    the new widget gets the focusVisible="true" property and the old one loses
+    it, which QSS paints as a plain colour tint — tabbing always shows focus,
+    clicking never does, and no outline is ever drawn (2026-10-02).
+    """
+    try:
+        from PySide6.QtCore import QEvent, QObject, Qt
+
+        state = {"kbd": False}
+        nav_keys = {
+            Qt.Key_Tab, Qt.Key_Backtab, Qt.Key_Left, Qt.Key_Right,
+            Qt.Key_Up, Qt.Key_Down, Qt.Key_Home, Qt.Key_End,
+            Qt.Key_PageUp, Qt.Key_PageDown,
+        }
+
+        def _paint(w, on: bool) -> None:
+            try:
+                if w is None:
+                    return
+                cur = w.property("focusVisible")
+                if (cur == "true") == on:
+                    return
+                w.setProperty("focusVisible", "true" if on else "false")
+                w.style().unpolish(w)
+                w.style().polish(w)
+                w.update()
+            except Exception:
+                pass
+
+        class _FocusVisible(QObject):
+            def eventFilter(self, obj, event):
+                try:
+                    t = event.type()
+                    if t == QEvent.KeyPress and event.key() in nav_keys:
+                        state["kbd"] = True
+                    elif t == QEvent.MouseButtonPress:
+                        state["kbd"] = False
+                        _paint(app.focusWidget(), False)
+                except Exception:
+                    pass
+                return False
+
+        filt = _FocusVisible(app)
+        app.installEventFilter(filt)
+        try:
+            app._focus_visible_ref = filt
+        except Exception:
+            pass
+
+        def _on_focus_changed(old, new) -> None:
+            try:
+                _paint(old, False)
+                if state["kbd"]:
+                    _paint(new, True)
+            except Exception:
+                pass
+
+        app.focusChanged.connect(_on_focus_changed)
     except Exception:
         pass
 

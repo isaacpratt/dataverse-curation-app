@@ -248,7 +248,10 @@ class SettingsPane(QWidget):
         self._user_status = QLabel("")
         self._user_status.setWordWrap(True)
         self._user_status.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
-        form.addRow("", self._user_status)
+        # Single-widget rows span both form columns — the hint must run the
+        # full width instead of wrapping in the narrow value column
+        # (2026-10-02 minor: the hint rendered as a cramped block).
+        form.addRow(self._user_status)
 
         tabs.addTab(general, "General")
 
@@ -274,7 +277,18 @@ class SettingsPane(QWidget):
         )
         # Used-for column absorbs leftover width.
         self.ext_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        self.ext_table.setStyleSheet(flush_table_style(last=False))
+        # Qt derives CELL-WIDGET geometry from the item content box whenever
+        # a stylesheet is active: the app's `QTableWidget::item` rule
+        # (padding 10px 12px + 1px border-bottom) shrank every action cell to
+        # 13px inside a 34px row, clipping the 28px buttons to hollow slivers
+        # that painted over the Used-for column (2026-10-02). Zeroing the
+        # vertical padding here (12px horizontal inset kept, item text stays
+        # centered at the same y) lets the cell fill the row; the row
+        # separator still comes from the app rule's border-bottom.
+        self.ext_table.setStyleSheet(
+            flush_table_style(last=False)
+            + "QTableWidget::item { padding: 0px 12px; }"
+        )
         # Remember the user's column widths/order across sessions.
         try:
             from storage import (
@@ -566,6 +580,15 @@ class SettingsPane(QWidget):
         from ui.icons import icon as _ext_icon  # hoisted: also used in TOOLS rows below
 
         frozen = bool(getattr(sys, "frozen", False))
+        # Hide the cells being replaced before repopulating: Qt only
+        # deleteLater()s the old cell widgets, so without this they keep
+        # painting at their stale geometry until the next event-loop turn —
+        # ghost button copies over the Used-for column in any capture (or
+        # one-frame flash) taken between the replacement and that turn.
+        for _r in range(self.ext_table.rowCount()):
+            _old = self.ext_table.cellWidget(_r, 4)
+            if _old is not None:
+                _old.hide()
         self.ext_table.setRowCount(len(self.EXTENSIONS))
         for row, (pip_name, import_name, desc) in enumerate(self.EXTENSIONS):
             self.ext_table.setItem(row, 0, QTableWidgetItem(pip_name))
@@ -777,8 +800,13 @@ class SettingsPane(QWidget):
 
     @staticmethod
     def _make_user_value() -> QLabel:
-        """Read-only identity field (selectable, muted until resolved)."""
-        lbl = QLabel("—")
+        """Read-only identity field (selectable, muted until resolved).
+
+        The unfetched state is a NAMED one ("Not checked yet", then
+        "Checking…"/"No user returned"/"Not set" — 2026-10-02 P2), never
+        a bare "—".
+        """
+        lbl = QLabel("Not checked yet")
         lbl.setWordWrap(True)
         lbl.setTextInteractionFlags(
             Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
@@ -790,25 +818,35 @@ class SettingsPane(QWidget):
         """Blank only the collection-role row (alias edits stale it alone)."""
         try:
             if getattr(self, "_user_role", None) is not None:
-                self._user_role.setText("—")
+                self._user_role.setText("Not checked yet")
         except Exception:
             pass
 
     def _set_collection_role(
-        self, roles: list | None, alias: str = ""
+        self, roles: list | None, alias: str = "", checked: bool = True
     ) -> None:
         """Render the caller's role(s) on the alias collection.
 
         roles None = could not determine (denied/network/empty alias);
         [] = no direct role assignment; otherwise the joined role names.
+        checked=False = the identity pass never ran (no URL/token yet), so
+        the row keeps its named unfetched state instead of implying a
+        failed check.
         """
         try:
             if roles is None:
-                self._user_role.setText("—")
-                tip = "Could not determine a role for this collection."
+                if not checked:
+                    self._user_role.setText("Not checked yet")
+                    tip = "Enter a base URL and API token above, then Test connection."
+                elif (alias or "").strip():
+                    self._user_role.setText("Couldn't check")
+                    tip = "Could not determine a role for this collection."
+                else:
+                    self._user_role.setText("Not checked yet")
+                    tip = "Enter a collection alias above to check the role."
             elif not roles:
                 self._user_role.setText(
-                    "No direct role" if (alias or "").strip() else "—"
+                    "No direct role" if (alias or "").strip() else "Not checked yet"
                 )
                 tip = (
                     f"No direct role assignment on '{alias}'."
@@ -823,7 +861,7 @@ class SettingsPane(QWidget):
             pass
 
     def _clear_user_info(self) -> None:
-        """Blank the identity rows (stale identity must not survive edits)."""
+        """Reset the identity rows (stale identity must not survive edits)."""
         try:
             for attr in (
                 "_user_identifier", "_user_display", "_user_super", "_user_affil",
@@ -831,7 +869,7 @@ class SettingsPane(QWidget):
             ):
                 lbl = getattr(self, attr, None)
                 if lbl is not None:
-                    lbl.setText("—")
+                    lbl.setText("Not checked yet")
                     lbl.setStyleSheet(
                         f"font-size: 12px; color: {ON_SURFACE_VARIANT}; "
                         "border: none; background: transparent;"
@@ -841,36 +879,59 @@ class SettingsPane(QWidget):
         except Exception:
             pass
 
-    def _set_user_info(self, me: dict | None, status: str = "") -> None:
-        """Render a /api/users/:me profile into the identity rows."""
+    def _set_user_info(self, me: dict | None, status: str = "", checked: bool = False) -> None:
+        """Render a /api/users/:me profile into the identity rows.
+
+        checked=False (never queried: no URL/token yet) reads "Not checked
+        yet"; checked=True with no payload reads "No user returned"; a
+        loaded profile with an absent field reads "Not set" — each state is
+        named, never a bare "—" (2026-10-02 P2).
+        """
         try:
             ok = isinstance(me, dict) and bool(me)
-            self._user_identifier.setText(str((me or {}).get("identifier") or "—"))
+            if not ok:
+                empty = "No user returned" if checked else "Not checked yet"
+                self._user_identifier.setText(empty)
+                self._user_display.setText(empty)
+                self._user_super.setText(empty)
+                self._user_super.setStyleSheet(
+                    "font-size: 12px; "
+                    f"color: {ON_SURFACE_VARIANT}; border: none; background: transparent;"
+                )
+                self._user_affil.setText(empty)
+                self._user_status.setText(status)
+                return
+            self._user_identifier.setText(str(me.get("identifier") or "Not set"))
             display = str(
-                (me or {}).get("displayName")
+                me.get("displayName")
                 or " ".join(
                     p for p in (
-                        str((me or {}).get("firstName") or "").strip(),
-                        str((me or {}).get("lastName") or "").strip(),
+                        str(me.get("firstName") or "").strip(),
+                        str(me.get("lastName") or "").strip(),
                     )
                     if p
                 )
-                or "—"
+                or "Not set"
             )
             self._user_display.setText(display)
-            is_super = bool((me or {}).get("superuser")) if ok else None
-            self._user_super.setText(
-                "—" if is_super is None else ("Yes" if is_super else "No")
-            )
+            is_super = bool(me.get("superuser"))
+            self._user_super.setText("Yes" if is_super else "No")
             self._user_super.setStyleSheet(
                 "font-size: 12px; font-weight: 600; "
-                f"color: {SUCCESS_DARK if is_super else (ON_SURFACE_VARIANT if is_super is None else ON_SECONDARY_CONTAINER)}; "
+                f"color: {SUCCESS_DARK if is_super else ON_SECONDARY_CONTAINER}; "
                 "border: none; background: transparent;"
             )
-            self._user_affil.setText(str((me or {}).get("affiliation") or "—"))
+            self._user_affil.setText(str(me.get("affiliation") or "Not set"))
             self._user_status.setText(status)
         except Exception:
             pass
+
+    def _set_user_rows(self, text: str) -> None:
+        """Put every identity row in the same named state (in-flight check)."""
+        for attr in ("_user_identifier", "_user_display", "_user_super", "_user_affil", "_user_role"):
+            lbl = getattr(self, attr, None)
+            if lbl is not None:
+                lbl.setText(text)
 
     def _refresh_user_info(self) -> None:
         """Fetch identity + alias-collection role off the GUI thread."""
@@ -881,14 +942,16 @@ class SettingsPane(QWidget):
         except Exception:
             return
         if not base or not token:
+            # Nothing was queried: every row keeps its named unfetched state.
             self._set_user_info(
                 None, "Enter a base URL and API token above, then Test connection."
             )
-            self._set_collection_role(None, alias)
+            self._set_collection_role(None, alias, checked=False)
             return
         if self._shell_worker is not None and self._shell_worker.isRunning():
             return  # a test/extension task is running; refreshes on next open
         self._user_status.setText("Checking identity…")
+        self._set_user_rows("Checking…")
 
         def _fetch() -> tuple:
             import json as _json
@@ -930,7 +993,9 @@ class SettingsPane(QWidget):
             self._set_user_info(me, "")
         else:
             self._set_user_info(
-                None, "Could not verify identity — check the URL/token (see log)."
+                None,
+                "Could not verify identity — check the URL/token (see log).",
+                checked=True,
             )
         self._set_collection_role(
             list(roles) if isinstance(roles, list) else None, alias

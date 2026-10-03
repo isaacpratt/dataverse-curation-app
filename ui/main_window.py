@@ -50,6 +50,7 @@ from ui.theme import (
     ON_SURFACE_VARIANT,
     OUTLINE_VARIANT,
     PRIMARY,
+    PRIMARY_FIXED_DIM,
     SECONDARY_CONTAINER,
     SURFACE_CONTAINER,
     SURFACE_CONTAINER_HIGH,
@@ -205,6 +206,8 @@ def _maximized_client_rect(hwnd: int):
 _WIN_BTN_QSS = (
     f"QPushButton {{ background: transparent; color: {ON_SURFACE}; border: none; "
     "border-radius: 0px; }"
+    # Keyboard-focus tint: before hover so hover feedback wins when both apply.
+    f"QPushButton[focusVisible=\"true\"] {{ background: {PRIMARY_FIXED_DIM}; }}"
     f"QPushButton:hover, QPushButton[hovered=\"true\"] {{ "
     f"background: {SURFACE_CONTAINER_HIGH}; }}"
     f"QPushButton:pressed {{ background: {SECONDARY_CONTAINER}; }}"
@@ -212,6 +215,7 @@ _WIN_BTN_QSS = (
 _WIN_CLOSE_QSS = (
     f"QPushButton {{ background: transparent; color: {ON_SURFACE}; border: none; "
     "border-radius: 0px; }"
+    f"QPushButton[focusVisible=\"true\"] {{ background: {PRIMARY_FIXED_DIM}; }}"
     f"QPushButton:hover, QPushButton[hovered=\"true\"] {{ "
     f"background: {ERROR}; color: {ON_PRIMARY}; }}"
     f"QPushButton:pressed {{ background: {ON_ERROR_CONTAINER}; color: {ON_PRIMARY}; }}"

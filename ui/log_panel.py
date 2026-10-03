@@ -95,7 +95,10 @@ class LogPage(QWidget):
         font = QFont("Consolas")
         font.setStyleHint(QFont.Monospace)
         self._view.setFont(font)
-        self._view.setPlaceholderText("Log will appear here as the app talks to Dataverse…")
+        self._view.setPlaceholderText(
+            "Nothing logged yet — run checks, download files, or refresh the "
+            "dashboard and every Dataverse request will appear here."
+        )
         self._view.setStyleSheet(
             f"QPlainTextEdit {{ background: {SURFACE_CONTAINER_LOW}; color: {ON_SURFACE}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 6px 8px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; }}"
         )

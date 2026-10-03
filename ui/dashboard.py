@@ -71,6 +71,18 @@ _COLUMN_WIDTHS = {
     "downloaded_at": 130,
 }
 
+# Metric-card value: the real count (22px bold) versus a named pre-crawl
+# state (12px muted words, 2026-10-02 P2) — the number slot never shows a
+# bare "—", so a visible "0" can only mean a completed check counted zero.
+_METRIC_VALUE_STYLE = (
+    f"font-size: 22px; font-weight: 700; color: {ON_SURFACE}; "
+    "border: none; background: transparent;"
+)
+_METRIC_STATE_STYLE = (
+    f"font-size: 12px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
+    "letter-spacing: 0.5px; border: none; background: transparent;"
+)
+
 
 def _human_size(n: int) -> str:
     """Human-readable size with B/KB/MB/GB/TB (shared with detail)."""
@@ -416,8 +428,10 @@ class DashboardView(QWidget):
         self._worker: CrawlWorker | None = None
         self._all_datasets: list[dict] = []
         self._datasets: list[dict] = []
-        # Metrics read "-" until real data exists (first crawl / cache paint);
-        # zeros before that would claim knowledge we don't have.
+        # Metrics state "Checking…"/"Not fetched" until real data exists
+        # (first crawl / cache paint); a visible 0 then always means a
+        # completed check counted zero — zeros before that would claim
+        # knowledge we don't have.
         self._crawled = False
         self._col_index = {key: i for i, (key, _h, _v) in enumerate(COLUMNS)}
         # Curation labels for the connected Dataverse, remembered with each
@@ -455,6 +469,10 @@ class DashboardView(QWidget):
         self._metrics_row = QHBoxLayout()
         self._metrics_row.setSpacing(16)
         self._metric_cards: list[QFrame] = []
+        self._metric_subs: list[str] = []
+        # When the numbers below were last measured ("never" pre-crawl) —
+        # carried in every card's tooltip so a 0 is never a mystery.
+        self._last_refresh = "never"
         for accent, label, sub_text in [
             ("tertiary", "Pending Datasets", "drafts in queue"),
             ("primary", "In Review", "locked for review"),
@@ -463,6 +481,7 @@ class DashboardView(QWidget):
             card = self._make_metric_card(accent, label, sub_text)
             self._metrics_row.addWidget(card, 1)
             self._metric_cards.append(card)
+            self._metric_subs.append(sub_text)
         outer.addLayout(self._metrics_row)
 
         # ---- Curation Queue card ----
@@ -614,7 +633,21 @@ class DashboardView(QWidget):
             f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 8px 12px;"
         )
         self._progress.setWordWrap(True)
-        outer.addWidget(self._progress)
+        foot = QHBoxLayout()
+        foot.setSpacing(8)
+        foot.addWidget(self._progress, 1)
+        # The actionable footer hint gets a real affordance instead of a
+        # floating sentence: one tap straight to Settings (2026-10-02 minor).
+        foot_btn = AppButton("Open Settings", kind="ghost", size="sm")
+        foot_btn.setToolTip("Dataverse URL, API token, workspace, extensions")
+        foot_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; border: none; color: {PRIMARY}; "
+            "border-radius: 8px; font-size: 11px; }"
+            f"QPushButton:hover {{ color: {ON_SURFACE}; }}"
+        )
+        foot_btn.clicked.connect(self.settingsRequested.emit)
+        foot.addWidget(foot_btn, 0, Qt.AlignVCenter)
+        outer.addLayout(foot)
 
         self._apply_default_column_visibility()
         # Snapshot the construction view for the Columns-menu reset, then
@@ -639,7 +672,8 @@ class DashboardView(QWidget):
         # changes/new datasets in the background and diffs into this view.
         self._shown_cache_key = ""
         self._cache_loaded = self._show_cached_dashboard()
-        # First paint: "-" metrics + first-run card until a crawl lands.
+        # First paint: named pre-crawl metric states + first-run card until
+        # a crawl lands.
         self._update_metrics()
 
         if not (self._config.dataverse.api_token or "").strip():
@@ -761,6 +795,7 @@ class DashboardView(QWidget):
             except Exception:
                 pass
             saved = (entry.get("saved_at") or "")[:16].replace("T", " ")
+            self._last_refresh = saved or "earlier session"
             self._refresh_title()
             self._progress.setText(
                 f"Showing {len(self._all_datasets)} cached dataset(s)"
@@ -994,10 +1029,7 @@ class DashboardView(QWidget):
         lay.addWidget(lbl, 1)
         v = QLabel("0")
         v.setObjectName("metricValue")
-        v.setStyleSheet(
-            f"font-size: 22px; font-weight: 700; color: {ON_SURFACE}; "
-            "border: none; background: transparent;"
-        )
+        v.setStyleSheet(_METRIC_VALUE_STYLE)
         v.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         lay.addWidget(v, 0)
         return card
@@ -1256,6 +1288,8 @@ class DashboardView(QWidget):
         self._worker.finished.connect(self._worker.deleteLater)
         self._worker.error.connect(self._worker.deleteLater)
         self._worker.start()
+        # Pre-crawl cards now read "Checking…" instead of staying idle.
+        self._update_metrics()
 
     def _apply_size_cache(self, datasets: list[dict]) -> None:
         """Fill unknown Size cells from the downloaded-metadata cache.
@@ -1348,6 +1382,14 @@ class DashboardView(QWidget):
             self._apply_size_cache(datasets)
             self._all_datasets = datasets
             self._crawled = True
+            try:
+                import datetime as _dt_now
+
+                self._last_refresh = _dt_now.datetime.now().strftime(
+                    "%Y-%m-%d %H:%M"
+                )
+            except Exception:
+                self._last_refresh = "just now"
             self._merge_row_labels()
             self._rebuild_collection_filter()
             # Persist this crawl so the next app open paints instantly.
@@ -1397,20 +1439,36 @@ class DashboardView(QWidget):
             )
 
     def _update_metrics(self) -> None:
-        """All three cards from REAL data — never placeholders.
+        """All three cards from REAL data; named states before the first crawl.
 
         - Pending Datasets: versionState DRAFT (plain drafts awaiting triage)
         - In Review: locked for review (confirmed via the locks endpoint)
         - Needs Action: drafts + in-review items with no logged decision yet
 
-        Before the first crawl finishes every card reads "-" (no data yet,
-        not "zero of everything").
+        Before the first crawl finishes each card states its condition in
+        words ("Checking…" while the crawl runs, "Not fetched" when idle)
+        instead of a bare "—", so a visible 0 can only ever mean a completed
+        check counted zero; every card's tooltip carries the last-refresh
+        time ("never" until something has been measured).
         """
+        loading = self._worker is not None and self._worker.isRunning()
         if not self._crawled:
-            for card in self._metric_cards:
+            state = "Checking…" if loading else "Not fetched"
+            note = (
+                "Crawl in progress — counts land when it finishes."
+                if loading
+                else
+                "No crawl has completed yet — add an API key in Settings, "
+                "then press Refresh."
+            )
+            for card, sub in zip(self._metric_cards, self._metric_subs, strict=False):
                 v_lbl = card.findChild(QLabel, "metricValue")
                 if v_lbl:
-                    v_lbl.setText("—")
+                    v_lbl.setText(state)
+                    v_lbl.setStyleSheet(_METRIC_STATE_STYLE)
+                card.setToolTip(
+                    f"{sub}\n{note}\nLast refresh: {self._last_refresh}"
+                )
             self._update_empty_state()
             return
         in_review = sum(
@@ -1435,10 +1493,14 @@ class DashboardView(QWidget):
                 if (st == "DRAFT" or "REVIEW" in st) and d.get("persistent_id") not in decided:
                     needs_action += 1
         vals = [pending, in_review, needs_action]
-        for card, val in zip(self._metric_cards, vals, strict=False):
+        for card, sub, val in zip(
+            self._metric_cards, self._metric_subs, vals, strict=False
+        ):
             v_lbl = card.findChild(QLabel, "metricValue")
             if v_lbl:
                 v_lbl.setText(str(val))
+                v_lbl.setStyleSheet(_METRIC_VALUE_STYLE)
+            card.setToolTip(f"{sub}\nLast refresh: {self._last_refresh}")
         self._update_empty_state()
 
     def _cell_text(self, ds: dict, key: str) -> str:

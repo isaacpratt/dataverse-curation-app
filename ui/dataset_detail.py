@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialog,
@@ -586,7 +586,9 @@ class DatasetDetailView(QWidget):
     # ---- Builders ----
     def _build_auto_checks_card(self) -> QFrame:
         card, _body_host, _title, header_lay = make_card("Auto-Checks")
-        self._auto_summary = QLabel("—")
+        # Named pre-run state, never "—" (2026-10-02 P2); refreshed to
+        # "N check(s) will run"/counts/"No file checks" as data lands.
+        self._auto_summary = QLabel("Not run yet")
         self._auto_summary.setStyleSheet(f"font-size: 11px; font-weight: 600; color: {ON_SURFACE_VARIANT}; background: transparent; border: none;")
         header_lay.addWidget(self._auto_summary)
         # Body: scroll of checks (factory body reused directly)
@@ -613,6 +615,10 @@ class DatasetDetailView(QWidget):
         legend.setTextFormat(Qt.RichText)
         legend.setWordWrap(True)
         legend.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
+        # Hover-reveal: the legend explains itself on approach instead of
+        # costing a read on every visit (2026-10-02 minor).
+        legend.setVisible(False)
+        card.installEventFilter(self)
         self._auto_body.addWidget(legend)
         self._auto_legend = legend
         # Placeholder
@@ -746,14 +752,30 @@ class DatasetDetailView(QWidget):
         )
         self._refresh_decision_options()
         body.addWidget(self._decision_combo)
+        # One-line consequence helper: names what recording the choice will
+        # actually do BEFORE the commit, and Commit stays disabled while the
+        # combo sits on the non-answer placeholder (2026-10-02 P3 — the
+        # widest decision point had neither).
+        self._decision_help = QLabel("")
+        self._decision_help.setWordWrap(True)
+        self._decision_help.setStyleSheet(
+            f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; "
+            "background: transparent; border: none;"
+        )
+        body.addWidget(self._decision_help)
         # Commit button row
         row = QHBoxLayout()
         row.addStretch()
         commit = AppButton("Commit Decision", kind="primary", size="md")
         commit.setStyleSheet(action_button_style(True))
         commit.clicked.connect(self._on_commit)
+        self._commit_btn = commit
         row.addWidget(commit)
         body.addLayout(row)
+        # Widgets exist now: gate + helper follow the restored choice, and
+        # every later combo change re-syncs them.
+        self._decision_combo.currentIndexChanged.connect(self._sync_decision_state)
+        self._sync_decision_state()
         return card
 
     def _build_nav_card(self) -> QFrame:
@@ -843,13 +865,20 @@ class DatasetDetailView(QWidget):
         draft_body.addWidget(self._response_edit, 1)
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
-        regen = AppButton("Regenerate", kind="secondary", size="sm")
-        regen.setStyleSheet(action_button_style(False))
+        # One primary, the rest ghost — equal-weight secondaries read as
+        # three peers with no obvious next step (2026-10-02 minor).
+        ghost_sm = (
+            f"QPushButton {{ background: transparent; border: none; color: {ON_SURFACE}; "
+            "border-radius: 8px; font-size: 12px; }"
+            f"QPushButton:hover {{ background: {SURFACE_CONTAINER}; }}"
+        )
+        regen = AppButton("Regenerate", kind="ghost", size="sm")
+        regen.setStyleSheet(ghost_sm)
         regen.setToolTip("Rebuild the draft from the current findings (discards manual edits)")
         regen.clicked.connect(lambda: self._refresh_response(force=True))
         btn_row.addWidget(regen)
-        copy_btn = AppButton("Copy", kind="secondary", size="sm")
-        copy_btn.setStyleSheet(action_button_style(False))
+        copy_btn = AppButton("Copy", kind="ghost", size="sm")
+        copy_btn.setStyleSheet(ghost_sm)
         copy_btn.clicked.connect(self._on_response_copy)
         btn_row.addWidget(copy_btn)
         export_btn = AppButton("Export…", kind="primary", size="sm")
@@ -1504,7 +1533,8 @@ class DatasetDetailView(QWidget):
         # edge and paint their own corners in _populate_version_diff.
         _body_host.setContentsMargins(0, 0, 0, 0)
         _body_host.setSpacing(0)
-        self._version_summary = QLabel("—")
+        # Named not-loaded state, never "—" (2026-10-02 P2).
+        self._version_summary = QLabel("Not loaded yet")
         self._version_summary.setStyleSheet(f"font-size: 11px; font-weight: 600; color: {ON_SURFACE_VARIANT}; background: transparent; border: none;")
         header_lay.addWidget(self._version_summary)
         self._version_reset_btn = AppButton("", kind="ghost", size="sm")
@@ -1591,7 +1621,7 @@ class DatasetDetailView(QWidget):
             self._version_body.addWidget(vlist)
             flush_widgets.append((vlist, "list"))
         elif self._metadata is None:
-            self._version_summary.setText("—")
+            self._version_summary.setText("Not loaded yet")
             self._version_placeholder("Version comparison appears after loading metadata from Dataverse.")
             return
         else:
@@ -1894,12 +1924,14 @@ class DatasetDetailView(QWidget):
             if not files:
                 if self._inventory is not None and len(self._inventory) == 0 and self._metadata is not None:
                     ph = QLabel("This dataset contains no files in Dataverse — file checks do not apply. Metadata checks above still apply.")
+                    # A measured zero, not a placeholder — name it (2026-10-02 P2).
+                    self._auto_summary.setText("No file checks")
                 else:
                     ph = QLabel("No file list yet — load metadata to see which checks will run.")
+                    self._auto_summary.setText("Not run yet")
                 ph.setWordWrap(True)
                 ph.setStyleSheet(f"font-size: 12px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;")
                 self._auto_body.addWidget(ph)
-                self._auto_summary.setText("—")
                 return
             # Count will_run
             will = sum(1 for p in planned if p.get("will_run"))
@@ -2121,14 +2153,10 @@ class DatasetDetailView(QWidget):
         self._staged_files = files
         self._apply_file_filter_internal()
         # Staged fallback: every listed file is on disk by construction.
+        # Header grammar: major actions are text-only in every state —
+        # "Downloaded (N)" already carries the meaning (2026-10-02 minor).
         try:
             self._dl_btn.setText(f"Downloaded ({len(files)})")
-            try:
-                from ui.icons import icon as _dl_icon
-
-                self._dl_btn.setIcon(_dl_icon("check", color=SUCCESS))
-            except Exception:
-                pass
             self._dl_btn.setToolTip("All staged files are on disk — clicking verifies instead of re-downloading")
         except Exception:
             pass
@@ -2245,36 +2273,22 @@ class DatasetDetailView(QWidget):
                 if (path in staged_paths) or (Path(path).name in staged_names)
             )
             total = len(rows)
-            from PySide6.QtGui import QIcon as _QIcon
-
-            from ui.icons import icon as _dl_icon2
-
+            # Header grammar: text-only major action in every state; the
+            # count in the label ("Downloaded (N)") is the status cue.
             if total and n_staged >= total:
                 btn.setText(f"Downloaded ({total})")
-                try:
-                    btn.setIcon(_dl_icon2("check", color=SUCCESS))
-                except Exception:
-                    pass
                 btn.setToolTip(
                     "All files are already staged locally — clicking verifies "
                     "and skips the download instead of re-prompting"
                 )
             elif n_staged:
                 btn.setText(f"Download All ({n_staged}/{total} staged)")
-                try:
-                    btn.setIcon(_QIcon())
-                except Exception:
-                    pass
                 btn.setToolTip(
                     f"{n_staged} of {total} file(s) already staged — "
                     "only missing files will be fetched after approval"
                 )
             else:
                 btn.setText("Download All")
-                try:
-                    btn.setIcon(_QIcon())
-                except Exception:
-                    pass
                 btn.setToolTip("Download the dataset bundle for local checks")
         except Exception:
             pass
@@ -2777,6 +2791,80 @@ class DatasetDetailView(QWidget):
                 self._decision_combo.blockSignals(False)
             except Exception:
                 pass
+            # Rebuilt list → helper line + commit gate follow the restored
+            # choice (no-op before the widgets exist at build time).
+            self._sync_decision_state()
+
+    def _decision_consequence(self, choice: str, from_labels: bool) -> str:
+        """One line naming what recording this choice actually does.
+
+        The four generic states get real consequence copy; instance curation
+        labels (arbitrary server strings) fall back to the shared mechanics
+        (dataset log + Dataverse label), so the line never overpromises.
+        """
+        known = {
+            "Approve & Publish": (
+                "Curator sign-off: records approval in this dataset's log; "
+                "publish the draft in Dataverse when ready."
+            ),
+            "Contact Author (Revisions Required)": (
+                "Requests changes: records the request here; send the drafted "
+                "response above to the author."
+            ),
+            "Reject Submission": (
+                "Declines this version: records the rejection; the draft "
+                "stays in Dataverse until withdrawn."
+            ),
+            "Hold for Internal Review": (
+                "Parks the dataset for a second look: records the hold; no "
+                "Dataverse state changes."
+            ),
+        }
+        text = known.get(choice, f"Records '{choice}' in this dataset's log.")
+        if from_labels:
+            text += " Also set as this dataset's Dataverse curation label."
+        return text
+
+    def _sync_decision_state(self, *_ignored: object) -> None:
+        """Gate Commit + refresh the helper line for the current choice.
+
+        Commit is disabled while the combo sits on the "Select decision…"
+        non-answer, so the decision can't be skipped past silently — the
+        placeholder itself explains why (2026-10-02 P3).
+        """
+        try:
+            choice = self._decision_combo.currentData()
+            choice = choice if isinstance(choice, str) and choice else ""
+            help_lbl = getattr(self, "_decision_help", None)
+            if help_lbl is not None:
+                if choice:
+                    _options, from_labels = self._decision_choices()
+                    help_lbl.setText(
+                        self._decision_consequence(choice, from_labels)
+                    )
+                else:
+                    help_lbl.setText(
+                        "Pick an action to see what it does — Commit stays "
+                        "disabled until one is chosen."
+                    )
+            commit = getattr(self, "_commit_btn", None)
+            if commit is not None:
+                commit.setEnabled(bool(choice))
+        except Exception:
+            pass
+
+    def eventFilter(self, obj, ev):  # noqa: D102
+        # Hover-reveal the Auto-Checks legend while the pointer is anywhere
+        # on that card (Enter/Leave track the card + its children, so rows
+        # don't flicker it) — 2026-10-02 minor.
+        if obj is getattr(self, "_auto_card", None) and getattr(
+            self, "_auto_legend", None
+        ) is not None:
+            if ev.type() == QEvent.Type.Enter:
+                self._auto_legend.setVisible(True)
+            elif ev.type() == QEvent.Type.Leave:
+                self._auto_legend.setVisible(False)
+        return super().eventFilter(obj, ev)
 
     # -- assessment commit --
     def _on_commit(self) -> None:
