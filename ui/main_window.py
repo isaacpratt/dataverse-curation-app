@@ -344,7 +344,7 @@ class MainWindow(QMainWindow):
         self._metadata_cache: dict[str, tuple[dict, list]] = {}
         self._open_pids: list[tuple[str, str]] = []
         self.setWindowTitle("Dataverse Docent")
-        # Window-level icon so the Windows taskbar always shows the 32x32
+        # Window-level icon so the Windows taskbar always shows the 16x16
         # mark (main.py also sets it on QApplication; dialogs inherit).
         try:
             from PySide6.QtGui import QIcon

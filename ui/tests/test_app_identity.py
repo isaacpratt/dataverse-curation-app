@@ -37,13 +37,13 @@ def test_docent_png_loads_as_pixmap():
     assert pix.width() > 0 and pix.height() > 0
 
 
-def test_mark_icon_path_resolves_32x32_png():
-    """Dashboard mark + taskbar/window icon use the 32x32.png mark."""
+def test_mark_icon_path_resolves_16x16_png():
+    """Dashboard mark + taskbar/window icon use the 16x16.png mark."""
     from ui.theme import mark_icon_path
 
     path = mark_icon_path()
     assert path, "mark_icon_path() returned nothing"
-    assert path.replace("\\", "/").endswith("32x32.png")
+    assert path.replace("\\", "/").endswith("16x16.png")
 
 
 def test_about_page_shows_icon_beside_renamed_title(win, qapp):

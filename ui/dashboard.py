@@ -339,6 +339,59 @@ def diff_dashboard_datasets(old: list[dict], new: list[dict]) -> dict:
         return {"added": [], "removed": [], "changed": []}
 
 
+def _merge_enriched_rows(existing: list[dict], batch: list[dict]) -> int:
+    """Patch worker enrichment batches into painted rows, matched by pid.
+
+    Copies scalars only (the worker keeps its live dicts for the final
+    finished() payload). An "In Review" lock confirmation is never
+    clobbered by an enrichment state, and a live enriched size wins over a
+    stale disk-cache fill. Returns the merged count; never raises.
+    """
+    try:
+        by_pid: dict[str, dict] = {}
+        for d in existing or []:
+            if not isinstance(d, dict):
+                continue
+            try:
+                pid = str(d.get("persistent_id") or "")
+            except Exception:
+                continue
+            if pid:
+                by_pid[pid] = d
+        merged = 0
+        for src in batch or []:
+            if not isinstance(src, dict):
+                continue
+            try:
+                pid = str(src.get("persistent_id") or "")
+            except Exception:
+                continue
+            dst = by_pid.get(pid) if pid else None
+            if dst is None:
+                continue
+            try:
+                for key in (
+                    "total_size_bytes", "file_count", "depositor",
+                    "state", "has_draft", "size_enriched",
+                ):
+                    if key not in src:
+                        continue
+                    if key == "state" and "REVIEW" in str(dst.get("state") or "").upper():
+                        continue
+                    dst[key] = src[key]
+                if src.get("size_enriched"):
+                    try:
+                        dst.pop("size_from_cache", None)
+                    except Exception:
+                        pass
+                merged += 1
+            except Exception:
+                continue
+        return merged
+    except Exception:
+        return 0
+
+
 def load_dashboard_cache(workspace: Path, key: str) -> dict | None:
     """Load cached {saved_at, datasets, labels} for one instance+collection slot.
 
@@ -691,8 +744,9 @@ class DashboardView(QWidget):
 
             _pix = _QPixmap(mark_icon_path())
             if not _pix.isNull():
+                # Native 16x16 — never upscale the pixel mark.
                 mark.setPixmap(
-                    _pix.scaledToHeight(22, Qt.SmoothTransformation)
+                    _pix.scaledToHeight(16, Qt.SmoothTransformation)
                 )
                 mark.setToolTip("Dataverse Docent")
         except Exception:
@@ -1351,6 +1405,7 @@ class DashboardView(QWidget):
         self._worker.progress.connect(lambda msg: self._progress.setText(msg))
         self._worker.labelsDiscovered.connect(self._on_labels_discovered)
         self._worker.allowedProbed.connect(self._on_allowed_probed)
+        self._worker.enriched.connect(self._on_enrichment_batch)
         self._worker.finished.connect(self._on_crawl_finished)
         self._worker.error.connect(self._on_crawl_error)
         self._worker.finished.connect(lambda: setattr(self, "_worker", None))
@@ -1419,6 +1474,21 @@ class DashboardView(QWidget):
             # Union only; the probe-pure slot is stamped by
             # _on_allowed_probed, and the union persists via
             # save_dashboard_cache at crawl end.
+
+    def _on_enrichment_batch(self, batch: list[dict]) -> None:
+        """Merge one worker enrichment batch into the painted table.
+
+        Batches arrive while the crawl runs (progressive paint); the final
+        finished() payload replaces the rows wholesale, so a missed batch
+        only costs liveness, never correctness.
+        """
+        try:
+            if not batch:
+                return
+            if _merge_enriched_rows(getattr(self, "_all_datasets", []), batch):
+                self._apply_filter()
+        except Exception:
+            pass
 
     def _on_crawl_finished(self, datasets: list[dict]) -> None:
         try:
@@ -1691,7 +1761,12 @@ class DashboardView(QWidget):
                     item.setToolTip(text_val)
                     if key == "total_size_bytes":
                         if text_val == "—":
-                            item.setToolTip("Size unknown — open the dataset to load its file inventory")
+                            if ds.get("size_pending"):
+                                item.setToolTip("Beyond the enrichment cap — open the dataset to load its file inventory")
+                            else:
+                                item.setToolTip("Size unknown — open the dataset to load its file inventory")
+                        elif ds.get("size_enriched"):
+                            item.setToolTip(f"{text_val} — summed from live file inventory")
                         elif ds.get("size_from_cache"):
                             item.setToolTip(f"{text_val} — summed from downloaded metadata")
                     sort_key = self._cell_sort_key(ds, key)

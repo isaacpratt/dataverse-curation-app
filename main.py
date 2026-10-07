@@ -196,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
 
         from ui.theme import mark_icon_path
 
-        # Taskbar/dock icon: the 32x32 mark (the About page keeps docent.png).
+        # Taskbar/dock icon: the 16x16 mark (the About page keeps docent.png).
         _icon_path = mark_icon_path()
         if _icon_path:
             app.setWindowIcon(QIcon(_icon_path))

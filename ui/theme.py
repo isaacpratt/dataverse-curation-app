@@ -150,13 +150,13 @@ def app_icon_path() -> str:
 
 
 def mark_icon_path() -> str:
-    """Absolute path to the 32x32.png mark (ui/assets/32x32.png).
+    """Absolute path to the 16x16.png mark (ui/assets/16x16.png).
 
     The dashboard status pill's mark and the window icon the Windows
     taskbar draws use this; the About page keeps docent.png
     (app_icon_path). Resolved by asset_path (dev + frozen).
     """
-    return asset_path("32x32.png")
+    return asset_path("16x16.png")
 
 
 def _chevron_qss() -> str:
