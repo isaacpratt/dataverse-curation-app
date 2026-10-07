@@ -78,6 +78,7 @@ Outputs: `dist/curation-app-lite/curation-app-lite.exe` (onedir folder, fast lau
 - `docs/html/report-contract.html` — the JSON report format shared by engine and GUI
 - `docs/html/development.html` — setup, testing, adding checks, packaging
 - `docs/html/user-guide.html` — how a curator uses the app (dashboard, detail, metadata, log)
+- `docs/html/proposals.html` — proposed but not yet implemented changes (queued UX work, deferred checks, open decisions)
 
 ## Roadmap
 

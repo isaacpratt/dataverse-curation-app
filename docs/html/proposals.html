@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposals — Dataverse Docent</title>
+<style>
+:root{--bg:#0f172a;--bg2:#111c33;--ink:#0f172a;--muted:#526078;--line:#e2e8f0;--accent:#0e7490;--ok:#15803d;--warn:#b45309;--err:#b91c1c;--soft:#f1f5f9;--radius:12px}
+*{box-sizing:border-box}body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--ink);background:#f8fafc;line-height:1.6}
+header.hero{background:linear-gradient(135deg,var(--bg),var(--bg2));color:#fff;padding:34px 24px 26px}.wrap{max-width:1080px;margin:0 auto}
+.hero h1{margin:0;font-size:26px}.hero p{margin:6px 0 0;color:#cbd5e1}
+nav.top{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--line)}nav.top .wrap{display:flex;gap:4px;flex-wrap:wrap;padding:8px 24px}
+nav.top a{text-decoration:none;color:var(--ink);font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px}nav.top a:hover{background:var(--soft)}nav.top a[aria-current]{background:#e0f2fe;color:#0c4a6e}
+main .wrap{padding:26px 24px 60px}h2{font-size:22px;margin:34px 0 10px;padding-top:8px;border-top:2px solid var(--line)}h3{font-size:17px;margin:22px 0 8px;color:#0c4a6e}
+p,li{font-size:15px}code{font-family:Consolas,monospace;font-size:13px;background:#f1f5f9;border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;background:#fff;border:1px solid var(--line)}th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#f1f5f9;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#334155}
+.callout{border-left:5px solid var(--accent);background:#ecfeff;border-radius:0 var(--radius) var(--radius) 0;padding:12px 16px;margin:14px 0;font-size:14.5px}.callout.warn{border-color:var(--warn);background:#fffbeb}
+.pill{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px;white-space:nowrap}.p-err{background:#fee2e2;color:#991b1b}.p-warn{background:#fef3c7;color:#92400e}.p-mut{background:#f1f5f9;color:#475569}.p-ok{background:#dcfce7;color:#166534}
+footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-size:13px}footer .wrap{padding:16px 24px}
+@media(max-width:640px){th,td{padding:7px 8px;font-size:13px}}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap"><h1>Proposals</h1><p>Proposed but <b>not yet implemented</b>: queued UX work, deferred checks, packaging milestones, and open decisions. Nothing on this page is in the app today.</p></div></header>
+<nav class="top"><div class="wrap">
+<a href="index.html">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a><a href="proposals.html" aria-current="page">Proposals</a>
+</div></nav>
+<main><div class="wrap">
+
+<div class="callout"><b>How this page works:</b> an item lives here only while it is <i>unimplemented</i>. When something lands it moves out — implemented changes are recorded in <a href="architecture.html">Architecture</a>'s decision log instead. Last triaged: 2026-10-07.</div>
+
+<h2>Queued UX work</h2>
+<p>Carried over from the UX critique re-runs; the P0s of the 2026-10-02 and 2026-10-06 batches are already fixed, these remain.</p>
+<table>
+<tr><th>Proposal</th><th>What it would do</th><th>Where</th><th>Priority</th></tr>
+<tr><td>Settings <code>● unsaved</code> dirty-chip</td><td>Track dirtiness in the Settings pane (General / Extensions tabs) and show the same <code>● unsaved</code> chip that Review configuration already uses, so <b>Back</b> can't silently discard edits.</td><td><code>ui/settings_dialog.py</code></td><td><span class="pill p-err">P1</span></td></tr>
+<tr><td>Detail step rail</td><td>A persistent stepper down the dataset-detail workflow (Review metadata → Changes → Download → Checks → Export → Respond) showing where the curator is and what's next.</td><td><code>ui/dataset_detail.py</code></td><td><span class="pill p-err">P1</span></td></tr>
+<tr><td>Remaining P2s (2026-10-06 critique re-run)</td><td>The P2 items recorded during the dual-agent critique re-run (P0s 1→0, score 28→26/40) — recorded in the critique notes, not yet scheduled.</td><td>various</td><td><span class="pill p-warn">P2</span></td></tr>
+<tr><td>Step-4 quick wins</td><td>Small Auto-Checks (workflow step 4) improvements flagged during the workflow critique — cheap wins queued for a spare batch.</td><td><code>ui/dataset_detail.py</code></td><td><span class="pill p-mut">—</span></td></tr>
+<tr><td>Step-6 live authenticated pass</td><td>Exercise the export/report path against a live instance with a <b>real API token</b>. All verification so far is tokenless against the public demo (401/404 noise is expected), so authenticated behavior is unproven end-to-end.</td><td>verification</td><td><span class="pill p-mut">—</span></td></tr>
+<tr><td>Busy-indicator naming</td><td>Standardize the busy/progress indicator naming and appearance across views (spinners, indeterminate bars, status labels) — one vocabulary, one component.</td><td><code>ui/</code></td><td><span class="pill p-mut">P3</span></td></tr>
+<tr><td>MetricCard stylesheet warning</td><td>Optional polish: silence the remaining <code>MetricCard</code> stylesheet warning (cosmetic console noise, no user impact).</td><td>metric cards</td><td><span class="pill p-mut">optional</span></td></tr>
+</table>
+
+<h2>Deferred engine checks</h2>
+<table>
+<tr><th>Check</th><th>Why it is deferred</th><th>Behavior today</th></tr>
+<tr><td><code>mat_check.py</code> (MATLAB <code>.mat</code>)</td><td>Keeps <code>scipy</code> out of the lite build (size); <code>Scripts/Inspect_mat_Script.R → scipy.io</code></td><td><code>.mat</code> files surface once per dataset as <code>inventory.unchecked_types</code> (warning) — manual review required. If added it would lazy-import like the other heavy libs.</td></tr>
+<tr><td>OCR parity (<code>Inspect_OCR_Script.R</code>)</td><td>Would run tesseract on scanned PDFs; today <code>pdf_check</code> OCR mode is a stub</td><td>Degrades to “not executed” (reported as an optional-tool warning); without tesseract installed the same notice appears.</td></tr>
+<tr><td><code>frdr_filename_check.R</code>, <code>validate_schema.R</code></td><td>Skipped by design — filename/junk coverage already lives in <code>extensions_check</code>; schema validation has no curation use case yet</td><td>Not ported; revisit only if curators ask for them.</td></tr>
+</table>
+
+<h2>Packaging milestones</h2>
+<ul>
+<li><b>Installer (Inno Setup / WiX)</b> — the app ships as portable onedir folders today (<code>dist/curation-app-lite/</code>, <code>dist/curation-app-full/</code>). An installer (Start-menu entry, upgrade path, file associations) is the documented next milestone; nothing is blocked on it.</li>
+</ul>
+
+<h2>Open decisions</h2>
+<div class="callout warn"><b>Needs a call before work starts:</b>
+<ul>
+<li><b>Delete <code>ui/assets/32x32.png</code>?</b> — superseded by <code>16x16.png</code> (dashboard/taskbar) and <code>docent-mark.ico</code> (exe); no code references it anymore. Trivial cleanup once confirmed.</li>
+<li><b>Land <code>engine/tests/test_enrichment.py</code>?</b> — currently untracked work-in-progress. The documented <b>262 tests</b> (196 engine + 66 UI) <i>includes</i> its 9 tests; a fresh clone collects only <b>253</b> until the file is committed.</li>
+</ul>
+</div>
+
+</div></main>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Created 2026-10-07 · Proposals only — nothing here is implemented.</div></footer>
+</body>
+</html>
