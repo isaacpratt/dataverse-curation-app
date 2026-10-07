@@ -344,6 +344,18 @@ class MainWindow(QMainWindow):
         self._metadata_cache: dict[str, tuple[dict, list]] = {}
         self._open_pids: list[tuple[str, str]] = []
         self.setWindowTitle("Dataverse Docent")
+        # Window-level icon so the Windows taskbar always shows the mark
+        # (main.py also sets it on QApplication; dialogs inherit from there).
+        try:
+            from PySide6.QtGui import QIcon
+
+            from ui.theme import app_icon_path
+
+            _icon = app_icon_path()
+            if _icon:
+                self.setWindowIcon(QIcon(_icon))
+        except Exception:
+            pass
         self.resize(1320, 860)
         # Floor the window so layout minimums (tall detail header, Response
         # page editors) cannot force-grow it past a usable size; content

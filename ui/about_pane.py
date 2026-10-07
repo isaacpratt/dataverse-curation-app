@@ -99,7 +99,8 @@ class AboutPane(QWidget):
             "border: none; background: transparent;"
         )
         title.setWordWrap(True)
-        # App mark beside the title (2026-10-06 Dataverse Docent rebrand).
+        # App mark beside the title (2026-10-06 Dataverse Docent rebrand;
+        # 2026-10-07 bumped to the icon's native 64×64).
         head_row = QHBoxLayout()
         head_row.setSpacing(12)
         head_row.setContentsMargins(0, 0, 0, 0)
@@ -110,11 +111,11 @@ class AboutPane(QWidget):
 
             pix = QPixmap(app_icon_path())
             if not pix.isNull():
-                mark.setPixmap(pix.scaledToHeight(44, Qt.SmoothTransformation))
+                mark.setPixmap(pix.scaledToHeight(64, Qt.SmoothTransformation))
         except Exception:
             pass
         mark.setStyleSheet("border: none; background: transparent;")
-        mark.setFixedWidth(48)
+        mark.setFixedWidth(64)
         head_row.addWidget(mark, 0, Qt.AlignTop)
         head_row.addWidget(title, 1)
         body.addLayout(head_row)

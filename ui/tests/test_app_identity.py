@@ -11,6 +11,14 @@ def test_window_title_is_dataverse_docent(win):
     assert win.windowTitle() == "Dataverse Docent"
 
 
+def test_window_carries_icon_for_taskbar(win):
+    """Windows draws the taskbar icon from the window icon.
+
+    Set it on the window itself, not only on QApplication (2026-10-07).
+    """
+    assert not win.windowIcon().isNull(), "window icon missing (blank taskbar entry)"
+
+
 def test_app_icon_path_resolves_docent_png():
     from ui.theme import app_icon_path
 
@@ -39,6 +47,8 @@ def test_about_page_shows_icon_beside_renamed_title(win, qapp):
     mark = about.findChild(QLabel, "DocentMark")
     assert mark is not None, "docent icon missing on About"
     assert not mark.pixmap().isNull()
+    # 2026-10-07: About mark renders at the icon's native 64×64.
+    assert mark.pixmap().height() == 64, mark.pixmap().height()
     assert mark.x() < titles[0].x()
     # Leave the shared window on the dashboard.
     win._show_dashboard()

@@ -131,19 +131,55 @@ def test_scope_header_removed(win):
 
 
 def test_footer_open_settings_link_removed(win):
+    from PySide6.QtCore import QPoint
+
     dash = win._dashboard
+    # Dashboard coordinates for both sides — the message label now lives
+    # inside the bar strip, so its local y() is parent-relative.
+    prog_y = dash._progress.mapTo(dash, QPoint(0, 0)).y()
     near = [
         b
         for b in dash.findChildren(QAbstractButton)
-        if b.text() == "Open Settings" and abs(b.y() - dash._progress.y()) < 40
+        if b.text() == "Open Settings"
+        and abs(b.mapTo(dash, QPoint(0, 0)).y() - prog_y) < 40
     ]
     assert near == []
 
 
 def test_docent_mark_sits_bottom_right(win):
+    from PySide6.QtCore import QPoint
+
     dash = win._dashboard
     mark = dash.findChild(QLabel, "DocentMark")
     assert mark is not None, "docent mark missing from dashboard"
     assert not mark.pixmap().isNull()
-    assert mark.y() > dash._progress.y()
-    assert mark.x() > dash._status_lbl.x()
+    # Compare in dashboard coordinates — the labels now live inside the
+    # bar, so their local y() values are parent-relative.
+    mark_pt = mark.mapTo(dash, QPoint(0, 0))
+    prog_pt = dash._progress.mapTo(dash, QPoint(0, 0))
+    scope_pt = dash._status_lbl.mapTo(dash, QPoint(0, 0))
+    # On the status-bar row, to the right of both labels — the bar ends
+    # just before the mark (2026-10-07 unified bar).
+    assert abs(mark_pt.y() - prog_pt.y()) < 30
+    assert mark_pt.x() > prog_pt.x()
+    assert mark_pt.x() > scope_pt.x()
+
+
+def test_unified_status_bar_spans_width(win):
+    """One full-bleed bar: scope + message share a strip edge to edge.
+
+    The strip stops before the docent mark — no second status row.
+    """
+    dash = win._dashboard
+    strip = dash._status_lbl.parentWidget()
+    assert strip is not None
+    assert strip is dash._progress.parentWidget(), "message lives outside the bar"
+    # Flush left, flush to the page bottom.
+    assert strip.x() == 0, strip.x()
+    assert strip.y() + strip.height() >= dash.height() - 40
+    # The bar ends before the mark, which pins the bottom-right corner.
+    mark = dash.findChild(QLabel, "DocentMark")
+    assert mark is not None
+    assert strip.x() + strip.width() <= mark.x()
+    # Single line: the strip is a bar, not the old multi-line pill.
+    assert strip.height() <= 40, strip.height()
