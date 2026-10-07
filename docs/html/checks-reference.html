@@ -22,7 +22,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 </style>
 </head>
 <body>
-<header class="hero"><div class="wrap"><h1>Auto-checks reference</h1><p>What the engine verifies when you press <b>Run checks</b>, what each badge means, and what each of the 21 checks can find.</p></div></header>
+<header class="hero"><div class="wrap"><h1>Auto-checks reference</h1><p>What the engine verifies when you press <b>Run checks</b>, what each badge means, and what each of the 21 checks can find. Checks are ports of the R inspectors in <code>CUR_Res_CurationTools</code> — see <a href="engine-port.html" style="color:#7dd3fc">Engine port</a> for the port matrix.</p></div></header>
 <nav class="top"><div class="wrap">
 <a href="index.html">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html" aria-current="page">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a>
 </div></nav>
@@ -41,7 +41,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <rect x="765" y="80" width="125" height="90" rx="10" fill="#0f172a"/><text x="827" y="108" fill="#fff" text-anchor="middle" font-size="12" font-weight="700">DatasetReport</text><text x="827" y="128" fill="#94a3b8" text-anchor="middle" font-size="11">JSON + Markdown</text><text x="827" y="146" fill="#94a3b8" text-anchor="middle" font-size="11">always-emit IDs</text>
 <line x1="160" y1="125" x2="193" y2="125" stroke="#0e7490" stroke-width="2" marker-end="url(#a)"/><line x1="365" y1="125" x2="398" y2="70" stroke="#0e7490" stroke-width="2" marker-end="url(#a)"/><line x1="365" y1="130" x2="398" y2="180" stroke="#b45309" stroke-width="2" marker-end="url(#a)"/><line x1="570" y1="65" x2="603" y2="65" stroke="#0e7490" stroke-width="2" marker-end="url(#a)"/><line x1="570" y1="185" x2="670" y2="185" stroke="#7c3aed" stroke-width="2" opacity="0"/><line x1="735" y1="65" x2="763" y2="100" stroke="#0e7490" stroke-width="2" marker-end="url(#a)"/><line x1="735" y1="185" x2="763" y2="140" stroke="#7c3aed" stroke-width="2" marker-end="url(#a)"/>
 </svg>
-<figcaption>Compound names shed one outer layer first. Symlinks are skipped; each file runs in isolation so one crash can't sink the report. Secrets/PII scanners (<code>hush-scan</code>, <code>piigex</code>) are required and bundled — never “missing”. Structured PII uses <code>regions=["intl"]</code> + the Canadian postal/SIN pack; foreign national IDs are disabled by policy.</figcaption>
+<figcaption>Compound names shed one outer layer first. Symlinks are skipped; each file runs in isolation so one crash can't sink the report. Results aggregate into the <a href="report-contract.html">DatasetReport contract</a> (JSON + Markdown). Secrets/PII scanners (<code>hush-scan</code>, <code>piigex</code>) are required and bundled — never “missing”. Structured PII uses <code>regions=["intl"]</code> + the Canadian postal/SIN pack; foreign national IDs are disabled by policy.</figcaption>
 </figure>
 
 <h2>What PASS means (two contexts)</h2>
@@ -93,9 +93,9 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <div class="callout warn">MATLAB <code>.mat</code> (and any format without a module) is reported once per dataset as <code>inventory.unchecked_types</code> (warning) — manual review required. <code>scipy</code> stays optional by design.</div>
 
 <h2>Download verification (a gate, not a check)</h2>
-<p>Before checks run, <code>DownloadManager.verify()</code> rehashes every staged file against the Dataverse checksum (<code>md5</code>/<code>sha1</code>). Mismatches surface as <code>checksum mismatch: &lt;path&gt;</code> with expected/actual hashes. Tabular <code>.tab</code> derivatives are server-regenerated, so their message includes the file's UNF for manual comparison instead of failing byte-exact.</p>
+<p>Before checks run, <code>DownloadManager.verify()</code> rehashes every staged file against the Dataverse checksum (<code>md5</code>/<code>sha1</code>). Mismatches surface as <code>checksum mismatch: &lt;path&gt;</code> with expected/actual hashes. Tabular <code>.tab</code> derivatives are server-regenerated, so their message includes the file's UNF for manual comparison instead of failing byte-exact — see “Checksum problems” in the <a href="user-guide.html">User guide</a>.</p>
 
 </div></main>
-<footer><div class="wrap"><a href="index.html">← Overview</a> · Generated 2026-10-06, verified against code.</div></footer>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-10-07, verified against code.</div></footer>
 </body>
 </html>

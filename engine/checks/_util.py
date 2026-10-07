@@ -41,7 +41,7 @@ _PII_SCRUBBER = None
 
 
 def missing_library(check_id: str, lib: str) -> CheckResult:
-    # Contract (docs/report-contract.md): "not executed" is warning + passed
+    # Contract (docs/html/report-contract.html): "not executed" is warning + passed
     # with details.skipped=True so the UI/Markdown renders an explicit
     # SKIPPED state instead of confusing it with a real pass.
     # "Missing: …" prefix matches the pre-run probe wording so the UI renders

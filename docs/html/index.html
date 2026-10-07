@@ -54,8 +54,8 @@ footer .wrap{padding:16px 24px}
 <body>
 <header class="hero"><div class="wrap">
 <h1>Dataverse Docent — Documentation</h1>
-<p>Desktop curation assistant for Alliance Dataverse instances: pulls datasets submitted for review, runs automated format checks, checks metadata completeness, and presents findings with an exportable curation report.</p>
-<div class="badges"><span class="badge ok">21 check modules</span><span class="badge ok">198 tests</span><span class="badge info">PySide6 desktop</span><span class="badge">Engine v0.1.0</span><span class="badge warn">Verified vs code 2026-10-06</span></div>
+<p>Desktop curation assistant for Alliance Dataverse instances: pulls datasets submitted for review, runs automated format checks, checks metadata completeness, and presents findings with an exportable curation report. These HTML pages are the documentation source of truth.</p>
+<div class="badges"><span class="badge ok">21 check modules</span><span class="badge ok">262 tests</span><span class="badge info">PySide6 desktop</span><span class="badge">Engine v0.1.0</span><span class="badge warn">Verified vs code 2026-10-07</span></div>
 </div></header>
 <nav class="top"><div class="wrap">
 <a href="index.html" aria-current="page">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a>
@@ -76,11 +76,11 @@ footer .wrap{padding:16px 24px}
 <h2>Project status</h2>
 <div class="flow">
 <div class="step"><b><span class="n">0</span>Scaffold</b>Repo, GUI shell, storage <span class="pill p-ok">done</span></div><div class="arrow">→</div>
-<div class="step"><b><span class="n">1</span>Engine port</b>21 checks, 198 tests <span class="pill p-ok">done</span></div><div class="arrow">→</div>
+<div class="step"><b><span class="n">1</span>Engine port</b>21 checks, 262 tests <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">2</span>Report runner</b><code>run_report</code> end-to-end <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">3</span>Client + downloads</b>Crawler + search, approval gate <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">4</span>PySide6 GUI</b>Dashboard, detail, settings, log <span class="pill p-ok">done</span></div><div class="arrow">→</div>
-<div class="step"><b><span class="n">5</span>Packaging</b>Lite onefile + full onedir <span class="pill p-ok">done</span></div>
+<div class="step"><b><span class="n">5</span>Packaging</b>Lite onedir + full onedir <span class="pill p-ok">done</span></div>
 </div>
 
 <h2>Quick start</h2>
@@ -88,16 +88,16 @@ footer .wrap{padding:16px 24px}
 .venv\Scripts\activate
 pip install -r requirements.txt
 copy config.example.json config.json   # PowerShell: Copy-Item config.example.json config.json
-pytest                                  # 198 tests
+pytest                                  # 262 tests
 python main.py                          # GUI — pick the Dataverse in Settings
 python main.py --headless &lt;staged_dir&gt; --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE</code></pre>
 <p>Requirements: Python 3.10+ (Windows recommended). Headless exit codes: <b>0</b> clean, <b>1</b> error-level findings, <b>2</b> usage/IO failure.</p>
 
-<h2>Documentation audit — what was fixed (2026-10-06)</h2>
-<div class="callout ok">All <code>docs/*.md</code> files were re-checked against the code (<code>engine/checks/__init__.py:registry</code>, <code>main.py</code> CLI, <code>engine/report.py</code>, <code>ui/</code> views, <code>Makefile</code>). Stale claims were corrected in the markdown sources; the tables below and every HTML page reflect the verified state.</div>
+<h2>Documentation audit — what was fixed</h2>
+<div class="callout ok">The documentation was re-checked against the code (<code>engine/checks/__init__.py:registry</code>, <code>main.py</code> CLI, <code>engine/report.py</code>, <code>ui/</code> views, <code>Makefile</code>) on 2026-10-06 and again on 2026-10-07, when these HTML pages became the <b>source of truth</b> (the <code>docs/*.md</code> mirrors were retired). The tables below record the verified state.</div>
 <table>
 <tr><th>Stale claim</th><th>Where</th><th>Verified truth</th></tr>
-<tr><td>“20 check modules (19 R inspectors…)”, “101 tests”</td><td>README, engine-port, development, user-guide</td><td><b>21</b> registered modules (<code>registry</code> has 21 keys incl. <code>format.secrets</code> + <code>inventory.extensions</code>); <b>198</b> collected tests (181 engine + 17 UI)</td></tr>
+<tr><td>“20 check modules (19 R inspectors…)”, “101 tests”</td><td>README, engine-port, development, user-guide</td><td><b>21</b> registered modules (<code>registry</code> has 21 keys incl. <code>format.secrets</code> + <code>inventory.extensions</code>); <b>262</b> collected tests (196 engine + 66 UI) via full <code>pytest --collect-only -q</code> output (always sum the complete output)</td></tr>
 <tr><td>Module list omitting <code>secret_check</code></td><td>development layout</td><td>Added <code>secret_check</code> + missing engine files (<code>constants.py</code>, <code>status.py</code>, <code>report_md.py</code>) and UI files (<code>review_config.py</code>, <code>checks_tree.py</code>, <code>icons.py</code>)</td></tr>
 <tr><td><code>test_audit_fixes.py</code> “31 tests”</td><td>development</td><td>Collects <b>32</b></td></tr>
 <tr><td><code>--format json|md|both</code> missing</td><td>development layout, user-guide headless</td><td>Documented; <code>run_report_to_file(..., fmt=…)</code> verified in <code>engine/runner.py</code></td></tr>
@@ -108,8 +108,7 @@ python main.py --headless &lt;staged_dir&gt; --out report.json --format json --p
 
 <h2>Repository layout</h2>
 <pre><code>dataverse-curation-app/
-├── docs/                 # markdown sources (+ this html/ artifact set)
-├── docs/html/            # this documentation (self-contained, offline-friendly)
+├── docs/html/            # documentation (source of truth — edit these pages)
 ├── engine/               # Python check engine
 │   ├── checks/           # 21 format modules + base.py / _util.py
 │   ├── report.py         # DatasetReport JSON contract (+ Markdown export)
@@ -118,8 +117,8 @@ python main.py --headless &lt;staged_dir&gt; --out report.json --format json --p
 │   ├── constants.py      # shared scan caps (EngineCaps)
 │   ├── dispatcher.py     # extension → check mapping
 │   ├── runner.py         # run_report / run_report_to_file / list_planned_checks
-│   └── tests/            # pytest suite (181 tests)
-├── ui/                   # PySide6 views (15 modules, 17 tests)
+│   └── tests/            # pytest suite (196 tests)
+├── ui/                   # PySide6 views (15 modules, 66 tests)
 ├── dataverse_client.py   # Native/Search API client
 ├── download_manager.py   # approval-gated downloads + verify
 ├── metadata_check.py     # citation-block completeness (McMaster / Minimal)
@@ -131,9 +130,9 @@ python main.py --headless &lt;staged_dir&gt; --out report.json --format json --p
 └── config.example.json   # configuration template</code></pre>
 
 <h2>How to use these pages</h2>
-<p>Each page is a single self-contained HTML file (inline CSS + inline SVG, no network needed). Open any of them directly in a browser, or serve <code>docs/html/</code> statically. The markdown files in <code>docs/</code> remain the editable sources.</p>
+<p>Each page is a single self-contained HTML file (inline CSS + inline SVG, no network needed). Open any of them directly in a browser, or serve <code>docs/html/</code> statically. These pages are the editable source of truth — the <code>docs/*.md</code> markdown mirrors were retired on 2026-10-07.</p>
 
 </div></main>
-<footer><div class="wrap">Generated 2026-10-06 from <code>docs/*.md</code>, verified against code. Engine v0.1.0 · MIT License.</div></footer>
+<footer><div class="wrap">Updated 2026-10-07 · documentation source of truth · verified against code. Engine v0.1.0 · MIT License.</div></footer>
 </body>
 </html>

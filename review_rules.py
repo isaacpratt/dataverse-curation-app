@@ -205,7 +205,7 @@ def _builtin_mcmaster() -> dict[str, Any]:
     ]
     return {
         "label": "McMaster — Curation Log + Depositor Checklist",
-        "description": "Rules from docs/CurationLog.pdf and docs/DepositorChecklist.pdf (McMaster Dataverse)",
+        "description": "Rules from the McMaster Curation Log and Depositor Checklist (McMaster Dataverse)",
         "dataverses": ["*"],
         "field_rules": field_rules,
         "content_rules": content_rules,

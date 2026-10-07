@@ -74,6 +74,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <div class="step"><b><span class="n">b</span>Search fallback (always)</b><code>start=0,100,…,900</code>, dedup by PID, logs <code>Search page N: M item(s), K new</code>. Verified on Borealis demo: 13 datasets over 2 pages.</div><div class="arrow">→</div>
 <div class="step"><b><span class="n">2</span>Lock confirmation</b>Optional strict mode: <code>dataset_in_review()</code> checks <code>…/locks</code> for “review”. Dashboard defaults to all drafts; Status combo filters (All / DRAFT / Published / In Review / Deaccessioned).</div>
 </div>
+<p>An informational banner in the UI names the discovery source (“Search API (paginated)” vs “dvmeta draft crawl”) — see the progress label.</p>
 
 <h2>Download flow (approval-gated)</h2>
 <div class="flow">
@@ -100,6 +101,6 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <div class="callout ok"><b>Live-verified</b> against <code>https://demo.borealisdata.ca</code>: version → Borealis; search <code>subtree=mcmaster</code> → 10 + 3 = 13 paginated; dataset lookup → citation title OK; versions → 23 files; bundle → 358 477 bytes streamed and unzipped. Empty alias and <code>:root</code> return the whole repo; root alias is <code>dv</code>.</div>
 
 </div></main>
-<footer><div class="wrap"><a href="index.html">← Overview</a> · Generated 2026-10-06, verified against code.</div></footer>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-10-07, verified against code.</div></footer>
 </body>
 </html>

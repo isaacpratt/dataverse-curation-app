@@ -3,7 +3,7 @@
 Discovery delegates to the dataverse-metadata-crawler CLI (its internal
 imports are not import-safe as a library across releases, so we drive the
 stable CLI surface). In-review status is confirmed per dataset via the
-locks endpoint. See docs/dataverse-integration.md for endpoints and auth.
+locks endpoint. See docs/html/dataverse-integration.html for endpoints and auth.
 
 All requests/responses are recorded in an in-memory log (see applog.py)
 which the UI can display.

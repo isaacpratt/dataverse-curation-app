@@ -94,7 +94,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td><code>inventory.*</code></td><td><code>inventory.extensions</code>, <code>inventory.zero_byte</code>, <code>inventory.executables</code>, <code>inventory.system_junk</code>, <code>inventory.unchecked_types</code></td><td>dataset-level (21 registered modules in <code>engine/checks/__init__.py:registry</code>)</td></tr>
 <tr><td><code>format.&lt;format&gt;.*</code></td><td><code>format.csv.structure</code>, <code>format.gpkg.layers</code>, <code>format.pdf.text</code>, <code>format.secrets</code></td><td>per-file</td></tr>
 </table>
-<p><code>engine/runner.py:list_planned_checks</code> enumerates IDs before execution — shown in the Auto-Checks card as planned badges, then as results.</p>
+<p>Registered checks live in <code>engine/checks/__init__.py:registry</code> (21 modules) — see <a href="engine-port.html">Engine port</a> for the R→Python matrix and <a href="checks-reference.html">Checks reference</a> for semantics. <code>engine/runner.py:list_planned_checks</code> enumerates IDs before execution — shown in the Auto-Checks card as planned badges, then as results.</p>
 
 <h2>Serialization and export</h2>
 <ul>
@@ -105,6 +105,6 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 </ul>
 
 </div></main>
-<footer><div class="wrap"><a href="index.html">← Overview</a> · Generated 2026-10-06, verified against code.</div></footer>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-10-07, verified against code.</div></footer>
 </body>
 </html>

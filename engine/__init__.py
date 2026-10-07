@@ -1,7 +1,7 @@
 """Dataverse Docent - check engine.
 
 Runtime re-implementation of the R inspectors from CUR_Res_CurationTools.
-See docs/engine-port.md for the port matrix and status.
+See docs/html/engine-port.html for the port matrix and status.
 """
 
 __version__ = "0.1.0"

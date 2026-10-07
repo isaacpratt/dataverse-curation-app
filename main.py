@@ -1,7 +1,7 @@
 """Launch the Dataverse Docent entry point.
 
 Default is the desktop GUI; --headless runs the engine on a staged
-dataset directory and writes a JSON report (see docs/development.md).
+dataset directory and writes a JSON report (see docs/html/development.html).
 """
 
 import argparse
@@ -12,22 +12,26 @@ from pathlib import Path
 def _sibling_libs_path() -> Path | None:
     """Find a sibling full-build libs folder next to a frozen exe.
 
-    Looks for `curation-app-full/` next to the exe and returns its path.
-    The folder should be an onedir PyInstaller build (or just a Python
-    site-packages tree) — anything we can prepend to sys.path to load the
-    heavy optional libraries (pyreadstat, netCDF4, h5py, …) without
-    re-bundling them in the lite onefile exe. The lite exe remains
-    self-contained; the sibling folder is purely additive.
+    Looks for `curation-app-full/` next to the exe (onefile layout: exe in
+    `dist/`, full folder beside it) or next to the folder holding the exe
+    (onedir layout: `dist/curation-app-lite/curation-app-lite.exe`, full
+    folder in `dist/`) and returns its path. The folder should be an onedir
+    PyInstaller build (or just a Python site-packages tree) — anything we
+    can prepend to sys.path to load the heavy optional libraries (pyreadstat,
+    netCDF4, h5py, …) without re-bundling them in the lite build. The lite
+    exe remains self-contained; the sibling folder is purely additive.
     """
     if not getattr(sys, "frozen", False):
         return None
     # NOTE: sys._MEIPASS is deliberately NOT used here — in onefile mode it
     # is a temp extraction dir (whose parent is meaningless), and in onedir
     # mode it is the _internal folder. The sibling folder always lives next
-    # to the real .exe.
-    candidate = Path(sys.executable).parent / "curation-app-full"
-    if candidate.exists() and candidate.is_dir():
-        return candidate.resolve()
+    # to the real .exe, or next to the folder containing it (onedir).
+    exe_dir = Path(sys.executable).parent
+    for base in (exe_dir, exe_dir.parent):
+        candidate = base / "curation-app-full"
+        if candidate.exists() and candidate.is_dir():
+            return candidate.resolve()
     return None
 
 

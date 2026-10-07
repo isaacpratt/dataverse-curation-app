@@ -1,7 +1,7 @@
 """Run report checks over a staged dataset directory.
 
 Dispatches checks and aggregates findings into a DatasetReport
-(docs/report-contract.md).
+(docs/html/report-contract.html).
 """
 
 import mimetypes

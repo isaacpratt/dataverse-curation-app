@@ -299,7 +299,7 @@ class ImagesCheck(Check):
                 )
             ]
         except ImageFile.TruncatedFileError:
-            # Taxonomy (docs/checks-reference.md): unreadable image = error.
+            # Taxonomy (docs/html/checks-reference.html): unreadable image = error.
             return [
                 CheckResult(
                     check_id="format.images.valid",

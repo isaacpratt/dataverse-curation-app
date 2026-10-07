@@ -27,7 +27,7 @@ typecheck:
 # ------------------------------------------------------------------
 # Default `make build` produces BOTH artefacts in dist/, side by side:
 #
-#   dist/curation-app-lite.exe    — single-file exe with common formats
+#   dist/curation-app-lite/       — onedir folder with common formats
 #                                    bundled (jpg/png/pdf/xml/xlsx/tiff work
 #                                    offline, no sibling needed)
 #   dist/curation-app-full/       — onedir folder that additionally covers
@@ -36,46 +36,55 @@ typecheck:
 #                                     NetCDF/HDF5/MATLAB)
 #
 # The lite exe still looks for a sibling `curation-app-full/` folder for the
-# heavy libs, but common images/documents no longer depend on it: PIL,
-# pypdf, lxml, openpyxl, tifffile, chardet are bundled in lite, plus a
-# stdlib header fallback covers JPG/PNG/GIF/BMP/WEBP even without Pillow.
+# heavy libs (checked next to the exe and next to the folder holding it, so
+# the onedir layout resolves too), but common images/documents no longer
+# depend on it: PIL, pypdf, lxml, openpyxl, tifffile, chardet are bundled in
+# lite, plus a stdlib header fallback covers JPG/PNG/GIF/BMP/WEBP even
+# without Pillow.
 # NOTE: sibling sys.path injection only resolves binary .pyd shims — pure-
 # Python modules live inside the full exe's archive, so for heavy formats
 # run dist/curation-app-full/curation-app-full.exe directly.
 #
-# This keeps fast iterative testing cheap: only the lite onefile needs
+# This keeps fast iterative testing cheap: only the lite folder needs
 # rebuilding (a few seconds), and the heavy lib folder persists across
 # builds until you explicitly `rm -rf dist/curation-app-full`.
 # ------------------------------------------------------------------
-# PyInstaller flags shared by lite recipes: heavy binary libs excluded;
-# hush/piigex are pure-Python secret/PII scanners and always ship.
+# PyInstaller flags shared by lite recipes: heavy binary libs excluded plus
+# verified-safe optional extras (tkinter/tcl-tk and optional PIL codecs —
+# Pillow tolerates their absence); hush/piigex are pure-Python secret/PII
+# scanners and always ship.
 # --collect-all piigex is required: its detectors package walks the on-disk
 # tree at import (pkgutil/pathlib), which is invisible when modules only
 # live in the PYZ archive — collecting data+submodules materialises the tree.
 LITE_EXCLUDES = --exclude-module pyreadstat --exclude-module netCDF4 \
-	--exclude-module h5py --exclude-module scipy
+	--exclude-module h5py --exclude-module scipy \
+	--exclude-module tkinter --exclude-module turtle \
+	--exclude-module PIL.ImageTk --exclude-module PIL.SpiderImagePlugin \
+	--exclude-module PIL._avif
+# Window/Explorer icon for every exe we ship: multi-size .ico rendered from
+# ui/assets/16x16.png (64x64 docent.png stays the About art only).
+EXE_ICON = --icon ui/assets/docent-mark.ico
 SECRET_HIDDENS = --hidden-import hush --hidden-import hush.scanner \
 	--hidden-import hush.rules --hidden-import hush.entropy \
 	--collect-all piigex --hidden-import stdnum
 
 build:
-	$(PYTHON) -m PyInstaller --noconfirm --clean --name curation-app-lite --windowed --onefile \
-		$(LITE_EXCLUDES) $(SECRET_HIDDENS) \
+	$(PYTHON) -m PyInstaller --noconfirm --clean --name curation-app-lite --windowed --onedir \
+		$(LITE_EXCLUDES) $(SECRET_HIDDENS) $(EXE_ICON) \
 		--add-data "ui/assets;ui/assets" \
 		--workpath .pyi-cache \
 		main.py
 	$(PYTHON) -m PyInstaller --noconfirm --clean --name curation-app-full --windowed --onedir \
-		$(SECRET_HIDDENS) \
+		$(SECRET_HIDDENS) $(EXE_ICON) \
 		--add-data "ui/assets;ui/assets" --workpath .pyi-cache main.py
-	# Copy example config + checklist PDFs into the full folder so the
-	# lite exe can find them via its sibling lookup (no-op when absent).
-	$(PYTHON) -c "import shutil, pathlib; [shutil.copy(f, 'dist/curation-app-full/' + pathlib.Path(f).name) for f in ('config.example.json', 'docs/CurationLog.pdf', 'docs/DepositorChecklist.pdf') if pathlib.Path(f).exists()]"
+	# Copy the example config into the full folder (no-op when absent).
+	$(PYTHON) -c "import shutil, pathlib; [shutil.copy(f, 'dist/curation-app-full/' + pathlib.Path(f).name) for f in ('config.example.json',) if pathlib.Path(f).exists()]"
 
-# Rebuild only the lite exe. Keeps dist/curation-app-full/ intact.
+# Rebuild only the lite folder. Keeps dist/curation-app-full/ intact.
 # No --clean here so PyInstaller reuses its Analysis cache (~seconds).
 rebuild-lite:
-	$(PYTHON) -m PyInstaller --noconfirm --name curation-app-lite --windowed --onefile \
-		$(LITE_EXCLUDES) $(SECRET_HIDDENS) \
+	$(PYTHON) -m PyInstaller --noconfirm --name curation-app-lite --windowed --onedir \
+		$(LITE_EXCLUDES) $(SECRET_HIDDENS) $(EXE_ICON) \
 		--add-data "ui/assets;ui/assets" \
 		--workpath .pyi-cache \
 		main.py
@@ -85,13 +94,13 @@ rebuild-lite:
 # need the lite exe.
 build-full:
 	$(PYTHON) -m PyInstaller --noconfirm --clean --name curation-app-full --windowed --onedir \
-		$(SECRET_HIDDENS) \
+		$(SECRET_HIDDENS) $(EXE_ICON) \
 		--add-data "ui/assets;ui/assets" --workpath .pyi-cache main.py
 
-# Smoke the lite exe without a display: --headless --help must exit 0 and
-# dist size is reported (catches missing-asset regressions).
+# Smoke the lite build without a display: --headless --help must exit 0 and
+# the exe size is reported (catches missing-asset regressions).
 smoke:
-	$(PYTHON) -c "import pathlib, subprocess, sys; exe=pathlib.Path('dist/curation-app-lite.exe'); print(('exe ' + str(exe.stat().st_size) + ' bytes') if exe.exists() else 'lite exe missing — run make rebuild-lite first'); sys.exit(0)"
+	$(PYTHON) -c "import pathlib, subprocess, sys; exe=pathlib.Path('dist/curation-app-lite/curation-app-lite.exe'); print(('exe ' + str(exe.stat().st_size) + ' bytes') if exe.exists() else 'lite exe missing — run make rebuild-lite first'); sys.exit(0)"
 	$(PYTHON) main.py --headless --help
 
 clean:

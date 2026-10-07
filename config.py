@@ -2,13 +2,16 @@
 
 The curator chooses which Dataverse to work against in Settings (or via
 CLI flags in headless mode). The selected base URL, API token and
-collection alias are persisted to config.json next to the executable.
+collection alias are persisted to config.json — resolved for frozen
+builds by `resolve_config_path` (CWD, next to the exe, then the folder
+holding the build), for dev runs in the working directory.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -18,6 +21,28 @@ PRESETS: dict[str, str] = {
 }
 
 DEFAULT_CONFIG_PATH = Path("config.json")
+
+
+def resolve_config_path(path: Path | None = None) -> Path:
+    """Choose which config.json this run reads and writes.
+
+    Source runs are unchanged (CWD semantics) and explicit paths are
+    honoured as-is. For the default path inside a frozen exe: CWD first
+    (terminal launches have always resolved there), then beside the exe,
+    then one level above the exe — the folder holding the build, where
+    onefile-era launches kept the file — so the lite exe moving into its
+    own onedir subfolder still finds an existing config. With no config
+    anywhere, frozen runs default above the build folder so a fresh save
+    survives rebuilds (PyInstaller wipes its output folder on rebuild).
+    """
+    primary = Path(path) if path else DEFAULT_CONFIG_PATH
+    if primary != DEFAULT_CONFIG_PATH or not getattr(sys, "frozen", False):
+        return primary
+    exe_dir = Path(sys.executable).parent
+    for candidate in (primary, exe_dir / primary.name, exe_dir.parent / primary.name):
+        if candidate.exists():
+            return candidate
+    return exe_dir.parent / primary.name
 
 
 def default_workspace() -> Path:
@@ -53,7 +78,7 @@ class Config:
 
     @classmethod
     def load(cls, path: Path | None = None) -> Config:
-        cfg_path = Path(path) if path else DEFAULT_CONFIG_PATH
+        cfg_path = resolve_config_path(path)
         # Env overrides win over file (CI / headless secrets without
         # persisting tokens to disk).
         env_url = os.environ.get("DATAVERSE_BASE_URL", "").strip()
@@ -111,7 +136,7 @@ class Config:
     def save(self, path: Path | None = None) -> None:
         import tempfile
 
-        cfg_path = Path(path) if path else DEFAULT_CONFIG_PATH
+        cfg_path = resolve_config_path(path)
         payload = {
             "dataverse": {
                 "base_url": self.dataverse.base_url,

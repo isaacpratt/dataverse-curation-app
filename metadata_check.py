@@ -1,8 +1,9 @@
 """Metadata completeness checking against configurable requirement profiles.
 
 Profiles:
-- McMaster (default): derived from docs/CurationLog.pdf + docs/DepositorChecklist.pdf
-  (McMaster Dataverse). Mandatory fields are marked ★ Required.
+- McMaster (default): derived from the McMaster Curation Log +
+  Depositor Checklist (source PDFs retired 2026-10-07; the rules are
+  maintained in code). Mandatory fields are marked ★ Required.
 - Minimal: only the Dataverse core mandatory fields.
 
 Each result: {field, requirement, value, status}
@@ -16,7 +17,7 @@ from typing import Any
 PROFILES: dict[str, dict[str, Any]] = {
     "McMaster": {
         "label": "McMaster — Curation Log + Depositor Checklist",
-        "description": "Rules from docs/CurationLog.pdf and docs/DepositorChecklist.pdf (McMaster Dataverse)",
+        "description": "Rules from the McMaster Curation Log and Depositor Checklist (McMaster Dataverse)",
         "ruleset": "mcmaster-default",
     },
     "Minimal": {
@@ -37,15 +38,24 @@ _FILE_NAME = "requirements_profiles.json"
 def profiles_path() -> _Path:
     """Canonical location of the editable requirement profiles.
 
-    Frozen exe: next to the executable (CWD is arbitrary there). Dev runs:
-    the current working directory (repo root). One helper so the checker
-    and the Requirements dialog always read/write the same file.
+    Frozen exe: next to the executable (CWD is arbitrary there), falling
+    back one level above — the folder holding the build, where onefile-era
+    launches kept the file — so an exe inside its own onedir subfolder
+    still finds an existing profiles file; with none anywhere, resolve
+    above the build folder so a fresh write survives rebuilds (PyInstaller
+    wipes its output folder). Dev runs: the current working directory
+    (repo root). One helper so the checker and the Requirements dialog
+    always read/write the same file.
     """
     import sys
 
     if getattr(sys, "frozen", False):
         try:
-            return _Path(sys.executable).parent / _FILE_NAME
+            exe_dir = _Path(sys.executable).parent
+            for candidate in (exe_dir / _FILE_NAME, exe_dir.parent / _FILE_NAME):
+                if candidate.exists():
+                    return candidate
+            return exe_dir.parent / _FILE_NAME
         except Exception:
             pass
     return _Path(_FILE_NAME)
