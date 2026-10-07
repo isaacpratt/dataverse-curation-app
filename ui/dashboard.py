@@ -32,7 +32,6 @@ from ui.theme import (
     OUTLINE_VARIANT,
     PRIMARY,
     SURFACE_CONTAINER,
-    SURFACE_CONTAINER_LOW,
     SURFACE_CONTAINER_LOWEST,
     TERTIARY,
     selectable_labels,
@@ -465,13 +464,8 @@ class DashboardView(QWidget):
         self._filter_timer.timeout.connect(self._apply_filter)
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-        # Page content sits on the usual margins; the unified status bar
-        # below is full-bleed (edge to edge, flush to the window bottom).
-        content = QVBoxLayout()
-        content.setContentsMargins(24, 24, 24, 16)
-        content.setSpacing(20)
+        outer.setContentsMargins(24, 24, 24, 24)
+        outer.setSpacing(20)
         # Scoped to self: a bare `background` rule acts subtree-wide and
         # would override app-level backgrounds (e.g. the queue table face).
         self.setObjectName("DashboardView")
@@ -494,7 +488,7 @@ class DashboardView(QWidget):
             self._metrics_row.addWidget(card, 1)
             self._metric_cards.append(card)
             self._metric_subs.append(sub_text)
-        content.addLayout(self._metrics_row)
+        outer.addLayout(self._metrics_row)
 
         # ---- Curation Queue card ----
         queue_card = QFrame()
@@ -637,44 +631,43 @@ class DashboardView(QWidget):
         queue_layout.addWidget(queue_stack, 1)
         # Status renders as plain text like every other column.
 
-        content.addWidget(queue_card, 1)
+        outer.addWidget(queue_card, 1)
 
-        # Unified status bar (2026-10-07): one full-bleed strip — scope +
-        # filtered count, a dot, then the contextual message — ending just
-        # before the app mark pinned at the bottom-right corner. It replaces
-        # the separate pill row and status row (they read as two bars).
-        strip = QFrame()
-        strip.setObjectName("StatusBar")
-        strip.setFixedHeight(30)
-        strip.setStyleSheet(
-            f"QFrame#StatusBar {{ background: {SURFACE_CONTAINER_LOW}; "
-            f"border-top: 1px solid {OUTLINE_VARIANT}; }}"
+        # One status pill (2026-10-07): the scope + filtered count and the
+        # contextual message share the pill that previously existed — one
+        # row only, ending just before the app mark at the bottom-right
+        # (replaces the separate pill row + status bar).
+        pill = QFrame()
+        pill.setObjectName("StatusPill")
+        pill.setStyleSheet(
+            f"QFrame#StatusPill {{ background: {SURFACE_CONTAINER_LOWEST}; "
+            f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; }}"
         )
-        strip_lay = QHBoxLayout(strip)
-        strip_lay.setContentsMargins(20, 0, 14, 0)
-        strip_lay.setSpacing(8)
+        pill_lay = QHBoxLayout(pill)
+        pill_lay.setContentsMargins(14, 6, 14, 6)
+        pill_lay.setSpacing(8)
         self._status_lbl = _BarLabel("")
         self._status_lbl.setStyleSheet(
             f"font-size: 11px; color: {ON_SURFACE_VARIANT}; "
             "background: transparent; border: none;"
         )
-        strip_lay.addWidget(self._status_lbl)
-        strip_lay.setAlignment(self._status_lbl, Qt.AlignVCenter)
+        pill_lay.addWidget(self._status_lbl)
+        pill_lay.setAlignment(self._status_lbl, Qt.AlignVCenter)
         self._status_sep = QLabel("·")
         self._status_sep.setStyleSheet(
             f"font-size: 11px; color: {ON_SURFACE_VARIANT}; "
             "background: transparent; border: none;"
         )
         self._status_sep.hide()
-        strip_lay.addWidget(self._status_sep)
-        strip_lay.setAlignment(self._status_sep, Qt.AlignVCenter)
+        pill_lay.addWidget(self._status_sep)
+        pill_lay.setAlignment(self._status_sep, Qt.AlignVCenter)
         self._progress = _BarLabel("")
         self._progress.setStyleSheet(
             f"font-size: 11px; color: {ON_SURFACE_VARIANT}; "
             "background: transparent; border: none;"
         )
-        strip_lay.addWidget(self._progress, 1)
-        strip_lay.setAlignment(self._progress, Qt.AlignVCenter)
+        pill_lay.addWidget(self._progress, 1)
+        pill_lay.setAlignment(self._progress, Qt.AlignVCenter)
 
         def _sync_sep() -> None:
             # The dot joins scope and message only when both sides exist;
@@ -686,18 +679,17 @@ class DashboardView(QWidget):
         self._status_lbl.changed.connect(_sync_sep)
         self._progress.changed.connect(_sync_sep)
 
-        bottom = QHBoxLayout()
-        bottom.setContentsMargins(0, 0, 16, 0)
-        bottom.setSpacing(12)
-        bottom.addWidget(strip, 1)
+        foot = QHBoxLayout()
+        foot.setSpacing(12)
+        foot.addWidget(pill, 1)
         mark = QLabel()
         mark.setObjectName("DocentMark")
         try:
             from PySide6.QtGui import QPixmap as _QPixmap
 
-            from ui.theme import app_icon_path
+            from ui.theme import mark_icon_path
 
-            _pix = _QPixmap(app_icon_path())
+            _pix = _QPixmap(mark_icon_path())
             if not _pix.isNull():
                 mark.setPixmap(
                     _pix.scaledToHeight(22, Qt.SmoothTransformation)
@@ -706,10 +698,9 @@ class DashboardView(QWidget):
         except Exception:
             pass
         mark.setStyleSheet("border: none; background: transparent;")
-        bottom.addWidget(mark, 0, Qt.AlignVCenter)
+        foot.addWidget(mark, 0, Qt.AlignVCenter)
 
-        outer.addLayout(content, 1)
-        outer.addLayout(bottom)
+        outer.addLayout(foot)
         _sync_sep()
         self._sync_status_bar()
 

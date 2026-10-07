@@ -141,26 +141,22 @@ def asset_path(name: str) -> str:
 
 
 def app_icon_path() -> str:
-    """Absolute path to the app icon (docent.png at the repo root).
+    """Absolute path to the app icon (ui/assets/docent.png).
 
-    Works frozen too: the exe bundles it via --add-data "docent.png;.",
-    which lands at the sys._MEIPASS root next to the extracted modules.
+    The About page keeps this mark. asset_path resolves the bundled
+    copy both in dev and frozen (the exe ships --add-data "ui/assets;ui/assets").
     """
-    import sys
-    from pathlib import Path
+    return asset_path("docent.png")
 
-    candidates = []
-    meipass = getattr(sys, "_MEIPASS", "")
-    if meipass:
-        candidates.append(Path(meipass) / "docent.png")
-    candidates.append(Path(__file__).resolve().parent.parent / "docent.png")
-    for path in candidates:
-        try:
-            if path.exists():
-                return path.as_posix()
-        except Exception:
-            continue
-    return ""
+
+def mark_icon_path() -> str:
+    """Absolute path to the 32x32.png mark (ui/assets/32x32.png).
+
+    The dashboard status pill's mark and the window icon the Windows
+    taskbar draws use this; the About page keeps docent.png
+    (app_icon_path). Resolved by asset_path (dev + frozen).
+    """
+    return asset_path("32x32.png")
 
 
 def _chevron_qss() -> str:

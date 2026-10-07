@@ -9,7 +9,7 @@ removed, footer Open Settings link replaced by the Docent mark).
 import re
 
 import pytest
-from PySide6.QtWidgets import QAbstractButton, QLabel
+from PySide6.QtWidgets import QAbstractButton, QFrame, QLabel
 
 DASH = "\u2014"
 ELL = "\u2026"
@@ -165,21 +165,25 @@ def test_docent_mark_sits_bottom_right(win):
     assert mark_pt.x() > scope_pt.x()
 
 
-def test_unified_status_bar_spans_width(win):
-    """One full-bleed bar: scope + message share a strip edge to edge.
+def test_status_pill_is_single_unified_row(win):
+    """Scope + message share the one status pill; its row ends before the mark.
 
-    The strip stops before the docent mark — no second status row.
+    The flat full-bleed strip was rejected — the status bar lives in the
+    pill that previously existed (2026-10-07).
     """
+    from PySide6.QtCore import QPoint
+
     dash = win._dashboard
-    strip = dash._status_lbl.parentWidget()
-    assert strip is not None
-    assert strip is dash._progress.parentWidget(), "message lives outside the bar"
-    # Flush left, flush to the page bottom.
-    assert strip.x() == 0, strip.x()
-    assert strip.y() + strip.height() >= dash.height() - 40
-    # The bar ends before the mark, which pins the bottom-right corner.
+    pill = dash._status_lbl.parentWidget()
+    assert pill is not None
+    assert pill is dash._progress.parentWidget(), "message lives outside the pill"
+    assert pill.objectName() == "StatusPill"
+    # Exactly one pill — the old second status bar is gone.
+    assert len(dash.findChildren(QFrame, "StatusPill")) == 1
     mark = dash.findChild(QLabel, "DocentMark")
     assert mark is not None
-    assert strip.x() + strip.width() <= mark.x()
-    # Single line: the strip is a bar, not the old multi-line pill.
-    assert strip.height() <= 40, strip.height()
+    pill_right = pill.mapTo(dash, QPoint(pill.width(), 0)).x()
+    mark_x = mark.mapTo(dash, QPoint(0, 0)).x()
+    assert pill_right <= mark_x, "pill row must end before the mark"
+    # The pill stretches its row across the content width.
+    assert pill.width() > dash.width() * 0.6, pill.width()

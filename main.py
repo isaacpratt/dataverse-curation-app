@@ -194,9 +194,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         from PySide6.QtGui import QIcon
 
-        from ui.theme import app_icon_path
+        from ui.theme import mark_icon_path
 
-        _icon_path = app_icon_path()
+        # Taskbar/dock icon: the 32x32 mark (the About page keeps docent.png).
+        _icon_path = mark_icon_path()
         if _icon_path:
             app.setWindowIcon(QIcon(_icon_path))
     except Exception:
