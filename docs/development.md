@@ -17,7 +17,7 @@ copy config.example.json config.json     # cmd; PowerShell: Copy-Item config.exa
 Run tests:
 
 ```bash
-pytest -q   # 101 tests (engine + dataverse + runner + storage + audit regressions; run pytest --collect-only -q for current count) — warning suppressed via pyproject filterwarnings
+pytest -q   # 198 tests (engine + dataverse + runner + storage + audit regressions; run pytest --collect-only -q for current count) — warning suppressed via pyproject filterwarnings
 ```
 
 Launch the GUI:
@@ -32,8 +32,10 @@ python main.py --dataverse https://demo.borealisdata.ca
 Headless engine runs (no GUI — full pipeline on a staged directory; `--dataverse`/`--config` are GUI-only and rejected here):
 
 ```bash
-python main.py --headless <staged_dataset_dir> --out report.json --persistent-id doi:10.5072/FK2/EXAMPLE
+python main.py --headless <staged_dataset_dir> --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE
 ```
+
+`--format` accepts `json` (default), `md`, or `both` (writes a Markdown sibling next to `--out`).
 
 This walks the directory, dispatches every file to its format checks (lazy optional deps), runs the dataset-level inventory check, and writes the `DatasetReport` JSON (see `docs/report-contract.md`). Example: `engine/tests/test_runner.py` exercises `run_report` against `CUR_Res_CurationTools/data/Inspect_gpkg` (13 files, 0 findings).
 
@@ -46,22 +48,27 @@ python -c "import compileall; compileall.compile_dir('ui',quiet=1)"
 
 ## Layout
 
-- `main.py` — entry: `argparse` for `--headless`/`--out`/`--persistent-id`/`--config`/`--dataverse` (the last two are GUI-only; headless rejects them); Qt/UI imports lazy under GUI branch (TYPE_CHECKING-only at import so `--headless` stays fast; PyInstaller collects via hidden-imports); sibling-folder loader for heavy libs; exit codes 0 clean / 1 error-findings / 2 usage-IO; `MainWindow` (`ui/main_window.py`) with TopNav + `QStackedWidget` (dashboard/detail/settings/about) + log strip.
+- `main.py` — entry: `argparse` for `--headless`/`--out`/`--format json|md|both`/`--persistent-id`/`--config`/`--dataverse` (the last two are GUI-only; headless rejects them); Qt/UI imports lazy under GUI branch (TYPE_CHECKING-only at import so `--headless` stays fast; PyInstaller collects via hidden-imports); sibling-folder loader for heavy libs; exit codes 0 clean / 1 error-findings / 2 usage-IO; `MainWindow` (`ui/main_window.py`) with TopNav + `QStackedWidget` (dashboard/detail/settings/review-config/about/log) + log page.
 - `config.py` — `DataverseConfig` (`base_url`, `api_token`, `collection` alias `subtree`/`collection_alias` compat), `AppConfig(workspace)`, `Config.load/save`, `PRESETS` (includes `Borealis Demo — demo.borealisdata.ca`).
 - `dataverse_client.py` — `DataverseClient` (see `docs/dataverse-integration.md`), `normalize_files` (keeps UNF/tabular/original-format fields), `parse_ds_metadata_payload`, `search_item_state` (draft-aware) + draft-preferring dedup, curation/version/timestamp/notification parsers, retry on 10054.
 - `download_manager.py` — `DownloadManager: quote/quote_from` (original size preferred for tabular), `inventory`, `missing_files`/`is_fully_staged` (original path for tabular), `approve_and_download` (+ `download_originals` for tabular originals, then removes staged `.tab`), `verify` → `(ok, problems, warnings)` (originals by size), `hash_file`, zip-slip guard, streaming downloads, `save/load_metadata` per-dataset cache.
 - `metadata_check.py` — `PROFILES`, `DEFAULT_PROFILE`, `check_metadata_completeness` (McMaster vs Minimal), ORCID regex, `requirements_profiles.json` support.
 - `applog.py` — `AppLog` ring buffer, `log_response`, `get_app_log()`.
-- `storage.py` — SQLite local state (`datasets`, `files`, `check_results`, `curation_actions`) plus JSON caches (`dataset_sizes.json`, `curation_labels.json`, `table_layout.json` with save/restore helpers).
+- `storage.py` — SQLite local state (`datasets`, `files`, `check_results`, `curation_actions`) plus JSON caches (`dataset_sizes.json`, `curation_labels.json`, `dashboard_cache.json` via `ui/dashboard.py` helpers, `table_layout.json` with save/restore helpers).
 - `engine/checks/base.py` — `Check` base class and `CheckResult(check_id, level, passed, message, details)` dataclass with `to_dict/from_dict`.
-- `engine/checks/<format>_check.py` — 20 format modules (csv, xlsx, sav, dta, sas7bdat, json, xml, ipynb, sqlite, hdf5, nc, gpkg, tiff, images, pdf, text, code, containers, fastq, extensions); lazy `try/except ImportError` for heavy libs.
+- `engine/checks/<format>_check.py` — 21 format modules (csv, xlsx, sav, dta, sas7bdat, json, xml, ipynb, sqlite, hdf5, nc, gpkg, tiff, images, pdf, text, code, secret, containers, fastq, extensions); lazy `try/except ImportError` for heavy libs.
+- `engine/constants.py` — shared scan caps (`EngineCaps`: sample bytes, row caps, member caps, pixel caps).
+- `engine/status.py` — `classify`/`summarize`/`file_status` badge taxonomy (passed / failed-error / failed-warning / skipped).
+- `engine/report_md.py` — Markdown rendering of `DatasetReport` (`render_markdown`).
+- `response_draft.py` — depositor-response draft builder (`build_response`/`render_response`) from ruleset + report findings.
+- `review_rules.py` — versioned review rulesets (`RULESETS_VERSION=2`, `mcmaster-default`, `minimal`, per-Dataverse assignment, content rules).
 - `engine/checks/_util.py` — `missing_library`, `detect_encoding`, `find_emails`, `find_pii` (piigex `regions=["intl"]` + Canadian postal/SIN; foreign national IDs disabled), `pii_result` (always-emit PII result with truncation copy).
 - `engine/checks/__init__.py` — `registry` of all checks.
-- `engine/report.py` — `DatasetReport`/`FileEntry` with JSON round-trip (`to_dict`/`from_dict`/`save`/`load`).
+- `engine/report.py` — `DatasetReport`/`FileEntry` with JSON round-trip (`to_dict`/`from_dict`/`save`/`load`) plus `to_markdown`/`save_markdown`.
 - `engine/dispatcher.py` — maps file path to checks (compound names shed one compression layer: `.fq.gz` → fastq, `.tar.gz` → tar); dataset-level checks have empty `extensions`.
-- `engine/runner.py` — `run_report(staged_dir, pid, label)` and `list_planned_checks(files)` (used by the Auto-Checks card); symlinks skipped, per-file isolation via `_safe_run`, `inventory.unchecked_types` hint for formats without a check.
-- `engine/tests/test_audit_fixes.py` — 31 regression tests for the audit batches (dispatch, missing-lib contract, traversal/atomicity, caps, taxonomy).
-- `ui/` — `widgets.py` kit (`AppButton` kinds primary/secondary/ghost/chip/nav + sizes sm/md/lg, `AppTable` movable/resizable/sortable/copy, `make_card`, `make_search_field`/`make_line_edit`, `make_combo`) used by every view; `main_window.py` (TopNav with dataset chips + close buttons, stack, status bar, shortcuts), `dashboard.py` (`COLUMNS` 12, `_SortItem` numeric/date sort, status/label/collection filters + Columns… menu; Status is plain text; `dashboard_cache.json` cache-first paint + `diff_dashboard_datasets` change-only refresh), `dataset_detail.py` (main column: completeness/manifest/auto-checks/version-log cards; sticky sidebar: sections nav/dataset timeline/assessment), `settings_dialog.py:SettingsPane` (General/Extensions tabs, install/uninstall + sizes + tool rows), `about_pane.py`, `workers.py` (parented QThread workers with `progress`/`finished`/`error`, `MetadataWorker` fetching metadata/inventory/curation/diff/versions/timestamps/notifications), `dialogs.py` (selectable), `log_panel.py` (`LogPage` full-stack page with Live toggle, `QSyntaxHighlighter` INAV-style), `download_dialog.py`, `theme.py` (tokens, QSS incl. chevron asset + unified 8px radius, `selectable_labels`, table/list copy filters, app-wide hover cursor).
+- `engine/runner.py` — `run_report(staged_dir, pid, label)` and `run_report_to_file(..., fmt="json|md|both")` plus `list_planned_checks(files)` (used by the Auto-Checks card); symlinks skipped, per-file isolation via `_safe_run`, `inventory.unchecked_types` hint for formats without a check.
+- `engine/tests/test_audit_fixes.py` — 32 regression tests for the audit batches (dispatch, missing-lib contract, traversal/atomicity, caps, taxonomy).
+- `ui/` — `widgets.py` kit (`AppButton` kinds primary/secondary/ghost/chip/nav + sizes sm/md/lg, `AppTable` movable/resizable/sortable/copy, `make_card`, `make_search_field`/`make_line_edit`, `make_combo`) used by every view; `main_window.py` (TopNav with dataset chips + close buttons, stack, status bar, shortcuts), `dashboard.py` (`COLUMNS` 12, `_SortItem` numeric/date sort, status/label/collection filters + Columns… menu; Status is plain text; `dashboard_cache.json` cache-first paint + `diff_dashboard_datasets` change-only refresh), `dataset_detail.py` (main column: completeness/manifest/auto-checks/version-log cards; sticky sidebar: sections nav/dataset timeline/assessment that pushes the chosen curation label via `set_curation_label`), `review_config.py:ReviewConfigView` (rulesets + response templates), `settings_dialog.py:SettingsPane` (General/Extensions tabs, install/uninstall + sizes + tool rows), `about_pane.py`, `workers.py` (parented QThread workers with `progress`/`finished`/`error`/`cancelled`, `MetadataWorker` fetching metadata/inventory/curation/diff/versions/timestamps/notifications), `dialogs.py` (selectable), `checks_tree.py` (folder › file › check model + badge text), `icons.py`, `log_panel.py` (`LogPage` stack page with Live toggle, `QSyntaxHighlighter` INAV-style), `download_dialog.py`, `theme.py` (tokens, QSS incl. chevron asset + unified 8px radius, `selectable_labels`, table/list copy filters, app-wide hover cursor).
 
 ## Adding a check
 

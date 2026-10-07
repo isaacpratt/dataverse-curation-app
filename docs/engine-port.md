@@ -4,7 +4,7 @@ The check engine re-implements the inspectors from [CUR_Res_CurationTools](../CU
 
 ## Status
 
-Phase 1 complete: **20 check modules (19 R inspectors + dataset-level extensions/fastq) ported** and verified. The suite is **101 tests passing** (`engine/tests/test_port_spike.py`, `engine/tests/test_formats.py`, `engine/tests/test_dataverse.py`, `engine/tests/test_runner.py`, plus audit/dashboard-cache/report; run `pytest --collect-only -q` for current count; numpy warning suppressed via `pyproject.toml:filterwarnings`). MATLAB `.mat` (`Scripts/Inspect_mat_Script.R` → `scipy.io`) remains **deferred** to keep `scipy` optional — `mat_check.py` does not exist; if added, it would be lazy-imported like the other heavy libs.
+Phase 1 complete: **21 check modules ported** and verified. The suite is **198 tests passing** (`engine/tests/test_port_spike.py`, `engine/tests/test_formats.py`, `engine/tests/test_dataverse.py`, `engine/tests/test_runner.py`, plus audit/dashboard-cache/report/status/response-draft/review-rules; run `pytest --collect-only -q` for current count; numpy warning suppressed via `pyproject.toml:filterwarnings`). MATLAB `.mat` (`Scripts/Inspect_mat_Script.R` → `scipy.io`) remains **deferred** to keep `scipy` optional — `mat_check.py` does not exist; if added, it would be lazy-imported like the other heavy libs.
 
 Notable findings and divergences from the R scripts:
 
@@ -61,4 +61,4 @@ If parity cannot be reached for a specific format, that check degrades to a docu
 
 ## Maintenance note
 
-The R book remains the authoritative R reference; the Python engine is the app runtime. Parity tests (`pytest -q` — 101 tests; see CI `.github/workflows/ci.yml`) are the contract that keeps the two in sync — they must run in CI as the R scripts evolve.
+The R book remains the authoritative R reference; the Python engine is the app runtime. Parity tests (`pytest -q` — 198 tests; see CI `.github/workflows/ci.yml`) are the contract that keeps the two in sync — they must run in CI as the R scripts evolve.

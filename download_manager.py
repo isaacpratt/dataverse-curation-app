@@ -15,6 +15,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from dataverse_client import DownloadCancelled
+
 _STREAM_CHUNK = 1 << 20
 
 # Per-dataset staging locks: concurrent DownloadWorkers (or download+verify)
@@ -271,19 +273,31 @@ class DownloadManager:
         self,
         persistent_id: str,
         progress: Callable[[int], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
     ) -> Path:
         """Download the bundle and stage its contents for the check engine.
 
         Afterwards, original-format uploads are fetched per tabular file
         (the bundle only carries server-generated .tab derivatives).
+        `is_cancelled` stops both phases at the next stream chunk with
+        DownloadCancelled; the truncated .part is removed first, while
+        files already staged stay on disk (a later run skips them).
         """
         with _stage_lock(persistent_id):
             dest_dir = self.dataset_dir(persistent_id)
             part = dest_dir / "_bundle.zip.part"
             bundle = dest_dir / "_bundle.zip"
-            self._client.download_dataset_zip(
-                persistent_id, part, progress=progress
-            )
+            try:
+                self._client.download_dataset_zip(
+                    persistent_id, part, progress=progress, is_cancelled=is_cancelled
+                )
+            except DownloadCancelled:
+                # Never leave a truncated .part behind — next run starts clean.
+                try:
+                    part.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                raise
             # Only publish the bundle on a complete download — a killed run
             # leaves .part behind, never a truncated _bundle.zip.
             part.replace(bundle)
@@ -296,8 +310,13 @@ class DownloadManager:
                     pass
             try:
                 self.download_originals(
-                    persistent_id, progress=progress, max_workers=min(4, os.cpu_count() or 4)
+                    persistent_id,
+                    progress=progress,
+                    max_workers=min(4, os.cpu_count() or 4),
+                    is_cancelled=is_cancelled,
                 )
+            except DownloadCancelled:
+                raise
             except Exception as exc:
                 from applog import get_app_log
 
@@ -310,13 +329,17 @@ class DownloadManager:
         inventory: list | None = None,
         progress: Callable[[int], None] | None = None,
         max_workers: int = 1,
+        is_cancelled: Callable[[], bool] | None = None,
     ) -> list[str]:
         """Fetch original uploads behind tabular .tab derivatives.
 
         Returns staged original paths. Skips files already staged with a
-        matching size. Never raises — per-file failures are collected and
-        ignored (the .tab remains available for checks). `max_workers>1`
-        fetches originals in parallel (I/O-bound).
+        matching size. Never raises for per-file failures — they are
+        collected and ignored (the .tab remains available for checks).
+        The one exception is DownloadCancelled (curator cancelled): it
+        propagates immediately, the in-flight partial is removed, and
+        files already staged are kept. `max_workers>1` fetches originals
+        in parallel (I/O-bound).
         """
         try:
             inv = inventory if inventory is not None else self.inventory(persistent_id)
@@ -329,6 +352,8 @@ class DownloadManager:
         def _fetch_one(item) -> str | None:
             dest: Path | None = None
             try:
+                if is_cancelled and is_cancelled():
+                    raise DownloadCancelled("originals")
                 if not isinstance(item, dict) or not item.get("tabular"):
                     return None
                 file_id = str(item.get("id") or "")
@@ -358,8 +383,19 @@ class DownloadManager:
                     ):
                         return dest.relative_to(root).as_posix()
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                self._client.download_datafile_original(file_id, dest, progress=progress)
+                self._client.download_datafile_original(
+                    file_id, dest, progress=progress, is_cancelled=is_cancelled
+                )
                 return dest.relative_to(root).as_posix()
+            except DownloadCancelled:
+                # Curator cancelled: drop the in-flight partial, then let the
+                # cancellation travel up — it is not a per-file failure.
+                try:
+                    if dest is not None and dest.is_file():
+                        dest.unlink()
+                except OSError:
+                    pass
+                raise
             except Exception:
                 try:
                     if dest is not None and dest.is_file():

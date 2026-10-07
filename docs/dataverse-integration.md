@@ -27,7 +27,7 @@ The app talks to Dataverse exclusively through the Native/Search API (no Postgre
 | Lifecycle timestamps | `GET /api/datasets/:persistentId/timestamps` (numeric-id fallback) | `createTime`, `publicationTime`, `globalIdCreateTime`, draft `lastUpdateTime`, etc.; `{}` when unavailable |
 | Notifications | `GET /api/notifications/all?limit=&offset=&inAppNotificationFormat=true` | Token-owner inbox with `sentTimestamp`; in-app items carry structured `datasetPersistentIdentifier`/`ownerDisplayName`, so `SUBMITTEDDS` notes are matched by PID with the collection name taken straight from the API — no text comparison |
 | Allowed labels | `GET /api/datasets/:persistentId/allowedCurationLabels?persistentId=<doi>` | Comma-separated, **instance/collection-specific** set; empty when labels not configured |
-| Set / delete label | `PUT` / `DELETE /api/datasets/:persistentId/curationStatus?...&label=<label>` | Available in `DataverseClient.set_curation_label/delete_curation_label` (not yet wired to UI buttons) |
+| Set / delete label | `PUT` / `DELETE /api/datasets/:persistentId/curationStatus?...&label=<label>` | `DataverseClient.set_curation_label/delete_curation_label`, wired to the dataset detail **Assessment Action** (pushes the chosen label, logged to the dataset timeline) |
 
 ## Curation labels (per-instance)
 Allowed curation labels (`AllowedCurationLabels` setting) differ per Dataverse instance and even per collection, so the app never hard-codes them. Labels are pulled in bulk-first order on every dashboard refresh (`CrawlWorker`):

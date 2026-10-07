@@ -5,11 +5,11 @@ Desktop curation assistant for Alliance Dataverse instances. It pulls datasets s
 ## Status
 
 - Phase 0 — scaffold complete
-- Phase 1 — R-to-Python engine port: **20 check modules (19 R inspectors + extensions/fastq) ported, 101 tests passing** (`docs/engine-port.md`; MATLAB `.mat` deferred to keep `scipy` optional; run `pytest --collect-only -q` for the current count)
+- Phase 1 — R-to-Python engine port: **21 check modules ported, 198 tests passing** (`docs/engine-port.md`; MATLAB `.mat` deferred to keep `scipy` optional; run `pytest --collect-only -q` for the current count)
 - Phase 2 — report runner complete: `python main.py --headless <dir>` produces the `DatasetReport` JSON end-to-end (`engine/runner.py:run_report`)
 - Phase 3 — Dataverse client + download manager complete: crawler-based discovery with Search API fallback (paginated, draft-aware), per-dataset `IN_REVIEW` lock confirmation, approval-gated zip download with streaming, original-format fetch for tabular ingests, skip-if-staged, checksum verification with `.tab` warnings (not errors), zip-slip guard; live-verified against `https://demo.borealisdata.ca`
 - Phase 4 — PySide6 GUI complete: dashboard (12 sortable/column-togglable columns with pill delegates, status/label/collection filters, content-width auto-fit with visible resize handles and reset-to-defaults), dataset detail (main column: completeness/manifest/auto-checks/version-log cards; sticky sidebar: sections nav, dataset timeline, assessment that pushes curation labels), settings/about stack panes, log strip under the nav with Live toggle, selectable text + table copy everywhere
-- Phase 5 — packaging complete: PyInstaller onefile lite exe (~63 MB, all 20 checks lazy-import optional libs) beside a full onedir build whose heavy libs the lite exe picks up; `Makefile` targets `build` / `rebuild-lite` / `build-full`
+- Phase 5 — packaging complete: PyInstaller onefile lite exe (~63 MB, all 21 checks lazy-import optional libs) beside a full onedir build whose heavy libs the lite exe picks up; `Makefile` targets `build` / `rebuild-lite` / `build-full`
 
 ## Context
 
@@ -29,11 +29,11 @@ Design decisions: native PySide6 desktop app (single process), API-token authent
 dataverse-curation-app/
 ├── docs/                 # architecture, engine port, checks reference, dataverse, report contract, dev, user guide
 ├── engine/               # Python check engine (ports of the R inspectors)
-│   ├── checks/           # one module per format (20), plus base.py/_util.py
+│   ├── checks/           # one module per format (21), plus base.py/_util.py
 │   ├── report.py         # DatasetReport JSON contract
 │   ├── dispatcher.py     # extension -> check mapping
 │   ├── runner.py         # run_report / list_planned_checks
-│   └── tests/            # pytest suite (101 tests; see CI)
+│   └── tests/            # pytest suite (198 tests; see CI)
 ├── ui/                   # PySide6 views (main window, dashboard, detail, settings/about panes, log strip, workers, dialogs, theme, widgets incl. AppTable content-fit)
 ├── dataverse_client.py   # Native/Search API client (dvmeta CLI + paginated search fallback, versions/compare/timestamps/notifications/curation labels)
 ├── download_manager.py   # approval-gated downloads, originals, skip-if-staged, verify (ok/problems/warnings)
@@ -51,10 +51,10 @@ python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
-pytest                        # 101 tests (run pytest --collect-only -q for current count)
+pytest                        # 198 tests (run pytest --collect-only -q for current count)
 python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
 # headless against a staged directory (--dataverse/--config are GUI-only):
-python main.py --headless <staged_dir> --out report.json --persistent-id doi:10.5072/FK2/EXAMPLE
+python main.py --headless <staged_dir> --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE
 ```
 
 Requirements: Python 3.10+ (Windows recommended). `make` needs Git Bash on Windows; without it, run `.\build-lite.ps1` in PowerShell (same flags as `Makefile:rebuild-lite`). Headless exit codes: 0 clean, 1 error-level findings, 2 usage/IO failure. R is only needed for parity verification against the original scripts during the port phase, not at runtime.

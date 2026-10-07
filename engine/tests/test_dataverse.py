@@ -577,7 +577,7 @@ def test_download_originals_skips_staged_and_nontabular(tmp_path):
             super().__init__(inventory)
             self.fetched = []
 
-        def download_datafile_original(self, file_id, dest, progress=None):
+        def download_datafile_original(self, file_id, dest, progress=None, is_cancelled=None):
             self.fetched.append(file_id)
             Path(dest).write_bytes(b"orig-bytes")
             return dest

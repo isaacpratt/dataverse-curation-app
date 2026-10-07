@@ -303,30 +303,53 @@ class DownloadWorker(QThread):
     progress = Signal(int)
     finished = Signal(Path)
     error = Signal(str)
+    # Emitted when the curator cancels (or cancel wins a race at the tail
+    # of a run) — the UI resets via _on_download_cancelled, never a dialog.
+    cancelled = Signal()
 
     def __init__(self, client, workspace: Path, persistent_id: str, parent=None):
         super().__init__(parent)
         self._client = client
         self._workspace = workspace
         self._pid = persistent_id
+        self._cancel_requested = False
+
+    def cancel(self) -> None:
+        """Stop the run at the next stream chunk.
+
+        Sets a Python-side flag (works before the thread starts) *and*
+        the QThread interruption flag (works mid-run).
+        """
+        self._cancel_requested = True
+        self.requestInterruption()
+
+    def _stop_requested(self) -> bool:
+        return self._cancel_requested or self.isInterruptionRequested()
 
     def run(self) -> None:
         import traceback
 
-        try:
-            from download_manager import DownloadManager
+        from download_manager import DownloadCancelled, DownloadManager
 
+        try:
             mgr = DownloadManager(self._client, self._workspace)
-            if self.isInterruptionRequested():
+            if self._stop_requested():
+                self.cancelled.emit()
                 return
             staged = mgr.approve_and_download(
-                self._pid, progress=lambda n: self.progress.emit(n)
+                self._pid,
+                progress=lambda n: self.progress.emit(n),
+                is_cancelled=self._stop_requested,
             )
-            if self.isInterruptionRequested():
+            if self._stop_requested():
+                self.cancelled.emit()
                 return
             self.finished.emit(staged)
+        except DownloadCancelled:
+            self.cancelled.emit()
         except Exception as exc:
-            if self.isInterruptionRequested():
+            if self._stop_requested():
+                self.cancelled.emit()
                 return
             self.error.emit(f"{exc}\n\n{traceback.format_exc()}")
 

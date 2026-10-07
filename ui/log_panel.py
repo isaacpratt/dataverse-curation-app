@@ -59,6 +59,33 @@ class LogPage(QWidget):
         title = QLabel("Dataverse Communication Log")
         title.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {ON_SURFACE}; background: transparent; border: none;")
         header.addWidget(title)
+        # Severity legend: chips reuse the highlighter's exact fills, so the
+        # key shows what a line actually looks like (colour never explains
+        # itself; reachable without hovering).
+        legend = QHBoxLayout()
+        legend.setSpacing(4)
+        err_chip = QLabel("ERROR")
+        err_chip.setStyleSheet(
+            f"font-size: 10px; font-weight: 700; color: {ON_ERROR}; background: {ERROR};"
+            " border: none; border-radius: 4px; padding: 1px 6px;"
+        )
+        err_chip.setToolTip("Lines containing ERROR render on the brand error fill (bold)")
+        legend.addWidget(err_chip)
+        warn_chip = QLabel("WARN")
+        warn_chip.setStyleSheet(
+            f"font-size: 10px; font-weight: 700; color: {ON_ERROR_CONTAINER}; background: {ERROR_CONTAINER};"
+            " border: none; border-radius: 4px; padding: 1px 6px;"
+        )
+        warn_chip.setToolTip("Lines containing WARN/WARNING render on the warm fill (bold)")
+        legend.addWidget(warn_chip)
+        plain_chip = QLabel("INFO · DEBUG plain")
+        plain_chip.setStyleSheet(
+            f"font-size: 10px; color: {ON_SURFACE_VARIANT}; background: transparent;"
+            " border: none; padding: 1px 0;"
+        )
+        plain_chip.setToolTip("Everything else stays unstyled; identifiers and details keep their accents")
+        legend.addWidget(plain_chip)
+        header.addLayout(legend)
         header.addStretch(1)
         # Search box: filter visible lines (case-insensitive substring).
         # Standard search field — same 36px box + 13px text as the

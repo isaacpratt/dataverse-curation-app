@@ -385,6 +385,15 @@ class DatasetDetailView(QWidget):
         self._dl_btn.setStyleSheet(action_button_style(False))
         self._dl_btn.clicked.connect(self._on_download)
         actions_row.addWidget(self._dl_btn)
+        # Mid-download Cancel — hidden until a worker starts, so the action
+        # row keeps its idle layout (critique P3: no silent 15-min wait).
+        self._dl_cancel_btn = AppButton("Cancel", kind="secondary", size="md")
+        self._dl_cancel_btn.setStyleSheet(action_button_style(False))
+        self._dl_cancel_btn.setToolTip("Stop the download — files already staged stay on disk")
+        self._dl_cancel_btn.setAccessibleName("Cancel download")
+        self._dl_cancel_btn.clicked.connect(self._on_download_cancel_click)
+        self._dl_cancel_btn.setVisible(False)
+        actions_row.addWidget(self._dl_cancel_btn)
         self._history_btn = AppButton("Export reports…", kind="secondary", size="md")
         self._history_btn.setStyleSheet(action_button_style(False))
         self._history_btn.setToolTip("Save the DatasetReport JSON + Markdown (runs after checks complete)")
@@ -2947,8 +2956,12 @@ class DatasetDetailView(QWidget):
         self._dl_worker.progress.connect(lambda n: self._progress.setFormat(f"{n / 1024**2:.1f} MB"))
         self._dl_worker.finished.connect(self._on_download_finished)
         self._dl_worker.error.connect(self._on_download_error)
+        self._dl_worker.cancelled.connect(self._on_download_cancelled)
         self._dl_worker.finished.connect(self._dl_worker.deleteLater)
         self._dl_worker.error.connect(self._dl_worker.deleteLater)
+        self._dl_worker.cancelled.connect(self._dl_worker.deleteLater)
+        self._dl_cancel_btn.setEnabled(True)
+        self._dl_cancel_btn.setVisible(True)
         self._dl_worker.start()
 
     def _on_download_finished(self, staged: Path) -> None:
@@ -2983,6 +2996,30 @@ class DatasetDetailView(QWidget):
         headline, details = describe_error(msg)
         show_critical(self, "Download", headline, details=details,
                      retry=self._on_download)
+
+    def _on_download_cancel_click(self) -> None:
+        """Ask the worker to stop; stay disabled until it acknowledges."""
+        if self._dl_worker is None:
+            return
+        self._dl_cancel_btn.setEnabled(False)
+        self._set_status("Cancelling — stopping after the current chunk…")
+        try:
+            self._dl_worker.cancel()
+        except Exception:
+            pass
+
+    def _on_download_cancelled(self) -> None:
+        """Worker acknowledged the cancel: reset the action row quietly."""
+        self._dl_worker = None
+        self._progress.setVisible(False)
+        self._dl_btn.setEnabled(True)
+        self._dl_cancel_btn.setEnabled(True)
+        self._dl_cancel_btn.setVisible(False)
+        self._refresh_files_placeholder()
+        # Staged files (bundle extract or finished originals) stay valid.
+        self._check_btn.setEnabled(self._dl_mgr.files_dir(self._pid).exists())
+        self._set_status("Download cancelled — files already staged were kept.")
+        self._log_action("downloaded", "Cancelled by user", {"cancelled": True})
 
     # -- checks cache ------------------------------------------------------
     def _cached_report_path(self) -> Path:

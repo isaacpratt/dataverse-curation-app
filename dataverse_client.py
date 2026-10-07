@@ -45,6 +45,15 @@ class _RetryOriginal(Exception):
     """Internal: throttled original-format download should retry the loop."""
 
 
+class DownloadCancelled(Exception):
+    """Raised from a streaming loop when the curator cancels the download.
+
+    Deliberately not an HTTP/network error: the retry loops must never
+    catch or replay it — it propagates straight through DownloadManager
+    to the worker, which turns it into the `cancelled` signal.
+    """
+
+
 def _throttle_delay(exc: requests.HTTPError) -> float | None:
     """Retry-After seconds for a retryable HTTP error, else None.
 
@@ -2106,6 +2115,7 @@ class DataverseClient:
         dest: Path,
         progress: Callable[[int], None] | None,
         label: str,
+        is_cancelled: Callable[[], bool] | None = None,
     ) -> int | None:
         """One version attempt of a streaming download, with retries.
 
@@ -2114,10 +2124,13 @@ class DataverseClient:
         (401/403) raise immediately so a bad token is not masked by version
         fallback. Raises on persistent network/HTTP failure. `dest` is
         truncated at the start of every attempt, so callers must pass a
-        .part path.
+        .part path. `is_cancelled` is polled per chunk; a True answer
+        raises DownloadCancelled, which is never retried.
         """
         from applog import log_response
 
+        if is_cancelled and is_cancelled():
+            raise DownloadCancelled(label)
         for attempt in range(3):
             try:
                 start = time.monotonic()
@@ -2157,6 +2170,8 @@ class DataverseClient:
                         for chunk in response.iter_content(chunk_size=_STREAM_CHUNK):
                             if not chunk:
                                 continue
+                            if is_cancelled and is_cancelled():
+                                raise DownloadCancelled(label)
                             handle.write(chunk)
                             received += len(chunk)
                             if progress:
@@ -2195,6 +2210,7 @@ class DataverseClient:
         dest: Path,
         version: str = "draft",
         progress: Callable[[int], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
     ) -> Path:
         dest = Path(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -2209,12 +2225,12 @@ class DataverseClient:
         for ver in (access_version, "latest"):
             params = {"persistentId": identifier, "version": ver} if by_pid else {"version": ver}
             path = "/api/access/dataset/:persistentId" if by_pid else f"/api/access/dataset/{identifier}"
-            if self._stream_download(path, params, dl_headers, dest, progress, f"version {ver}") is not None:
+            if self._stream_download(path, params, dl_headers, dest, progress, f"version {ver}", is_cancelled) is not None:
                 return dest
         # final attempt without version
         path = "/api/access/dataset/:persistentId" if by_pid else f"/api/access/dataset/{identifier}"
         params = {"persistentId": identifier} if by_pid else {}
-        if self._stream_download(path, params, dl_headers, dest, progress, "unversioned") is None:
+        if self._stream_download(path, params, dl_headers, dest, progress, "unversioned", is_cancelled) is None:
             raise requests.HTTPError("Dataset bundle download not available (404)")
         return dest
 
@@ -2247,12 +2263,15 @@ class DataverseClient:
         file_id: str,
         dest: Path,
         progress: Callable[[int], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
     ) -> Path:
         """Download one file in its ORIGINAL uploaded format.
 
         Tabular ingests are served as generated .tab by default; passing
         ?format=original returns the depositor's upload (e.g. .sav). Raises
         RuntimeError when unavailable so callers can skip the file.
+        `is_cancelled` is polled before each attempt and per chunk; a True
+        answer raises DownloadCancelled, which is never retried.
         """
         from applog import log_response
 
@@ -2261,6 +2280,8 @@ class DataverseClient:
         dl_headers: dict[str, str] = {"Accept": "*/*"}
         if self._api_token:
             dl_headers["X-Dataverse-key"] = self._api_token
+        if is_cancelled and is_cancelled():
+            raise DownloadCancelled(f"datafile {file_id}")
         last_exc: Exception | None = None
         for attempt in range(3):
             try:
@@ -2299,6 +2320,8 @@ class DataverseClient:
                         for chunk in response.iter_content(chunk_size=_STREAM_CHUNK):
                             if not chunk:
                                 continue
+                            if is_cancelled and is_cancelled():
+                                raise DownloadCancelled(f"datafile {file_id}")
                             handle.write(chunk)
                             received += len(chunk)
                             if progress:
