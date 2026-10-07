@@ -42,6 +42,16 @@ class CrawlWorker(QThread):
     # stamps the disk slot only when probed is True, so a cache hit can
     # never freeze an unverified union in place.
     allowedProbed = Signal(dict)
+    # Emitted during dashboard enrichment with shallow copies of newly
+    # enriched rows (batched): the dashboard merges them into the painted
+    # table progressively so a 1300-row crawl never blocks the UI.
+    enriched = Signal(list)
+
+    # Dashboard enrichment bounds (approved scope): drafts first, capped,
+    # sums-only, flushed to the table in batches.
+    _ENRICH_MAX_ROWS = 200
+    _ENRICH_WORKERS = 5
+    _ENRICH_FLUSH_EVERY = 25
 
     def __init__(self, base_url: str, api_token: str, subtree: str, parent=None):
         super().__init__(parent)
@@ -63,6 +73,79 @@ class CrawlWorker(QThread):
             datasets = client.list_draft_datasets(self._subtree)
             if self.isInterruptionRequested():
                 return
+            # Dashboard enrichment: patch thin search rows with live
+            # inventory sums + depositor + authoritative state (drafts
+            # first, capped, cancellable). The locks stage below still owns
+            # the "In Review" state — enrichment never clobbers it.
+            try:
+                total_rows = len(datasets)
+                if total_rows:
+                    self.progress.emit(
+                        f"Enriching {total_rows} dataset(s) with file sizes…"
+                    )
+                emitted: set = set()
+                pending_batch: list = []
+
+                def _on_enrich_progress(done: int, total: int) -> None:
+                    try:
+                        self.progress.emit(
+                            f"Enriching dataset details… {done}/{total}"
+                        )
+                    except Exception:
+                        pass
+                    # Progressive paint: hand newly enriched rows to the
+                    # dashboard every _ENRICH_FLUSH_EVERY completions (plus
+                    # the tail), as shallow copies — the worker keeps the
+                    # live dicts for the final finished() payload.
+                    try:
+                        for d in datasets:
+                            try:
+                                pid = str(d.get("persistent_id") or "")
+                            except Exception:
+                                continue
+                            if d.get("size_enriched") and pid and pid not in emitted:
+                                pending_batch.append(d)
+                                emitted.add(pid)
+                        if pending_batch and (
+                            len(pending_batch) >= CrawlWorker._ENRICH_FLUSH_EVERY
+                            or done >= total
+                        ):
+                            self.enriched.emit([dict(d) for d in pending_batch])
+                            pending_batch.clear()
+                    except Exception:
+                        pass
+
+                enrich_stats = client.enrich_datasets_with_inventory(
+                    datasets,
+                    max_rows=CrawlWorker._ENRICH_MAX_ROWS,
+                    max_workers=CrawlWorker._ENRICH_WORKERS,
+                    progress=_on_enrich_progress,
+                    is_cancelled=self.isInterruptionRequested,
+                )
+                if self.isInterruptionRequested():
+                    return
+                try:
+                    rest = [
+                        dict(d) for d in datasets
+                        if d.get("size_enriched")
+                        and str(d.get("persistent_id") or "") not in emitted
+                    ]
+                    if rest:
+                        self.enriched.emit(rest)
+                except Exception:
+                    pass
+                try:
+                    n_enriched = int((enrich_stats or {}).get("enriched", 0))
+                    n_pending = int((enrich_stats or {}).get("pending", 0))
+                except Exception:
+                    n_enriched, n_pending = 0, 0
+                if n_enriched:
+                    tail = f" (+{n_pending} beyond cap)" if n_pending else ""
+                    self.progress.emit(
+                        f"Enriched {n_enriched} dataset(s) with live sizes{tail} — checking review locks…"
+                    )
+            except Exception:
+                pass
             # Search API versionState is only DRAFT/RELEASED — in-review state
             # lives in the locks endpoint, so confirm per dataset here.
             # Parallel: one locks call per dataset would take minutes serially.

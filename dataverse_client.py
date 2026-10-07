@@ -458,6 +458,74 @@ def is_draft_dataset(ds: Any) -> bool:
         return False
 
 
+def _version_files_data(data: Any) -> dict[str, Any]:
+    """Extract the files-carrying version dict from a version `data` payload.
+
+    Dataverse versions API puts files at data.files (not
+    data.datasetVersion.files); metadata reads put them under
+    data.datasetVersion or data.latestVersion.
+    """
+    try:
+        if not isinstance(data, dict):
+            return {}
+        # Prefer version docs that actually carry files; fall back through
+        # the known shapes in order (mirrors get_file_inventory history).
+        for key in ("datasetVersion", "latestVersion"):
+            try:
+                candidate = data.get(key)
+            except Exception:
+                candidate = None
+            if isinstance(candidate, dict) and candidate.get("files"):
+                return candidate
+        try:
+            dataset_version = data.get("datasetVersion")
+        except Exception:
+            dataset_version = None
+        if isinstance(dataset_version, dict):
+            return dataset_version
+        try:
+            data_files = data.get("files")
+        except Exception:
+            data_files = None
+        if data_files:
+            return {"files": data_files if isinstance(data_files, list) else []}
+        try:
+            latest = data.get("latestVersion")
+        except Exception:
+            latest = None
+        if isinstance(latest, dict):
+            return latest
+        return {}
+    except Exception:
+        return {}
+
+
+def _summarize_version_data(data: Any) -> tuple[list[dict[str, Any]], str, str]:
+    """Best-effort (files, depositor, versionState) from a version payload.
+
+    Never raises; missing pieces come back empty (shapes without embedded
+    metadata, e.g. bare data.files lists, yield files only).
+    """
+    try:
+        version_data = _version_files_data(data)
+        files = normalize_files(version_data)
+    except Exception:
+        files = []
+    depositor = ""
+    state = ""
+    try:
+        if isinstance(version_data, dict):
+            dep = _field_value(version_data, "depositor")
+            if isinstance(dep, str):
+                depositor = dep
+            if not depositor and isinstance(data, dict):
+                depositor = str(data.get("depositorName") or "")
+            state = str(version_data.get("versionState") or "")
+    except Exception:
+        pass
+    return files, depositor, state
+
+
 # Authenticated-identity cache: (base_url, token fingerprint) -> /api/users/:me data.
 # Keyed by a SHA-256 fingerprint, never the token itself. Successes only —
 # a failure (bad token, network) returns None and retries next time.
@@ -1294,13 +1362,14 @@ class DataverseClient:
         return datasets
 
     def list_draft_datasets(
-        self, subtree: str = "", workdir: Path | None = None, max_pages: int = 10
+        self, subtree: str = "", workdir: Path | None = None, max_pages: int = 15
     ) -> list[dict[str, Any]]:
         """All draft datasets in the subtree (superset of in-review).
 
         Uses the dvmeta crawler when available (dev installs); in the
         frozen portable build or when dvmeta is absent, paginates through
-        the native Search API so the dashboard gets ALL datasets.
+        the native Search API so the dashboard gets ALL datasets (up to
+        max_pages * 100; TRUNCATED is logged loudly past the cap).
         """
         if _dvmeta_available():
             export_path = None
@@ -2054,10 +2123,26 @@ class DataverseClient:
     def get_file_inventory(
         self, identifier: str, version: str = "draft"
     ) -> list[dict[str, Any]]:
-        # Try draft first (with correct lowercase ":draft"), fall back to
-        # :latest for published datasets. Auth failures (401/403) fail fast
-        # — retrying other versions would mask a bad token and risk running
-        # checks on the wrong version silently.
+        data, api_version, tried = self._fetch_version_data(identifier, version)
+        if api_version != f":{version.lstrip(':').lower()}":
+            get_app_log().error(
+                f"Inventory for {identifier}: requested :{version} "
+                f"unavailable, using {api_version} (tried {tried}) — "
+                "verify you are reviewing the intended version"
+            )
+        return normalize_files(_version_files_data(data))
+
+    def _fetch_version_data(
+        self, identifier: str, version: str = "draft"
+    ) -> tuple[dict[str, Any], str, list[str]]:
+        """Fetch the raw `data` payload for one dataset version.
+
+        Tries `version` first (correct lowercase, e.g. `:draft`), then
+        `:latest` / `:latest-published`, then an unversioned metadata read.
+        Returns `(data, used_version, tried)`. Auth failures (401/403) fail
+        fast — retrying other versions would mask a bad token and risk
+        running checks on the wrong version silently.
+        """
         tried: list[str] = []
         for ver in (version, "latest", "latest-published"):
             api_version = ver if ver.startswith(":") else f":{ver.lower()}"
@@ -2071,19 +2156,7 @@ class DataverseClient:
                     payload = self._get_json(
                         f"/api/datasets/{identifier}/versions/{api_version}"
                     )
-                data = payload.get("data", {})
-                # Dataverse versions API puts files at data.files (not data.datasetVersion.files)
-                version_data = data.get("datasetVersion") or data
-                # files may be at version_data.files or data.files
-                if not version_data.get("files") and data.get("files"):
-                    version_data = {"files": data.get("files", [])}
-                if api_version != f":{version.lstrip(':').lower()}":
-                    get_app_log().error(
-                        f"Inventory for {identifier}: requested :{version} "
-                        f"unavailable, using {api_version} (tried {tried}) — "
-                        "verify you are reviewing the intended version"
-                    )
-                return normalize_files(version_data)
+                return payload.get("data", {}), api_version, tried
             except requests.HTTPError as exc:
                 resp = getattr(exc, "response", None)
                 status = resp.status_code if resp is not None else 0
@@ -2102,8 +2175,129 @@ class DataverseClient:
         )
         # dataset metadata contains latestVersion files? try to extract
         data = payload.get("data", {})
-        version_data = data.get("latestVersion") or {}
-        return normalize_files(version_data)
+        return data, "unversioned", tried
+
+    def enrich_datasets_with_inventory(
+        self,
+        datasets: list[dict[str, Any]],
+        max_rows: int = 200,
+        max_workers: int = 5,
+        progress: Callable[[int, int], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> dict[str, int]:
+        """Patch thin search rows with live inventory sums + depositor + state.
+
+        For each row lacking `total_size_bytes`, fetches one version doc
+        (`:draft`, falling back like `get_file_inventory`) and patches
+        `total_size_bytes` (summed), `file_count` (only when the search
+        value is falsy), `depositor` (only when the version carries one),
+        `state` (never clobbering an "In Review" lock confirmation), and
+        `has_draft` (set True when the `:draft` doc answers). Patched rows
+        get `size_enriched=True`; rows beyond `max_rows` keep thin data and
+        get `size_pending=True` so the UI can say so. Never embeds file
+        arrays — sums and counts only.
+
+        Drafts go first so a capped run enriches curation candidates before
+        published rows. Per-item isolation: one dataset's failure never
+        fails the batch. Auth failure (401/403) aborts the remaining
+        queue — every later item would fail the same way. Never raises;
+        returns {"attempted", "enriched", "pending", "auth_failed"}.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        try:
+            rows = [d for d in (datasets or []) if isinstance(d, dict)]
+        except Exception:
+            return {"attempted": 0, "enriched": 0, "pending": 0, "auth_failed": 0}
+        candidates = [
+            ds for ds in rows
+            if ds.get("total_size_bytes") is None and str(ds.get("persistent_id") or "")
+        ]
+        # Drafts first: capped runs spend calls on curation candidates.
+        try:
+            candidates.sort(key=lambda ds: 0 if is_draft_dataset(ds) else 1)
+        except Exception:
+            pass
+        todo = candidates[:max_rows] if max_rows >= 0 else list(candidates)
+        for ds in candidates[len(todo):]:
+            try:
+                if ds.get("total_size_bytes") is None:
+                    ds["size_pending"] = True
+            except Exception:
+                pass
+        result = {"attempted": 0, "enriched": 0, "pending": len(candidates) - len(todo), "auth_failed": 0}
+        if not todo:
+            return result
+
+        def _fetch_one(ds: dict) -> tuple[dict, tuple | None]:
+            pid = str(ds.get("persistent_id") or "")
+            try:
+                data, used_version, _tried = self._fetch_version_data(pid)
+            except Exception:
+                raise
+            files, depositor, state = _summarize_version_data(data)
+            return ds, (files, depositor, state, used_version)
+
+        def _auth_denied(exc: BaseException) -> bool:
+            try:
+                resp = getattr(exc, "response", None)
+                return resp is not None and resp.status_code in (401, 403)
+            except Exception:
+                return False
+
+        total = len(todo)
+        done = 0
+        try:
+            with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
+                futures = {pool.submit(_fetch_one, ds): ds for ds in todo}
+                for fut in as_completed(futures):
+                    if is_cancelled is not None:
+                        try:
+                            if is_cancelled():
+                                for f in futures:
+                                    f.cancel()
+                                break
+                        except Exception:
+                            pass
+                    ds = futures[fut]
+                    result["attempted"] += 1
+                    try:
+                        _ds, summary = fut.result()
+                    except Exception as exc:
+                        if _auth_denied(exc):
+                            result["auth_failed"] = 1
+                            for f in futures:
+                                f.cancel()
+                            break
+                        continue
+                    try:
+                        files, depositor, state, used_version = summary
+                        ds["total_size_bytes"] = sum(int(f.get("size_bytes") or 0) for f in files)
+                        ds["size_enriched"] = True
+                        try:
+                            ds.pop("size_pending", None)
+                        except Exception:
+                            pass
+                        if not ds.get("file_count") and files:
+                            ds["file_count"] = len(files)
+                        if depositor and (not ds.get("depositor") or ds.get("depositor") == ds.get("contact")):
+                            ds["depositor"] = depositor
+                        if state and "REVIEW" not in str(ds.get("state") or "").upper():
+                            ds["state"] = state
+                        if used_version == ":draft":
+                            ds["has_draft"] = True
+                        result["enriched"] += 1
+                    except Exception:
+                        continue
+                    done += 1
+                    if progress is not None:
+                        try:
+                            progress(done, total)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        return result
 
     # -- download ------------------------------------------------------------
 
