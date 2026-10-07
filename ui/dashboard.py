@@ -456,15 +456,6 @@ class DashboardView(QWidget):
         self.setObjectName("DashboardView")
         self.setStyleSheet(f"QWidget#DashboardView {{ background: {BACKGROUND}; }}")
 
-        # ---- Title row: repository scope lives here --------------------
-        # "Datasets: <base URL> · <collection alias>" (moved up from the
-        # old bottom subtitle so the scope reads with the title).
-        self._title_lbl = QLabel("Datasets")
-        self._title_lbl.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {ON_SURFACE};")
-        self._title_lbl.setWordWrap(True)
-        outer.addWidget(self._title_lbl)
-        self._refresh_title()
-
         # ---- Metrics cards (values always from real data; 0 when empty) ----
         self._metrics_row = QHBoxLayout()
         self._metrics_row.setSpacing(16)
@@ -636,18 +627,38 @@ class DashboardView(QWidget):
         foot = QHBoxLayout()
         foot.setSpacing(8)
         foot.addWidget(self._progress, 1)
-        # The actionable footer hint gets a real affordance instead of a
-        # floating sentence: one tap straight to Settings (2026-10-02 minor).
-        foot_btn = AppButton("Open Settings", kind="ghost", size="sm")
-        foot_btn.setToolTip("Dataverse URL, API token, workspace, extensions")
-        foot_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; border: none; color: {PRIMARY}; "
-            "border-radius: 8px; font-size: 11px; }"
-            f"QPushButton:hover {{ color: {ON_SURFACE}; }}"
-        )
-        foot_btn.clicked.connect(self.settingsRequested.emit)
-        foot.addWidget(foot_btn, 0, Qt.AlignVCenter)
         outer.addLayout(foot)
+
+        # Status bar: persistent scope + count at the bottom (replaces the
+        # removed "Datasets: <URL> · <alias>" header), app mark pinned to
+        # the dashboard's bottom-right corner (2026-10-06 Docent rebrand).
+        status_row = QHBoxLayout()
+        status_row.setSpacing(8)
+        self._status_lbl = QLabel("")
+        self._status_lbl.setStyleSheet(
+            f"font-size: 11px; color: {ON_SURFACE_VARIANT}; "
+            "background: transparent; border: none;"
+        )
+        status_row.addWidget(self._status_lbl, 1)
+        mark = QLabel()
+        mark.setObjectName("DocentMark")
+        try:
+            from PySide6.QtGui import QPixmap as _QPixmap
+
+            from ui.theme import app_icon_path
+
+            _pix = _QPixmap(app_icon_path())
+            if not _pix.isNull():
+                mark.setPixmap(
+                    _pix.scaledToHeight(22, Qt.SmoothTransformation)
+                )
+                mark.setToolTip("Dataverse Docent")
+        except Exception:
+            pass
+        mark.setStyleSheet("border: none; background: transparent;")
+        status_row.addWidget(mark, 0, Qt.AlignVCenter)
+        outer.addLayout(status_row)
+        self._sync_status_bar()
 
         self._apply_default_column_visibility()
         # Snapshot the construction view for the Columns-menu reset, then
@@ -700,13 +711,28 @@ class DashboardView(QWidget):
         except Exception:
             return ""
 
-    def _refresh_title(self) -> None:
-        """Title carries the repository scope: Datasets: <URL> · <alias>."""
+    def _sync_status_bar(self) -> None:
+        """Status bar reads `<base>[/<alias>]: <shown>/<total> datasets shown`.
+
+        The scope (URL + collection alias) used to live in the page header;
+        it moved to the bottom status bar on 2026-10-06, beside the filtered
+        count. "shown" honours active search/label/state filters.
+        """
         try:
             base = (self._config.dataverse.base_url or "").rstrip("/")
-            alias = self._current_collection() or "whole repository"
-            self._title_lbl.setText(f"Datasets: {base}  ·  {alias}")
-            self._title_lbl.setToolTip(f"Active Dataverse: {base}\nCollection: {alias}")
+            alias = self._current_collection().strip("/")
+            scope = f"{base}/{alias}" if alias else base
+            shown_ds = getattr(self, "_datasets", None)
+            if shown_ds is None:
+                shown_ds = getattr(self, "_all_datasets", [])
+            total = len(getattr(self, "_all_datasets", []) or [])
+            lbl = getattr(self, "_status_lbl", None)
+            if lbl is not None:
+                lbl.setText(f"{scope}: {len(shown_ds)}/{total} datasets shown")
+                lbl.setToolTip(
+                    f"Active Dataverse: {base}\n"
+                    f"Collection: {alias or 'whole repository'}"
+                )
         except Exception:
             pass
 
@@ -796,9 +822,9 @@ class DashboardView(QWidget):
                 pass
             saved = (entry.get("saved_at") or "")[:16].replace("T", " ")
             self._last_refresh = saved or "earlier session"
-            self._refresh_title()
+            self._sync_status_bar()
             self._progress.setText(
-                f"Showing {len(self._all_datasets)} cached dataset(s)"
+                f"Showing {len(self._all_datasets)} cached datasets"
                 f"{(' from ' + saved) if saved else ''} — checking for changes…"
             )
             return True
@@ -1227,7 +1253,7 @@ class DashboardView(QWidget):
         # A new top-level with no cache resets the combo; the crawl refills
         # it with one shared call. Sub-collections reuse the cached list.
         self._seed_labels_from_cache()
-        self._refresh_title()
+        self._sync_status_bar()
         # Cache-first: keep the painted rows on screen while the background
         # crawl checks for changes — never wipe to an empty table on open.
         # Exception: the instance/collection switched (different cache slot),
@@ -1262,7 +1288,7 @@ class DashboardView(QWidget):
         self._refresh_btn.setEnabled(False)
         if had_rows:
             self._progress.setText(
-                f"Checking for changes… (showing {len(self._all_datasets)} cached dataset(s))"
+                f"Checking for changes… (showing {len(self._all_datasets)} cached datasets)"
             )
         else:
             self._progress.setText("Contacting Dataverse…")
@@ -1408,11 +1434,11 @@ class DashboardView(QWidget):
                 total = len(datasets)
                 if not had_previous:
                     self._progress.setText(
-                        f"{total} dataset(s) shown — double-click a row to open"
+                        f"{total} datasets shown — double-click a row to open"
                     )
                 elif not (n_new or n_chg or n_del):
                     self._progress.setText(
-                        f"No changes — {total} dataset(s) up to date. Double-click a row to open"
+                        f"No changes — {total} datasets up to date. Double-click a row to open"
                     )
                 else:
                     parts = []
@@ -1423,7 +1449,7 @@ class DashboardView(QWidget):
                     if n_del:
                         parts.append(f"{n_del} removed")
                     self._progress.setText(
-                        f"{', '.join(parts)} — {total} dataset(s) shown. Double-click a row to open"
+                        f"{', '.join(parts)} — {total} datasets shown. Double-click a row to open"
                     )
             except Exception:
                 pass
@@ -1595,6 +1621,7 @@ class DashboardView(QWidget):
                 filtered.append(ds)
             self._datasets = filtered
             self._update_metrics()
+            self._sync_status_bar()
             if not self._all_datasets:
                 self._progress.setText(
                     "No datasets found in this collection. Check the collection alias "
@@ -1606,10 +1633,9 @@ class DashboardView(QWidget):
                     "Clear the filter to see all."
                 )
             else:
-                self._progress.setText(
-                    f"{len(filtered)} / {len(self._all_datasets)} dataset(s) shown — "
-                    "double-click a row to open"
-                )
+                # Counts + scope live in the status bar now — the pill keeps
+                # the standing hint instead of repeating them.
+                self._progress.setText("Double-click a row to open it")
 
             self._table.setSortingEnabled(False)
             self._table.setRowCount(len(filtered))

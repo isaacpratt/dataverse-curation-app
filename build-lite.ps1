@@ -7,6 +7,8 @@ python -m PyInstaller --noconfirm --name curation-app-lite --windowed --onefile 
   --hidden-import hush --hidden-import hush.scanner --hidden-import hush.rules `
   --hidden-import hush.entropy --collect-all piigex --hidden-import stdnum `
   --add-data "ui/assets;ui/assets" `
+  --add-data "docent.png;." `
+  --icon docent.png `
   --workpath .pyi-cache `
   main.py
 Write-Host "Built dist/curation-app-lite.exe"

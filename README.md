@@ -1,4 +1,4 @@
-# Dataverse Curation App
+# Dataverse Docent
 
 Desktop curation assistant for Alliance Dataverse instances. It pulls datasets submitted for review, lets the curator approve a download, runs automated format-specific checks on the files, checks metadata completeness, and presents per-file and dataset-level findings in a desktop GUI with an exportable curation report.
 

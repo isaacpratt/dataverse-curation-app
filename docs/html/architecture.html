@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture — Dataverse Docent</title>
+<style>
+:root{--bg:#0f172a;--bg2:#111c33;--ink:#0f172a;--muted:#526078;--line:#e2e8f0;--accent:#0e7490;--ok:#15803d;--warn:#b45309;--err:#b91c1c;--soft:#f1f5f9;--radius:12px}
+*{box-sizing:border-box}body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--ink);background:#f8fafc;line-height:1.6}
+header.hero{background:linear-gradient(135deg,var(--bg),var(--bg2));color:#fff;padding:34px 24px 26px}.wrap{max-width:1080px;margin:0 auto}
+.hero h1{margin:0;font-size:26px}.hero p{margin:6px 0 0;color:#cbd5e1}
+nav.top{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--line)}nav.top .wrap{display:flex;gap:4px;flex-wrap:wrap;padding:8px 24px}
+nav.top a{text-decoration:none;color:var(--ink);font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px}nav.top a:hover{background:var(--soft)}nav.top a[aria-current]{background:#e0f2fe;color:#0c4a6e}
+main .wrap{padding:26px 24px 60px}h2{font-size:22px;margin:34px 0 10px;padding-top:8px;border-top:2px solid var(--line)}h3{font-size:17px;margin:22px 0 8px;color:#0c4a6e}
+p,li{font-size:15px}code{font-family:Consolas,monospace;font-size:13px;background:#f1f5f9;border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+pre{background:#0f172a;color:#e2e8f0;border-radius:var(--radius);padding:16px;overflow:auto;font-size:13px}pre code{background:none;border:none;color:inherit}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;background:#fff;border:1px solid var(--line)}th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#f1f5f9;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#334155}
+.callout{border-left:5px solid var(--accent);background:#ecfeff;border-radius:0 var(--radius) var(--radius) 0;padding:12px 16px;margin:14px 0;font-size:14.5px}
+figure{margin:16px 0;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px}figcaption{font-size:13px;color:var(--muted);margin-top:8px}svg.diagram{width:100%;height:auto;display:block}
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:12px 0}.step{flex:1 1 150px;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;font-size:13.5px}.step b{display:block;font-size:13px;color:#0c4a6e;margin-bottom:2px}.step .n{display:inline-block;background:var(--accent);color:#fff;font-weight:800;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:12px;margin-right:6px}.arrow{align-self:center;padding:0 6px;color:var(--accent);font-weight:800;font-size:18px}
+.pill{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px}.p-ok{background:#dcfce7;color:#166534}
+footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-size:13px}footer .wrap{padding:16px 24px}
+@media(max-width:640px){th,td{padding:7px 8px;font-size:13px}}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap"><h1>Architecture</h1><p>Single-process PySide6 desktop app: Dataverse API → approved downloads → Python check engine → metadata completeness → GUI + live request log.</p></div></header>
+<nav class="top"><div class="wrap">
+<a href="index.html">Overview</a><a href="architecture.html" aria-current="page">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a>
+</div></nav>
+<main><div class="wrap">
+
+<h2>System map</h2>
+<figure>
+<svg class="diagram" viewBox="0 0 900 340" role="img" aria-label="System component diagram">
+<defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#0e7490"/></marker></defs>
+<rect x="10" y="120" width="150" height="90" rx="10" fill="#0f172a"/><text x="85" y="152" fill="#fff" text-anchor="middle" font-size="14" font-weight="700">Dataverse</text><text x="85" y="172" fill="#94a3b8" text-anchor="middle" font-size="12">Native / Search API</text><text x="85" y="190" fill="#94a3b8" text-anchor="middle" font-size="12">demo.borealisdata.ca ✓</text>
+<rect x="200" y="40" width="200" height="90" rx="10" fill="#fff" stroke="#0e7490" stroke-width="2"/><text x="300" y="66" text-anchor="middle" font-size="13" font-weight="700">dataverse_client.py</text><text x="300" y="86" text-anchor="middle" font-size="11" fill="#526078">discovery · locks · inventory</text><text x="300" y="103" text-anchor="middle" font-size="11" fill="#526078">labels · versions · notify</text>
+<rect x="200" y="150" width="200" height="90" rx="10" fill="#fff" stroke="#0e7490" stroke-width="2"/><text x="300" y="176" text-anchor="middle" font-size="13" font-weight="700">download_manager.py</text><text x="300" y="196" text-anchor="middle" font-size="11" fill="#526078">quote → approve → bundle</text><text x="300" y="213" text-anchor="middle" font-size="11" fill="#526078">originals → verify</text>
+<rect x="440" y="40" width="200" height="120" rx="10" fill="#ecfeff" stroke="#0e7490" stroke-width="2"/><text x="540" y="66" text-anchor="middle" font-size="13" font-weight="700">engine/ (21 checks)</text><text x="540" y="86" text-anchor="middle" font-size="11" fill="#526078">dispatcher · runner</text><text x="540" y="103" text-anchor="middle" font-size="11" fill="#526078">report.py · status.py</text><text x="540" y="120" text-anchor="middle" font-size="11" fill="#526078">constants · report_md</text><text x="540" y="140" text-anchor="middle" font-size="11" fill="#15803d">lazy heavy imports</text>
+<rect x="440" y="180" width="200" height="100" rx="10" fill="#fff" stroke="#7c3aed" stroke-width="2"/><text x="540" y="206" text-anchor="middle" font-size="13" font-weight="700">metadata + rules</text><text x="540" y="226" text-anchor="middle" font-size="11" fill="#526078">metadata_check.py</text><text x="540" y="243" text-anchor="middle" font-size="11" fill="#526078">review_rules.py v2</text><text x="540" y="260" text-anchor="middle" font-size="11" fill="#526078">response_draft.py</text>
+<rect x="680" y="40" width="210" height="240" rx="10" fill="#0f172a"/><text x="785" y="66" fill="#fff" text-anchor="middle" font-size="13" font-weight="700">ui/ (PySide6)</text><text x="785" y="88" fill="#94a3b8" text-anchor="middle" font-size="11">dashboard · detail</text><text x="785" y="106" fill="#94a3b8" text-anchor="middle" font-size="11">settings · review-config</text><text x="785" y="124" fill="#94a3b8" text-anchor="middle" font-size="11">about · log page</text><text x="785" y="142" fill="#94a3b8" text-anchor="middle" font-size="11">workers (QThread)</text><text x="785" y="160" fill="#94a3b8" text-anchor="middle" font-size="11">widgets kit · theme</text><text x="785" y="186" fill="#5eead4" text-anchor="middle" font-size="11">GUI thread never blocks</text><text x="785" y="206" fill="#5eead4" text-anchor="middle" font-size="11">signals: progress /</text><text x="785" y="224" fill="#5eead4" text-anchor="middle" font-size="11">finished / error</text>
+<rect x="200" y="260" width="440" height="60" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-dasharray="5 4"/><text x="420" y="283" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">workspace/ — state.db · downloads/ · reports/ · JSON caches · applog ring</text><text x="420" y="303" text-anchor="middle" font-size="11" fill="#64748b">storage.py · applog.py · config.py</text>
+<line x1="160" y1="165" x2="198" y2="100" stroke="#0e7490" stroke-width="2" marker-end="url(#a)"/><line x1="160" y1="175" x2="198" y2="190" stroke="#0e7490" stroke-width="2" marker-end="url(#a)"/>
+<line x1="400" y1="195" x2="438" y2="110" stroke="#0e7490" stroke-width="2" marker-end="url(#a)"/><text x="419" y="145" font-size="10" fill="#0e7490">staged files</text>
+<line x1="640" y1="100" x2="678" y2="100" stroke="#0e7490" stroke-width="2" marker-end="url(#a)"/><text x="659" y="92" font-size="10" fill="#0e7490">results</text>
+<line x1="420" y1="258" x2="560" y2="162" stroke="#7c3aed" stroke-width="2" marker-end="url(#a)"/>
+</svg>
+<figcaption>Single process. Network + engine work runs on parented <code>QThread</code> workers; the GUI thread only renders. The engine never touches the network.</figcaption>
+</figure>
+
+<h2>Components</h2>
+<table>
+<tr><th>Component</th><th>Files</th><th>Responsibility</th></tr>
+<tr><td>Dataverse client</td><td><code>dataverse_client.py</code>, <code>config.py</code></td><td>Token auth (<code>X-Dataverse-key</code>); discovery via dvmeta CLI draft crawl, else paginated <code>GET /api/search</code> (draft-aware dedup); <code>IN_REVIEW</code> lock confirmation; metadata, file inventory (keeps UNF/tabular/original fields), bundle + original-format downloads, version compare/list, timestamps, notifications inbox, curation labels (bulk CSV → per-dataset → allowed set).</td></tr>
+<tr><td>Download manager</td><td><code>download_manager.py</code></td><td>Size quote (original size for tabular), approval gate, skip-if-fully-staged, streaming zip with progress, original-format fetch then <code>.tab</code> removal (originals-only), zip-slip guard, <code>verify() → (ok, problems, warnings)</code>, staging + <code>metadata.json</code>/<code>file-manifest.json</code>.</td></tr>
+<tr><td>Check engine</td><td><code>engine/</code></td><td><b>21</b> per-format checks (<code>engine/checks/*_check.py</code>, <code>base.py:Check/CheckResult</code>), registry-driven dispatch (<code>dispatcher.py</code>), <code>DatasetReport</code> (<code>report.py</code>), <code>list_planned_checks</code> (<code>runner.py</code>), badge taxonomy (<code>status.py</code>), scan caps (<code>constants.py</code>), Markdown view (<code>report_md.py</code>). Heavy libs lazy; <code>hush-scan</code> + <code>piigex</code> ship in both builds.</td></tr>
+<tr><td>Metadata completeness</td><td><code>metadata_check.py</code> + <code>review_rules.py</code></td><td>Rule-driven completeness from versioned rulesets (<code>mcmaster-default</code> from the McMaster PDFs, <code>minimal</code>), per-author ORCID + author count + license/terms handlers, README/text-search content rules, <code>requirements_profiles.json</code> v2, per-Dataverse assignment.</td></tr>
+<tr><td>Local state</td><td><code>storage.py</code> (+ <code>ui/dashboard.py</code> cache helpers)</td><td>SQLite <code>state.db</code> (datasets/files/check_results/curation_actions) + JSON caches: <code>dataset_sizes.json</code>, <code>curation_labels.json</code>, <code>dashboard_cache.json</code> (instant paint + change-only refresh), <code>table_layout.json</code> (<code>restore_table_state → bool</code> locks auto-fit when a saved view applied).</td></tr>
+<tr><td>App log</td><td><code>applog.py</code></td><td>In-memory ring buffer (<code>AppLog</code>, 2000 lines), <code>log_response(method, URL, status, ms, summary)</code> with token redaction, surfaced in the Log stack page.</td></tr>
+<tr><td>GUI</td><td><code>ui/</code> (15 modules)</td><td>Dashboard (12 columns, filters, cache-first paint + <code>diff_dashboard_datasets</code>), dataset detail (main + sticky sidebar, assessment pushes label via <code>set_curation_label</code>), settings / review-config / about / log stack pages, workers (<code>Crawl/Download/Check/Metadata/MetadataBlocks</code>), selectable dialogs, manifest tree (<code>checks_tree.py</code>), shared kit (<code>widgets.py</code>) + theme tokens (<code>theme.py</code>).</td></tr>
+</table>
+
+<h2>Threading model</h2>
+<div class="callout">The GUI thread never blocks. Workers are parented to their views with <code>deleteLater</code> chained on completion; a discarded detail view's live workers are adopted by the main window — a live <code>QThread</code> is never destroyed. One check run at a time per dataset; results persist as <code>DatasetReport</code> so a crash loses nothing. The Log page polls on an 800 ms <code>QTimer</code> (Live toggle, gated to page visibility, search debounced at 200 ms).</div>
+<p>Missing optional dependency → <code>CheckResult(level="warning", passed=True, message="Missing: pip install … — check not executed")</code>, never an error. JPG/PNG/GIF/BMP/WEBP add a stdlib header fallback when Pillow is absent.</p>
+
+<h2>Data flow for one dataset</h2>
+<div class="flow">
+<div class="step"><b><span class="n">1</span>Discover</b><code>list_draft_datasets()</code> via dvmeta or paginated search; <code>CrawlWorker</code> confirms locks + labels; cache-first paint, background diff reports <i>N new, M updated, K removed</i>.</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">2</span>Inspect</b>Detail auto-loads (<code>QTimer.singleShot(100)</code>, <code>MetadataWorker</code>): metadata, inventory, curation, diff, versions, timestamps, review submission.</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">3</span>Download</b><b>Download All</b> quotes (original size for tabular), skips fully-staged, streams bundle, fetches originals, drops <code>.tab</code>, verifies <code>(ok, problems, warnings)</code>.</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">4</span>Check</b><b>Run checks</b> (<code>CheckWorker → run_report</code>): dispatch per file + dataset-level <code>extensions</code>; exports to <code>workspace/downloads/&lt;pid&gt;/reports/</code>.</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">5</span>Curate</b>Main column (completeness, manifest, auto-checks, version log) + sidebar (sections, timeline, assessment → pushes curation label). Header link is version-aware (<code>…&amp;version=DRAFT</code>).</div>
+</div>
+
+<h2>Local storage</h2>
+<table>
+<tr><th>Path</th><th>Contents</th></tr>
+<tr><td><code>workspace/state.db</code></td><td>SQLite: <code>datasets</code>, <code>files</code>, <code>check_results</code>, <code>curation_actions</code> (append-only timeline)</td></tr>
+<tr><td><code>workspace/downloads/&lt;pid&gt;/</code></td><td>Staged files (preserves <code>directoryLabel</code>), <code>metadata.json</code>, <code>file-manifest.json</code>, <code>reports/&lt;id&gt;_report.{json,md}</code>, <code>response_draft.md</code></td></tr>
+<tr><td><code>workspace/dataset_sizes.json</code></td><td>Summed inventory sizes (dashboard Size column)</td></tr>
+<tr><td><code>workspace/curation_labels.json</code></td><td>Per-instance label sets, keyed by base URL (probe-pure)</td></tr>
+<tr><td><code>workspace/dashboard_cache.json</code></td><td>Last crawl per instance+collection (instant paint + change-only refresh)</td></tr>
+<tr><td><code>workspace/table_layout.json</code></td><td>Column widths/sort/hidden/order for dashboard, dataset tables, extensions, review-fields tree</td></tr>
+<tr><td><code>config.json</code></td><td>URL, token, collection alias, workspace path (gitignored; <code>--config/--dataverse</code> overrides)</td></tr>
+<tr><td><code>requirements_profiles.json</code></td><td>Versioned review rulesets (editable on the Review configuration page)</td></tr>
+</table>
+
+<h2>Packaging</h2>
+<table>
+<tr><th>Artefact</th><th>How</th><th>Covers</th></tr>
+<tr><td><code>dist/curation-app-lite.exe</code> (~63 MB)</td><td><code>--windowed --onefile</code>, excludes only heavy binary libs; <code>--collect-all piigex</code> (detectors walk the on-disk tree); <code>--add-data "ui/assets;ui/assets"</code></td><td>Common formats offline (Pillow, pypdf, lxml, openpyxl, tifffile, chardet bundled) + stdlib image-header fallback</td></tr>
+<tr><td><code>dist/curation-app-full/</code></td><td><code>--windowed --onedir</code>, no excludes</td><td>Heavy libs (pyreadstat, netCDF4, h5py, scipy) — run its exe directly for SPSS/SAS/Stata/NetCDF/HDF5/MAT</td></tr>
+</table>
+<p><code>Makefile</code>: <code>build</code> (both) · <code>rebuild-lite</code> (exe only, cached, ~2 min) · <code>build-full</code> (folder only) · <code>smoke</code>. PowerShell without <code>make</code>: <code>.\build-lite.ps1</code>. Network retries 3× on <code>ConnectionError/ChunkedEncodingError/Timeout/ConnectionResetError</code> (WinError 10054) with backoff + 429/503 <code>Retry-After</code> (≤30 s).</p>
+
+<h2>Decision log (condensed)</h2>
+<table>
+<tr><th>Date</th><th>Decision</th></tr>
+<tr><td>2026-08-17</td><td>PySide6 single-process desktop; API-token auth; Python port over portable R (~400 MB)</td></tr>
+<tr><td>2026-08-21/25</td><td>dvmeta CLI draft crawl + <code>IN_REVIEW</code> locks; paginated Search fallback (<code>start</code>, dedup, <code>subtree</code>); streaming download; 10054 retry</td></tr>
+<tr><td>2026-08-25/26</td><td>Metadata completeness as first-class feature (McMaster); lite packaging with lazy imports</td></tr>
+<tr><td>2026-09-08/09</td><td>Detail main + sticky sidebar; settings/about as stack panes; log strip → Log stack page; problems-vs-warnings verify; originals-only tabular; skip-if-staged; QThread adoption</td></tr>
+<tr><td>2026-09-11/14</td><td><code>ui/widgets.py</code> kit as single source of truth; audit batch (compound dispatch, missing-lib guards, atomic staging, Timeout/429/503 retries, caps, taxonomy)</td></tr>
+<tr><td>2026-09-15/23</td><td>Dashboard cache-first paint; MIT license; title-bar/DWM hardening; per-author ORCID/count, license/terms rules; originals-only downloads</td></tr>
+<tr><td>2026-09-25 → 10-02</td><td>Theme tokens single-sourced (<code>test_theme_tokens.py</code> enforces); keyboard parity + plain-language errors; caption <code>HTCLIENT</code> fix; colour-not-outline focus; named loading states; guarded decision combo; Copy diagnostics (never the token)</td></tr>
+</table>
+
+</div></main>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Generated 2026-10-06, verified against code.</div></footer>
+</body>
+</html>

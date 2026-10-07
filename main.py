@@ -1,4 +1,4 @@
-"""Launch the Dataverse Curation App entry point.
+"""Launch the Dataverse Docent entry point.
 
 Default is the desktop GUI; --headless runs the engine on a staged
 dataset directory and writes a JSON report (see docs/development.md).
@@ -80,7 +80,7 @@ if _TYPE_CHECKING:  # pragma: no cover  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Dataverse Curation App")
+    parser = argparse.ArgumentParser(description="Dataverse Docent")
     parser.add_argument(
         "--headless",
         action="store_true",
@@ -191,6 +191,16 @@ def main(argv: list[str] | None = None) -> int:
         cfg.dataverse.base_url = args.dataverse.rstrip("/")
 
     app = QApplication(sys.argv)
+    try:
+        from PySide6.QtGui import QIcon
+
+        from ui.theme import app_icon_path
+
+        _icon_path = app_icon_path()
+        if _icon_path:
+            app.setWindowIcon(QIcon(_icon_path))
+    except Exception:
+        pass
     try:
         from ui.theme import apply_theme
         apply_theme(app)

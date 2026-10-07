@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Development — Dataverse Docent</title>
+<style>
+:root{--bg:#0f172a;--bg2:#111c33;--ink:#0f172a;--muted:#526078;--line:#e2e8f0;--accent:#0e7490;--ok:#15803d;--soft:#f1f5f9;--radius:12px}
+*{box-sizing:border-box}body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--ink);background:#f8fafc;line-height:1.6}
+header.hero{background:linear-gradient(135deg,var(--bg),var(--bg2));color:#fff;padding:34px 24px 26px}.wrap{max-width:1080px;margin:0 auto}
+.hero h1{margin:0;font-size:26px}.hero p{margin:6px 0 0;color:#cbd5e1}
+nav.top{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--line)}nav.top .wrap{display:flex;gap:4px;flex-wrap:wrap;padding:8px 24px}
+nav.top a{text-decoration:none;color:var(--ink);font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px}nav.top a:hover{background:var(--soft)}nav.top a[aria-current]{background:#e0f2fe;color:#0c4a6e}
+main .wrap{padding:26px 24px 60px}h2{font-size:22px;margin:34px 0 10px;padding-top:8px;border-top:2px solid var(--line)}h3{font-size:17px;margin:22px 0 8px;color:#0c4a6e}
+p,li{font-size:15px}code{font-family:Consolas,monospace;font-size:13px;background:#f1f5f9;border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+pre{background:#0f172a;color:#e2e8f0;border-radius:var(--radius);padding:16px;overflow:auto;font-size:13px}pre code{background:none;border:none;color:inherit;padding:0}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;background:#fff;border:1px solid var(--line)}th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#f1f5f9;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#334155}
+.callout{border-left:5px solid var(--accent);background:#ecfeff;border-radius:0 var(--radius) var(--radius) 0;padding:12px 16px;margin:14px 0;font-size:14.5px}.callout.ok{border-color:var(--ok);background:#f0fdf4}
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:12px 0}.step{flex:1 1 160px;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;font-size:13.5px}.step b{display:block;font-size:13px;color:#0c4a6e;margin-bottom:2px}.step .n{display:inline-block;background:var(--accent);color:#fff;font-weight:800;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:12px;margin-right:6px}
+.arrow{align-self:center;padding:0 6px;color:var(--accent);font-weight:800;font-size:18px}
+footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-size:13px}footer .wrap{padding:16px 24px}
+@media(max-width:640px){th,td{padding:7px 8px;font-size:13px}}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap"><h1>Development</h1><p>Setup, layout, adding a check, parity verification, packaging, conventions. Prerequisites: Python 3.10+ on Windows; R 4.x only for parity verification (optional).</p></div></header>
+<nav class="top"><div class="wrap">
+<a href="index.html">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html" aria-current="page">Development</a>
+</div></nav>
+<main><div class="wrap">
+
+<h2>Setup</h2>
+<pre><code>python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy config.example.json config.json     # PowerShell: Copy-Item config.example.json config.json
+pytest -q                                # 198 tests (run pytest --collect-only -q for the live count)
+python main.py                           # GUI
+python main.py --config path/to/config.json
+python main.py --dataverse https://demo.borealisdata.ca
+python main.py --headless &lt;staged_dir&gt; --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE
+python -c "import compileall; compileall.compile_dir('.',force=True)"</code></pre>
+<p>Headless rejects <code>--dataverse/--config</code> (GUI-only). Example: <code>engine/tests/test_runner.py</code> runs <code>run_report</code> against <code>CUR_Res_CurationTools/data/Inspect_gpkg</code> (13 files, 0 findings). Test files: 16 engine suites (incl. <code>test_audit_fixes</code> 32, <code>test_dataverse</code> 45, <code>test_formats</code> 18, <code>test_review_rules</code> 18) + 3 UI suites.</p>
+
+<h2>Layout</h2>
+<table>
+<tr><th>File</th><th>Role</th></tr>
+<tr><td><code>main.py</code></td><td><code>--headless/--out/--format/--persistent-id/--config/--dataverse</code>; lazy Qt (TYPE_CHECKING-only at import); sibling-libs loader; exits 0/1/2; <code>MainWindow</code> with TopNav + <code>QStackedWidget</code> (dashboard/detail/settings/review-config/about/log)</td></tr>
+<tr><td><code>config.py</code></td><td><code>DataverseConfig</code> (base_url, token, collection alias), <code>AppConfig</code> (workspace, tesseract, exiftool), <code>Config.load/save</code>, <code>PRESETS</code>, <code>DATAVERSE_*</code> env overrides</td></tr>
+<tr><td><code>dataverse_client.py</code></td><td><code>DataverseClient</code> + parsers (<code>normalize_files</code>, <code>parse_ds_metadata_payload</code>, <code>search_item_state</code>, curation/version/timestamp/notification, 10054 retry)</td></tr>
+<tr><td><code>download_manager.py</code></td><td><code>quote/quote_from</code>, <code>missing_files/is_fully_staged</code>, <code>approve_and_download</code> (+ <code>download_originals</code>), <code>verify → (ok, problems, warnings)</code>, zip-slip guard, per-dataset cache</td></tr>
+<tr><td><code>metadata_check.py</code></td><td><code>PROFILES</code>, <code>DEFAULT_PROFILE="McMaster"</code>, <code>check_metadata_completeness</code>, ORCID regex, <code>requirements_profiles.json</code> support</td></tr>
+<tr><td><code>review_rules.py</code></td><td><code>RULESETS_VERSION=2</code>, 30-entry <code>FIELD_CATALOG</code>, builtin McMaster/Minimal rulesets, per-Dataverse assignment, content-rule evaluation</td></tr>
+<tr><td><code>response_draft.py</code></td><td><code>build_response/render_response</code> — draft from ruleset + report findings</td></tr>
+<tr><td><code>applog.py</code></td><td><code>AppLog</code> ring (2000), <code>log_response</code>, redaction, <code>get_app_log()</code></td></tr>
+<tr><td><code>storage.py</code></td><td>SQLite (<code>datasets/files/check_results/curation_actions</code>) + JSON caches (<code>dataset_sizes</code>, <code>curation_labels</code>, <code>table_layout</code>; dashboard cache helpers live in <code>ui/dashboard.py</code>)</td></tr>
+<tr><td><code>engine/checks/base.py</code></td><td><code>Check</code> base + <code>CheckResult</code> dataclass with <code>to_dict/from_dict</code></td></tr>
+<tr><td><code>engine/checks/&lt;format&gt;_check.py</code></td><td><b>21 modules</b> (csv, xlsx, sav, dta, sas7bdat, json, xml, ipynb, sqlite, hdf5, nc, gpkg, tiff, images, pdf, text, code, <b>secret</b>, containers, fastq, extensions); lazy heavy imports</td></tr>
+<tr><td><code>engine/checks/_util.py</code></td><td><code>missing_library</code>, <code>skipped</code>, <code>detect_encoding</code>, <code>find_emails/find_pii</code> (intl + CA postal/SIN), <code>pii_result</code></td></tr>
+<tr><td><code>engine/checks/__init__.py</code></td><td><code>registry</code> auto-built from <code>_MODULES</code> (21 keys)</td></tr>
+<tr><td><code>engine/constants.py</code></td><td><code>EngineCaps</code> scan caps (samples, rows, members, pixels…)</td></tr>
+<tr><td><code>engine/status.py</code></td><td><code>classify/summarize/file_status/status_label</code> badge taxonomy</td></tr>
+<tr><td><code>engine/report.py</code> / <code>report_md.py</code></td><td><code>DatasetReport/FileEntry</code> JSON round-trip + Markdown rendering</td></tr>
+<tr><td><code>engine/dispatcher.py</code></td><td>Registry-driven path → checks; one strippable outer layer (<code>.fq.gz</code>→fastq, <code>.tar.gz</code>→tar); empty <code>extensions</code> = dataset-level</td></tr>
+<tr><td><code>engine/runner.py</code></td><td><code>run_report</code>, <code>run_report_to_file(fmt=json|md|both)</code>, <code>list_planned_checks</code>; symlinks skipped; <code>_safe_run</code> isolation; <code>inventory.unchecked_types</code> hint</td></tr>
+<tr><td><code>ui/</code></td><td><code>widgets.py</code> kit; <code>main_window.py</code>; <code>dashboard.py</code> (COLUMNS 12, <code>_SortItem</code>, cache-first + <code>diff_dashboard_datasets</code>); <code>dataset_detail.py</code>; <code>review_config.py</code>; <code>settings_dialog.py</code>; <code>about_pane.py</code>; <code>workers.py</code> (5 QThreads); <code>dialogs.py</code> (selectable + <code>describe_error</code>); <code>checks_tree.py</code>; <code>icons.py</code>; <code>log_panel.py</code> (<code>LogPage</code>); <code>download_dialog.py</code>; <code>theme.py</code> (single-source tokens)</td></tr>
+</table>
+
+<h2>Adding a check</h2>
+<div class="flow">
+<div class="step"><b><span class="n">1</span>Implement</b><code>engine/checks/&lt;name&gt;_check.py</code>: unique <code>check_id</code> in <code>format.&lt;format&gt;.*</code>, extensions set, lazy <code>try: import</code> + <code>_util.missing_library</code> warning when absent.</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">2</span>Register</b>Import + append in <code>engine/checks/__init__.py:_MODULES</code> so <code>registry</code>, dispatcher, and runner discover it.</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">3</span>Test</b>Fixtures under <code>engine/tests/fixtures/</code> + cases in <code>test_formats.py</code>/<code>test_port_spike.py</code> asserting <code>CheckResult</code>s for known-good and known-bad files; re-run <code>pytest</code>.</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">4</span>Document</b>GUI picks it up automatically (<code>registry → list_planned_checks → Auto-Checks</code>); document semantics in <code>docs/checks-reference.md</code> (+ this page set).</div>
+</div>
+
+<h2>Parity verification (completed)</h2>
+<ol>
+<li>Ran each R inspector on a <code>CUR_Res_CurationTools/data/</code> sample, saved CSV output.</li>
+<li>Ran the matching Python check on the same directory, dumped <code>DatasetReport</code> JSON.</li>
+<li>Asserted equivalent findings; differences encoded as CI fixtures.</li>
+</ol>
+<p>Divergences: sas7bdat magic at offset 80, gpkg pure-SQLite, netcdf per-dim capped slices, containers zip integrity, fastq gzip-aware capped sampling, csv delimiter-sniff fallback.</p>
+
+<h2>Packaging</h2>
+<pre><code>make build         # both: lite onefile exe + full onedir folder in dist/
+make rebuild-lite  # lite exe only (~2 min), keeps dist/curation-app-full/
+make build-full    # onedir folder only
+make smoke         # size report + headless --help check</code></pre>
+<ul>
+<li>Lite onefile (~63 MB): single exe, no unzip; heavy libs load from sibling <code>dist/curation-app-full/</code> when present (for heavy formats run the full exe directly — sibling injection only resolves binary <code>.pyd</code> shims).</li>
+<li>Top-level imports in <code>main.py</code> guarantee <code>pyi_rth_pyside6</code> collects Qt plugins. Verify: output ends <code>Build complete! …\dist</code>, then smoke-launch and kill. Installer (Inno/WiX) is a later milestone.</li>
+</ul>
+
+<h2>Conventions</h2>
+<ul>
+<li>Python 3.10 typing, dataclasses; no external framework in <code>engine/</code> (stdlib + listed deps). Checks are pure functions of local files — <b>no network I/O inside <code>engine/</code></b>.</li>
+<li>Module-per-format naming mirrors the R scripts; keep <code>docs/report-contract.md</code> in sync with schema changes.</li>
+<li>Selectable dialogs (<code>ui/dialogs.py:show_warning/show_critical/show_info</code>) for traceback-bearing errors; log every request via <code>applog.log_response</code>.</li>
+<li>Parent every <code>QThread</code> to its view, chain <code>deleteLater</code>, adopt before discarding (<code>MainWindow._open_dataset</code>) — never destroy a live <code>QThread</code>.</li>
+<li>Theme: no hardcoded hex outside <code>theme.py</code> (enforced by <code>ui/tests/test_theme_tokens.py</code>).</li>
+</ul>
+
+</div></main>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Generated 2026-10-06, verified against code.</div></footer>
+</body>
+</html>

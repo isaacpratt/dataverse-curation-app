@@ -1,6 +1,7 @@
 """About pane: non-modal stack page describing the app (replaces the popup)."""
 
 from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -91,14 +92,32 @@ class AboutPane(QWidget):
         body.setContentsMargins(20, 20, 20, 20)
         body.setSpacing(10)
 
-        title = QLabel(f"Dataverse Curation App <span style='color:{ON_SECONDARY_CONTAINER}'>v{_app_version()}</span>")
+        title = QLabel(f"Dataverse Docent <span style='color:{ON_SECONDARY_CONTAINER}'>v{_app_version()}</span>")
         title.setTextFormat(Qt.RichText)
         title.setStyleSheet(
             f"font-size: 16px; font-weight: 600; color: {ON_SURFACE}; "
             "border: none; background: transparent;"
         )
         title.setWordWrap(True)
-        body.addWidget(title)
+        # App mark beside the title (2026-10-06 Dataverse Docent rebrand).
+        head_row = QHBoxLayout()
+        head_row.setSpacing(12)
+        head_row.setContentsMargins(0, 0, 0, 0)
+        mark = QLabel()
+        mark.setObjectName("DocentMark")
+        try:
+            from ui.theme import app_icon_path
+
+            pix = QPixmap(app_icon_path())
+            if not pix.isNull():
+                mark.setPixmap(pix.scaledToHeight(44, Qt.SmoothTransformation))
+        except Exception:
+            pass
+        mark.setStyleSheet("border: none; background: transparent;")
+        mark.setFixedWidth(48)
+        head_row.addWidget(mark, 0, Qt.AlignTop)
+        head_row.addWidget(title, 1)
+        body.addLayout(head_row)
 
         # Two columns (2026-10-02 minor): overview left, environment
         # facts + copy right — support details where they can be found.

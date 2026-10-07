@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Checks reference — Dataverse Docent</title>
+<style>
+:root{--bg:#0f172a;--bg2:#111c33;--ink:#0f172a;--muted:#526078;--line:#e2e8f0;--accent:#0e7490;--ok:#15803d;--warn:#b45309;--err:#b91c1c;--soft:#f1f5f9;--radius:12px}
+*{box-sizing:border-box}body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--ink);background:#f8fafc;line-height:1.6}
+header.hero{background:linear-gradient(135deg,var(--bg),var(--bg2));color:#fff;padding:34px 24px 26px}.wrap{max-width:1080px;margin:0 auto}
+.hero h1{margin:0;font-size:26px}.hero p{margin:6px 0 0;color:#cbd5e1}
+nav.top{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--line)}nav.top .wrap{display:flex;gap:4px;flex-wrap:wrap;padding:8px 24px}
+nav.top a{text-decoration:none;color:var(--ink);font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px}nav.top a:hover{background:var(--soft)}nav.top a[aria-current]{background:#e0f2fe;color:#0c4a6e}
+main .wrap{padding:26px 24px 60px}h2{font-size:22px;margin:34px 0 10px;padding-top:8px;border-top:2px solid var(--line)}h3{font-size:17px;margin:22px 0 8px;color:#0c4a6e}
+p,li{font-size:15px}code{font-family:Consolas,monospace;font-size:13px;background:#f1f5f9;border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;background:#fff;border:1px solid var(--line)}th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#f1f5f9;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#334155}
+.callout{border-left:5px solid var(--accent);background:#ecfeff;border-radius:0 var(--radius) var(--radius) 0;padding:12px 16px;margin:14px 0;font-size:14.5px}.callout.warn{border-color:var(--warn);background:#fffbeb}
+figure{margin:16px 0;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px}figcaption{font-size:13px;color:var(--muted);margin-top:8px}svg.diagram{width:100%;height:auto;display:block}
+.pill{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px;margin:1px 2px}.p-info{background:#dbeafe;color:#1e40af}.p-warn{background:#fef3c7;color:#92400e}.p-err{background:#fee2e2;color:#991b1b}.p-ok{background:#dcfce7;color:#166534}.p-mut{background:#f1f5f9;color:#475569}
+footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-size:13px}footer .wrap{padding:16px 24px}
+@media(max-width:640px){th,td{padding:7px 8px;font-size:13px}}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap"><h1>Auto-checks reference</h1><p>What the engine verifies when you press <b>Run checks</b>, what each badge means, and what each of the 21 checks can find.</p></div></header>
+<nav class="top"><div class="wrap">
+<a href="index.html">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html" aria-current="page">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a>
+</div></nav>
+<main><div class="wrap">
+
+<h2>How checks run</h2>
+<figure>
+<svg class="diagram" viewBox="0 0 900 250" role="img" aria-label="Dispatch flowchart">
+<defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#0e7490"/></marker></defs>
+<rect x="10" y="90" width="150" height="70" rx="10" fill="#0f172a"/><text x="85" y="117" fill="#fff" text-anchor="middle" font-size="13" font-weight="700">staged file</text><text x="85" y="137" fill="#94a3b8" text-anchor="middle" font-size="11">sample.fq.gz</text>
+<rect x="195" y="90" width="170" height="70" rx="10" fill="#fff" stroke="#0e7490" stroke-width="2"/><text x="280" y="114" text-anchor="middle" font-size="12" font-weight="700">shed one compression</text><text x="280" y="132" text-anchor="middle" font-size="11" fill="#526078">.fq.gz → {.fq} · .tar.gz → {.tar}</text><text x="280" y="148" text-anchor="middle" font-size="11" fill="#526078">engine/dispatcher.py</text>
+<rect x="400" y="30" width="170" height="70" rx="10" fill="#ecfeff" stroke="#0e7490" stroke-width="2"/><text x="485" y="54" text-anchor="middle" font-size="12" font-weight="700">registry match?</text><text x="485" y="72" text-anchor="middle" font-size="11" fill="#526078">wanted ∩ extensions</text>
+<rect x="400" y="150" width="170" height="70" rx="10" fill="#fff" stroke="#b45309" stroke-width="2"/><text x="485" y="174" text-anchor="middle" font-size="12" font-weight="700">no module (.mat…)</text><text x="485" y="192" text-anchor="middle" font-size="11" fill="#526078">inventory.unchecked_types</text><text x="485" y="208" text-anchor="middle" font-size="11" fill="#b45309">dataset warning</text>
+<rect x="605" y="30" width="130" height="70" rx="10" fill="#fff" stroke="#15803d" stroke-width="2"/><text x="670" y="54" text-anchor="middle" font-size="12" font-weight="700">run check(s)</text><text x="670" y="72" text-anchor="middle" font-size="11" fill="#526078">per-file isolation</text><text x="670" y="88" text-anchor="middle" font-size="11" fill="#526078">_safe_run</text>
+<rect x="605" y="150" width="130" height="70" rx="10" fill="#fff" stroke="#7c3aed" stroke-width="2"/><text x="670" y="174" text-anchor="middle" font-size="12" font-weight="700">dataset-level</text><text x="670" y="192" text-anchor="middle" font-size="11" fill="#526078">inventory.*</text><text x="670" y="208" text-anchor="middle" font-size="11" fill="#526078">extensions census</text>
+<rect x="765" y="80" width="125" height="90" rx="10" fill="#0f172a"/><text x="827" y="108" fill="#fff" text-anchor="middle" font-size="12" font-weight="700">DatasetReport</text><text x="827" y="128" fill="#94a3b8" text-anchor="middle" font-size="11">JSON + Markdown</text><text x="827" y="146" fill="#94a3b8" text-anchor="middle" font-size="11">always-emit IDs</text>
+<line x1="160" y1="125" x2="193" y2="125" stroke="#0e7490" stroke-width="2" marker-end="url(#a)"/><line x1="365" y1="125" x2="398" y2="70" stroke="#0e7490" stroke-width="2" marker-end="url(#a)"/><line x1="365" y1="130" x2="398" y2="180" stroke="#b45309" stroke-width="2" marker-end="url(#a)"/><line x1="570" y1="65" x2="603" y2="65" stroke="#0e7490" stroke-width="2" marker-end="url(#a)"/><line x1="570" y1="185" x2="670" y2="185" stroke="#7c3aed" stroke-width="2" opacity="0"/><line x1="735" y1="65" x2="763" y2="100" stroke="#0e7490" stroke-width="2" marker-end="url(#a)"/><line x1="735" y1="185" x2="763" y2="140" stroke="#7c3aed" stroke-width="2" marker-end="url(#a)"/>
+</svg>
+<figcaption>Compound names shed one outer layer first. Symlinks are skipped; each file runs in isolation so one crash can't sink the report. Secrets/PII scanners (<code>hush-scan</code>, <code>piigex</code>) are required and bundled — never “missing”. Structured PII uses <code>regions=["intl"]</code> + the Canadian postal/SIN pack; foreign national IDs are disabled by policy.</figcaption>
+</figure>
+
+<h2>What PASS means (two contexts)</h2>
+<table>
+<tr><th>When</th><th>Badge</th><th>Meaning</th></tr>
+<tr><td rowspan="3"><b>Before running</b> (Auto-Checks card)</td><td><span class="pill p-ok">PASS</span></td><td>Check is planned and applicable to this dataset's files</td></tr>
+<tr><td><span class="pill p-mut">—</span></td><td>No matching files for this check</td></tr>
+<tr><td><span class="pill p-warn">MISSING</span></td><td>Optional library absent in this build</td></tr>
+<tr><td rowspan="4"><b>After running</b></td><td><span class="pill p-ok">✓ passed:true</span></td><td>Policy held (info results typically pass with details, e.g. “consistent 12 columns”)</td></tr>
+<tr><td><span class="pill p-err">✕ FAIL</span></td><td><code>error</code>-level finding — data integrity problem</td></tr>
+<tr><td><span class="pill p-warn">✕ warning</span></td><td>Finding to review with the researcher</td></tr>
+<tr><td><span class="pill p-mut">○ SKIPPED</span></td><td>Sub-check could not run (<code>details.skipped</code>: missing lib, encrypted PDF, legacy <code>.xls</code>, size caps) — distinct from a pass</td></tr>
+</table>
+<div class="callout"><b>Always-emit:</b> every module emits all owned IDs every run — passes like “No zero-byte files” and “no PII values detected” stay visible in the manifest tree and Markdown. Finding lists are capped (<code>secret_max_listed=20</code>, <code>pii_max_samples=10</code>); the message always states the truncation (<code>showing first 10 of 47 sample(s)</code>) and <code>details.count</code> carries the full total.</div>
+
+<h2>Issue taxonomy</h2>
+<table>
+<tr><th>Level</th><th>Meaning</th><th>Typical examples</th></tr>
+<tr><td><span class="pill p-info">info</span></td><td>No action; confirms health</td><td>File parsed OK + encoding; extension census; NetCDF variable count; consistent CSV columns</td></tr>
+<tr><td><span class="pill p-warn">warning</span></td><td>Review; likely needs a fix or a note to the researcher</td><td>Ragged CSV; duplicates; structured PII; secrets in code/text/config; non-ASCII filenames; executables; hidden sheets/macros; unexecuted notebook cells; scanned PDF; mixed line endings; TODO markers; external HDF5 links; system junk (<code>Thumbs.db</code>, <code>__MACOSX</code>)</td></tr>
+<tr><td><span class="pill p-err">error</span></td><td>Data integrity problem</td><td>0-byte file; unparseable CSV/JSON/XML/notebook; corrupt zip/tar; unreadable SPSS/Stata/SAS; missing GeoPackage geometry; truncated image; checksum mismatch</td></tr>
+</table>
+
+<h2>Per-format checks (21 modules)</h2>
+<table>
+<tr><th>Module</th><th>Check IDs</th><th>Examines</th><th>Notable findings</th></tr>
+<tr><td><code>csv_check</code></td><td><code>format.csv.*</code></td><td>Encoding, delimiter sniff, ragged/missing/duplicate rows, PII (piigex + CA) on 1k-row sample; full parse capped 50k rows (<code>truncated:true</code> when sampled)</td><td>Ragged / duplicates / PII (warning)</td></tr>
+<tr><td><code>xlsx_check</code></td><td><code>format.xlsx.*</code></td><td>Workbook opens, sheet list, hidden sheets, VBA macros, tabular shape, PII first 1k data rows/sheet</td><td>Hidden, macros, PII (warning)</td></tr>
+<tr><td><code>sav_check</code></td><td><code>format.spss.*</code></td><td>SPSS opens (pyreadstat), variable dictionary, encoding, value labels</td><td>Unreadable (error)</td></tr>
+<tr><td><code>dta_check</code></td><td><code>format.stata.*</code> + pii</td><td>As SPSS + PII scan on character columns</td><td>Same family + PII</td></tr>
+<tr><td><code>sas7bdat_check</code></td><td><code>format.sas.*</code></td><td>128-byte <code>SAS FILE</code> magic, then as SPSS</td><td>Non-SAS with <code>.sas7bdat</code> extension</td></tr>
+<tr><td><code>json_check</code></td><td><code>format.json.valid</code></td><td>Strict parse (over 64 MiB → too-large warning, no full parse)</td><td>Unparseable (error)</td></tr>
+<tr><td><code>xml_check</code></td><td><code>format.xml.valid</code></td><td>Well-formedness (lxml)</td><td>Malformed (error)</td></tr>
+<tr><td><code>ipynb_check</code></td><td><code>format.ipynb.*</code></td><td>Notebook JSON (64 MiB cap), cell inventory, execution counts</td><td>Invalid (error); unexecuted (warning)</td></tr>
+<tr><td><code>sqlite_check</code></td><td><code>format.sqlite.*</code></td><td>Opens, full <code>integrity_check</code>, table inventory</td><td>Corrupt (error)</td></tr>
+<tr><td><code>hdf5_check</code></td><td><code>format.hdf5.*</code></td><td>Opens, external links; walk capped 5k (<code>truncated</code> when partial)</td><td>Dangling links (warning)</td></tr>
+<tr><td><code>nc_check</code></td><td><code>format.netcdf.*</code></td><td>Opens, vars/dims, CRS/georef, NaN sampling on capped per-dim slices</td><td>Missing CRS (warning); all-NaN variable</td></tr>
+<tr><td><code>gpkg_check</code></td><td><code>format.gpkg.*</code></td><td>Pure-SQLite <code>gpkg_*</code> tables, layers, SRS (no GDAL)</td><td>Missing geometry (error)</td></tr>
+<tr><td><code>tiff_check</code></td><td><code>format.tiff.valid</code></td><td>Header/pages parse (tifffile)</td><td>Corrupt (error)</td></tr>
+<tr><td><code>images_check</code></td><td><code>format.images.valid</code></td><td>Raster opens, mode/size (Pillow; stdlib header fallback without it)</td><td>Unreadable/truncated (error)</td></tr>
+<tr><td><code>pdf_check</code></td><td><code>format.pdf.*</code></td><td>Opens, page count, text sampled on first 3 pages</td><td>No extractable text — scanned, needs OCR (warning)</td></tr>
+<tr><td><code>text_check</code></td><td><code>format.text.*</code></td><td>Encoding, line-ending mix, control chars, PII on 1 MiB sample</td><td>Mixed endings, control chars, PII (warning)</td></tr>
+<tr><td><code>code_check</code></td><td><code>format.code.*</code></td><td>Readable text (first 1 MiB), TODO/FIXME scan</td><td>TODO markers (warning)</td></tr>
+<tr><td><code>secret_check</code></td><td><code>format.secrets</code></td><td>hush-scan (regex + entropy) over first 5 MiB of code/text/config; capped at 20, explicit “showing first N of M”</td><td>API keys, tokens, private keys, high-entropy strings (warning)</td></tr>
+<tr><td><code>containers_check</code></td><td><code>format.containers.*</code></td><td>Zip <code>testzip</code>, tar members, traversal (<code>..</code>/absolute), encrypted entries; capped 10k members / 2 GiB</td><td>Corrupt (error); traversal + encrypted (warning)</td></tr>
+<tr><td><code>fastq_check</code></td><td><code>format.fastq.*</code></td><td>Gzip-aware 4-line validation (header/<code>+</code>/seq-qual length), length/GC on capped sample</td><td>Malformed incl. length mismatch (warning); no valid reads (error)</td></tr>
+<tr><td><code>extensions_check</code> (dataset)</td><td><code>inventory.*</code></td><td>Extension census, 0-byte files, executables, OS junk (nested <code>__MACOSX</code> incl.)</td><td>0-byte (error); executables/junk (warning)</td></tr>
+</table>
+<div class="callout warn">MATLAB <code>.mat</code> (and any format without a module) is reported once per dataset as <code>inventory.unchecked_types</code> (warning) — manual review required. <code>scipy</code> stays optional by design.</div>
+
+<h2>Download verification (a gate, not a check)</h2>
+<p>Before checks run, <code>DownloadManager.verify()</code> rehashes every staged file against the Dataverse checksum (<code>md5</code>/<code>sha1</code>). Mismatches surface as <code>checksum mismatch: &lt;path&gt;</code> with expected/actual hashes. Tabular <code>.tab</code> derivatives are server-regenerated, so their message includes the file's UNF for manual comparison instead of failing byte-exact.</p>
+
+</div></main>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Generated 2026-10-06, verified against code.</div></footer>
+</body>
+</html>

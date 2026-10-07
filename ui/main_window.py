@@ -343,7 +343,7 @@ class MainWindow(QMainWindow):
         self._config = config
         self._metadata_cache: dict[str, tuple[dict, list]] = {}
         self._open_pids: list[tuple[str, str]] = []
-        self.setWindowTitle("Dataverse Curation App")
+        self.setWindowTitle("Dataverse Docent")
         self.resize(1320, 860)
         # Floor the window so layout minimums (tall detail header, Response
         # page editors) cannot force-grow it past a usable size; content

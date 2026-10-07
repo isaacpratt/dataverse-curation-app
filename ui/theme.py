@@ -140,6 +140,29 @@ def asset_path(name: str) -> str:
     return ""
 
 
+def app_icon_path() -> str:
+    """Absolute path to the app icon (docent.png at the repo root).
+
+    Works frozen too: the exe bundles it via --add-data "docent.png;.",
+    which lands at the sys._MEIPASS root next to the extracted modules.
+    """
+    import sys
+    from pathlib import Path
+
+    candidates = []
+    meipass = getattr(sys, "_MEIPASS", "")
+    if meipass:
+        candidates.append(Path(meipass) / "docent.png")
+    candidates.append(Path(__file__).resolve().parent.parent / "docent.png")
+    for path in candidates:
+        try:
+            if path.exists():
+                return path.as_posix()
+        except Exception:
+            continue
+    return ""
+
+
 def _chevron_qss() -> str:
     """Down-arrow rule: Lucide chevron when bundled, CSS triangle fallback."""
     arrow = asset_path("lucide/chevron-down-grey.svg")
