@@ -35,3 +35,5 @@ Thumbs.db
 .pyi-cache/
 # Local AI-agent tooling (skills, sessions) — environment-specific, not app source.
 .opencode/
+# Agent screenshots/scratch (browser captures, verification images).
+.openchamber/
