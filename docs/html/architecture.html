@@ -107,7 +107,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><th>Date</th><th>Decision</th></tr>
 <tr><td>2026-08-17</td><td>PySide6 single-process desktop; API-token auth; Python port over portable R (~400 MB)</td></tr>
 <tr><td>2026-08-21/25</td><td>dvmeta CLI draft crawl + <code>IN_REVIEW</code> locks; paginated Search fallback (<code>start</code>, dedup, <code>subtree</code>); streaming download; 10054 retry; metadata completeness as first-class feature (McMaster profile); lite packaging with lazy imports</td></tr>
-<tr><td>2026-10-20</td><td>dvmeta removed (the crawler's 0.2.0 restructure broke the CLI contract, so the branch was dead code): discovery is now total-driven Search at <code>per_page=1000</code> + in-process pooled inventory enrichment, which every user — including frozen exe users — gets. Progress ring with catch-up/backoff; painted-row window for very large collections</td></tr>
+<tr><td>2026-10-29</td><td>dvmeta removed (the crawler's 0.2.0 restructure broke the CLI contract, so the branch was dead code): discovery is now total-driven Search at <code>per_page=1000</code> + in-process pooled inventory enrichment, which every user — including frozen exe users — gets. Progress ring with catch-up/backoff; painted-row window for very large collections</td></tr>
 <tr><td>2026-09-08/15</td><td>Detail main + sticky sidebar; settings/about as stack panes; log strip → Log stack page; problems-vs-warnings verify; originals-only tabular; skip-if-staged; QThread adoption; dashboard cache-first paint; MIT license</td></tr>
 <tr><td>2026-09-11/23</td><td><code>ui/widgets.py</code> kit as single source of truth (RinUI QML rejected); audit batches: compound dispatch, missing-lib guards, atomic staging, Timeout/429/503 retries, caps, taxonomy; per-author ORCID/count + license/terms rules; caption-button hit codes</td></tr>
 <tr><td>2026-09-25 → 10-02</td><td>Theme tokens single-sourced (<code>test_theme_tokens.py</code> enforces); keyboard parity + plain-language errors; caption <code>HTCLIENT</code> fix; colour-not-outline focus; named loading states; guarded decision combo; Copy diagnostics (never the token); title-bar <code>WM_NCCALCSIZE</code> healing</td></tr>
@@ -117,6 +117,6 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 </table>
 
 </div></main>
-<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-10-07, verified against code.</div></footer>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-10-29, verified against code.</div></footer>
 </body>
 </html>

@@ -10,6 +10,7 @@ Desktop curation assistant for Alliance Dataverse instances. It pulls datasets s
 - Phase 3 — Dataverse client + download manager complete: total-driven paginated Search discovery (draft-aware, `per_page=1000`) with in-process pooled inventory enrichment, per-dataset `IN_REVIEW` lock confirmation, approval-gated zip download with streaming, original-format fetch for tabular ingests, skip-if-staged, checksum verification with `.tab` warnings (not errors), zip-slip guard; live-verified against `https://demo.borealisdata.ca`
 - Phase 4 — PySide6 GUI complete: dashboard (12 sortable/column-togglable columns with pill delegates, status/label/collection filters, content-width auto-fit with visible resize handles and reset-to-defaults), dataset detail (main column: completeness/manifest/auto-checks/version-log cards; sticky sidebar: sections nav, dataset timeline, assessment that pushes curation labels), settings/about stack panes, Log stack page with severity legend + Live toggle, selectable text + table copy everywhere
 - Phase 5 — packaging complete: PyInstaller lite build (onedir folder, all 21 checks lazy-import optional libs) beside a full onedir build whose heavy libs the lite exe picks up; `Makefile` targets `build` / `rebuild-lite` / `build-full`
+- **All planned phases complete** (279 tests: 200 engine + 79 UI). Remaining work is queued but does not block the app — the live plan is `docs/html/proposals.html`: a live authenticated pass, two P1 UX items, measuring the painting-window/enrichment-cap constants, and an installer.
 
 ## Context
 

@@ -26,6 +26,7 @@ p,li{font-size:15px}code{font-family:Consolas,"Cascadia Code",monospace;font-siz
 pre{background:#0f172a;color:#e2e8f0;border-radius:var(--radius);padding:16px;overflow:auto;font-size:13px}
 pre code{background:none;border:none;color:inherit;padding:0}
 table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;background:#fff;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.table-wrap{overflow-x:auto}
 th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
 th{background:#f1f5f9;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#334155}
 tr:last-child td{border-bottom:none}
@@ -55,7 +56,7 @@ footer .wrap{padding:16px 24px}
 <header class="hero"><div class="wrap">
 <h1>Dataverse Docent — Documentation</h1>
 <p>Desktop curation assistant for Alliance Dataverse instances: pulls datasets submitted for review, runs automated format checks, checks metadata completeness, and presents findings with an exportable curation report. These HTML pages are the documentation source of truth.</p>
-<div class="badges"><span class="badge ok">21 check modules</span><span class="badge ok">279 tests</span><span class="badge info">PySide6 desktop</span><span class="badge">Engine v0.1.0</span><span class="badge warn">Verified vs code 2026-10-20</span></div>
+<div class="badges"><span class="badge ok">21 check modules</span><span class="badge ok">279 tests</span><span class="badge info">PySide6 desktop</span><span class="badge">Engine v0.1.0</span><span class="badge warn">Verified vs code 2026-10-29</span></div>
 </div></header>
 <nav class="top"><div class="wrap">
 <a href="index.html" aria-current="page">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a><a href="proposals.html">Proposals</a>
@@ -71,17 +72,32 @@ footer .wrap{padding:16px 24px}
 <div class="card"><h3>🔄 Engine port</h3><p>R → Python port matrix, divergences, go/no-go criteria.</p><a href="engine-port.html">Read →</a></div>
 <div class="card"><h3>🧭 User guide</h3><p>Dashboard, dataset detail, workflow steps, log, troubleshooting, headless.</p><a href="user-guide.html">Read →</a></div>
 <div class="card"><h3>🛠 Development</h3><p>Setup, layout, adding a check, parity verification, packaging, conventions.</p><a href="development.html">Read →</a></div>
-<div class="card"><h3>📌 Proposals</h3><p>Proposed but not yet implemented: queued UX work, deferred checks, packaging milestones, open decisions.</p><a href="proposals.html">Read →</a></div>
+<div class="card"><h3>📌 Proposals</h3><p>The remaining plan by bucket — queued UX, verification, deferred checks, packaging, open decisions — plus the shipped record.</p><a href="proposals.html">Read →</a></div>
 </div>
 
 <h2>Project status</h2>
+<div class="callout ok"><b>Snapshot 2026-10-29 — all six phases complete.</b> The app is feature-complete for its documented scope: 21 check modules, 279 tests (200 engine + 79 UI), 17 UI modules. Discovery is total-driven Search at <code>per_page=1000</code> plus pooled in-process inventory enrichment (no crawler dependency); the dashboard, dataset detail, downloads, auto-checks and export paths work end-to-end; lite and full <b>onedir</b> builds are packaged. The remaining plan is queued, not blocking — see below.</div>
 <div class="flow">
 <div class="step"><b><span class="n">0</span>Scaffold</b>Repo, GUI shell, storage <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">1</span>Engine port</b>21 checks, 279 tests <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">2</span>Report runner</b><code>run_report</code> end-to-end <span class="pill p-ok">done</span></div><div class="arrow">→</div>
-<div class="step"><b><span class="n">3</span>Client + downloads</b>Crawler + search, approval gate <span class="pill p-ok">done</span></div><div class="arrow">→</div>
+<div class="step"><b><span class="n">3</span>Client + downloads</b>Search + enrichment, approval gate <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">4</span>PySide6 GUI</b>Dashboard, detail, settings, log <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">5</span>Packaging</b>Lite onedir + full onedir <span class="pill p-ok">done</span></div>
+</div>
+
+<h2>Remaining work at a glance</h2>
+<p>Nothing open blocks the app. The plan is queued in <a href="proposals.html">Proposals</a>; this is the index.</p>
+<div class="table-wrap">
+<table>
+<tr><th>Bucket</th><th>Open items</th><th>Priority</th><th>Detail</th></tr>
+<tr><td><b>Verification</b></td><td>Live authenticated pass — drafts and curation labels need a real API token (guest verification is done)</td><td><span class="pill p-err">P1</span></td><td><a href="proposals.html#verification">Proposals →</a></td></tr>
+<tr><td><b>UX</b></td><td>Settings <code>● unsaved</code> chip · detail step rail · remaining P2s · step-4 quick wins · busy-indicator naming</td><td><span class="pill p-err">P1</span>–<span class="pill p-mut">P3</span></td><td><a href="proposals.html#queued">Proposals →</a></td></tr>
+<tr><td><b>Performance</b></td><td>Measure and tune the two new constants: painting window (2,000 rows) and enrichment cap (200 rows)</td><td><span class="pill p-warn">P2</span></td><td><a href="proposals.html#decisions">Open decisions →</a></td></tr>
+<tr><td><b>Engine checks</b></td><td>MATLAB <code>.mat</code> and OCR parity (deferred); <code>frdr</code>/schema skipped by design</td><td><span class="pill p-mut">deferred</span></td><td><a href="proposals.html#checks">Proposals →</a></td></tr>
+<tr><td><b>Packaging</b></td><td>Installer (Inno Setup / WiX) — portable onedir works today</td><td><span class="pill p-mut">milestone</span></td><td><a href="proposals.html#packaging">Proposals →</a></td></tr>
+<tr><td><b>Decisions</b></td><td>Delete <code>32x32.png</code>? · auth-fallback UX for refused datasets · MetricCard stylesheet warning</td><td><span class="pill p-mut">call</span></td><td><a href="proposals.html#decisions">Open decisions →</a></td></tr>
+</table>
 </div>
 
 <h2>Quick start</h2>
@@ -95,7 +111,7 @@ python main.py --headless &lt;staged_dir&gt; --out report.json --format json --p
 <p>Requirements: Python 3.10+ (Windows recommended). Headless exit codes: <b>0</b> clean, <b>1</b> error-level findings, <b>2</b> usage/IO failure.</p>
 
 <h2>Documentation audit — what was fixed</h2>
-<div class="callout ok">The documentation was re-checked against the code (<code>engine/checks/__init__.py:registry</code>, <code>main.py</code> CLI, <code>engine/report.py</code>, <code>ui/</code> views, <code>Makefile</code>) on 2026-10-06 and again on 2026-10-07, when these HTML pages became the <b>source of truth</b> (the <code>docs/*.md</code> mirrors were retired). The tables below record the verified state.</div>
+<div class="callout ok">The documentation was re-checked against the code (<code>engine/checks/__init__.py:registry</code>, <code>main.py</code> CLI, <code>engine/report.py</code>, <code>ui/</code> views, <code>Makefile</code>) on 2026-10-06 and 2026-10-07, when these HTML pages became the <b>source of truth</b> (the <code>docs/*.md</code> mirrors were retired), and again on <b>2026-10-29</b> after the discovery/enrichment/progress batch. The tables below record the verified state.</div>
 <table>
 <tr><th>Stale claim</th><th>Where</th><th>Verified truth</th></tr>
 <tr><td>“20 check modules (19 R inspectors…)”, “101 tests”</td><td>README, engine-port, development, user-guide</td><td><b>21</b> registered modules (<code>registry</code> has 21 keys incl. <code>format.secrets</code> + <code>inventory.extensions</code>); <b>279</b> collected tests (200 engine + 79 UI) via full <code>pytest --collect-only -q</code> output (always sum the complete output)</td></tr>
@@ -134,6 +150,6 @@ python main.py --headless &lt;staged_dir&gt; --out report.json --format json --p
 <p>Each page is a single self-contained HTML file (inline CSS + inline SVG, no network needed). Open any of them directly in a browser, or serve <code>docs/html/</code> statically. These pages are the editable source of truth — the <code>docs/*.md</code> markdown mirrors were retired on 2026-10-07.</p>
 
 </div></main>
-<footer><div class="wrap">Updated 2026-10-07 · documentation source of truth · verified against code. Engine v0.1.0 · MIT License.</div></footer>
+<footer><div class="wrap">Updated 2026-10-29 · documentation source of truth · verified against code. Engine v0.1.0 · MIT License.</div></footer>
 </body>
 </html>
