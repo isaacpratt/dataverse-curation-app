@@ -788,7 +788,6 @@ class DashboardView(QWidget):
             self._sync_header_from_table()
         except Exception:
             pass
-        self._load_labels_cache()
         selectable_labels(self)
         # Cache-first paint happens *after* the shell is visible (see
         # start_background_load): applying cached rows, local state and the
@@ -893,6 +892,10 @@ class DashboardView(QWidget):
         except Exception:  # pragma: no cover - probe is optional
             mark = lambda _label: None  # noqa: E731
         mark("dashboard: background load start")
+        # Labels seed from disk before the cached rows (it imports the
+        # Dataverse client, so it must not sit on the window-construction
+        # path). The rows then merge their own labels from the cache.
+        self._load_labels_cache()
         self._cache_loaded = self._show_cached_dashboard()
         self._update_metrics()
         has_token = bool((self._config.dataverse.api_token or "").strip())

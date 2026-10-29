@@ -122,6 +122,62 @@ def test_apply_dwm_frame_never_raises_without_window():
 
 
 @win32_only
+def test_cloak_window_sets_dwm_cloak_attribute(monkeypatch):
+    """The window is cloaked (attribute 13) until the first frame is ready."""
+    from ui.main_window import MainWindow
+
+    seen = {}
+
+    class FakeDwm:
+        def DwmSetWindowAttribute(self, hwnd, attr, value, size):
+            seen["hwnd"] = int(getattr(hwnd, "value", hwnd))
+            seen["attr"] = int(attr)
+            seen["value"] = value._obj.value
+            seen["size"] = int(size)
+            return 0
+
+    class FakeWindll:
+        dwmapi = FakeDwm()
+
+    monkeypatch.setattr("ctypes.windll", FakeWindll())
+
+    class FakeSelf:
+        _hwnd = 0x0000023A4F51C8D1
+
+        def winId(self):
+            return self._hwnd
+
+    assert MainWindow._cloak_window(FakeSelf(), True) is True
+    assert seen == {
+        "hwnd": 0x0000023A4F51C8D1,
+        "attr": 13,
+        "value": 1,
+        "size": 4,
+    }
+
+    assert MainWindow._cloak_window(FakeSelf(), False) is True
+    assert seen["value"] == 0
+
+
+def test_cloak_window_never_raises_without_window():
+    """Cloaking degrades to False (window still shows) when Win32 fails."""
+    from ui.main_window import MainWindow
+
+    class NoHandle:
+        _hwnd = 0
+
+        def winId(self):
+            return 0
+
+    class BadHandle:
+        def winId(self):
+            raise RuntimeError("no native window")
+
+    assert MainWindow._cloak_window(NoHandle(), True) is False
+    assert MainWindow._cloak_window(BadHandle(), True) is False
+
+
+@win32_only
 def test_work_area_for_hwnd_returns_plausible_rect():
     """Work-area lookup works against a real HWND with no Qt involved."""
     import ctypes

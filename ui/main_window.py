@@ -95,6 +95,19 @@ class _RECT(ctypes.Structure):
                 ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
 
 
+class _MARGINS(ctypes.Structure):
+    _fields_ = [
+        ("cxLeftWidth", ctypes.c_int),
+        ("cxRightWidth", ctypes.c_int),
+        ("cyTopHeight", ctypes.c_int),
+        ("cyBottomHeight", ctypes.c_int),
+    ]
+
+
+# DWMWA_CLOAK: keep a window out of DWM composition while it is prepared.
+_DWMWA_CLOAK = 13
+
+
 class _POINT(ctypes.Structure):
     _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
 
@@ -534,6 +547,20 @@ class MainWindow(QMainWindow):
         # page, so build it now (this is the one deliberate eager pane).
         if not self._config.dataverse.base_url:
             self._open_settings()
+
+        # Create the native window now and keep it out of DWM composition
+        # until reveal(). Mapping a window shows its client before Qt's first
+        # paint (~100 ms of empty window), and the native caption can flash
+        # for a frame before WM_NCCALCSIZE is re-asserted; neither can happen
+        # while the window is cloaked.
+        self._revealed = False
+        self._cloaked = False
+        try:
+            self._hwnd = int(self.winId())
+            self._apply_dwm_frame()
+            self._cloaked = self._cloak_window(True)
+        except Exception:
+            self._cloaked = False
 
     # -- status / repo badge -------------------------------------------
 
@@ -1039,6 +1066,16 @@ class MainWindow(QMainWindow):
             pass
 
     def showEvent(self, event) -> None:
+        # Re-assert the cloak before the first map (normally set in __init__
+        # already): a cloaked window is never composited, so neither an empty
+        # client nor a transient native caption can flash on screen.
+        try:
+            if not getattr(self, "_revealed", False):
+                self._cloaked = self._cloak_window(True) or bool(
+                    getattr(self, "_cloaked", False)
+                )
+        except Exception:
+            pass
         try:
             super().showEvent(event)
         except Exception:
@@ -1046,7 +1083,37 @@ class MainWindow(QMainWindow):
         # HWND + DWM are ready here; also re-applied on every
         # maximize/restore (see _on_max_restore/changeEvent).
         self._apply_dwm_frame()
+        # Strip any caption right away (while still cloaked), then keep the
+        # delayed heal for recalculation paths that land after the reveal.
+        self._heal_caption_strip()
         QTimer.singleShot(300, self._heal_caption_strip)
+        # Safety net for hosts that show the window without main.py's
+        # reveal(): never leave it cloaked and invisible.
+        if not getattr(self, "_revealed", False):
+            QTimer.singleShot(700, self.reveal)
+
+    def reveal(self) -> None:
+        """Uncloak the window once its first frame is painted.
+
+        The window is created cloaked (out of DWM composition), so mapping it
+        cannot show an empty client or a native caption. main.py calls this
+        after the first event-loop pass; the timer in showEvent covers every
+        other host. Idempotent and never raises.
+        """
+        if getattr(self, "_revealed", False):
+            return
+        self._revealed = True
+        try:
+            # processEvents() can return before the window's first WM_PAINT,
+            # which would reveal a blank client; paint synchronously first.
+            self.repaint()
+        except Exception:
+            pass
+        try:
+            if getattr(self, "_cloaked", False) and self._cloak_window(False):
+                self._cloaked = False
+        except Exception:
+            pass
 
     def _heal_caption_strip(self) -> None:
         """Re-assert the stripped frame if Windows ever re-adds a caption.
@@ -1092,6 +1159,37 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _cloak_window(self, cloaked: bool) -> bool:
+        """Add or remove this window from DWM composition (Windows only).
+
+        A cloaked window keeps painting normally but is never composited, so
+        the first frame can be prepared unseen and revealed in one step.
+        Returns True when the attribute was accepted; never raises.
+        """
+        try:
+            import sys as _sys
+
+            if not _sys.platform.startswith("win"):
+                return False
+            import ctypes
+            from ctypes import wintypes
+
+            hwnd = int(getattr(self, "_hwnd", 0) or 0) or int(self.winId())
+            if not hwnd:
+                return False
+            dwmapi = ctypes.windll.dwmapi
+            _declare_dwm_signatures(dwmapi, _MARGINS)
+            flag = wintypes.BOOL(1 if cloaked else 0)
+            hr = dwmapi.DwmSetWindowAttribute(
+                wintypes.HWND(hwnd),
+                _DWMWA_CLOAK,
+                ctypes.byref(flag),
+                ctypes.sizeof(flag),
+            )
+            return int(hr) == 0
+        except Exception:
+            return False
+
     def _apply_dwm_frame(self) -> None:
         """Restore the standard Windows border + drop shadow.
 
@@ -1119,14 +1217,6 @@ class MainWindow(QMainWindow):
                 return
             self._hwnd = hwnd
             dwmapi = ctypes.windll.dwmapi
-
-            class _MARGINS(ctypes.Structure):
-                _fields_ = [
-                    ("cxLeftWidth", ctypes.c_int),
-                    ("cxRightWidth", ctypes.c_int),
-                    ("cyTopHeight", ctypes.c_int),
-                    ("cyBottomHeight", ctypes.c_int),
-                ]
 
             # NOTE: argtypes are REQUIRED here and are configured before any
             # handle is touched (also so tests can assert the declarations).

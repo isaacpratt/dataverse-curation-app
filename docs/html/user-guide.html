@@ -88,7 +88,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <li>Checks matching the file format run automatically; files with no applicable check (unknown extension) are listed but not inspected (<code>no checks</code>).</li>
 <li><b>Lite build</b> covers JPG/PNG/PDF/XML/XLSX/TIFF offline (Pillow, pypdf, lxml, openpyxl, tifffile, chardet) + stdlib image-header fallback when Pillow is absent. Only heavy binary libs (pyreadstat, netCDF4, h5py, scipy) need the full build — run <code>dist/curation-app-full/curation-app-full.exe</code> directly for SPSS/SAS/Stata/NetCDF/HDF5/MAT. Missing libs report <code>Missing …</code> in the Auto-Checks area as a warning <code>CheckResult</code>, never a failure.</li>
 <li>OCR (PDF text extraction) and deep exif are optional: without tesseract/exiftool they report “not executed”.</li>
-<li>Parity with the R inspectors is held by <b>286 tests</b> (<a href="engine-port.html">engine port</a>; <code>pytest --collect-only -q</code> for the live count). Semantics: <a href="checks-reference.html">checks reference</a>.</li>
+<li>Parity with the R inspectors is held by <b>288 tests</b> (<a href="engine-port.html">engine port</a>; <code>pytest --collect-only -q</code> for the live count). Semantics: <a href="checks-reference.html">checks reference</a>.</li>
 </ul>
 
 <h2>Log and troubleshooting</h2>

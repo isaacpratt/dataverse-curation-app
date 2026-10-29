@@ -240,10 +240,11 @@ def main(argv: list[str] | None = None) -> int:
     mark("MainWindow constructed")
     window.show()
     mark("window shown")
-    # Paint the shell before the cache apply and the first crawl. The
-    # dashboard reads its cached rows, local state and network only after
-    # this point, so the window appears without waiting for them.
+    # The window is created cloaked: paint the shell, then reveal it in one
+    # step so no empty client or native caption can flash. Cached rows, local
+    # state and the first crawl follow (background load), after this point.
     app.processEvents()
+    window.reveal()
     mark("first paint")
     window.start_background_load()
     return app.exec()
