@@ -22,12 +22,12 @@ def _identity_rows(pane):
 
 
 def test_initial_rows_are_named(win):
-    rows = _identity_rows(win._settings)
+    rows = _identity_rows(win._ensure_settings())
     assert all(t and t != DASH for t in rows), rows
 
 
 def test_checked_but_empty_reads_no_user_returned(win):
-    pane = win._settings
+    pane = win._ensure_settings()
     pane._set_user_info(
         None, "Could not verify identity - check the URL/token (see log).", checked=True
     )
@@ -36,14 +36,14 @@ def test_checked_but_empty_reads_no_user_returned(win):
 
 
 def test_unchecked_reads_not_checked_yet(win):
-    pane = win._settings
+    pane = win._ensure_settings()
     pane._set_user_info(None, "", checked=False)
     rows = _identity_rows(pane)
     assert rows[:4] == ["Not checked yet"] * 4, rows
 
 
 def test_profile_payload_renders_fields(win):
-    pane = win._settings
+    pane = win._ensure_settings()
     pane._set_user_info(
         {"identifier": "curator1", "displayName": "Ada Curator", "superuser": True,
          "affiliation": "Example U"},
@@ -58,7 +58,7 @@ def test_profile_payload_renders_fields(win):
 
 
 def test_absent_profile_fields_read_not_set(win):
-    pane = win._settings
+    pane = win._ensure_settings()
     pane._set_user_info({"identifier": "curator1"}, "", checked=True)
     assert pane._user_identifier.text() == "curator1"
     assert pane._user_display.text() == "Not set"
@@ -67,31 +67,31 @@ def test_absent_profile_fields_read_not_set(win):
 
 
 def test_role_checked_failure_reads_couldnt_check(win):
-    pane = win._settings
+    pane = win._ensure_settings()
     pane._set_collection_role(None, "mcmaster", checked=True)
     assert pane._user_role.text() == "Couldn't check"
 
 
 def test_role_checked_empty_list_reads_no_direct_role(win):
-    pane = win._settings
+    pane = win._ensure_settings()
     pane._set_collection_role([], "mcmaster", checked=True)
     assert pane._user_role.text() == "No direct role"
 
 
 def test_role_checked_without_alias_reads_not_checked(win):
-    pane = win._settings
+    pane = win._ensure_settings()
     pane._set_collection_role(None, "", checked=True)
     assert pane._user_role.text() == "Not checked yet"
 
 
 def test_role_unchecked_keeps_named_state(win):
-    pane = win._settings
+    pane = win._ensure_settings()
     pane._set_collection_role(None, "mcmaster", checked=False)
     assert pane._user_role.text() == "Not checked yet"
 
 
 def test_empty_token_refresh_stays_offline_and_named(win):
-    pane = win._settings
+    pane = win._ensure_settings()
     saved = pane.token_edit.text()
     pane.token_edit.clear()
     try:

@@ -35,7 +35,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 pip install -r requirements.txt
 copy config.example.json config.json     # cmd; PowerShell: Copy-Item config.example.json config.json
                                           # Borealis demo preset is the default; edit base_url/api_token/collection
-pytest -q                                # 279 tests (run pytest --collect-only -q for the live count)
+pytest -q                                # 286 tests (run pytest --collect-only -q for the live count)
 python main.py                           # GUI
 python main.py --config path/to/config.json
 python main.py --dataverse https://demo.borealisdata.ca
@@ -44,10 +44,18 @@ python -c "import compileall; compileall.compile_dir('.',force=True)"
 python -c "import compileall; compileall.compile_dir('ui',quiet=1)"</code></pre>
 <p>Headless rejects <code>--dataverse/--config</code> (GUI-only); <code>--format</code> accepts <code>json</code> (default), <code>md</code>, or <code>both</code>. The walk dispatches every file to its format checks and writes the <a href="report-contract.html">DatasetReport JSON contract</a>. Example: <code>engine/tests/test_runner.py</code> runs <code>run_report</code> against <code>CUR_Res_CurationTools/data/Inspect_gpkg</code> (13 files, 0 findings). Test files: 18 engine suites (incl. <code>test_audit_fixes</code> 32, <code>test_dataverse</code> 45, <code>test_formats</code> 18, <code>test_review_rules</code> 18, <code>test_enrichment</code> 9) + 10 UI suites.</p>
 
+<h2>Startup timing</h2>
+<p>The window paints its shell before the cached dashboard, local state reads or any network call: <code>main.py</code> shows the window, processes the first frame, then calls <code>MainWindow.start_background_load()</code>. Settings, About, Requirements and Log are built on first navigation (their scroll pages join the stack then). To see where a launch spends its time, point <code>DOCENT_STARTUP_LOG</code> at a file; every phase appends one row (total ms since process start, ms since <code>startup_probe</code> import, label), and the total includes the PyInstaller bootloader:</p>
+<pre><code>$env:DOCENT_STARTUP_LOG = "$env:TEMP\docent-startup.log"
+dist\curation-app-lite\curation-app-lite.exe
+Get-Content $env:TEMP\docent-startup.log</code></pre>
+<p>Warm onedir launches reach first paint in roughly 0.9-1.1 s on the reference machine; cold launches pay an antivirus pass over the ~160 MB folder. The probe is inert (one environment lookup per mark) when the variable is unset.</p>
+
 <h2>Layout</h2>
 <table>
 <tr><th>File</th><th>Role</th></tr>
 <tr><td><code>main.py</code></td><td><code>--headless/--out/--format/--persistent-id/--config/--dataverse</code>; lazy Qt (TYPE_CHECKING-only at import); sibling-libs loader (exe dir <b>and</b> its parent); exits 0/1/2; <code>MainWindow</code> with TopNav + <code>QStackedWidget</code> (dashboard/detail/settings/review-config/about/log)</td></tr>
+<tr><td><code>startup_probe.py</code></td><td>Opt-in <code>DOCENT_STARTUP_LOG</code> phase timings (process start &rarr; first paint); no-op unless the variable is set</td></tr>
 <tr><td><code>config.py</code></td><td><code>DataverseConfig</code> (base_url, token, collection alias), <code>AppConfig</code> (workspace, tesseract, exiftool), <code>Config.load/save</code>, <code>resolve_config_path()</code> (CWD → exe dir → level above exe), <code>PRESETS</code>, <code>DATAVERSE_*</code> env overrides</td></tr>
 <tr><td><code>dataverse_client.py</code></td><td><code>DataverseClient</code> + parsers (<code>normalize_files</code>, <code>search_item_state</code>, curation/version/timestamp/notification, 10054 retry) plus total-driven discovery (<code>_search_page</code> → rows + <code>total_count</code>) and pooled inventory enrichment (<code>enrich_datasets_with_inventory</code>) — endpoints in <a href="dataverse-integration.html">Dataverse integration</a></td></tr>
 <tr><td><code>ui/ring.py</code> + <code>ui/progress.py</code></td><td>Circular progress ring (catch-up easing, stall backoff, error tint) and the pure phase math (<code>ease_step</code>, <code>phase_fraction</code>) behind it</td></tr>

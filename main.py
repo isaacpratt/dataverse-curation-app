@@ -8,6 +8,10 @@ import argparse
 import sys
 from pathlib import Path
 
+from startup_probe import mark
+
+mark("main.py imported")
+
 
 def _sibling_libs_path() -> Path | None:
     """Find a sibling full-build libs folder next to a frozen exe.
@@ -112,6 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         help="override dataverse base URL (e.g. https://demo.borealisdata.ca)",
     )
     args = parser.parse_args(argv)
+    mark("args parsed")
 
     # In frozen builds, look for a sibling `curation-app-full/` folder and
     # prepend it to sys.path so heavy libs (pyreadstat, netCDF4, h5py, …)
@@ -182,6 +187,8 @@ def main(argv: list[str] | None = None) -> int:
     from config import Config
     from ui.main_window import MainWindow
 
+    mark("PySide6 + ui.main_window imported")
+
     try:
         cfg = Config.load(Path(args.config))
     except ValueError as exc:
@@ -193,8 +200,10 @@ def main(argv: list[str] | None = None) -> int:
         cfg = _Config()
     if args.dataverse:
         cfg.dataverse.base_url = args.dataverse.rstrip("/")
+    mark("config loaded")
 
     app = QApplication(sys.argv)
+    mark("QApplication created")
     try:
         from PySide6.QtGui import QIcon
 
@@ -211,6 +220,7 @@ def main(argv: list[str] | None = None) -> int:
         apply_theme(app)
     except Exception:
         pass
+    mark("theme applied")
 
     # Global crash guard — show a copyable dialog instead of silently exiting
     def _excepthook(exc_type, exc, tb):
@@ -227,7 +237,15 @@ def main(argv: list[str] | None = None) -> int:
     sys.excepthook = _excepthook
 
     window = MainWindow(cfg)
+    mark("MainWindow constructed")
     window.show()
+    mark("window shown")
+    # Paint the shell before the cache apply and the first crawl. The
+    # dashboard reads its cached rows, local state and network only after
+    # this point, so the window appears without waiting for them.
+    app.processEvents()
+    mark("first paint")
+    window.start_background_load()
     return app.exec()
 
 

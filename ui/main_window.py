@@ -32,13 +32,9 @@ from PySide6.QtWidgets import (
 )
 
 from config import Config
-from ui.about_pane import AboutPane
 from ui.dashboard import DashboardView
-from ui.dataset_detail import DatasetDetailView
 from ui.dialogs import show_warning
 from ui.icons import icon as lucide_icon
-from ui.log_panel import LogPage
-from ui.settings_dialog import SettingsPane
 from ui.theme import (
     BACKGROUND,
     ERROR,
@@ -519,32 +515,23 @@ class MainWindow(QMainWindow):
         # First-run empty-state card: "Open Settings" jumps to the API key pane.
         self._dashboard.settingsRequested.connect(self._open_settings)
         self._stack.addWidget(self._dashboard)
-        try:
-            from ui.review_config import ReviewConfigView
-
-            self._review_config = ReviewConfigView(config)
-            self._review_config.saved.connect(self._on_review_config_saved)
-            self._stack.addWidget(self._review_config)
-        except Exception:
-            self._review_config = None
-        self._settings = SettingsPane(config)
-        self._settings.saved.connect(self._on_settings_saved)
-        self._settings.discarded.connect(lambda: self._show_pane(None))
-        # Stack pages wrapped in scroll areas (never layout siblings): tall
-        # panes scroll in place instead of growing the window.
-        self._settings_page = self._wrap_pane_page(self._settings)
-        self._stack.addWidget(self._settings_page)
-        self._about = AboutPane(self)
-        self._about.discarded.connect(lambda: self._show_pane(None))
-        self._about_page = self._wrap_pane_page(self._about)
-        self._stack.addWidget(self._about_page)
-        # Full-page log view
-        self._log_page = LogPage(self)
-        self._stack.addWidget(self._log_page)
+        # Every other page is built on first use. Building all five up front
+        # cost roughly 0.7 s before the first frame (Review configuration
+        # alone lays out a 112-row rules table), and none of them is needed
+        # to show the dashboard. The lazy builders below add a page to the
+        # stack the first time its nav entry is used.
+        self._review_config = None
+        self._settings = None
+        self._settings_page = None
+        self._about = None
+        self._about_page = None
+        self._log_page = None
         # Content role to return to when a settings/about page closes.
         self._pane_return: str | None = None
-        self._detail: DatasetDetailView | None = None
+        self._detail = None
 
+        # First run with no instance configured: Settings is the only useful
+        # page, so build it now (this is the one deliberate eager pane).
         if not self._config.dataverse.base_url:
             self._open_settings()
 
@@ -564,6 +551,58 @@ class MainWindow(QMainWindow):
         scroll.setStyleSheet(f"QScrollArea {{ background: {BACKGROUND}; border: none; }}")
         scroll.setWidget(pane)
         return scroll
+
+    # -- lazy pages -----------------------------------------------------
+    #
+    # Each builder is idempotent and returns the pane itself (the stack page
+    # for the scroll-wrapped panes lives beside it). Keeping this off the
+    # construction path is what lets the window appear before the heavy
+    # widgets exist.
+
+    def _ensure_settings(self):
+        """Build the Settings pane on first use and return it."""
+        if self._settings is None:
+            from ui.settings_dialog import SettingsPane
+
+            self._settings = SettingsPane(self._config)
+            self._settings.saved.connect(self._on_settings_saved)
+            self._settings.discarded.connect(lambda: self._show_pane(None))
+            # Scroll-wrapped: tall panes scroll in place, never grow the window.
+            self._settings_page = self._wrap_pane_page(self._settings)
+            self._stack.addWidget(self._settings_page)
+        return self._settings
+
+    def _ensure_about(self):
+        """Build the About pane on first use and return it."""
+        if self._about is None:
+            from ui.about_pane import AboutPane
+
+            self._about = AboutPane(self)
+            self._about.discarded.connect(lambda: self._show_pane(None))
+            self._about_page = self._wrap_pane_page(self._about)
+            self._stack.addWidget(self._about_page)
+        return self._about
+
+    def _ensure_log(self):
+        """Build the full-page log view on first use and return it."""
+        if self._log_page is None:
+            from ui.log_panel import LogPage
+
+            self._log_page = LogPage(self)
+            self._stack.addWidget(self._log_page)
+        return self._log_page
+
+    def start_background_load(self) -> None:
+        """Paint the cached dashboard, then start the first crawl.
+
+        Called once by main.py after the window's first frame, so startup
+        never waits for the cache apply, local state reads or the network.
+        Idempotent; tests and embedded windows may skip it entirely.
+        """
+        try:
+            self._dashboard.start_background_load()
+        except Exception:
+            pass
 
     # -- slots ----------------------------------------------------------
 
@@ -664,15 +703,21 @@ class MainWindow(QMainWindow):
                 # Exclusive like before: opening a page switches stack.
                 if role not in ("settings", "about"):
                     self._pane_return = role
-                target = self._settings_page if name == "settings" else self._about_page
+                if name == "settings":
+                    self._ensure_settings()
+                    target = self._settings_page
+                else:
+                    self._ensure_about()
+                    target = self._about_page
                 if self._stack.currentWidget() is not target:
                     self._stack.setCurrentWidget(target)
             elif name == "log":
                 # Switch to log page; remember where we came from.
                 if role not in ("log", "settings", "about"):
                     self._pane_return = role
-                if self._stack.currentWidget() is not self._log_page:
-                    self._stack.setCurrentWidget(self._log_page)
+                page = self._ensure_log()
+                if self._stack.currentWidget() is not page:
+                    self._stack.setCurrentWidget(page)
             elif name is None:
                 # Close pane: return to previous content if we're in settings/about/log.
                 if role in ("settings", "about", "log"):
@@ -689,7 +734,7 @@ class MainWindow(QMainWindow):
     def _on_settings_toggled(self, checked: bool) -> None:
         if checked:
             try:
-                self._settings.reload()
+                self._ensure_settings().reload()
             except Exception:
                 pass
         self._show_pane("settings" if checked else None)
@@ -702,7 +747,7 @@ class MainWindow(QMainWindow):
 
     def _open_settings(self) -> None:
         try:
-            self._settings.reload()
+            self._ensure_settings().reload()
         except Exception:
             pass
         self._show_pane("settings")
@@ -715,6 +760,11 @@ class MainWindow(QMainWindow):
             show_warning(self, "Dashboard", f"Could not refresh dashboard:\n{exc}")
 
     def _open_dataset(self, persistent_id: str, title: str) -> None:
+        # Imported here, not at module level: the detail view drags in the
+        # whole network stack (requests, dataverse_client, download manager,
+        # metadata rules). None of it is needed to show the dashboard.
+        from ui.dataset_detail import DatasetDetailView
+
         if self._detail is not None:
             # Adopt still-running workers so destroying the view cannot kill
             # a live QThread ("Destroyed while thread is still running").

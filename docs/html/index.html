@@ -56,7 +56,7 @@ footer .wrap{padding:16px 24px}
 <header class="hero"><div class="wrap">
 <h1>Dataverse Docent — Documentation</h1>
 <p>Desktop curation assistant for Alliance Dataverse instances: pulls datasets submitted for review, runs automated format checks, checks metadata completeness, and presents findings with an exportable curation report. These HTML pages are the documentation source of truth.</p>
-<div class="badges"><span class="badge ok">21 check modules</span><span class="badge ok">279 tests</span><span class="badge info">PySide6 desktop</span><span class="badge">Engine v0.1.0</span><span class="badge warn">Verified vs code 2026-10-29</span></div>
+<div class="badges"><span class="badge ok">21 check modules</span><span class="badge ok">286 tests</span><span class="badge info">PySide6 desktop</span><span class="badge">Engine v0.1.0</span><span class="badge warn">Verified vs code 2026-10-29</span></div>
 </div></header>
 <nav class="top"><div class="wrap">
 <a href="index.html" aria-current="page">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a><a href="proposals.html">Proposals</a>
@@ -76,10 +76,10 @@ footer .wrap{padding:16px 24px}
 </div>
 
 <h2>Project status</h2>
-<div class="callout ok"><b>Snapshot 2026-10-29 — all six phases complete.</b> The app is feature-complete for its documented scope: 21 check modules, 279 tests (200 engine + 79 UI), 17 UI modules. Discovery is total-driven Search at <code>per_page=1000</code> plus pooled in-process inventory enrichment (no crawler dependency); the dashboard, dataset detail, downloads, auto-checks and export paths work end-to-end; lite and full <b>onedir</b> builds are packaged. The remaining plan is queued, not blocking — see below.</div>
+<div class="callout ok"><b>Snapshot 2026-10-29 — all six phases complete.</b> The app is feature-complete for its documented scope: 21 check modules, 286 tests (200 engine + 86 UI), 17 UI modules. Discovery is total-driven Search at <code>per_page=1000</code> plus pooled in-process inventory enrichment (no crawler dependency); the dashboard, dataset detail, downloads, auto-checks and export paths work end-to-end; lite and full <b>onedir</b> builds are packaged; startup paints the shell before cache/network work (~1 s warm, measured via <code>DOCENT_STARTUP_LOG</code>). The remaining plan is queued, not blocking — see below.</div>
 <div class="flow">
 <div class="step"><b><span class="n">0</span>Scaffold</b>Repo, GUI shell, storage <span class="pill p-ok">done</span></div><div class="arrow">→</div>
-<div class="step"><b><span class="n">1</span>Engine port</b>21 checks, 279 tests <span class="pill p-ok">done</span></div><div class="arrow">→</div>
+<div class="step"><b><span class="n">1</span>Engine port</b>21 checks, 286 tests <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">2</span>Report runner</b><code>run_report</code> end-to-end <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">3</span>Client + downloads</b>Search + enrichment, approval gate <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">4</span>PySide6 GUI</b>Dashboard, detail, settings, log <span class="pill p-ok">done</span></div><div class="arrow">→</div>
@@ -105,7 +105,7 @@ footer .wrap{padding:16px 24px}
 .venv\Scripts\activate
 pip install -r requirements.txt
 copy config.example.json config.json   # PowerShell: Copy-Item config.example.json config.json
-pytest                                  # 279 tests
+pytest                                  # 286 tests
 python main.py                          # GUI — pick the Dataverse in Settings
 python main.py --headless &lt;staged_dir&gt; --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE</code></pre>
 <p>Requirements: Python 3.10+ (Windows recommended). Headless exit codes: <b>0</b> clean, <b>1</b> error-level findings, <b>2</b> usage/IO failure.</p>
@@ -114,7 +114,7 @@ python main.py --headless &lt;staged_dir&gt; --out report.json --format json --p
 <div class="callout ok">The documentation was re-checked against the code (<code>engine/checks/__init__.py:registry</code>, <code>main.py</code> CLI, <code>engine/report.py</code>, <code>ui/</code> views, <code>Makefile</code>) on 2026-10-06 and 2026-10-07, when these HTML pages became the <b>source of truth</b> (the <code>docs/*.md</code> mirrors were retired), and again on <b>2026-10-29</b> after the discovery/enrichment/progress batch. The tables below record the verified state.</div>
 <table>
 <tr><th>Stale claim</th><th>Where</th><th>Verified truth</th></tr>
-<tr><td>“20 check modules (19 R inspectors…)”, “101 tests”</td><td>README, engine-port, development, user-guide</td><td><b>21</b> registered modules (<code>registry</code> has 21 keys incl. <code>format.secrets</code> + <code>inventory.extensions</code>); <b>279</b> collected tests (200 engine + 79 UI) via full <code>pytest --collect-only -q</code> output (always sum the complete output)</td></tr>
+<tr><td>“20 check modules (19 R inspectors…)”, “101 tests”</td><td>README, engine-port, development, user-guide</td><td><b>21</b> registered modules (<code>registry</code> has 21 keys incl. <code>format.secrets</code> + <code>inventory.extensions</code>); <b>286</b> collected tests (200 engine + 86 UI) via full <code>pytest --collect-only -q</code> output (always sum the complete output)</td></tr>
 <tr><td>Module list omitting <code>secret_check</code></td><td>development layout</td><td>Added <code>secret_check</code> + missing engine files (<code>constants.py</code>, <code>status.py</code>, <code>report_md.py</code>) and UI files (<code>review_config.py</code>, <code>checks_tree.py</code>, <code>icons.py</code>)</td></tr>
 <tr><td><code>test_audit_fixes.py</code> “31 tests”</td><td>development</td><td>Collects <b>32</b></td></tr>
 <tr><td><code>--format json|md|both</code> missing</td><td>development layout, user-guide headless</td><td>Documented; <code>run_report_to_file(..., fmt=…)</code> verified in <code>engine/runner.py</code></td></tr>

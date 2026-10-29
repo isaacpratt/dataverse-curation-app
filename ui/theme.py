@@ -323,7 +323,7 @@ QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{
 /* Keyboard focus (Tab/arrow navigation) paints a colour tint — never an
    outline (2026-10-02 — replaces both the outline batch and its removal).
    focusVisible is set only when focus arrives from the keyboard
-   (theme._install_focus_visible); mouse clicks set no tint. Focused inputs
+   (theme._install_interaction_tracking); mouse clicks set no tint. Focused inputs
    still signal focus via the border-colour change above. */
 QPushButton[focusVisible="true"] {{
     background: {PRIMARY_FIXED_DIM};
@@ -669,8 +669,7 @@ def apply_theme(app) -> None:
     font.setPointSize(9)
     app.setFont(font)
     app.setStyleSheet(global_qss())
-    _install_hover_cursor(app)
-    _install_focus_visible(app)
+    _install_interaction_tracking(app)
 
 
 def action_button_style(primary: bool = False) -> str:
@@ -763,50 +762,25 @@ def label_badge_style(label: str) -> str:
     )
 
 
-def _install_hover_cursor(app) -> None:
-    """Pointing-hand cursor on every enabled button (QSS cannot set cursors).
+def _install_interaction_tracking(app) -> None:
+    """Pointing-hand cursors + keyboard-only focus tint, in one app filter.
 
-    Installed once on the QApplication; covers buttons created later too
-    (chips, table cells, dynamic rows).
+    Two behaviours share one QApplication event filter: QSS cannot set
+    cursors, and it has no "focus arrived from the keyboard" selector.
+    Keeping them together halves the Python callbacks during startup, when
+    Qt delivers tens of thousands of show/polish events (the filters used to
+    be separate, so every event crossed into Python twice).
+
+    Keyboard focus: Tab/arrow presses arm the flag; any mouse press disarms
+    it and drops the tint from the focused widget (clicking the
+    already-focused widget fires no focusChanged, so it is cleared here).
+    On focus change the new widget gets ``focusVisible="true"`` and the old
+    one loses it, painted as a colour tint — tabbing shows focus, clicking
+    never does, and no outline is ever drawn (2026-10-02).
     """
     try:
         from PySide6.QtCore import QEvent, QObject, Qt
         from PySide6.QtWidgets import QAbstractButton
-
-        class _HoverCursor(QObject):
-            def eventFilter(self, obj, event):
-                try:
-                    if event.type() == QEvent.Enter and isinstance(obj, QAbstractButton):
-                        if obj.isEnabled():
-                            obj.setCursor(Qt.PointingHandCursor)
-                        else:
-                            obj.unsetCursor()
-                except Exception:
-                    pass
-                return False
-
-        filt = _HoverCursor(app)
-        app.installEventFilter(filt)
-        try:
-            app._hover_cursor_ref = filt
-        except Exception:
-            pass
-    except Exception:
-        pass
-
-
-def _install_focus_visible(app) -> None:
-    """Keyboard-focus tint: focusVisible is set only when focus came from the keyboard.
-
-    Tab/arrow key presses arm the flag; any mouse press disarms it and drops the
-    tint from the widget that has focus (a click on the already-focused widget
-    fires no focusChanged, so the tint must be cleared directly). On focus change
-    the new widget gets the focusVisible="true" property and the old one loses
-    it, which QSS paints as a plain colour tint — tabbing always shows focus,
-    clicking never does, and no outline is ever drawn (2026-10-02).
-    """
-    try:
-        from PySide6.QtCore import QEvent, QObject, Qt
 
         state = {"kbd": False}
         nav_keys = {
@@ -829,12 +803,19 @@ def _install_focus_visible(app) -> None:
             except Exception:
                 pass
 
-        class _FocusVisible(QObject):
+        class _Interaction(QObject):
             def eventFilter(self, obj, event):
                 try:
                     t = event.type()
-                    if t == QEvent.KeyPress and event.key() in nav_keys:
-                        state["kbd"] = True
+                    if t == QEvent.Enter:
+                        if isinstance(obj, QAbstractButton):
+                            if obj.isEnabled():
+                                obj.setCursor(Qt.PointingHandCursor)
+                            else:
+                                obj.unsetCursor()
+                    elif t == QEvent.KeyPress:
+                        if event.key() in nav_keys:
+                            state["kbd"] = True
                     elif t == QEvent.MouseButtonPress:
                         state["kbd"] = False
                         _paint(app.focusWidget(), False)
@@ -842,10 +823,10 @@ def _install_focus_visible(app) -> None:
                     pass
                 return False
 
-        filt = _FocusVisible(app)
+        filt = _Interaction(app)
         app.installEventFilter(filt)
         try:
-            app._focus_visible_ref = filt
+            app._interaction_ref = filt
         except Exception:
             pass
 

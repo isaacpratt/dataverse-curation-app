@@ -790,25 +790,27 @@ class DashboardView(QWidget):
             pass
         self._load_labels_cache()
         selectable_labels(self)
-        # Cache-first paint: last crawl renders instantly so reopening the
-        # app never starts from an empty table; reload() then checks for
-        # changes/new datasets in the background and diffs into this view.
+        # Cache-first paint happens *after* the shell is visible (see
+        # start_background_load): applying cached rows, local state and the
+        # first crawl must never delay the window. Only the cache file is
+        # read here — a small JSON parse that lets the first frame show an
+        # honest "restoring" state instead of a misleading empty queue.
         self._shown_cache_key = ""
-        self._cache_loaded = self._show_cached_dashboard()
+        self._cache_loaded = False
+        self._startup_started = False
+        self._startup_cache_entry = self._read_dashboard_cache()
+        self._restoring = bool(self._startup_cache_entry)
         # First paint: named pre-crawl metric states + first-run card until
         # a crawl lands.
         self._update_metrics()
 
-        if not (self._config.dataverse.api_token or "").strip():
-            if not self._cache_loaded:
-                self._progress.setText("Enter an API key in Settings (top nav) to load datasets.")
-            else:
-                self._progress.setText(
-                    self._progress.text()
-                    + " — enter an API key in Settings to check for updates."
-                )
-        else:
-            self.reload()
+        has_token = bool((self._config.dataverse.api_token or "").strip())
+        if not has_token and not self._restoring:
+            self._progress.setText("Enter an API key in Settings (top nav) to load datasets.")
+        elif has_token:
+            self._progress.setText(
+                "Restoring your last view…" if self._restoring else "Contacting Dataverse…"
+            )
 
     # -- curation labels (per-instance set, remembered with each pull) -----
 
@@ -874,6 +876,39 @@ class DashboardView(QWidget):
         """Seed the label filter from the last pull (startup path)."""
         self._seed_labels_from_cache()
 
+    def start_background_load(self) -> None:
+        """Paint the cached queue, then start the first crawl.
+
+        Called by MainWindow once the window has painted its first frame
+        (main.py). Applying the cache, reading state.db/staged folders and
+        contacting the server all happen here instead of in __init__, so
+        startup latency does not depend on cache size. Idempotent.
+        """
+        if self._startup_started:
+            return
+        self._startup_started = True
+        self._restoring = False
+        try:
+            from startup_probe import mark
+        except Exception:  # pragma: no cover - probe is optional
+            mark = lambda _label: None  # noqa: E731
+        mark("dashboard: background load start")
+        self._cache_loaded = self._show_cached_dashboard()
+        self._update_metrics()
+        has_token = bool((self._config.dataverse.api_token or "").strip())
+        if not has_token:
+            if self._cache_loaded:
+                self._progress.setText(
+                    self._progress.text()
+                    + " — enter an API key in Settings to check for updates."
+                )
+            else:
+                self._progress.setText("Enter an API key in Settings (top nav) to load datasets.")
+            mark("dashboard: ready (no token)")
+            return
+        self.reload()
+        mark("dashboard: crawl started")
+
     # -- dashboard table cache (instant paint + change-only refresh) --------
 
     def _dashboard_cache_key(self) -> str:
@@ -887,11 +922,24 @@ class DashboardView(QWidget):
         except Exception:
             return "default"
 
+    def _read_dashboard_cache(self) -> dict | None:
+        """Read this instance+collection's cached crawl (JSON only, no paint)."""
+        try:
+            ws = Path(getattr(getattr(self._config, "app", None), "workspace", Path.home()))
+            return load_dashboard_cache(ws, self._dashboard_cache_key())
+        except Exception:
+            return None
+
     def _show_cached_dashboard(self) -> bool:
         """Paint the last crawl instantly (no network). True when shown."""
         try:
             ws = Path(getattr(getattr(self._config, "app", None), "workspace", Path.home()))
-            entry = load_dashboard_cache(ws, self._dashboard_cache_key())
+            # Prefetched in __init__ (so the first frame could say
+            # "restoring"); fall back to a fresh read when called directly.
+            entry = getattr(self, "_startup_cache_entry", None)
+            self._startup_cache_entry = None
+            if entry is None:
+                entry = load_dashboard_cache(ws, self._dashboard_cache_key())
             if not entry or not entry.get("datasets"):
                 return False
             cached_labels = entry.get("labels") or []
@@ -1117,10 +1165,17 @@ class DashboardView(QWidget):
         except Exception:
             has_token = False
         loading = self._worker is not None and self._worker.isRunning()
+        restoring = bool(getattr(self, "_restoring", False))
         show = not self._all_datasets and not loading
         try:
             if show:
-                if has_token:
+                if restoring:
+                    self._empty_head.setText("Restoring your last view…")
+                    self._empty_body.setText(
+                        "Painting the datasets from your last session — the "
+                        "change check follows in the background."
+                    )
+                elif has_token:
                     self._empty_head.setText("No datasets in this collection")
                     self._empty_body.setText(
                         "The connected collection returned no datasets. "
@@ -1357,6 +1412,10 @@ class DashboardView(QWidget):
             pass
 
     def reload(self) -> None:
+        # A manual refresh owns the queue from here: the deferred startup
+        # paint must not overwrite fresher rows with stale cache.
+        self._startup_started = True
+        self._restoring = False
         if self._worker is not None and self._worker.isRunning():
             self._progress.setText("Already loading — please wait…")
             return
@@ -1637,15 +1696,18 @@ class DashboardView(QWidget):
         time ("never" until something has been measured).
         """
         loading = self._worker is not None and self._worker.isRunning()
+        restoring = bool(getattr(self, "_restoring", False))
         if not self._crawled:
-            state = "Checking…" if loading else "Not fetched"
-            note = (
-                "Crawl in progress — counts land when it finishes."
-                if loading
-                else
-                "No crawl has completed yet — add an API key in Settings, "
-                "then press Refresh."
-            )
+            state = "Checking…" if (loading or restoring) else "Not fetched"
+            if loading:
+                note = "Crawl in progress — counts land when it finishes."
+            elif restoring:
+                note = "Restoring the cached view — counts land once it paints."
+            else:
+                note = (
+                    "No crawl has completed yet — add an API key in Settings, "
+                    "then press Refresh."
+                )
             for card, sub in zip(self._metric_cards, self._metric_subs, strict=False):
                 v_lbl = card.findChild(QLabel, "metricValue")
                 if v_lbl:

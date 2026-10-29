@@ -30,6 +30,9 @@ def test_idle_metrics_read_not_fetched(win, monkeypatch):
     dash = win._dashboard
     monkeypatch.setattr(dash, "_crawled", False)
     monkeypatch.setattr(dash, "_worker", None)
+    # The shared window may hold a real cache entry ("restoring" is a named
+    # pre-crawl state now); an idle, empty dashboard is the case here.
+    monkeypatch.setattr(dash, "_restoring", False)
     dash._update_metrics()
     vals = [_mval(c) for c in dash._metric_cards]
     assert vals == ["Not fetched"] * 3, vals

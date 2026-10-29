@@ -31,9 +31,27 @@ def _app_version() -> str:
         return "0.1.0"
 
 
+def _platform_text() -> str:
+    """OS version without ``platform.platform()``'s ``cmd /c ver`` subprocess.
+
+    ``platform.platform()`` shells out twice on Windows (~110 ms), which used
+    to sit on the startup path; ``sys.getwindowsversion()`` answers locally.
+    """
+    import sys as _sys
+
+    try:
+        if _sys.platform == "win32":
+            v = _sys.getwindowsversion()
+            return f"Windows {v.major}.{v.minor}.{v.build}"
+        import platform as _platform
+
+        return f"{_platform.system()} {_platform.release()}"
+    except Exception:
+        return "unknown"
+
+
 def _diag_text() -> str:
     """Environment facts for a support request — never the API token."""
-    import platform as _platform
     import sys as _sys
 
     try:
@@ -44,7 +62,7 @@ def _diag_text() -> str:
         f"version: {_app_version()}",
         f"python: {_sys.version.split()[0]}",
         f"qt: {_qt_version}",
-        f"platform: {_platform.platform()}",
+        f"platform: {_platform_text()}",
         f"install: {'frozen' if getattr(_sys, 'frozen', False) else 'source'}",
     ]
     try:
