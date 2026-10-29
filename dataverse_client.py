@@ -1,21 +1,15 @@
-"""Dataverse Native API client with crawler-based discovery.
+"""Dataverse Native API client with paginated Search-API discovery.
 
-Discovery delegates to the dataverse-metadata-crawler CLI (its internal
-imports are not import-safe as a library across releases, so we drive the
-stable CLI surface). In-review status is confirmed per dataset via the
-locks endpoint. See docs/html/dataverse-integration.html for endpoints and auth.
+Discovery paginates the native Search API (draft-aware dedup) and enriches
+rows with live inventory sums; in-review status is confirmed per dataset
+via the locks endpoint. See docs/html/dataverse-integration.html for
+endpoints and auth.
 
 All requests/responses are recorded in an in-memory log (see applog.py)
 which the UI can display.
 """
 
 import hashlib
-import importlib.util
-import json
-import os
-import subprocess
-import sys
-import tempfile
 import threading
 import time
 from collections.abc import Callable
@@ -67,24 +61,6 @@ def _throttle_delay(exc: requests.HTTPError) -> float | None:
         return max(0.0, min(30.0, float(resp.headers.get("Retry-After", ""))))
     except (TypeError, ValueError):
         return 0.0
-
-
-def _dvmeta_available() -> bool:
-    if getattr(sys, "frozen", False):
-        return False
-    spec = importlib.util.find_spec("dvmeta.main")
-    return spec is not None and spec.origin is not None
-
-
-def _dvmeta_cli_path() -> Path:
-    spec = importlib.util.find_spec("dvmeta.main")
-    if spec is None or not spec.origin:
-        raise RuntimeError(
-            "dataverse-metadata-crawler is not installed "
-            "(pip install git+https://github.com/scholarsportal/"
-            "dataverse-metadata-crawler.git)"
-        )
-    return Path(spec.origin)
 
 
 def _field_value(dataset_version: dict[str, Any], type_name: str) -> Any:
@@ -315,48 +291,6 @@ def note_review_submission(pid: str, note: Any) -> dict[str, str] | None:
     }
 
 
-def parse_ds_metadata_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """Parse a dvmeta ds_metadata_*.json export into normalized datasets."""
-    datasets: list[dict[str, Any]] = []
-    for entry in payload.values():
-        if not isinstance(entry, dict):
-            continue
-        data = entry.get("data")
-        if not isinstance(data, dict):
-            continue
-        version = data.get("datasetVersion")
-        if not isinstance(version, dict):
-            continue
-        files = normalize_files(version)
-        # collection from dvmeta is not directly in version; try data fields
-        collection = data.get("ownerName") or data.get("dataverseAlias") or ""
-        depositor_val = _field_value(version, "depositor")
-        depositor = depositor_val if isinstance(depositor_val, str) else ""
-        if not depositor:
-            # sometimes depositor is in dataset-level fields
-            depositor = data.get("depositorName") or ""
-        datasets.append(
-            {
-                "persistent_id": (
-                    data.get("datasetPersistentId")
-                    or data.get("persistentId")
-                    or ""
-                ),
-                "title": extract_title(version),
-                "contact": _extract_contact(version),
-                "depositor": depositor,
-                "date_created": (version.get("createTime") or "")[:10],
-                "date_published": (data.get("publicationDate") or version.get("lastUpdateTime") or "")[:10],
-                "collection": collection,
-                "state": version.get("versionState", ""),
-                "file_count": len(files),
-                "total_size_bytes": sum(f["size_bytes"] for f in files),
-                "files": files,
-            }
-        )
-    return datasets
-
-
 def locks_indicate_review(locks: list[dict[str, Any]]) -> bool:
     import re as _re
 
@@ -500,11 +434,13 @@ def _version_files_data(data: Any) -> dict[str, Any]:
         return {}
 
 
-def _summarize_version_data(data: Any) -> tuple[list[dict[str, Any]], str, str]:
-    """Best-effort (files, depositor, versionState) from a version payload.
+def _summarize_version_data(data: Any) -> tuple[list[dict[str, Any]], str, str, bool]:
+    """Best-effort (files, depositor, versionState, files_known) from a payload.
 
-    Never raises; missing pieces come back empty (shapes without embedded
-    metadata, e.g. bare data.files lists, yield files only).
+    Never raises. `files_known` is False when the payload carried no
+    `files` key at all — that means "the server did not tell us", which
+    is different from "this dataset has zero files" and must not be
+    rendered as a size of 0.
     """
     try:
         version_data = _version_files_data(data)
@@ -513,17 +449,25 @@ def _summarize_version_data(data: Any) -> tuple[list[dict[str, Any]], str, str]:
         files = []
     depositor = ""
     state = ""
+    files_known = False
     try:
         if isinstance(version_data, dict):
+            if "files" in version_data:
+                files_known = True
             dep = _field_value(version_data, "depositor")
             if isinstance(dep, str):
                 depositor = dep
             if not depositor and isinstance(data, dict):
                 depositor = str(data.get("depositorName") or "")
             state = str(version_data.get("versionState") or "")
+        if not state and isinstance(data, dict):
+            # Flat version shape: versionState sits beside files.
+            state = str(data.get("versionState") or "")
+        if not files_known and isinstance(data, dict) and "files" in data:
+            files_known = True
     except Exception:
         pass
-    return files, depositor, state
+    return files, depositor, state, files_known
 
 
 # Authenticated-identity cache: (base_url, token fingerprint) -> /api/users/:me data.
@@ -1247,61 +1191,15 @@ class DataverseClient:
 
     # -- discovery -----------------------------------------------------------
 
-    def _crawl(self, subtree: str, workdir: Path | None = None) -> Path:
-        """Run the dvmeta CLI at version=draft; returns the export JSON path.
+    def _search_page(
+        self, subtree: str = "", per_page: int = 100, start: int = 0
+    ) -> tuple[list[dict[str, Any]], int | None]:
+        """One Search API page → (rows, total_count).
 
-        When `workdir` is None a temp dir is created. It is intentionally
-        NOT auto-deleted here because the caller reads the export file
-        afterwards — see `list_draft_datasets` which cleans up auto-created
-        dirs after parsing.
+        `total_count` is the server's total match count (None when the
+        server omits it). Rows carry only what a Solr search doc has:
+        no byte totals, no inventory.
         """
-        auto_created = workdir is None
-        workdir = Path(workdir or tempfile.mkdtemp(prefix="dvmeta-"))
-        workdir.mkdir(parents=True, exist_ok=True)
-        # Tag auto-created dirs so the caller can clean them up.
-        try:
-            (workdir / ".dvmeta-auto-tmp").touch(exist_ok=True) if auto_created else None
-        except OSError:
-            pass
-        command = [
-            sys.executable,
-            str(_dvmeta_cli_path()),
-            "-c",
-            subtree or "root",
-            "-v",
-            "draft",
-            "-d",
-            "--no-log",
-        ]
-        env = dict(os.environ)
-        env["BASE_URL"] = self._base_url.rstrip("/") + "/"
-        # SECURITY: API_KEY is visible in the child's environment to same-user
-        # process inspectors for the crawl duration (up to timeout below).
-        # Prefer DATAVERSE_API_TOKEN env-only (no config.json) when crawling
-        # untrusted machines. Full fix needs dvmeta stdin/file key support.
-        env["API_KEY"] = self._api_token or "none"
-        completed = subprocess.run(
-            command,
-            cwd=str(workdir),
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=3600,
-        )
-        if completed.returncode != 0:
-            raise RuntimeError(
-                f"dvmeta crawl failed: {completed.stderr[-2000:]}"
-            )
-        exports = sorted(
-            (workdir / "exported_files" / "json_files").glob(
-                "ds_metadata_*.json"
-            )
-        )
-        if not exports:
-            raise RuntimeError("dvmeta produced no ds_metadata export")
-        return exports[-1]
-
-    def _search_fallback(self, subtree: str = "", per_page: int = 100, start: int = 0) -> list[dict[str, Any]]:
         params: dict[str, str] = {
             "q": "*",
             "type": "dataset",
@@ -1328,7 +1226,12 @@ class DataverseClient:
                     + " — try an empty alias for the whole repository, or check the alias spelling."
                 ) from exc
             raise
-        items = payload.get("data", {}).get("items", [])
+        data_block = payload.get("data", {}) or {}
+        items = data_block.get("items", [])
+        try:
+            total_count: int | None = int(data_block["total_count"])
+        except (KeyError, TypeError, ValueError):
+            total_count = None
         datasets: list[dict[str, Any]] = []
         for item in items:
             pid = item.get("global_id") or item.get("identifier") or ""
@@ -1353,62 +1256,71 @@ class DataverseClient:
                     "publication_statuses": [str(s or "") for s in (item.get("publicationStatuses") or [])],
                     "file_count": int(item.get("fileCount") or 0),
                     # Search items carry no byte totals — None (unknown, shown
-                    # as "—") rather than a misleading 0. The dvmeta path and
-                    # the download quote provide real sums.
+                    # as "—") rather than a misleading 0. The enrichment
+                    # stage and the download quote provide real sums.
                     "total_size_bytes": None,
                     "files": [],
                 }
             )
-        return datasets
+        return datasets, total_count
+
+    def _search_fallback(
+        self, subtree: str = "", per_page: int = 100, start: int = 0
+    ) -> list[dict[str, Any]]:
+        """One Search API page as rows only (compat wrapper)."""
+        rows, _total = self._search_page(subtree, per_page, start)
+        return rows
 
     def list_draft_datasets(
-        self, subtree: str = "", workdir: Path | None = None, max_pages: int = 15
+        self,
+        subtree: str = "",
+        per_page: int = 1000,
+        max_pages: int = 100,
+        progress: Callable[[int, int, int], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
     ) -> list[dict[str, Any]]:
-        """All draft datasets in the subtree (superset of in-review).
+        """All datasets in the subtree (superset of in-review).
 
-        Uses the dvmeta crawler when available (dev installs); in the
-        frozen portable build or when dvmeta is absent, paginates through
-        the native Search API so the dashboard gets ALL datasets (up to
-        max_pages * 100; TRUNCATED is logged loudly past the cap).
+        Pages the native Search API with `per_page` (1000 by default) and
+        drives the loop from the server's `total_count`: the page count is
+        known after the first response, so progress can be reported as
+        "page N of M". Termination is belt-and-suspenders — the loop ends
+        when the collected count reaches the total, when a page comes back
+        short or empty (the ground truth for a corpus that shifts under a
+        long crawl), or when the runaway guard trips. Whatever ends it, the
+        collected count is reconciled against the total and any gap is
+        logged loudly instead of pretending the pull was complete.
+
+        `max_pages` is a runaway guard (100 × 1000 = 100k datasets), not a
+        data cap. `progress(page, pages_total, collected)` is called after
+        each page; `is_cancelled` stops the crawl cooperatively.
         """
-        if _dvmeta_available():
-            export_path = None
-            auto_tmp = workdir is None
-            try:
-                export_path = self._crawl(subtree, workdir)
-                # Guard huge exports: stream-parse size check before full load.
-                try:
-                    if export_path.stat().st_size > 200 << 20:
-                        get_app_log().error(
-                            f"dvmeta export {export_path.stat().st_size} bytes exceeds "
-                            "200MB cap — falling back to Search API"
-                        )
-                        raise ValueError("dvmeta export too large")
-                except OSError:
-                    pass
-                payload = json.loads(export_path.read_text(encoding="utf-8"))
-                return parse_ds_metadata_payload(payload)
-            except Exception as exc:
-                get_app_log().error(f"dvmeta crawl failed ({exc}) — falling back to Search API")
-            finally:
-                # Clean up auto-created temp dirs (success or Search-fallback).
-                if auto_tmp and export_path is not None:
-                    try:
-                        import shutil
-
-                        tmp_root = export_path.parents[2] if len(export_path.parents) >= 3 else export_path.parent
-                        # Only delete dirs we created (marker file present).
-                        if (tmp_root / ".dvmeta-auto-tmp").exists():
-                            shutil.rmtree(tmp_root, ignore_errors=True)
-                    except Exception:
-                        pass
         all_datasets: list[dict[str, Any]] = []
         seen: dict[str, int] = {}
+        total_expected: int | None = None
+        pages_total: int | None = None
         hit_page_cap = False
-        for page in range(1, max_pages + 1):
-            start = (page - 1) * 100
-            batch = self._search_fallback(subtree, per_page=100, start=start)
+        page = 0
+        while page < max_pages:
+            if is_cancelled is not None:
+                try:
+                    if is_cancelled():
+                        break
+                except Exception:
+                    pass
+            page += 1
+            start = (page - 1) * per_page
+            batch, total_count = self._search_page(subtree, per_page, start)
+            if total_count is not None and total_expected is None:
+                total_expected = total_count
+                try:
+                    pages_total = max(1, -(-total_expected // per_page))
+                except Exception:
+                    pages_total = None
             if not batch:
+                get_app_log().info(
+                    f"Search page {page} (start={start}): empty — stopping"
+                )
                 break
             new = 0
             for d in batch:
@@ -1423,19 +1335,50 @@ class DataverseClient:
                     # stay visible to draft filtering.
                     all_datasets[seen[pid]] = d
                     new += 1
-            get_app_log().info(f"Search page {page} (start={start}): {len(batch)} item(s), {new} new, cumulative {len(all_datasets)}")
-            if len(batch) < 100:
+            get_app_log().info(
+                f"Search page {page} (start={start}): {len(batch)} item(s), "
+                f"{new} new, cumulative {len(all_datasets)}"
+            )
+            if progress is not None:
+                try:
+                    progress(page, pages_total or 0, len(all_datasets))
+                except Exception:
+                    pass
+            if len(batch) < per_page:
+                # Short page: the corpus is exhausted (or the server
+                # clamped per_page). Ground truth — stop here.
+                break
+            if total_expected is not None and len(all_datasets) >= total_expected:
+                # Reached the advertised total: the plan is done. The
+                # short-page rule above covers a corpus that grew.
                 break
             if page == max_pages:
-                # Full pages all the way to the cap: the tail is silently
-                # cut. Say so loudly instead of pretending N is the total.
                 hit_page_cap = True
         if hit_page_cap:
             get_app_log().error(
-                f"Search hit the {max_pages * 100}-dataset page cap — results are "
+                f"Search hit the {max_pages}-page runaway guard — results are "
                 "TRUNCATED. Narrow the collection/subtree and refresh."
             )
-        get_app_log().info(f"Search complete: {len(all_datasets)} dataset(s){' (TRUNCATED — see above)' if hit_page_cap else ''}")
+        # Reconcile what we got against what the server advertised.
+        if total_expected is not None and len(all_datasets) != total_expected:
+            gap = total_expected - len(all_datasets)
+            if gap > 0:
+                get_app_log().error(
+                    f"Search collected {len(all_datasets)} of {total_expected} "
+                    f"dataset(s) — {gap} missing (the index changed during the "
+                    "crawl, or the server clamps page size). Narrow the "
+                    "collection and refresh if rows are missing."
+                )
+            else:
+                get_app_log().info(
+                    f"Search collected {len(all_datasets)} dataset(s) — "
+                    f"{abs(gap)} more than the advertised total of "
+                    f"{total_expected} (the index grew during the crawl)"
+                )
+        get_app_log().info(
+            f"Search complete: {len(all_datasets)} dataset(s)"
+            f"{' (TRUNCATED — see above)' if hit_page_cap else ''}"
+        )
         return all_datasets
 
     def dataset_in_review(self, identifier: str) -> bool:
@@ -1452,10 +1395,10 @@ class DataverseClient:
             return False
 
     def list_datasets_in_review(
-        self, subtree: str = "", workdir: Path | None = None
+        self, subtree: str = ""
     ) -> list[dict[str, Any]]:
         """Drafts from the crawl, kept only when locked IN_REVIEW."""
-        drafts = self.list_draft_datasets(subtree, workdir)
+        drafts = self.list_draft_datasets(subtree)
         return [d for d in drafts if self.dataset_in_review(d["persistent_id"])]
 
     # -- authenticated identity --------------------------------------------
@@ -2133,17 +2076,31 @@ class DataverseClient:
         return normalize_files(_version_files_data(data))
 
     def _fetch_version_data(
-        self, identifier: str, version: str = "draft"
+        self,
+        identifier: str,
+        version: str = "draft",
+        fall_back_on_auth: bool = False,
     ) -> tuple[dict[str, Any], str, list[str]]:
         """Fetch the raw `data` payload for one dataset version.
 
         Tries `version` first (correct lowercase, e.g. `:draft`), then
         `:latest` / `:latest-published`, then an unversioned metadata read.
-        Returns `(data, used_version, tried)`. Auth failures (401/403) fail
-        fast — retrying other versions would mask a bad token and risk
-        running checks on the wrong version silently.
+        Returns `(data, used_version, tried)`.
+
+        With `fall_back_on_auth=False` (the default, used for the actual
+        check inventory) an auth failure (401/403) fails fast — retrying
+        other versions would mask a bad token and risk running checks on
+        the wrong version silently.
+
+        With `fall_back_on_auth=True` (dashboard enrichment) an auth
+        failure on one version only means "you may not see that
+        version" — a published dataset has no readable draft, and a
+        guest token cannot see drafts at all. Enrichment then tries the
+        next version, and raises only if EVERY version was refused (which
+        does mean the token itself is bad).
         """
         tried: list[str] = []
+        auth_errors: list[Exception] = []
         for ver in (version, "latest", "latest-published"):
             api_version = ver if ver.startswith(":") else f":{ver.lower()}"
             try:
@@ -2162,12 +2119,26 @@ class DataverseClient:
                 status = resp.status_code if resp is not None else 0
                 tried.append(f"{api_version}={status}")
                 if status in (401, 403):
-                    # Auth failure: do not silently try other versions.
-                    raise
+                    if not fall_back_on_auth:
+                        # Auth failure: do not silently try other versions.
+                        raise
+                    # "You may not see this version" — remember it and try
+                    # the next one. A refusal on EVERY version means the
+                    # token itself is bad, which the caller must know.
+                    auth_errors.append(exc)
+                    get_app_log().info(
+                        f"Version {api_version} not readable for {identifier} "
+                        f"({status}), trying next version"
+                    )
+                    continue
                 if status in (400, 404):
                     get_app_log().info(f"Version {api_version} not available for {identifier} ({status}), trying next")
                     continue
                 raise
+        # Every version was refused (401/403) — the token cannot read this
+        # dataset at all. Surface it so the caller can abort the batch.
+        if auth_errors:
+            raise auth_errors[-1]
         # fallback: try without version (latest published)
         payload = self._get_json(
             "/api/datasets/:persistentId" if ":" in identifier else f"/api/datasets/{identifier}",
@@ -2231,12 +2202,14 @@ class DataverseClient:
 
         def _fetch_one(ds: dict) -> tuple[dict, tuple | None]:
             pid = str(ds.get("persistent_id") or "")
-            try:
-                data, used_version, _tried = self._fetch_version_data(pid)
-            except Exception:
-                raise
-            files, depositor, state = _summarize_version_data(data)
-            return ds, (files, depositor, state, used_version)
+            # fall_back_on_auth: a published dataset has no readable draft
+            # and a guest token cannot see drafts at all — fall through to
+            # the published version instead of failing the dataset.
+            data, used_version, _tried = self._fetch_version_data(
+                pid, fall_back_on_auth=True
+            )
+            files, depositor, state, files_known = _summarize_version_data(data)
+            return ds, (files, depositor, state, used_version, files_known)
 
         def _auth_denied(exc: BaseException) -> bool:
             try:
@@ -2271,15 +2244,18 @@ class DataverseClient:
                             break
                         continue
                     try:
-                        files, depositor, state, used_version = summary
-                        ds["total_size_bytes"] = sum(int(f.get("size_bytes") or 0) for f in files)
-                        ds["size_enriched"] = True
-                        try:
-                            ds.pop("size_pending", None)
-                        except Exception:
-                            pass
-                        if not ds.get("file_count") and files:
-                            ds["file_count"] = len(files)
+                        files, depositor, state, used_version, files_known = summary
+                        if files_known:
+                            ds["total_size_bytes"] = sum(
+                                int(f.get("size_bytes") or 0) for f in files
+                            )
+                            ds["size_enriched"] = True
+                            try:
+                                ds.pop("size_pending", None)
+                            except Exception:
+                                pass
+                            if not ds.get("file_count") and files:
+                                ds["file_count"] = len(files)
                         if depositor and (not ds.get("depositor") or ds.get("depositor") == ds.get("contact")):
                             ds["depositor"] = depositor
                         if state and "REVIEW" not in str(ds.get("state") or "").upper():

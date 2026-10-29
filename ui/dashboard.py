@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from config import Config
+from ui.ring import RingProgress
 from ui.theme import (
     BACKGROUND,
     ERROR,
@@ -426,7 +427,7 @@ def save_dashboard_cache(workspace: Path, key: str, datasets: list[dict], labels
     """Persist one dashboard slot (best-effort, never raises).
 
     Strips per-row `_sort_*` caches and caps stored slots to avoid unbounded
-    growth (dvmeta rows embed full file arrays).
+    growth (up to 10 collections × their full row sets).
     """
     try:
         import datetime as _dt
@@ -489,6 +490,13 @@ class DashboardView(QWidget):
     openRequested = Signal(str, str)
     # Empty-state CTA: "Open Settings" reaches the main window's pane switch.
     settingsRequested = Signal()
+
+    # Painting window (W-11): the QTableWidget allocates one item per
+    # cell, so painting 25k rows × 12 columns on every keystroke is
+    # unusable. Filtering/sorting still cover the full set; only the
+    # painted rows are capped, and the status line says how many are
+    # hidden so the cap is never silent.
+    _MAX_PAINTED_ROWS = 2000
 
     def __init__(self, config: Config) -> None:
         super().__init__()
@@ -719,6 +727,12 @@ class DashboardView(QWidget):
             f"font-size: 11px; color: {ON_SURFACE_VARIANT}; "
             "background: transparent; border: none;"
         )
+        # Circular progress ring, alongside the status text (the text
+        # stays the accessible source of truth; the ring shows pace).
+        self._ring = RingProgress(diameter=18)
+        self._ring.hide()
+        pill_lay.addWidget(self._ring)
+        pill_lay.setAlignment(self._ring, Qt.AlignVCenter)
         pill_lay.addWidget(self._progress, 1)
         pill_lay.setAlignment(self._progress, Qt.AlignVCenter)
 
@@ -1384,6 +1398,13 @@ class DashboardView(QWidget):
             return
 
         self._refresh_btn.setEnabled(False)
+        # Fresh crawl: reset the ring (it stays hidden until the first
+        # fraction arrives, so an idle dashboard shows no spinner).
+        try:
+            self._ring.reset()
+            self._ring.hide()
+        except Exception:
+            pass
         if had_rows:
             self._progress.setText(
                 f"Checking for changes… (showing {len(self._all_datasets)} cached datasets)"
@@ -1403,6 +1424,7 @@ class DashboardView(QWidget):
             self,
         )
         self._worker.progress.connect(lambda msg: self._progress.setText(msg))
+        self._worker.progressFraction.connect(self._on_progress_fraction)
         self._worker.labelsDiscovered.connect(self._on_labels_discovered)
         self._worker.allowedProbed.connect(self._on_allowed_probed)
         self._worker.enriched.connect(self._on_enrichment_batch)
@@ -1475,6 +1497,22 @@ class DashboardView(QWidget):
             # _on_allowed_probed, and the union persists via
             # save_dashboard_cache at crawl end.
 
+    def _on_progress_fraction(self, fraction: float) -> None:
+        """Drive the progress ring from the worker's overall fraction."""
+        try:
+            self._ring.show()
+            self._ring.setFraction(fraction)
+            self._ring.setAccessibleDescription(self._ring.accessibleDescription())
+        except Exception:
+            pass
+
+    def _hide_ring(self) -> None:
+        """Hide the progress ring once its work is done."""
+        try:
+            self._ring.hide()
+        except Exception:
+            pass
+
     def _on_enrichment_batch(self, batch: list[dict]) -> None:
         """Merge one worker enrichment batch into the painted table.
 
@@ -1493,6 +1531,13 @@ class DashboardView(QWidget):
     def _on_crawl_finished(self, datasets: list[dict]) -> None:
         try:
             self._worker = None
+            # Crawl done: show the completed state briefly, then clear the
+            # ring — a permanent check mark would read as "still working".
+            try:
+                self._ring.setFraction(1.0)
+                QTimer.singleShot(1200, self._hide_ring)
+            except Exception:
+                pass
             # Diff against what is on screen (the cache) BEFORE replacing it,
             # so reopening the app reports only changes/new datasets.
             try:
@@ -1751,10 +1796,21 @@ class DashboardView(QWidget):
                 # the standing hint instead of repeating them.
                 self._progress.setText("Double-click a row to open it")
 
+            # Painting window: the table is a QTableWidget (one heap
+            # item per cell), so 25k rows × 12 columns is 300k items
+            # rebuilt on every filter keystroke. Filter and sort still
+            # run over the FULL set; only the painted rows are capped.
+            paint_rows = filtered[: DashboardView._MAX_PAINTED_ROWS]
+            if len(paint_rows) < len(filtered):
+                self._progress.setText(
+                    f"Showing {len(paint_rows):,} of {len(filtered):,} matching "
+                    f"({len(self._all_datasets):,} total) — narrow the filter to see more"
+                )
+
             self._table.setSortingEnabled(False)
-            self._table.setRowCount(len(filtered))
+            self._table.setRowCount(len(paint_rows))
             mono = QFont("JetBrains Mono")
-            for row, ds in enumerate(filtered):
+            for row, ds in enumerate(paint_rows):
                 for col, (key, _h, _v) in enumerate(COLUMNS):
                     text_val = self._cell_text(ds, key)
                     item = _SortItem(text_val)
@@ -1800,6 +1856,12 @@ class DashboardView(QWidget):
         self._worker = None
         self._refresh_btn.setEnabled(True)
         self._progress.setText("Error — details in dialog (Retry available)")
+        # Red ring: the failure is visible without opening the dialog.
+        try:
+            self._ring.show()
+            self._ring.setError()
+        except Exception:
+            pass
         headline, details = describe_error(msg)
         show_warning(
             self,

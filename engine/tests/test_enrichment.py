@@ -8,7 +8,6 @@ enriched fields; size-only changes stay out of the diff fingerprint).
 
 import requests
 
-import dataverse_client
 from dataverse_client import DataverseClient
 from ui.dashboard import (
     _merge_enriched_rows,
@@ -67,7 +66,7 @@ class _StubClient(DataverseClient):
         super().__init__("https://example.invalid", "token")
         self._docs = docs
 
-    def _fetch_version_data(self, identifier, version="draft"):
+    def _fetch_version_data(self, identifier, version="draft", fall_back_on_auth=False):
         doc = self._docs.get(identifier)
         if isinstance(doc, BaseException):
             raise doc
@@ -179,25 +178,147 @@ def test_enrichment_never_clobbers_in_review():
     assert rows[0]["total_size_bytes"] == 9
 
 
-def test_discovery_cap_fifteen_pages(monkeypatch):
+def test_discovery_pages_until_total(monkeypatch):
+    """Discovery is total-driven: 2500 datasets at per_page=1000 → 3 calls."""
     calls = {"n": 0}
 
-    def _page(self, subtree="", per_page=100, start=0):
+    def _page(self, subtree="", per_page=1000, start=0):
         calls["n"] += 1
-        return [
-            {"persistent_id": f"doi:10.5072/FK2/{start + i}", "has_draft": False}
-            for i in range(100)
-        ]
+        remaining = 2500 - start
+        n = max(0, min(per_page, remaining))
+        return (
+            [
+                {"persistent_id": f"doi:10.5072/FK2/{start + i}", "has_draft": False}
+                for i in range(n)
+            ],
+            2500,
+        )
 
-    monkeypatch.setattr(DataverseClient, "_search_fallback", _page)
-    monkeypatch.setattr(dataverse_client, "_dvmeta_available", lambda: False)
+    monkeypatch.setattr(DataverseClient, "_search_page", _page)
     client = DataverseClient("https://example.invalid", "token")
     try:
         rows = client.list_draft_datasets("")
     finally:
         client.close()
-    assert calls["n"] == 15
-    assert len(rows) == 1500
+    assert calls["n"] == 3
+    assert len(rows) == 2500
+
+
+def test_discovery_stops_on_short_page_when_total_missing(monkeypatch):
+    """No total_count from the server → the short page ends the crawl."""
+    calls = {"n": 0}
+
+    def _page(self, subtree="", per_page=1000, start=0):
+        calls["n"] += 1
+        n = 1000 if start == 0 else 12
+        return (
+            [
+                {"persistent_id": f"doi:10.5072/FK2/{start + i}", "has_draft": False}
+                for i in range(n)
+            ],
+            None,
+        )
+
+    monkeypatch.setattr(DataverseClient, "_search_page", _page)
+    client = DataverseClient("https://example.invalid", "token")
+    try:
+        rows = client.list_draft_datasets("")
+    finally:
+        client.close()
+    assert calls["n"] == 2
+    assert len(rows) == 1012
+
+
+def test_discovery_runaway_guard(monkeypatch):
+    """A server that always returns a full page stops at the guard."""
+    calls = {"n": 0}
+
+    def _page(self, subtree="", per_page=1000, start=0):
+        calls["n"] += 1
+        return (
+            [
+                {"persistent_id": f"doi:10.5072/FK2/{start + i}", "has_draft": False}
+                for i in range(per_page)
+            ],
+            None,
+        )
+
+    monkeypatch.setattr(DataverseClient, "_search_page", _page)
+    client = DataverseClient("https://example.invalid", "token")
+    try:
+        rows = client.list_draft_datasets("", per_page=1000, max_pages=3)
+    finally:
+        client.close()
+    assert calls["n"] == 3
+    assert len(rows) == 3000
+
+
+def test_discovery_progress_reports_page_counts(monkeypatch):
+    seen = []
+
+    def _page(self, subtree="", per_page=1000, start=0):
+        remaining = 2000 - start
+        n = max(0, min(per_page, remaining))
+        return (
+            [
+                {"persistent_id": f"doi:10.5072/FK2/{start + i}", "has_draft": False}
+                for i in range(n)
+            ],
+            2000,
+        )
+
+    monkeypatch.setattr(DataverseClient, "_search_page", _page)
+    client = DataverseClient("https://example.invalid", "token")
+    try:
+        client.list_draft_datasets("", progress=lambda p, t, c: seen.append((p, t, c)))
+    finally:
+        client.close()
+    assert seen == [(1, 2, 1000), (2, 2, 2000)]
+
+
+def test_enrichment_falls_back_to_published_when_draft_denied():
+    """A published dataset with no readable draft still enriches.
+
+    `:draft` is refused (401) but `:latest` answers — the row must be
+    enriched from the published version, not dropped. Stubs the HTTP
+    layer so the real version-fallback logic runs.
+    """
+    pid = "doi:10.5072/FK2/PUB"
+    # A plain client (no _fetch_version_data override) so the real
+    # version-fallback logic runs against a patched HTTP layer.
+    client = DataverseClient("https://example.invalid", "token")
+    seen = []
+
+    def _get_json(path, params=None, **kwargs):
+        seen.append(path)
+        if path.endswith("/versions/:draft"):
+            raise _http_error(401)
+        return {
+            "data": {
+                "files": [_entry("p.csv", 42)],
+                "versionState": "RELEASED",
+            }
+        }
+
+    client._get_json = _get_json
+    rows = [_thin(pid, draft=False)]
+    stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
+    assert stats["enriched"] == 1
+    assert stats["auth_failed"] == 0
+    assert rows[0]["total_size_bytes"] == 42
+    assert any(p.endswith("/versions/:draft") for p in seen)
+    assert any(p.endswith("/versions/:latest") for p in seen)
+
+
+def test_enrichment_leaves_size_unknown_when_files_absent():
+    """A payload with no `files` key means 'unknown', not 'zero bytes'."""
+    pid = "doi:10.5072/FK2/NOFILES"
+    client = _StubClient({pid: {"versionState": "RELEASED", "metadataBlocks": {}}})
+    rows = [_thin(pid, draft=False)]
+    stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
+    assert stats["enriched"] == 1
+    assert rows[0].get("total_size_bytes") is None
+    assert "size_enriched" not in rows[0]
 
 
 def test_merge_helper_copies_and_preserves_review():

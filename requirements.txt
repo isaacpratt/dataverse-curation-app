@@ -1,8 +1,7 @@
 PySide6>=6.6
 requests>=2.31
-# Dataset discovery: bulk crawl of draft datasets in a collection.
-# Pinned to a known-good commit for reproducible installs.
-dataverse-metadata-crawler @ git+https://github.com/scholarsportal/dataverse-metadata-crawler.git@958698cd420a088435d805d12d21c19bc003d286
+# Dataset discovery: paginated native Search API (per_page=1000, total-driven)
+# plus in-process inventory enrichment — no external crawler dependency.
 openpyxl>=3.1
 pyreadstat>=1.2
 h5py>=3.10

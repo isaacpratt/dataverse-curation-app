@@ -12,7 +12,6 @@ requires-python = ">=3.10"
 dependencies = [
     "PySide6>=6.6",
     "requests>=2.31",
-    "dataverse-metadata-crawler @ git+https://github.com/scholarsportal/dataverse-metadata-crawler.git@958698cd420a088435d805d12d21c19bc003d286",
     "numpy>=1.24",
     "openpyxl>=3.1",
     "pyreadstat>=1.2",

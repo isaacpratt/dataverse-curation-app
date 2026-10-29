@@ -100,6 +100,7 @@ def run_report(
     persistent_id: str = "",
     label: str = "",
     progress_callback=None,
+    progress_fraction=None,
     max_workers: int = 1,
     is_cancelled=None,
 ) -> DatasetReport:
@@ -108,6 +109,8 @@ def run_report(
     `max_workers>1` parallelizes per-file checks with a ThreadPool (checks
     are per-file isolated via `run_per_file`). `is_cancelled` is an optional
     zero-arg callable polled between files for cooperative cancellation.
+    `progress_fraction` is an optional callback receiving (done, total) so
+    a UI can show a determinate progress ring.
     """
     dataset_dir = Path(dataset_dir)
     try:
@@ -120,6 +123,13 @@ def run_report(
         if progress_callback:
             try:
                 progress_callback(msg)
+            except Exception:
+                pass
+
+    def _report_fraction(done: int, total: int) -> None:
+        if progress_fraction:
+            try:
+                progress_fraction(done, total)
             except Exception:
                 pass
 
@@ -182,6 +192,8 @@ def run_report(
     unmatched = [p for p, m in zip(files, matched_flags, strict=True) if not m]
 
     indexed = list(enumerate(files, 1))
+    total_files = len(indexed)
+    done_files = 0
     if max_workers and max_workers > 1:
         from concurrent.futures import ThreadPoolExecutor
 
@@ -189,6 +201,8 @@ def run_report(
             for result in pool.map(_run_one_file, indexed):
                 if _cancelled():
                     break
+                done_files += 1
+                _report_fraction(done_files, total_files)
                 if result is None or isinstance(result, Path):
                     continue
                 entries.append(result)
@@ -200,6 +214,8 @@ def run_report(
             if _cancelled():
                 break
             result = _run_one_file((idx, path))
+            done_files += 1
+            _report_fraction(done_files, total_files)
             if result is None or isinstance(result, Path):
                 continue
             entries.append(result)

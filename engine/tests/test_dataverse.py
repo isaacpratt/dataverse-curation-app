@@ -21,7 +21,6 @@ from dataverse_client import (
     parse_curation_states_csv,
     parse_curation_status,
     parse_dataset_versions,
-    parse_ds_metadata_payload,
     parse_timestamps,
     parse_version_compare,
     read_allowed_labels_cache,
@@ -33,25 +32,6 @@ from dataverse_client import (
 from download_manager import DownloadManager
 
 
-def _dataset_entry(pid: str, title: str, files: list) -> dict:
-    return {
-        "status": "OK",
-        "data": {
-            "datasetId": 42,
-            "datasetPersistentId": pid,
-            "datasetVersion": {
-                "versionState": "DRAFT",
-                "metadataBlocks": {
-                    "citation": {
-                        "fields": [{"typeName": "title", "value": title}]
-                    }
-                },
-                "files": files,
-            },
-        },
-    }
-
-
 def _file_entry(path: str, size: int, sha1: str) -> dict:
     directory, _, filename = path.rpartition("/")
     entry = {
@@ -61,29 +41,6 @@ def _file_entry(path: str, size: int, sha1: str) -> dict:
     if directory:
         entry["directoryLabel"] = directory
     return entry
-
-
-def test_parse_ds_metadata_payload():
-    payload = {
-        "key1": _dataset_entry(
-            "doi:10.5072/FK2/A",
-            "Dataset A",
-            [_file_entry("data/table.csv", 100, "a" * 40)],
-        ),
-        "key2": _dataset_entry("doi:10.5072/FK2/B", "", []),
-        "ignored": "not a dataset",
-    }
-
-    datasets = parse_ds_metadata_payload(payload)
-
-    assert len(datasets) == 2
-    first = next(d for d in datasets if d["persistent_id"] == "doi:10.5072/FK2/A")
-    assert first["title"] == "Dataset A"
-    assert first["state"] == "DRAFT"
-    assert first["file_count"] == 1
-    assert first["total_size_bytes"] == 100
-    assert first["files"][0]["path"] == "data/table.csv"
-    assert first["files"][0]["checksum_type"] == "sha1"
 
 
 def test_normalize_files_checksum_variants():

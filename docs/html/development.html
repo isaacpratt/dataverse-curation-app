@@ -35,7 +35,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 pip install -r requirements.txt
 copy config.example.json config.json     # cmd; PowerShell: Copy-Item config.example.json config.json
                                           # Borealis demo preset is the default; edit base_url/api_token/collection
-pytest -q                                # 262 tests (run pytest --collect-only -q for the live count)
+pytest -q                                # 279 tests (run pytest --collect-only -q for the live count)
 python main.py                           # GUI
 python main.py --config path/to/config.json
 python main.py --dataverse https://demo.borealisdata.ca
@@ -49,7 +49,8 @@ python -c "import compileall; compileall.compile_dir('ui',quiet=1)"</code></pre>
 <tr><th>File</th><th>Role</th></tr>
 <tr><td><code>main.py</code></td><td><code>--headless/--out/--format/--persistent-id/--config/--dataverse</code>; lazy Qt (TYPE_CHECKING-only at import); sibling-libs loader (exe dir <b>and</b> its parent); exits 0/1/2; <code>MainWindow</code> with TopNav + <code>QStackedWidget</code> (dashboard/detail/settings/review-config/about/log)</td></tr>
 <tr><td><code>config.py</code></td><td><code>DataverseConfig</code> (base_url, token, collection alias), <code>AppConfig</code> (workspace, tesseract, exiftool), <code>Config.load/save</code>, <code>resolve_config_path()</code> (CWD → exe dir → level above exe), <code>PRESETS</code>, <code>DATAVERSE_*</code> env overrides</td></tr>
-<tr><td><code>dataverse_client.py</code></td><td><code>DataverseClient</code> + parsers (<code>normalize_files</code>, <code>parse_ds_metadata_payload</code>, <code>search_item_state</code>, curation/version/timestamp/notification, 10054 retry) — endpoints in <a href="dataverse-integration.html">Dataverse integration</a></td></tr>
+<tr><td><code>dataverse_client.py</code></td><td><code>DataverseClient</code> + parsers (<code>normalize_files</code>, <code>search_item_state</code>, curation/version/timestamp/notification, 10054 retry) plus total-driven discovery (<code>_search_page</code> → rows + <code>total_count</code>) and pooled inventory enrichment (<code>enrich_datasets_with_inventory</code>) — endpoints in <a href="dataverse-integration.html">Dataverse integration</a></td></tr>
+<tr><td><code>ui/ring.py</code> + <code>ui/progress.py</code></td><td>Circular progress ring (catch-up easing, stall backoff, error tint) and the pure phase math (<code>ease_step</code>, <code>phase_fraction</code>) behind it</td></tr>
 <tr><td><code>download_manager.py</code></td><td><code>quote/quote_from</code>, <code>missing_files/is_fully_staged</code>, <code>approve_and_download</code> (+ <code>download_originals</code>), <code>verify → (ok, problems, warnings)</code>, zip-slip guard, per-dataset cache, per-PID download locks</td></tr>
 <tr><td><code>metadata_check.py</code></td><td><code>PROFILES</code>, <code>DEFAULT_PROFILE="McMaster"</code>, <code>check_metadata_completeness</code>, ORCID regex, <code>requirements_profiles.json</code> support</td></tr>
 <tr><td><code>review_rules.py</code></td><td><code>RULESETS_VERSION=2</code>, <code>FIELD_CATALOG</code>, builtin McMaster/Minimal rulesets, per-Dataverse assignment, content-rule evaluation</td></tr>

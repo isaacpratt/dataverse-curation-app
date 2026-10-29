@@ -28,8 +28,7 @@ Third-party attributions
   MIT-licensed (Copyright (c) 2026 Curation Services Team, Digital Research
   Alliance of Canada).
 - Design patterns draw on rdm-review-dashboard (Apache License 2.0).
-- Runtime dependencies include dataverse-metadata-crawler (MIT,
-  Copyright (c) 2025 Lok Hei Lui) and PySide6 (LGPL-3.0-only, The Qt
-  Company; dynamically linked — see its distribution for the full text).
+- Runtime dependencies include PySide6 (LGPL-3.0-only, The Qt Company;
+  dynamically linked — see its distribution for the full text).
   All other Python dependencies are under permissive MIT/BSD/Apache-2.0/
   0BSD-equivalent terms; see each package's distribution for details.

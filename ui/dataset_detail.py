@@ -32,6 +32,7 @@ from download_manager import DownloadManager
 from metadata_check import DEFAULT_PROFILE, PROFILES
 from ui.dialogs import describe_error, show_critical, show_info, show_warning
 from ui.download_dialog import DownloadApprovalDialog
+from ui.ring import RingProgress
 from ui.theme import (
     AMBER_700,
     BACKGROUND,
@@ -424,6 +425,13 @@ class DatasetDetailView(QWidget):
         self._progress.setVisible(False)
         self._progress.setFixedHeight(6)
         top_lay.addWidget(self._progress)
+        # Circular ring for download/check progress (W-12): a determinate
+        # arc beside the linear bar, since the bar is indeterminate for
+        # streamed bundles.
+        self._ring = RingProgress(diameter=18)
+        self._ring.hide()
+        top_lay.addWidget(self._ring)
+        top_lay.setAlignment(self._ring, Qt.AlignVCenter)
 
         # Review / Response switch (second page per dataset: the depositor draft).
         tab_row = QHBoxLayout()
@@ -2476,6 +2484,23 @@ class DatasetDetailView(QWidget):
                 continue
         return out
 
+    # -- progress ring -----------------------------------------------------
+    def _on_ring_fraction(self, fraction: float) -> None:
+        """Drive the circular progress ring (download / checks)."""
+        try:
+            self._ring.show()
+            self._ring.setFraction(fraction)
+            self._ring.setAccessibleDescription(self._ring.accessibleDescription())
+        except Exception:
+            pass
+
+    def _hide_ring(self) -> None:
+        """Hide the ring when the work it tracks is done."""
+        try:
+            self._ring.hide()
+        except Exception:
+            pass
+
     # -- metadata loading -------------------------------------------------
     def _on_load_metadata(self) -> None:
         if self._meta_worker is not None and self._meta_worker.isRunning():
@@ -2954,6 +2979,7 @@ class DatasetDetailView(QWidget):
         self._progress.setRange(0, 0)
         self._dl_worker = DownloadWorker(self._client, self._config.app.workspace, self._pid, self)
         self._dl_worker.progress.connect(lambda n: self._progress.setFormat(f"{n / 1024**2:.1f} MB"))
+        self._dl_worker.progressFraction.connect(self._on_ring_fraction)
         self._dl_worker.finished.connect(self._on_download_finished)
         self._dl_worker.error.connect(self._on_download_error)
         self._dl_worker.cancelled.connect(self._on_download_cancelled)
@@ -2966,6 +2992,7 @@ class DatasetDetailView(QWidget):
 
     def _on_download_finished(self, staged: Path) -> None:
         self._progress.setVisible(False)
+        self._hide_ring()
         self._dl_btn.setEnabled(True)
         ok, problems, warnings = self._dl_mgr.verify(self._pid)
         if problems:
@@ -2991,6 +3018,7 @@ class DatasetDetailView(QWidget):
 
     def _on_download_error(self, msg: str) -> None:
         self._progress.setVisible(False)
+        self._hide_ring()
         self._dl_btn.setEnabled(True)
         self._set_status("")
         headline, details = describe_error(msg)
@@ -3012,6 +3040,7 @@ class DatasetDetailView(QWidget):
         """Worker acknowledged the cancel: reset the action row quietly."""
         self._dl_worker = None
         self._progress.setVisible(False)
+        self._hide_ring()
         self._dl_btn.setEnabled(True)
         self._dl_cancel_btn.setEnabled(True)
         self._dl_cancel_btn.setVisible(False)
@@ -3050,6 +3079,7 @@ class DatasetDetailView(QWidget):
         self._progress.setRange(0, 0)
         self._check_worker = CheckWorker(staged, self._pid, self._title, self)
         self._check_worker.progress.connect(lambda msg: self._set_status(msg))
+        self._check_worker.progressFraction.connect(self._on_ring_fraction)
         self._check_worker.finished.connect(self._on_checks_finished)
         self._check_worker.error.connect(self._on_checks_error)
         self._check_worker.finished.connect(self._check_worker.deleteLater)
@@ -3070,6 +3100,7 @@ class DatasetDetailView(QWidget):
         except Exception:
             cache_path = None
         self._progress.setVisible(False)
+        self._hide_ring()
         self._check_btn.setEnabled(True)
         self._history_btn.setEnabled(True)
         # Update dataset-checks card + manifest tree
@@ -3111,6 +3142,7 @@ class DatasetDetailView(QWidget):
 
     def _on_checks_error(self, msg: str) -> None:
         self._progress.setVisible(False)
+        self._hide_ring()
         self._check_btn.setEnabled(True)
         self._set_status("")
         headline, details = describe_error(msg)

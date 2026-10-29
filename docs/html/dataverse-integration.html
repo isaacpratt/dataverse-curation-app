@@ -38,7 +38,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <table>
 <tr><th>Purpose</th><th>Endpoint</th><th>Notes</th></tr>
 <tr><td>Version check</td><td><code>GET /api/info/version</code></td><td>Verifies instance, adapts to API differences</td></tr>
-<tr><td>Discovery (fallback)</td><td><code>GET /api/search?q=*&amp;type=dataset&amp;per_page=100&amp;start=&lt;n&gt;&amp;subtree=&lt;alias&gt;</code></td><td><code>start</code> is an offset, not a page. Empty or <code>:root</code>/<code>root</code> = whole repo (no <code>subtree</code>). <code>max_pages=10</code> (=1000), dedup by <code>persistent_id</code></td></tr>
+<tr><td>Discovery</td><td><code>GET /api/search?q=*&amp;type=dataset&amp;per_page=1000&amp;start=&lt;n&gt;&amp;subtree=&lt;alias&gt;</code></td><td><code>start</code> is an offset, not a page. Empty or <code>:root</code>/<code>root</code> = whole repo (no <code>subtree</code>). The first response carries <code>total_count</code>, so the page count is known and paging is total-driven; dedup by <code>persistent_id</code></td></tr>
 <tr><td>In-review (strict)</td><td><code>GET /api/datasets/:persistentId/locks</code></td><td><code>lockType</code>/<code>reason</code> containing “review” (<code>locks_indicate_review</code>); <code>list_datasets_in_review()</code> filters the draft superset</td></tr>
 <tr><td>Metadata</td><td><code>GET /api/datasets/:persistentId?persistentId=&lt;doi&gt;</code></td><td>Citation blocks; <code>versionState</code> drives the header link</td></tr>
 <tr><td>File inventory</td><td><code>GET …/versions/:draft</code> (fallback <code>:latest</code>, <code>:latest-published</code>)</td><td><code>normalize_files</code> keeps filename, directoryLabel, filesize, contentType, checksum, UNF, tabular/original-format fields</td></tr>
@@ -70,11 +70,11 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <h2>Review-state discovery</h2>
 <div class="callout">Search docs need draft-aware reading (<code>search_item_state</code>): a published-plus-new-draft dataset can surface as RELEASED yet carry “Draft” in <code>publicationStatuses</code>. Draft/review markers anywhere win; duplicate PIDs keep the draft row — otherwise in-progress versions vanish from draft filtering.</div>
 <div class="flow">
-<div class="step"><b><span class="n">a</span>dvmeta crawl (dev installs)</b><code>dvmeta</code> CLI subprocess (<code>BASE_URL/API_KEY</code>), <code>-v draft</code>, parses <code>ds_metadata_*.json</code>. Unavailable frozen (<code>_dvmeta_available() == False</code>).</div><div class="arrow">+</div>
-<div class="step"><b><span class="n">b</span>Search fallback (always)</b><code>start=0,100,…,900</code>, dedup by PID, logs <code>Search page N: M item(s), K new</code>. Verified on Borealis demo: 13 datasets over 2 pages.</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">a</span>Search discovery (one path)</b><code>GET /api/search</code> at <code>per_page=1000</code>; the first response's <code>total_count</code> gives the page count, so the loop is total-driven and the progress ring can show “page 2 of 3”. Dedup by PID; each page logs <code>Search page N (start=…): M item(s), K new</code>.</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">b</span>Inventory enrichment</b>Drafts first, capped (200), 5 workers: one version doc per row adds the real byte total, true depositor and authoritative state. Sums only — never whole file arrays.</div><div class="arrow">→</div>
 <div class="step"><b><span class="n">2</span>Lock confirmation</b>Optional strict mode: <code>dataset_in_review()</code> checks <code>…/locks</code> for “review”. Dashboard defaults to all drafts; Status combo filters (All / DRAFT / Published / In Review / Deaccessioned).</div>
 </div>
-<p>An informational banner in the UI names the discovery source (“Search API (paginated)” vs “dvmeta draft crawl”) — see the progress label.</p>
+<p>Termination is belt-and-suspenders: the loop ends when the collected count reaches <code>total_count</code>, when a page comes back short or empty (the ground truth for a corpus that shifts under a long crawl), or when the runaway guard trips. Whatever ends it, collected vs. total is reconciled and any gap is logged loudly instead of pretending the pull was complete. Verified live on the Borealis demo: 2,097 datasets over 3 pages — the previous 1,000-dataset cap hid 52% of the repository.</p>
 
 <h2>Download flow (approval-gated)</h2>
 <div class="flow">
@@ -90,7 +90,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><th>Case</th><th>Behavior</th></tr>
 <tr><td>Transient network (<code>ConnectionError/ChunkedEncodingError/Timeout/ConnectionResetError</code>, WinError 10054)</td><td>3× retry, <code>1.5·(attempt+1)</code> s backoff; 429/503 honors <code>Retry-After</code> (≤30 s), then a plain-language <code>ConnectionError</code> (VPN/proxy hint)</td></tr>
 <tr><td>Bad collection alias (400/404 on <code>subtree</code>)</td><td>“Collection ‘…’ not found — try an empty alias for the whole repository”</td></tr>
-<tr><td>Discovery cap</td><td><code>max_pages=10</code> (1000 datasets); explicit TRUNCATED log when every page is full</td></tr>
+<tr><td>Discovery cap</td><td>None in practice: paging is driven by the server's <code>total_count</code>, and a short/empty page ends the crawl. <code>max_pages=100</code> is a runaway guard only (100 × 1000 = 100k); a genuine mismatch between collected and total is logged loudly</td></tr>
 <tr><td>Large download</td><td>Quote warning ~5 GB in the approval dialog; <code>Accept: */*</code> avoids 406</td></tr>
 <tr><td>Logging</td><td>Every call via <code>applog.log_response</code> (method, URL, status, ms, summary)</td></tr>
 </table>
@@ -98,7 +98,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <h2>Version comparison</h2>
 <p><code>MetadataWorker</code> calls <code>compare_versions(pid)</code> alongside the metadata fetch; <code>parse_version_compare</code> normalizes the <code>DatasetVersionDifference</code> shape. The “Changes since publication” card renders a Field | Previous (vX) | New (Draft) table plus a color-coded file list (added green, removed red, replaced amber, metadata blue) with a <code>vX → Draft · N change(s)</code> summary. First versions show “no published version to compare against”; identical drafts show “no changes”.</p>
 
-<div class="callout ok"><b>Live-verified</b> against <code>https://demo.borealisdata.ca</code>: version → Borealis; search <code>subtree=mcmaster</code> → 10 + 3 = 13 paginated; dataset lookup → citation title OK; versions → 23 files; bundle → 358 477 bytes streamed and unzipped. Empty alias and <code>:root</code> return the whole repo; root alias is <code>dv</code>.</div>
+<div class="callout ok"><b>Live-verified</b> against <code>https://demo.borealisdata.ca</code>: version → Borealis; search <code>subtree=mcmaster</code> → 14 datasets in one page (<code>total_count=14</code>); the whole repository → 2,097 datasets over 3 pages at <code>per_page=1000</code>; dataset lookup → citation title OK; versions → 23 files; bundle → 358 477 bytes streamed and unzipped. Empty alias and <code>:root</code> return the whole repo; root alias is <code>dv</code>.</div>
 
 </div></main>
 <footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-10-07, verified against code.</div></footer>

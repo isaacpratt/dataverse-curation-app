@@ -5,6 +5,14 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from ui.progress import (
+    PHASE_DISCOVERY,
+    PHASE_ENRICHMENT,
+    PHASE_LABELS,
+    PHASE_LOCKS,
+    phase_fraction,
+)
+
 # Parallelism for per-dataset confirmation calls (locks, label fallback).
 # The client holds no shared session and applog is lock-guarded, so plain
 # worker threads are safe; 8 keeps small instances fast without hammering.
@@ -46,6 +54,10 @@ class CrawlWorker(QThread):
     # enriched rows (batched): the dashboard merges them into the painted
     # table progressively so a 1300-row crawl never blocks the UI.
     enriched = Signal(list)
+    # Emitted with the overall crawl fraction (0..1) for the progress
+    # ring. Phased: discovery → enrichment → locks → labels. The value
+    # is monotonic; a skipped phase jumps to the next phase's floor.
+    progressFraction = Signal(float)
 
     # Dashboard enrichment bounds (approved scope): drafts first, capped,
     # sums-only, flushed to the table in batches.
@@ -58,6 +70,29 @@ class CrawlWorker(QThread):
         self._base_url = base_url
         self._api_token = api_token
         self._subtree = subtree
+        self._last_fraction = -1.0
+
+    def _emit_fraction(self, value: float) -> None:
+        """Emit a monotonic overall fraction for the progress ring.
+
+        Never goes backwards (a later phase always has a higher floor),
+        so the ring cannot visibly rewind.
+        """
+        try:
+            frac = float(value)
+        except (TypeError, ValueError):
+            return
+        if frac < 0.0:
+            frac = 0.0
+        elif frac > 1.0:
+            frac = 1.0
+        if frac <= self._last_fraction:
+            return
+        self._last_fraction = frac
+        try:
+            self.progressFraction.emit(frac)
+        except Exception:
+            pass
 
     def run(self) -> None:
         import traceback
@@ -70,7 +105,33 @@ class CrawlWorker(QThread):
             client = DataverseClient(self._base_url, self._api_token)
             coll = self._subtree.strip() or "whole repository"
             self.progress.emit(f"Fetching all datasets in {coll} (paginated Search API) …")
-            datasets = client.list_draft_datasets(self._subtree)
+            self._emit_fraction(phase_fraction(PHASE_DISCOVERY, 0, 0))
+
+            def _on_discovery_page(page: int, pages_total: int, collected: int) -> None:
+                # Discovery is total-driven: pages_total is known after the
+                # first page, so the ring can show real progress.
+                try:
+                    if pages_total > 0:
+                        self.progress.emit(
+                            f"Fetching datasets… page {page} of {pages_total} "
+                            f"({collected} found)"
+                        )
+                        self._emit_fraction(
+                            phase_fraction(PHASE_DISCOVERY, page, pages_total)
+                        )
+                    else:
+                        self.progress.emit(f"Fetching datasets… {collected} found")
+                        self._emit_fraction(
+                            phase_fraction(PHASE_DISCOVERY, collected, 0)
+                        )
+                except Exception:
+                    pass
+
+            datasets = client.list_draft_datasets(
+                self._subtree,
+                progress=_on_discovery_page,
+                is_cancelled=self.isInterruptionRequested,
+            )
             if self.isInterruptionRequested():
                 return
             # Dashboard enrichment: patch thin search rows with live
@@ -90,6 +151,9 @@ class CrawlWorker(QThread):
                     try:
                         self.progress.emit(
                             f"Enriching dataset details… {done}/{total}"
+                        )
+                        self._emit_fraction(
+                            phase_fraction(PHASE_ENRICHMENT, done, total)
                         )
                     except Exception:
                         pass
@@ -180,6 +244,9 @@ class CrawlWorker(QThread):
                         self.progress.emit(
                             f"Checking review locks… {done_n}/{total} ({in_review_n} in review)"
                         )
+                        self._emit_fraction(
+                            phase_fraction(PHASE_LOCKS, done_n, total)
+                        )
             # Curation labels are set at the Dataverse level. Superusers
             # pull them in bulk via the CSV report (one call for all
             # drafts). Non-superuser tokens 403 there, so for them the
@@ -191,6 +258,9 @@ class CrawlWorker(QThread):
 
             labels: list = []
             report = None
+            # Labels phase starts here; the fraction advances as the
+            # per-dataset reads or the bulk report complete.
+            self._emit_fraction(phase_fraction(PHASE_LABELS, 0, 0))
             try:
                 superuser = client.user_is_superuser()
             except Exception:
@@ -250,6 +320,7 @@ class CrawlWorker(QThread):
                     f"Curation report: {len(report)} draft(s), "
                     f"{len(labels)} label(s) in use"
                 )
+                self._emit_fraction(phase_fraction(PHASE_LABELS, 1, 1))
                 try:
                     get_app_log().info(
                         "Curation report: labels in use on drafts: "
@@ -292,6 +363,9 @@ class CrawlWorker(QThread):
                         done_n += 1
                         if done_n % 10 == 0 or done_n == total:
                             self.progress.emit(f"Reading curation labels… {done_n}/{total}")
+                            self._emit_fraction(
+                                phase_fraction(PHASE_LABELS, done_n, total)
+                            )
             # Union with the allowed set (labels can exist that no draft
             # currently carries, and vice versa for legacy values). The set
             # is shared across a first-level collection: a stamped disk
@@ -389,6 +463,10 @@ class DownloadWorker(QThread):
     # Emitted when the curator cancels (or cancel wins a race at the tail
     # of a run) — the UI resets via _on_download_cancelled, never a dialog.
     cancelled = Signal()
+    # Overall download fraction (0..1) for a progress ring. The bundle
+    # size is known up front, so this is determinate; a None target
+    # (unknown size) leaves the ring indeterminate.
+    progressFraction = Signal(float)
 
     def __init__(self, client, workspace: Path, persistent_id: str, parent=None):
         super().__init__(parent)
@@ -419,14 +497,37 @@ class DownloadWorker(QThread):
             if self._stop_requested():
                 self.cancelled.emit()
                 return
+            # Bundle size up front makes the ring determinate.
+            try:
+                quote = mgr.quote(self._pid)
+                total_bytes = int(quote.total_size_bytes or 0)
+            except Exception:
+                total_bytes = 0
+
+            def _on_bytes(n: int) -> None:
+                try:
+                    self.progress.emit(n)
+                except Exception:
+                    pass
+                try:
+                    if total_bytes > 0:
+                        frac = max(0.0, min(1.0, n / total_bytes))
+                        self.progressFraction.emit(frac)
+                except Exception:
+                    pass
+
             staged = mgr.approve_and_download(
                 self._pid,
-                progress=lambda n: self.progress.emit(n),
+                progress=_on_bytes,
                 is_cancelled=self._stop_requested,
             )
             if self._stop_requested():
                 self.cancelled.emit()
                 return
+            try:
+                self.progressFraction.emit(1.0)
+            except Exception:
+                pass
             self.finished.emit(staged)
         except DownloadCancelled:
             self.cancelled.emit()
@@ -441,6 +542,8 @@ class CheckWorker(QThread):
     finished = Signal(object)
     error = Signal(str)
     progress = Signal(str)
+    # Overall check fraction (0..1) for a progress ring.
+    progressFraction = Signal(float)
 
     def __init__(self, dataset_dir: Path, persistent_id: str, label: str, parent=None):
         super().__init__(parent)
@@ -458,17 +561,31 @@ class CheckWorker(QThread):
             def _cb(msg: str) -> None:
                 self.progress.emit(msg)
 
+            def _frac(done: int, total: int) -> None:
+                try:
+                    if total > 0:
+                        self.progressFraction.emit(
+                            max(0.0, min(1.0, done / total))
+                        )
+                except Exception:
+                    pass
+
             workers = max(1, min(8, (os.cpu_count() or 4)))
             report = run_report(
                 self._dataset_dir,
                 persistent_id=self._pid,
                 label=self._label,
                 progress_callback=_cb,
+                progress_fraction=_frac,
                 max_workers=workers,
                 is_cancelled=self.isInterruptionRequested,
             )
             if self.isInterruptionRequested():
                 return
+            try:
+                self.progressFraction.emit(1.0)
+            except Exception:
+                pass
             self.finished.emit(report)
         except Exception as exc:
             if self.isInterruptionRequested():
