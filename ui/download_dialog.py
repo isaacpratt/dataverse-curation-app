@@ -169,6 +169,7 @@ class DownloadApprovalDialog(QDialog):
         edit.setPlaceholderText("From your Dataverse account")
         if prefill:
             edit.setText(prefill)
+        caption.setBuddy(edit)
         form.addWidget(edit)
         self._base_inputs[key] = edit
         self._base_specs.append((key, label, required))
@@ -200,6 +201,7 @@ class DownloadApprovalDialog(QDialog):
             edit = QLineEdit()
             form.addWidget(edit)
             widget = edit
+        caption.setBuddy(widget)
         self._question_inputs.append((question, widget))
 
     @staticmethod
