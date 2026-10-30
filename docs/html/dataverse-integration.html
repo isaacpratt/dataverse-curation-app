@@ -79,10 +79,11 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <h2>Download flow (approval-gated)</h2>
 <div class="flow">
 <div class="step"><b><span class="n">1</span>Quote</b><code>quote(pid)</code> → count + bytes (original size for tabular). No bytes moved.</div><div class="arrow">→</div>
-<div class="step"><b><span class="n">2</span>Approve</b><code>DownloadApprovalDialog</code> with large-dataset warning. Nothing downloads until approved.</div><div class="arrow">→</div>
-<div class="step"><b><span class="n">3</span>Stream</b>To <code>_bundle.zip.part</code>, atomic rename; <code>draft → latest → unversioned</code>, 3× retry per version.</div><div class="arrow">→</div>
-<div class="step"><b><span class="n">4</span>Stage</b>Atomic unzip (<code>files.new/</code> → swap), zip-slip guard, originals fetched, <code>.tab</code> removed (originals-only).</div><div class="arrow">→</div>
-<div class="step"><b><span class="n">5</span>Verify</b><code>verify() → (ok, problems, warnings)</code>: originals by size, rest by checksum. Previous stage survives partial failure.</div>
+<div class="step"><b><span class="n">2</span>Approve</b><code>DownloadApprovalDialog</code> with large-dataset warning. A dataset with <code>guestbookId</code> renders the guestbook fields here (prefilled from <code>GET /api/users/:me</code>); nothing downloads until approved.</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">3</span>Answer</b>Guestbook datasets: <code>POST /api/access/dataset/:persistentId</code> with <code>{"guestbookResponse": {name, email, institution, position, answers[]}}</code> → <code>data.signedUrl</code>.</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">4</span>Stream</b>To <code>_bundle.zip.part</code>, atomic rename; plain datasets try <code>draft → latest → unversioned</code> (3× retry per version); guestbook datasets stream the signed URL once.</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">5</span>Stage</b>Atomic unzip (<code>files.new/</code> → swap), zip-slip guard, originals fetched, <code>.tab</code> removed (originals-only).</div><div class="arrow">→</div>
+<div class="step"><b><span class="n">6</span>Verify</b><code>verify() → (ok, problems, warnings)</code>: originals by size, rest by checksum. Previous stage survives partial failure.</div>
 </div>
 
 <h2>Errors, retries, limits</h2>
@@ -91,7 +92,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td>Transient network (<code>ConnectionError/ChunkedEncodingError/Timeout/ConnectionResetError</code>, WinError 10054)</td><td>3× retry, <code>1.5·(attempt+1)</code> s backoff; 429/503 honors <code>Retry-After</code> (≤30 s), then a plain-language <code>ConnectionError</code> (VPN/proxy hint)</td></tr>
 <tr><td>Bad collection alias (400/404 on <code>subtree</code>)</td><td>“Collection ‘…’ not found — try an empty alias for the whole repository”</td></tr>
 <tr><td>Discovery cap</td><td>None in practice: paging is driven by the server's <code>total_count</code>, and a short/empty page ends the crawl. <code>max_pages=100</code> is a runaway guard only (100 × 1000 = 100k); a genuine mismatch between collected and total is logged loudly</td></tr>
-<tr><td>Guestbook required (400)</td><td>Detected from the server's <code>Guestbook response</code> message and reported as such — no version retries, no misleading “Base URL” hint. Answer the guestbook on the dataset's Dataverse page (or remove it from the dataset), then download again</td></tr>
+<tr><td>Guestbook required (400)</td><td>The approval window renders the dataset's guestbook (from <code>GET /api/guestbooks/{id}</code>, account details prefilled) and POSTs the answers; Dataverse returns <code>data.signedUrl</code>, which streams the ZIP. A missing required field is caught before sending; a server rejection shows its reason. No version retries, no misleading “Base URL” hint</td></tr>
 <tr><td>Large download</td><td>Quote warning ~5 GB in the approval dialog; <code>Accept: */*</code> avoids 406</td></tr>
 <tr><td>Logging</td><td>Every call via <code>applog.log_response</code> (method, URL, status, ms, summary)</td></tr>
 </table>

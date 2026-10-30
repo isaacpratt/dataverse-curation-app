@@ -2090,6 +2090,34 @@ class DataverseClient:
             payload = self._get_json(f"/api/datasets/{identifier}")
         return payload.get("data", {})
 
+    def get_guestbook(self, guestbook_id: int | str) -> dict[str, Any]:
+        """Fetch one guestbook definition (required fields + custom questions).
+
+        Dataverse requires an API token for this call. The returned dict is
+        what the download window renders: ``nameRequired``/``emailRequired``/
+        ``institutionRequired``/``positionRequired`` plus ``customQuestions``
+        (each with ``id``, ``question``, ``required``, ``type`` and, for
+        type ``options``, ``optionValues``).
+        """
+        payload = self._get_json(f"/api/guestbooks/{guestbook_id}")
+        data = payload.get("data") if isinstance(payload, dict) else None
+        return data if isinstance(data, dict) else {}
+
+    def get_current_user(self) -> dict[str, Any]:
+        """Best-effort account details for guestbook prefill.
+
+        Never raises: a missing/limited token just means the download window
+        starts with empty fields. `affiliation` is the guestbook's
+        institution; the account may have no position (the window then asks
+        for it, because Dataverse rejects a missing required position).
+        """
+        try:
+            payload = self._get_json("/api/users/:me")
+        except Exception:
+            return {}
+        data = payload.get("data") if isinstance(payload, dict) else None
+        return data if isinstance(data, dict) else {}
+
     def get_file_inventory(
         self, identifier: str, version: str = "draft"
     ) -> list[dict[str, Any]]:
@@ -2304,9 +2332,9 @@ class DataverseClient:
 
     # -- download ------------------------------------------------------------
 
-    def _stream_download(
+    def _stream_url(
         self,
-        path: str,
+        url: str,
         params: dict[str, str],
         dl_headers: dict[str, str],
         dest: Path,
@@ -2314,7 +2342,7 @@ class DataverseClient:
         label: str,
         is_cancelled: Callable[[], bool] | None = None,
     ) -> int | None:
-        """One version attempt of a streaming download, with retries.
+        """Stream one URL to `dest`, with retries.
 
         Returns bytes received, or None when the server answers 400/404
         (version unavailable — caller tries the next version). Auth failures
@@ -2332,7 +2360,7 @@ class DataverseClient:
             try:
                 start = time.monotonic()
                 with self._session.get(
-                    self._api(path),
+                    url,
                     params=params,
                     headers=dl_headers,
                     stream=True,
@@ -2352,8 +2380,8 @@ class DataverseClient:
                             )
                             raise GuestbookRequired(
                                 (message or "This dataset requires a Guestbook response.")
-                                + " Answer the guestbook on the dataset's Dataverse page "
-                                "(or remove it from the dataset) and try again."
+                                + " Reload the dataset metadata so the download "
+                                "window can show the guestbook fields, then try again."
                             )
                         self._last_download_error = (
                             f"{message or 'The dataset or version was not found.'} "
@@ -2418,6 +2446,75 @@ class DataverseClient:
                 raise
         raise requests.ConnectionError(f"Download {label} failed after 3 attempts")  # pragma: no cover
 
+    def _stream_download(
+        self,
+        path: str,
+        params: dict[str, str],
+        dl_headers: dict[str, str],
+        dest: Path,
+        progress: Callable[[int], None] | None,
+        label: str,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> int | None:
+        """Stream an API path (one version attempt) — see _stream_url."""
+        return self._stream_url(
+            self._api(path), params, dl_headers, dest, progress, label, is_cancelled
+        )
+
+    def _guestbook_signed_url(
+        self, identifier: str, guestbook_response: dict[str, Any]
+    ) -> str:
+        """POST a guestbook response and return Dataverse's signed download URL.
+
+        Dataverse never streams the bundle for a guestbook-protected dataset
+        directly: POSTing the answers records the response and answers with
+        ``{"data": {"signedUrl": "..."}}``; the signed URL then streams the
+        ZIP (it carries ``gbrecs=true``/``gbrids=...``). The POST requires an
+        API token, so a guestbook cannot be answered without one.
+        """
+        if not self._api_token:
+            raise requests.HTTPError(
+                "This dataset requires a guestbook response, which needs a "
+                "Dataverse API token. Add one in Settings (Ctrl+,)."
+            )
+        by_pid = ":" in identifier
+        path = "/api/access/dataset/:persistentId" if by_pid else f"/api/access/dataset/{identifier}"
+        params = {"persistentId": identifier} if by_pid else {}
+        headers = {
+            "X-Dataverse-key": self._api_token,
+            "Content-Type": "application/json",
+        }
+        response = self._session.post(
+            self._api(path),
+            params=params,
+            headers=headers,
+            json={"guestbookResponse": guestbook_response or {}},
+            timeout=self._timeout,
+        )
+        try:
+            if response.status_code == 400:
+                message = _error_message(response)
+                raise requests.HTTPError(
+                    "Dataverse rejected the guestbook response: "
+                    + (message or "a required answer is missing.")
+                )
+            response.raise_for_status()
+            payload = response.json()
+        finally:
+            try:
+                response.close()
+            except Exception:
+                pass
+        data = payload.get("data") if isinstance(payload, dict) else None
+        signed = data.get("signedUrl") if isinstance(data, dict) else None
+        if not signed:
+            raise requests.HTTPError(
+                "Dataverse accepted the guestbook response but returned no "
+                "download link. Try downloading from the dataset's web page."
+            )
+        get_app_log().info("Guestbook accepted — streaming the signed download URL")
+        return str(signed)
+
     def download_dataset_zip(
         self,
         identifier: str,
@@ -2425,6 +2522,7 @@ class DataverseClient:
         version: str = "draft",
         progress: Callable[[int], None] | None = None,
         is_cancelled: Callable[[], bool] | None = None,
+        guestbook_response: dict[str, Any] | None = None,
     ) -> Path:
         dest = Path(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -2436,6 +2534,17 @@ class DataverseClient:
         access_version = version.lstrip(":").lower()
         by_pid = ":" in identifier
         self._last_download_error = ""
+        if guestbook_response is not None:
+            # Answering the guestbook is a separate exchange: POST the answers,
+            # then stream the signed URL. Version fallback does not apply (the
+            # POST endpoint already picks the draft when the token may see it).
+            signed_url = self._guestbook_signed_url(identifier, guestbook_response)
+            if self._stream_url(
+                signed_url, {}, {}, dest, progress, "guestbook", is_cancelled
+            ) is not None:
+                return dest
+            detail = getattr(self, "_last_download_error", "") or "the bundle was not found"
+            raise requests.HTTPError(f"Dataset bundle download failed: {detail}.")
         # Try requested version, fall back to latest if not found
         for ver in (access_version, "latest"):
             params = {"persistentId": identifier, "version": ver} if by_pid else {"version": ver}

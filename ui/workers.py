@@ -468,12 +468,20 @@ class DownloadWorker(QThread):
     # (unknown size) leaves the ring indeterminate.
     progressFraction = Signal(float)
 
-    def __init__(self, client, workspace: Path, persistent_id: str, parent=None):
+    def __init__(
+        self,
+        client,
+        workspace: Path,
+        persistent_id: str,
+        parent=None,
+        guestbook_response: dict | None = None,
+    ):
         super().__init__(parent)
         self._client = client
         self._workspace = workspace
         self._pid = persistent_id
         self._cancel_requested = False
+        self._guestbook_response = guestbook_response
 
     def cancel(self) -> None:
         """Stop the run at the next stream chunk.
@@ -520,6 +528,7 @@ class DownloadWorker(QThread):
                 self._pid,
                 progress=_on_bytes,
                 is_cancelled=self._stop_requested,
+                guestbook_response=self._guestbook_response,
             )
             if self._stop_requested():
                 self.cancelled.emit()
@@ -776,6 +785,21 @@ class MetadataWorker(QThread):
             except Exception:
                 review_submissions = []
             in_review = bool(results.get("in_review"))
+            # The dataset record names its guestbook, if any. Fetch the
+            # definition now so the download window can render its fields
+            # before the curator clicks Download (one small extra call).
+            guestbook = None
+            account = {}
+            try:
+                guestbook_id = metadata.get("guestbookId")
+                if guestbook_id:
+                    guestbook = client.get_guestbook(guestbook_id) or None
+                    # Prefill the window with the curator's account details;
+                    # Dataverse still requires any field the account lacks
+                    # (e.g. Position) to be filled in.
+                    account = client.get_current_user()
+            except Exception:
+                guestbook = None
             extra = {
                 "versions": versions,
                 "timestamps": timestamps if isinstance(timestamps, dict) else {},
@@ -784,6 +808,8 @@ class MetadataWorker(QThread):
                 else [],
                 "in_review": in_review,
                 "inventory_failed": inventory_failed,
+                "guestbook": guestbook,
+                "account": account,
             }
             self.finished.emit(metadata, inventory, curation, version_diff, extra)
         except Exception as exc:

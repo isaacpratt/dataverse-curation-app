@@ -99,7 +99,7 @@ def test_datafile_original_cancel_mid_chunk_never_retries(tmp_path):
 def test_bundle_cancel_unlinks_partial_part(tmp_path):
     class _CancelBundle:
         def download_dataset_zip(self, identifier, dest, version="draft", progress=None,
-                                 is_cancelled=None):
+                                 is_cancelled=None, guestbook_response=None):
             dest = Path(dest)
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(b"partial-zip")
@@ -148,7 +148,7 @@ def test_originals_real_failure_still_swallowed(tmp_path):
 def test_happy_path_unaffected_by_live_stop_flag(tmp_path):
     class _OkClient:
         def download_dataset_zip(self, identifier, dest, version="draft", progress=None,
-                                 is_cancelled=None):
+                                 is_cancelled=None, guestbook_response=None):
             buf = io.BytesIO()
             with zipfile.ZipFile(buf, "w") as zf:
                 zf.writestr("data.txt", "hello")

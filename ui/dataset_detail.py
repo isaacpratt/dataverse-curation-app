@@ -235,6 +235,8 @@ class DatasetDetailView(QWidget):
         self._report = None
         self._inventory: list[dict] = cached_inventory or []
         self._metadata: dict | None = cached_metadata
+        self._guestbook: dict | None = None
+        self._account: dict = {}
         self._curation: dict = {}
         self._version_diff: dict | None = None
         self._versions: list = []
@@ -2533,6 +2535,10 @@ class DatasetDetailView(QWidget):
         self._curation = curation if isinstance(curation, dict) else {}
         self._version_diff = version_diff if isinstance(version_diff, dict) else {}
         extra = extra if isinstance(extra, dict) else {}
+        guestbook = extra.get("guestbook")
+        self._guestbook = guestbook if isinstance(guestbook, dict) else None
+        account = extra.get("account")
+        self._account = account if isinstance(account, dict) else {}
         self._versions = extra.get("versions") if isinstance(extra.get("versions"), list) else []
         self._timestamps = extra.get("timestamps") if isinstance(extra.get("timestamps"), dict) else {}
         self._review_submissions = extra.get("review_submissions") if isinstance(extra.get("review_submissions"), list) else []
@@ -2970,14 +2976,51 @@ class DatasetDetailView(QWidget):
                     f"All {len(inventory)} file(s) are already downloaded and verified — nothing to fetch.",
                 )
             return
-        dlg = DownloadApprovalDialog(quote, self)
+        # A guestbook must be answered inside the approval window. It is
+        # normally preloaded with the metadata; fall back to one small GET
+        # when this view came from cached metadata or a stale record.
+        guestbook = self._guestbook
+        if not (isinstance(guestbook, dict) and guestbook.get("id")):
+            guestbook = None
+            gb_id = (
+                self._metadata.get("guestbookId")
+                if isinstance(self._metadata, dict)
+                else None
+            )
+            if gb_id:
+                try:
+                    guestbook = self._client.get_guestbook(gb_id)
+                    self._guestbook = guestbook
+                    if not self._account:
+                        self._account = self._client.get_current_user()
+                except Exception as exc:
+                    show_warning(
+                        self,
+                        "Download",
+                        "This dataset requires a guestbook response, but its "
+                        f"fields could not be loaded:\n{exc}\n\n"
+                        "Check the API token in Settings (Ctrl+,), then try again.",
+                    )
+                    return
+        if isinstance(guestbook, dict) and guestbook.get("enabled") is False:
+            guestbook = None
+        dlg = DownloadApprovalDialog(
+            quote, self, guestbook=guestbook, account=self._account
+        )
         if dlg.exec() != QDialog.Accepted:
             return
+        guestbook_response = dlg.guestbook_response() if guestbook else None
         self._dl_btn.setEnabled(False)
         self._set_status("Downloading bundle…")
         self._progress.setVisible(True)
         self._progress.setRange(0, 0)
-        self._dl_worker = DownloadWorker(self._client, self._config.app.workspace, self._pid, self)
+        self._dl_worker = DownloadWorker(
+            self._client,
+            self._config.app.workspace,
+            self._pid,
+            self,
+            guestbook_response=guestbook_response,
+        )
         self._dl_worker.progress.connect(lambda n: self._progress.setFormat(f"{n / 1024**2:.1f} MB"))
         self._dl_worker.progressFraction.connect(self._on_ring_fraction)
         self._dl_worker.finished.connect(self._on_download_finished)

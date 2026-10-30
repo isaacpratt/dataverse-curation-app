@@ -28,11 +28,16 @@ _NETWORK_HINTS = (
         "in a moment.",
     ),
     (
+        ("rejected the guestbook response", "guestbook response entry is required",
+         "guestbookresponse"),
+        "Dataverse rejected the guestbook answers. Fill in every required field "
+        "(including any account field the server asks for), then try again.",
+    ),
+    (
         ("guestbook",),
-        "This dataset requires a Guestbook response before its files can be "
-        "downloaded. Open the dataset on the Dataverse website to answer the "
-        "guestbook, or remove the guestbook from the dataset in Dataverse, then "
-        "try again.",
+        "This dataset requires a Guestbook response, but the download window did "
+        "not have its fields. Reload the dataset metadata and try again — the "
+        "download window will show the guestbook form.",
     ),
     (
         ("401", "403", "unauthorized", "forbidden", "invalid api token",

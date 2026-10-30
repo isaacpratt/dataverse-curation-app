@@ -274,6 +274,7 @@ class DownloadManager:
         persistent_id: str,
         progress: Callable[[int], None] | None = None,
         is_cancelled: Callable[[], bool] | None = None,
+        guestbook_response: dict | None = None,
     ) -> Path:
         """Download the bundle and stage its contents for the check engine.
 
@@ -282,6 +283,8 @@ class DownloadManager:
         `is_cancelled` stops both phases at the next stream chunk with
         DownloadCancelled; the truncated .part is removed first, while
         files already staged stay on disk (a later run skips them).
+        `guestbook_response` carries the curator's answers for a dataset
+        whose guestbook must be filled in before Dataverse serves the ZIP.
         """
         with _stage_lock(persistent_id):
             dest_dir = self.dataset_dir(persistent_id)
@@ -289,7 +292,11 @@ class DownloadManager:
             bundle = dest_dir / "_bundle.zip"
             try:
                 self._client.download_dataset_zip(
-                    persistent_id, part, progress=progress, is_cancelled=is_cancelled
+                    persistent_id,
+                    part,
+                    progress=progress,
+                    is_cancelled=is_cancelled,
+                    guestbook_response=guestbook_response,
                 )
             except DownloadCancelled:
                 # Never leave a truncated .part behind — next run starts clean.
