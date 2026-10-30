@@ -91,6 +91,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td>Transient network (<code>ConnectionError/ChunkedEncodingError/Timeout/ConnectionResetError</code>, WinError 10054)</td><td>3× retry, <code>1.5·(attempt+1)</code> s backoff; 429/503 honors <code>Retry-After</code> (≤30 s), then a plain-language <code>ConnectionError</code> (VPN/proxy hint)</td></tr>
 <tr><td>Bad collection alias (400/404 on <code>subtree</code>)</td><td>“Collection ‘…’ not found — try an empty alias for the whole repository”</td></tr>
 <tr><td>Discovery cap</td><td>None in practice: paging is driven by the server's <code>total_count</code>, and a short/empty page ends the crawl. <code>max_pages=100</code> is a runaway guard only (100 × 1000 = 100k); a genuine mismatch between collected and total is logged loudly</td></tr>
+<tr><td>Guestbook required (400)</td><td>Detected from the server's <code>Guestbook response</code> message and reported as such — no version retries, no misleading “Base URL” hint. Answer the guestbook on the dataset's Dataverse page (or remove it from the dataset), then download again</td></tr>
 <tr><td>Large download</td><td>Quote warning ~5 GB in the approval dialog; <code>Accept: */*</code> avoids 406</td></tr>
 <tr><td>Logging</td><td>Every call via <code>applog.log_response</code> (method, URL, status, ms, summary)</td></tr>
 </table>

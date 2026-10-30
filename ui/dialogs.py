@@ -28,6 +28,13 @@ _NETWORK_HINTS = (
         "in a moment.",
     ),
     (
+        ("guestbook",),
+        "This dataset requires a Guestbook response before its files can be "
+        "downloaded. Open the dataset on the Dataverse website to answer the "
+        "guestbook, or remove the guestbook from the dataset in Dataverse, then "
+        "try again.",
+    ),
+    (
         ("401", "403", "unauthorized", "forbidden", "invalid api token",
          "api token", "authentication"),
         "Dataverse rejected the request — the API token may be missing, expired, or "

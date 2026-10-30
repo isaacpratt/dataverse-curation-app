@@ -102,6 +102,11 @@ build-full:
 smoke:
 	$(PYTHON) -c "import pathlib, subprocess, sys; exe=pathlib.Path('dist/curation-app-lite/curation-app-lite.exe'); print(('exe ' + str(exe.stat().st_size) + ' bytes') if exe.exists() else 'lite exe missing — run make rebuild-lite first'); sys.exit(0)"
 	$(PYTHON) main.py --headless --help
+	# End-to-end: the frozen lite must run a headless CSV inspection with the
+	# bundled secret/PII stack (piigex + stdnum + hush). Catches rebuilds made
+	# without $(SECRET_HIDDENS), which previously surfaced as
+	# "inspection failed (cannot import name 'vnr' from 'stdnum.at')".
+	$(PYTHON) -c "import json, pathlib, subprocess, tempfile; d=pathlib.Path(tempfile.mkdtemp()); (d/'CA-TP4_HH_201601010000_201701010000.csv').write_text('t,v\n2016-01-01 00:00,-5.1\n2016-01-01 01:00,jane@example.com\n', encoding='utf-8'); out=d/'report.json'; subprocess.run(['dist/curation-app-lite/curation-app-lite.exe', '--headless', str(d), '--out', str(out)], check=True); report=json.loads(out.read_text(encoding='utf-8')); msgs=[c.get('message','') for f in report.get('files',[]) for c in f.get('checks',[])]; bad=[m for m in msgs if 'inspection failed' in m]; print('frozen csv checks:', len(msgs), '| inspection failures:', bad); raise SystemExit(1 if bad else 0)"
 
 clean:
 	$(PYTHON) -c "import shutil, glob, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in ('build', 'dist', '.pyi-cache')]; [pathlib.Path(p).unlink(missing_ok=True) for p in glob.glob('*.spec')]"

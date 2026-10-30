@@ -48,6 +48,33 @@ class DownloadCancelled(Exception):
     """
 
 
+class GuestbookRequired(Exception):
+    """The Access API refused the bundle because a guestbook must be answered.
+
+    Dataverse answers HTTP 400 ("You may not download this file without the
+    required Guestbook response ..."), which must not be mistaken for a
+    missing version: no retry or version fallback can succeed until the
+    guestbook is answered. Deliberately not an HTTPError so the streaming
+    retry loop does not swallow it as an unavailable version.
+    """
+
+
+def _error_message(response) -> str:
+    """Best-effort Dataverse error message from a JSON error response."""
+    try:
+        payload = response.json()
+    except Exception:
+        payload = None
+    if isinstance(payload, dict):
+        message = payload.get("message")
+        if message:
+            return str(message).strip()
+    try:
+        return (response.text or "").strip()[:400]
+    except Exception:
+        return ""
+
+
 def _throttle_delay(exc: requests.HTTPError) -> float | None:
     """Retry-After seconds for a retryable HTTP error, else None.
 
@@ -2318,7 +2345,24 @@ class DataverseClient:
                         )
                         response.raise_for_status()
                     if response.status_code in (400, 404):
-                        get_app_log().info(f"Download {label} not available ({response.status_code}), trying next")
+                        message = _error_message(response)
+                        if "guestbook" in message.lower():
+                            get_app_log().error(
+                                f"Download {label} blocked by a guestbook requirement"
+                            )
+                            raise GuestbookRequired(
+                                (message or "This dataset requires a Guestbook response.")
+                                + " Answer the guestbook on the dataset's Dataverse page "
+                                "(or remove it from the dataset) and try again."
+                            )
+                        self._last_download_error = (
+                            f"{message or 'The dataset or version was not found.'} "
+                            f"(HTTP {response.status_code})"
+                        )
+                        get_app_log().info(
+                            f"Download {label} not available ({response.status_code}): "
+                            f"{message or 'no server message'}"
+                        )
                         return None
                     log_response("GET", str(response.url), response.status_code, 0, "streaming…")
                     response.raise_for_status()
@@ -2391,6 +2435,7 @@ class DataverseClient:
             dl_headers["X-Dataverse-key"] = self._api_token
         access_version = version.lstrip(":").lower()
         by_pid = ":" in identifier
+        self._last_download_error = ""
         # Try requested version, fall back to latest if not found
         for ver in (access_version, "latest"):
             params = {"persistentId": identifier, "version": ver} if by_pid else {"version": ver}
@@ -2401,7 +2446,11 @@ class DataverseClient:
         path = "/api/access/dataset/:persistentId" if by_pid else f"/api/access/dataset/{identifier}"
         params = {"persistentId": identifier} if by_pid else {}
         if self._stream_download(path, params, dl_headers, dest, progress, "unversioned", is_cancelled) is None:
-            raise requests.HTTPError("Dataset bundle download not available (404)")
+            detail = getattr(self, "_last_download_error", "") or "the dataset or version was not found"
+            raise requests.HTTPError(
+                f"Dataset bundle download failed: {detail}. Check that the dataset "
+                "exists on this Dataverse and that the API token can access it."
+            )
         return dest
 
     def get_tabular_ingest_status(self, file_id: str) -> dict[str, Any]:
