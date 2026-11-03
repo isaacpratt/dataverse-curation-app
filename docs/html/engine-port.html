@@ -22,7 +22,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 </style>
 </head>
 <body>
-<header class="hero"><div class="wrap"><h1>Engine port: R → Python</h1><p>Self-contained re-implementation of the <code>CUR_Res_CurationTools</code> inspectors — no R runtime ships with the app.</p><div class="badges"><span class="badge ok">Phase 1 complete</span><span class="badge ok">21 modules ported</span><span class="badge ok">299 tests</span><span class="badge warn">MATLAB .mat deferred</span></div></div></header>
+<header class="hero"><div class="wrap"><h1>Engine port: R → Python</h1><p>Self-contained re-implementation of the <code>CUR_Res_CurationTools</code> inspectors — no R runtime ships with the app.</p><div class="badges"><span class="badge ok">Phase 1 complete</span><span class="badge ok">21 modules ported</span><span class="badge ok">302 tests</span><span class="badge warn">MATLAB .mat deferred</span></div></div></header>
 <nav class="top"><div class="wrap">
 <a href="index.html">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html" aria-current="page">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a><a href="proposals.html">Proposals</a>
 </div></nav>
@@ -32,7 +32,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <p>Bundling portable R was evaluated and rejected as a last resort: base R is ~100 MB and the required packages (tidyverse, haven, exiftoolr, …) push a portable install to ~400 MB. The Python engine ships at ~70 MB (lite zip, ~158 MB unpacked) with identical pass/fail semantics — verified by parity tests, not by inspection.</p>
 
 <h2>Status</h2>
-<div class="callout ok"><b>Phase 1 complete: 21 check modules ported and verified; 299 tests passing.</b> Run <code>pytest --collect-only -q</code> for the live count (205 engine + 94 UI). MATLAB <code>.mat</code> (<code>Scripts/Inspect_mat_Script.R → scipy.io</code>) stays <b>deferred</b> to keep <code>scipy</code> optional — <code>mat_check.py</code> does not exist; <code>.mat</code> files surface via <code>inventory.unchecked_types</code>. If added, it would be lazy-imported like the other heavy libs.</div>
+<div class="callout ok"><b>Phase 1 complete: 21 check modules ported and verified; 302 tests passing.</b> Run <code>pytest --collect-only -q</code> for the live count (205 engine + 97 UI). MATLAB <code>.mat</code> (<code>Scripts/Inspect_mat_Script.R → scipy.io</code>) stays <b>deferred</b> to keep <code>scipy</code> optional — <code>mat_check.py</code> does not exist; <code>.mat</code> files surface via <code>inventory.unchecked_types</code>. If added, it would be lazy-imported like the other heavy libs.</div>
 
 <h2>Notable divergences from the R scripts</h2>
 <table>

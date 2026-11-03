@@ -15,7 +15,9 @@ Intentional one-offs (NOT kit violations):
   with no kit equivalent.
 """
 
-from PySide6.QtCore import Qt, QTimer, Signal
+import textwrap
+
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -25,16 +27,20 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QTableWidget,
+    QToolButton,
+    QToolTip,
     QVBoxLayout,
     QWidget,
 )
 
 from ui.theme import (
     BACKGROUND,
+    ON_SECONDARY_CONTAINER,
     ON_SURFACE,
     ON_SURFACE_VARIANT,
     OUTLINE_VARIANT,
     PRIMARY,
+    SURFACE_CONTAINER,
     SURFACE_CONTAINER_LOW,
     SURFACE_CONTAINER_LOWEST,
     enable_table_copy,
@@ -46,6 +52,7 @@ __all__ = [
     "flush_table_style",
     "flush_list_style",
     "make_card",
+    "add_info_tip",
     "make_search_field",
     "make_line_edit",
     "make_combo",
@@ -362,6 +369,51 @@ def make_card(title: str, parent: QWidget | None = None) -> tuple:
     wrap.setStyleSheet("QWidget#CardBodyWrap { background: transparent; border: none; }")
     outer.addWidget(wrap)
     return card, body, title_lbl, top_lay
+
+
+def _wrap_tip(*paragraphs: str, width: int = 76) -> str:
+    """Join tooltip paragraphs with blank lines, wrapped for readability."""
+    chunks = []
+    for paragraph in paragraphs:
+        text = " ".join(str(paragraph).split())
+        if text:
+            chunks.append(textwrap.fill(text, width=width))
+    return "\n\n".join(chunks)
+
+
+def add_info_tip(header_layout, *paragraphs: str, name: str = "") -> QToolButton:
+    """Add a small Lucide (i) button right after a card title.
+
+    The explanation lives in the tooltip, so section headers read as
+    "Auto-Checks (i)" instead of carrying a permanent help paragraph.
+    Clicking shows the same text, for touch and pen input.
+    """
+    from ui.icons import icon as _icon
+
+    tip = _wrap_tip(*paragraphs)
+    btn = QToolButton()
+    btn.setObjectName("InfoTip")
+    try:
+        btn.setIcon(_icon("info", color=ON_SECONDARY_CONTAINER, size=14))
+    except Exception:
+        btn.setText("i")
+    btn.setIconSize(QSize(14, 14))
+    btn.setFixedSize(24, 24)
+    btn.setAutoRaise(True)
+    btn.setCursor(Qt.WhatsThisCursor)
+    btn.setToolTip(tip)
+    btn.setAccessibleName(f"About {name}" if name else "Section help")
+    btn.setAccessibleDescription(tip)
+    btn.setStyleSheet(
+        "QToolButton#InfoTip { background: transparent; border: none; "
+        "border-radius: 12px; padding: 0; }"
+        f"QToolButton#InfoTip:hover {{ background: {SURFACE_CONTAINER}; }}"
+    )
+    btn.clicked.connect(
+        lambda: QToolTip.showText(btn.mapToGlobal(btn.rect().bottomLeft()), tip, btn)
+    )
+    header_layout.insertWidget(1, btn)
+    return btn
 
 
 def make_search_field(placeholder: str, parent: QWidget | None = None, *, height: int = 36,

@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QEvent, Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialog,
@@ -63,6 +63,7 @@ from ui.theme import (
 from ui.widgets import (
     AppButton,
     AppTable,
+    add_info_tip,
     flush_list_style,
     flush_table_style,
     make_card,
@@ -605,6 +606,15 @@ class DatasetDetailView(QWidget):
     # ---- Builders ----
     def _build_auto_checks_card(self) -> QFrame:
         card, _body_host, _title, header_lay = make_card("Auto-Checks")
+        add_info_tip(
+            header_lay,
+            "Dataset checks appear here with their full messages. Rows list "
+            "every finding (dataset checks plus per-file failures and skips); "
+            "per-file passes live in File Manifest below — expand a file to "
+            "see every check, passes included.",
+            "✓ pass · ✕ issue · ○ SKIPPED · MISSING = optional library not installed.",
+            name="Auto-Checks",
+        )
         # Named pre-run state, never "—" (2026-10-02 P2); refreshed to
         # "N check(s) will run"/counts/"No file checks" as data lands.
         self._auto_summary = QLabel("Not run yet")
@@ -614,32 +624,6 @@ class DatasetDetailView(QWidget):
         self._auto_body = _body_host
         self._auto_body.setContentsMargins(16, 12, 16, 12)
         self._auto_body.setSpacing(8)
-        from ui.theme import asset_path as _asset_path
-
-        def _legend_img(name: str) -> str:
-            try:
-                path = _asset_path(f"lucide/{name}.svg")
-            except Exception:
-                path = ""
-            return (
-                f"<img src=\"{path}\" width=\"12\" height=\"12\">" if path else ""
-            )
-
-        legend = QLabel(
-            "Dataset checks live here (full messages) · per-file results live in "
-            "File Manifest below (expand a file to see every check, passes included) · "
-            f"{_legend_img('check-green')} pass · {_legend_img('x-red')} issue · "
-            f"{_legend_img('circle-grey')} SKIPPED · MISSING optional library not installed"
-        )
-        legend.setTextFormat(Qt.RichText)
-        legend.setWordWrap(True)
-        legend.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
-        # Hover-reveal: the legend explains itself on approach instead of
-        # costing a read on every visit (2026-10-02 minor).
-        legend.setVisible(False)
-        card.installEventFilter(self)
-        self._auto_body.addWidget(legend)
-        self._auto_legend = legend
         # Placeholder
         self._auto_placeholder = QLabel("No file list yet — load metadata to see which checks will run.")
         self._auto_placeholder.setWordWrap(True)
@@ -649,6 +633,14 @@ class DatasetDetailView(QWidget):
 
     def _build_metadata_card(self) -> QFrame:
         card, body, _title, header_lay = make_card("Metadata check")
+        add_info_tip(
+            header_lay,
+            "Metadata completeness for the active profile. Each row shows the "
+            "field, its metadata block, the current value and a pass/issue "
+            "status; incomplete rows are what is left to fill before "
+            "publication. The requirement for a field lives in its tooltip.",
+            name="Metadata check",
+        )
         # Flush card (manifest-tree pattern): zero body margins; the table
         # bleeds edge-to-edge.
         body.setContentsMargins(0, 0, 0, 0)
@@ -662,7 +654,7 @@ class DatasetDetailView(QWidget):
             "background: transparent; border: none;"
         )
         self._meta_summary.setToolTip("Load metadata from Dataverse to evaluate completeness")
-        header_lay.insertWidget(1, self._meta_summary)
+        header_lay.insertWidget(2, self._meta_summary)
         # Complete/incomplete filter for the checklist table.
         self._meta_filter = make_combo(
             [("All fields", "all"), ("Complete", "complete"), ("Incomplete", "incomplete")],
@@ -750,6 +742,14 @@ class DatasetDetailView(QWidget):
 
     def _build_assessment_card(self) -> QFrame:
         card, body, _title, _header = make_card("Assessment Action")
+        add_info_tip(
+            _header,
+            "Record the curation decision and internal notes for this dataset. "
+            "Commit Decision writes the chosen label to Dataverse when the "
+            "instance exposes curation labels, and appends the action to the "
+            "Dataset log.",
+            name="Assessment Action",
+        )
         body.setContentsMargins(16, 16, 16, 16)
         body.setSpacing(12)
         # Internal Notes
@@ -865,6 +865,12 @@ class DatasetDetailView(QWidget):
         cols.setSpacing(12)
 
         findings_card, findings_body, _t, _h = make_card("Findings included in the draft")
+        add_info_tip(
+            _h,
+            "Incomplete metadata checks and failed file checks included in the "
+            "response draft. Uncheck an item to drop it from the draft.",
+            name="Findings included in the draft",
+        )
         self._response_list = QListWidget()
         self._response_list.setMinimumHeight(240)
         self._response_list.setStyleSheet(
@@ -876,6 +882,12 @@ class DatasetDetailView(QWidget):
         cols.addWidget(findings_card, 1)
 
         draft_card, draft_body, _t2, _h2 = make_card("Draft (editable)")
+        add_info_tip(
+            _h2,
+            "Editable response text. Regenerate rebuilds it from the checked "
+            "findings (discarding edits); Export saves it as Markdown.",
+            name="Draft",
+        )
         self._response_edit = QTextEdit()
         self._response_edit.setPlaceholderText("The draft appears here once metadata is loaded…")
         self._response_edit.setMinimumHeight(280)
@@ -1330,6 +1342,13 @@ class DatasetDetailView(QWidget):
         from PySide6.QtWidgets import QListWidget
 
         card, body, _title, _header = make_card("Dataset log")
+        add_info_tip(
+            _header,
+            "Timeline for this dataset (newest first): creation, versions, "
+            "record dates, review submissions, curation labels, embargoes, "
+            "and local curation actions.",
+            name="Dataset log",
+        )
         self._dataset_log = QListWidget()
         # Tall timeline: minimum keeps it readable on short screens, the
         # higher maximum + Expanding policy lets it claim the sidebar's
@@ -1548,6 +1567,13 @@ class DatasetDetailView(QWidget):
     def _build_version_card(self) -> QFrame:
         """Version log: every version plus the published→draft diff."""
         card, _body_host, _title, header_lay = make_card("Version log")
+        add_info_tip(
+            header_lay,
+            "Every published version plus the draft, with field-level changes "
+            "and files added, removed or replaced between the previous version "
+            "and the draft. A first submission shows “Initial draft”.",
+            name="Version log",
+        )
         # Flush card (manifest-tree pattern): dynamic children are edge to
         # edge and paint their own corners in _populate_version_diff.
         _body_host.setContentsMargins(0, 0, 0, 0)
@@ -1741,6 +1767,14 @@ class DatasetDetailView(QWidget):
 
     def _build_file_manifest_card(self) -> QFrame:
         card, _body_unused, _title, header_lay = make_card("File Manifest")
+        add_info_tip(
+            header_lay,
+            "Every file in this dataset — the staged download when available, "
+            "otherwise the Dataverse inventory — grouped folder > file > check. "
+            "Expand a file to see every check, passes included; hover a check "
+            "for its full message and details. Open folder reveals the staged files.",
+            name="File Manifest",
+        )
         _body_unused.setContentsMargins(0, 0, 0, 0)
         _body_unused.setSpacing(0)
         self._open_folder_btn = AppButton("Open folder", kind="secondary", size="md")
@@ -1930,16 +1964,12 @@ class DatasetDetailView(QWidget):
             else:
                 files = []
             planned = list_planned_checks(files)
-            # Clear existing rows but keep the legend child
-            legend = getattr(self, "_auto_legend", None)
+            # Clear existing rows; the header summary is updated below.
             for i in reversed(range(self._auto_body.count())):
                 item = self._auto_body.takeAt(i)
                 w = item.widget() if item is not None else None
-                if w is None or w is legend:
-                    if w is not None:
-                        self._auto_body.insertWidget(i, w)
-                    continue
-                w.deleteLater()
+                if w is not None:
+                    w.deleteLater()
             if not files:
                 if self._inventory is not None and len(self._inventory) == 0 and self._metadata is not None:
                     ph = QLabel("This dataset contains no files in Dataverse — file checks do not apply. Metadata checks above still apply.")
@@ -2001,13 +2031,6 @@ class DatasetDetailView(QWidget):
                     except Exception:
                         pass
                     self._auto_body.addWidget(row)
-                note = QLabel(
-                    "All findings above (dataset + per-file failures and skips); "
-                    "per-file results, passes included, are in File Manifest below."
-                )
-                note.setWordWrap(True)
-                note.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;")
-                self._auto_body.addWidget(note)
                 if (
                     not self._report.dataset_checks
                     and not file_findings
@@ -2892,19 +2915,6 @@ class DatasetDetailView(QWidget):
                 commit.setEnabled(bool(choice))
         except Exception:
             pass
-
-    def eventFilter(self, obj, ev):  # noqa: D102
-        # Hover-reveal the Auto-Checks legend while the pointer is anywhere
-        # on that card (Enter/Leave track the card + its children, so rows
-        # don't flicker it) — 2026-10-02 minor.
-        if obj is getattr(self, "_auto_card", None) and getattr(
-            self, "_auto_legend", None
-        ) is not None:
-            if ev.type() == QEvent.Type.Enter:
-                self._auto_legend.setVisible(True)
-            elif ev.type() == QEvent.Type.Leave:
-                self._auto_legend.setVisible(False)
-        return super().eventFilter(obj, ev)
 
     # -- assessment commit --
     def _on_commit(self) -> None:
