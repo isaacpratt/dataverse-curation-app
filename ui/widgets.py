@@ -53,6 +53,7 @@ __all__ = [
     "flush_list_style",
     "make_card",
     "add_info_tip",
+    "make_page_heading",
     "make_search_field",
     "make_line_edit",
     "make_combo",
@@ -305,12 +306,12 @@ def flush_table_style(last: bool = True) -> str:
         "border-bottom-right-radius: " + bottom + "; } "
         "QHeaderView::section:first { border-top-left-radius: 0px; } "
         "QHeaderView::section:last { border-top-right-radius: 0px; } "
-        # Scrollbar lanes must be painted inline too: app-level QScrollBar
-        # backgrounds demonstrably do not stick under styled ancestors
-        # (lanes render page-colored, leaving the bottom-right corner an
-        # unfilled hole). Thumbs/grooves keep coming from the global theme.
-        "QTableWidget QScrollBar:vertical { background: " + SURFACE_CONTAINER_LOWEST + "; } "
-        "QTableWidget QScrollBar:horizontal { background: " + SURFACE_CONTAINER_LOWEST + "; } "
+        # Scrollbar lanes are transparent so the table's own painted surface
+        # and its rounded bottom-right corner show through, keeping the card
+        # border connected at the corner instead of ending in a white notch.
+        # Thumbs/grooves keep coming from the global theme.
+        "QTableWidget QScrollBar:vertical { background: transparent; } "
+        "QTableWidget QScrollBar:horizontal { background: transparent; } "
     )
 
 
@@ -324,6 +325,28 @@ def flush_list_style(last: bool = True) -> str:
         "border-bottom-right-radius: " + bottom + "; "
         f"font-size: 12px; color: {ON_SURFACE_VARIANT}; }}"
     )
+
+
+def make_page_heading(title: str, subtitle: str = "") -> tuple:
+    """Build the standard full-page heading (title + optional subtitle).
+
+    One contract for every top-level page (Settings, Review configuration,
+    Log, About, dataset page): the title uses the theme's ``HeadlineLG``
+    token, the subtitle the ``BodyMD`` token. No inline stylesheet — the
+    theme owns the look, so the pages cannot drift apart again (each page
+    used to invent its own size/weight/colour).
+
+    Returns (title_label, subtitle_label); subtitle_label is None when no
+    subtitle text was given.
+    """
+    head = QLabel(title)
+    head.setObjectName("HeadlineLG")
+    sub = None
+    if subtitle:
+        sub = QLabel(subtitle)
+        sub.setObjectName("BodyMD")
+        sub.setWordWrap(True)
+    return head, sub
 
 
 def make_card(title: str, parent: QWidget | None = None) -> tuple:

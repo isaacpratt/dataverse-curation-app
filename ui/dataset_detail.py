@@ -68,6 +68,7 @@ from ui.widgets import (
     flush_table_style,
     make_card,
     make_combo,
+    make_page_heading,
     make_search_field,
 )
 from ui.workers import CheckWorker, DownloadWorker, MetadataWorker
@@ -352,9 +353,10 @@ class DatasetDetailView(QWidget):
         badge_row.addStretch()
         header_left.addLayout(badge_row)
 
-        self._title_lbl = QLabel(self._title)
+        # Same page-heading contract as Settings / Review configuration /
+        # Log / About (HeadlineLG theme token).
+        self._title_lbl, _subtitle = make_page_heading(self._title)
         self._title_lbl.setWordWrap(True)
-        self._title_lbl.setStyleSheet(f"font-size: 22px; font-weight: 600; color: {ON_SURFACE}; border: none; background: transparent;")
 
         # Clickable Dataverse link sits next to the title
         self._header_link = QLabel()
@@ -592,6 +594,9 @@ class DatasetDetailView(QWidget):
 
         # Text selection + table copy support
         enable_list_copy(self._dataset_log)
+        # Selectable labels get the app's selection colours (see
+        # selectable_labels): the system highlight painted a black box
+        # behind the "N/M fields complete" summary.
         selectable_labels(self)
 
         # Review is the landing page; restore any saved per-dataset draft
@@ -1279,15 +1284,26 @@ class DatasetDetailView(QWidget):
                 except Exception:
                     pass
 
-            def _save(*_a, _n=name, _h=header) -> None:
-                save_table_state(self._config.app.workspace, _n, _h)
+            # Connect the persistence hooks once per header. The file
+            # manifest tracks the same header on every refresh (the saved
+            # widths have to be re-applied after the content fit), and
+            # reconnecting each time would save the layout once per
+            # refresh.
+            tracked = getattr(self, "_table_tracked_headers", None)
+            if tracked is None:
+                self._table_tracked_headers = tracked = {}
+            if tracked.get(name) is not header:
+                tracked[name] = header
 
-            header.sectionResized.connect(_save)
-            header.sectionMoved.connect(_save)
-            try:
-                header.sortIndicatorChanged.connect(_save)
-            except Exception:
-                pass
+                def _save(*_a, _n=name, _h=header) -> None:
+                    save_table_state(self._config.app.workspace, _n, _h)
+
+                header.sectionResized.connect(_save)
+                header.sectionMoved.connect(_save)
+                try:
+                    header.sortIndicatorChanged.connect(_save)
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -1803,6 +1819,18 @@ class DatasetDetailView(QWidget):
         )
         self._scan_filter.currentIndexChanged.connect(lambda _i: self._apply_file_filter_internal())
         header_lay.addWidget(self._scan_filter)
+        # Reset columns button — restores default widths/order
+        self._file_reset_btn = AppButton("", kind="ghost", size="sm")
+        self._file_reset_btn.setFixedSize(28, 28)
+        self._file_reset_btn.setAccessibleName("Reset file manifest columns")
+        try:
+            from ui.icons import icon as _reset_icon
+            self._file_reset_btn.setIcon(_reset_icon("rotate-ccw"))
+        except Exception:
+            self._file_reset_btn.setText("Reset")
+        self._file_reset_btn.setToolTip("Reset column widths and order to defaults")
+        self._file_reset_btn.clicked.connect(self._on_reset_file_view)
+        header_lay.addWidget(self._file_reset_btn)
         lay = QVBoxLayout()
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -1826,11 +1854,19 @@ class DatasetDetailView(QWidget):
         # icons track open/closed via _sync_tree_carets.
         from ui.icons import tree_branch_qss as _branch_qss
 
+        # Header: square top-left corner to meet the card's top bar flush;
+        # scrollbar lanes transparent so the vertical scrollbar starts below
+        # the header (no overlap). Thumbs/grooves come from the global theme.
         self._file_tree.setStyleSheet(
             f"QTreeView {{ background: {SURFACE_CONTAINER_LOWEST}; border: none; font-size: 12px; color: {ON_SURFACE}; }}"
             "QTreeView::item { height: 30px; border: none; }"
             f"QTreeView::item:hover {{ background: {SURFACE_CONTAINER_LOW}; }}"
             f"QTreeView::item:selected {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; }}"
+            "QHeaderView::section:first { border-top-left-radius: 0px; }"
+            "QHeaderView::section:last { border-top-right-radius: 0px; border-right: none; }"
+            f"QHeaderView::section {{ background: {SURFACE_CONTAINER}; }}"
+            "QTreeView QScrollBar:vertical { background: transparent; }"
+            "QTreeView QScrollBar:horizontal { background: transparent; }"
             + _branch_qss()
         )
         self._file_tree.clicked.connect(self._on_tree_clicked)
@@ -2407,8 +2443,17 @@ class DatasetDetailView(QWidget):
             _human_size,
             inventory=self._inventory if isinstance(self._inventory, list) else None,
         )
-        self._file_tree.setModel(model)
+        # The header's signals are blocked while the tree is rebuilt and
+        # the columns are fitted to their content: sectionResized persists
+        # the layout, so an auto-fit would overwrite the widths the user
+        # saved before the restore below can apply them.
+        _hdr = self._file_tree.header()
         try:
+            _hdr.blockSignals(True)
+        except Exception:
+            _hdr = None
+        try:
+            self._file_tree.setModel(model)
             self._file_tree.expandToDepth(0)
             # Auto-expand files with issues so findings are visible.
             for r in range(model.rowCount()):
@@ -2440,11 +2485,19 @@ class DatasetDetailView(QWidget):
             self._sync_tree_carets()
         except Exception:
             pass
+        finally:
+            if _hdr is not None:
+                try:
+                    _hdr.blockSignals(False)
+                except Exception:
+                    pass
         total = sum(r[1] for r in all_rows)
         self._file_footer_left.setText(f"Showing {len(rows)} of {len(all_rows)} files")
         self._file_footer_right.setText(f"Total Size: {_human_size(total)}" if total else "")
         self._refresh_download_state()
         self._update_expand_btn()
+        # Track header widths/order for persistence and reset button
+        self._track_table_widths("dataset_files", self._file_tree.header())
 
     def _sync_tree_carets(self) -> None:
         """Re-sync folder icons with the manifest tree's expanded state."""
@@ -2656,6 +2709,13 @@ class DatasetDetailView(QWidget):
                     "dataset_version", table.horizontalHeader()
                 )
             self._populate_version_diff()
+        except Exception:
+            pass
+
+    def _on_reset_file_view(self) -> None:
+        try:
+            self._reset_table_view("dataset_files", self._file_tree.header())
+            self._apply_file_filter_internal()
         except Exception:
             pass
 

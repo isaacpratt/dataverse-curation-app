@@ -53,7 +53,14 @@ from ui.theme import (
     enable_table_copy,
     selectable_labels,
 )
-from ui.widgets import AppButton, AppTable, flush_table_style, make_combo, make_line_edit
+from ui.widgets import (
+    AppButton,
+    AppTable,
+    flush_table_style,
+    make_combo,
+    make_line_edit,
+    make_page_heading,
+)
 
 # Compact face for buttons living inside table action cells: the standard
 # action_button_style padding (7px 14px) made "Reinstall"+"Uninstall" need
@@ -143,13 +150,15 @@ class SettingsPane(QWidget):
         outer.setContentsMargins(24, 24, 24, 24)
         outer.setSpacing(16)
 
-        heading = QLabel("Settings")
-        heading.setStyleSheet(f"font-size: 22px; font-weight: 600; color: {ON_SURFACE}; border: none; background: transparent;")
+        # Shared page-heading contract (HeadlineLG + BodyMD theme tokens):
+        # every full-page view opens with the same title/subtitle rhythm.
+        heading, sub = make_page_heading(
+            "Settings",
+            "Dataverse connection, workspace, and optional curation libraries.",
+        )
         outer.addWidget(heading)
-        sub = QLabel("Dataverse connection, workspace, and optional curation libraries.")
-        sub.setStyleSheet(f"font-size: 13px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
-        sub.setWordWrap(True)
-        outer.addWidget(sub)
+        if sub is not None:
+            outer.addWidget(sub)
 
 
         tabs = QTabWidget()

@@ -53,7 +53,13 @@ from ui.theme import (
     action_button_style,
     selectable_labels,
 )
-from ui.widgets import AppButton, make_card, make_combo, make_search_field
+from ui.widgets import (
+    AppButton,
+    make_card,
+    make_combo,
+    make_page_heading,
+    make_search_field,
+)
 
 _LEVELS = ["required", "optional", "unchecked"]
 
@@ -180,8 +186,9 @@ class ReviewConfigView(QWidget):
         self.setObjectName("ReviewConfigView")
         self.setStyleSheet(f"QWidget#ReviewConfigView {{ background: {BACKGROUND}; }}")
 
-        title = QLabel("Review configuration")
-        title.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {ON_SURFACE};")
+        # Shared page-heading contract (HeadlineLG theme token) — same
+        # title look as Settings, Log, and About.
+        title, _subtitle = make_page_heading("Review configuration")
         outer.addWidget(title)
 
         outer.addWidget(self._build_topbar())

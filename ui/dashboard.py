@@ -30,9 +30,12 @@ from ui.theme import (
     ERROR,
     ON_SURFACE,
     ON_SURFACE_VARIANT,
+    OUTLINE,
     OUTLINE_VARIANT,
     PRIMARY,
+    PRIMARY_FIXED,
     SURFACE_CONTAINER,
+    SURFACE_CONTAINER_HIGH,
     SURFACE_CONTAINER_LOWEST,
     TERTIARY,
     selectable_labels,
@@ -637,9 +640,17 @@ class DashboardView(QWidget):
             [h for _k, h, _v in COLUMNS],
             widths={i: _COLUMN_WIDTHS.get(key, 120) for i, (key, _h, _v) in enumerate(COLUMNS)},
             row_height=40,
+            # No stretch-last: the queue has no horizontal scrollbar, so
+            # the columns are fitted to the viewport by hand and the last
+            # visible column absorbs the slack (see _fit_queue_columns).
+            # Qt's own stretch only re-applies when the header itself is
+            # resized, and this header is hidden — after a drag the
+            # columns overflowed the viewport and the right-hand labels
+            # were cut off.
+            stretch_last=False,
         )
         # No horizontal scrollbar on the dashboard: the queue reads at
-        # window width (the stretch column absorbs any slack).
+        # window width (the filler column absorbs any slack).
         self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         # Flush under the banner header (last child: square top meets the
         # banner, 8px bottom meets the card border — see flush_table_style).
@@ -649,23 +660,45 @@ class DashboardView(QWidget):
         # (double-click alone locks out keyboard-only users), F5 refreshes,
         # Escape clears the search. See _on_table_key.
         self._table.installEventFilter(self)
+        # The viewport is watched too: its width changes when the vertical
+        # scrollbar appears (the columns must keep filling it).
+        try:
+            self._table.viewport().installEventFilter(self)
+        except Exception:
+            pass
         # Split header: the table's own header is hidden so its vertical
         # scrollbar spans rows only (starting underneath the header row).
         # This display header shares the table model and renders the
         # full-width header bar edge to edge above it.
         self._syncing_header = False
+        # Widths the fit scaled down (kept so a wider window restores them).
+        self._queue_unscaled: dict[int, int] | None = None
         self._table.horizontalHeader().setVisible(False)
         self._queue_header = QHeaderView(Qt.Horizontal)
         self._queue_header.setModel(self._table.model())
         self._queue_header.setSectionsMovable(True)
         self._queue_header.setSectionsClickable(True)
-        self._queue_header.setStretchLastSection(True)
+        # Never stretch on the display header: its widths are mirrored from
+        # the table header (which is fitted to the viewport). Stretching
+        # here as well let the last label drift off-centre after a move
+        # or resize.
+        self._queue_header.setStretchLastSection(False)
         self._queue_header.setFocusPolicy(Qt.NoFocus)
         self._queue_header.setFixedHeight(
             self._table.horizontalHeader().sizeHint().height()
         )
-        # Same flush section rules as the table's own header had.
-        self._queue_header.setStyleSheet(flush_table_style())
+        # Same flush section rules as the table's own header had. The extra
+        # QHeaderView background fills the slack right of the last section
+        # (the vertical scrollbar's lane) so no page colour shows through.
+        # Also set section background/border explicitly since this stylesheet
+        # replaces the global theme for this header.
+        self._queue_header.setStyleSheet(
+            flush_table_style()
+            + f"QHeaderView {{ background: {SURFACE_CONTAINER}; }}"
+            + f"QHeaderView::section {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE_VARIANT}; padding: 8px 14px 8px 12px; border: none; border-bottom: 1px solid {OUTLINE_VARIANT}; border-right: 1px solid {OUTLINE_VARIANT}; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }}"
+            + f"QHeaderView::section:hover {{ background: {SURFACE_CONTAINER_HIGH}; border-right: 1px solid {OUTLINE}; }}"
+            + f"QHeaderView::section:pressed {{ background: {PRIMARY_FIXED}; border-right: 2px solid {PRIMARY}; }}"
+        )
         self._sync_header_from_table()
         self._queue_header.sectionResized.connect(self._on_display_header_resized)
         self._table.horizontalHeader().sectionResized.connect(self._on_table_header_resized)
@@ -674,7 +707,7 @@ class DashboardView(QWidget):
         self._queue_header.sectionClicked.connect(self._on_header_clicked)
         # Content fit runs on the table header; mirror sizes to the display
         # header (sync flag keeps the mirror from persisting as a user drag).
-        self._table.columns_fitted.connect(self._sync_header_from_table)
+        self._table.columns_fitted.connect(self._on_columns_fitted)
         queue_layout.addWidget(self._queue_header)
         # Table + first-run overlay occupy the same grid cell so the card
         # floats over the (empty) table without any layout surgery when
@@ -1259,6 +1292,113 @@ class DashboardView(QWidget):
         finally:
             self._syncing_header = False
 
+    def _on_columns_fitted(self) -> None:
+        """Content fit changed the column widths: re-fit and mirror them.
+
+        The fit sizes the columns to their content; the slack that is left
+        over goes to the filler column so the queue still reads at window
+        width.
+        """
+        self._fit_queue_columns()
+        self._sync_header_from_table()
+
+    def _schedule_column_fit(self) -> None:
+        """Re-fit the queue columns once the layout has settled.
+
+        A window resize delivers the viewport a burst of intermediate
+        widths. Fitting on each of them would scale the columns down for
+        a width the user never saw, so the fit waits for the last one.
+        """
+        try:
+            QTimer.singleShot(0, self._fit_queue_columns)
+        except Exception:
+            pass
+
+    def _fit_queue_columns(self) -> None:
+        """Make the visible queue columns fill the viewport exactly.
+
+        The queue has no horizontal scrollbar, so the columns must add up
+        to the viewport width: the last visible column is the filler and
+        absorbs the slack (or gives it back). Qt's stretchLastSection
+        cannot do this here — it only re-applies when the header itself
+        is resized, and the queue's header is hidden — so after a drag
+        the columns overflowed the viewport and the right-hand labels
+        were cut off.
+
+        When the filler is at its floor and the columns still do not fit
+        (a narrow window), the other columns are scaled down by one ratio
+        — the content fit's rule. The pre-scale widths are remembered,
+        so widening the window restores them instead of leaving the queue
+        stuck at the narrow layout.
+
+        Signals are blocked: this is bookkeeping, not a user drag, so it
+        must not lock the content auto-fit.
+        """
+        try:
+            hdr = self._table.horizontalHeader()
+            width = self._table.viewport().width()
+            if width <= 0:
+                return
+            # Before the first paint the viewport carries a placeholder
+            # width; fitting to it would bake a wrong layout into the
+            # columns. The viewport resize that follows the show does the
+            # real fit.
+            if not self._table.isVisible():
+                return
+            visible = [i for i in range(hdr.count()) if not hdr.isSectionHidden(i)]
+            if not visible:
+                return
+            floor = hdr.minimumSectionSize()
+            filler = visible[-1]
+            others = visible[:-1]
+            want = {i: hdr.sectionSize(i) for i in visible}
+            # A previous downscale is undone as soon as there is room for
+            # the original widths again.
+            restore = getattr(self, "_queue_unscaled", None)
+            if restore:
+                for i, w in restore.items():
+                    if i in want:
+                        want[i] = w
+                if width - sum(want[i] for i in others) >= floor:
+                    self._queue_unscaled = None
+                else:
+                    want = {i: hdr.sectionSize(i) for i in visible}
+            other_total = sum(want[i] for i in others)
+            target_filler = width - other_total
+            if target_filler >= floor:
+                # The filler absorbs the difference (the common case).
+                want[filler] = target_filler
+            else:
+                # The filler is at its floor: scale the other columns down
+                # by one ratio so nothing is cut off.
+                room = max(0, width - floor)
+                if other_total > room > 0:
+                    ratio = room / other_total
+                    if not getattr(self, "_queue_unscaled", None):
+                        self._queue_unscaled = {
+                            i: hdr.sectionSize(i) for i in others
+                        }
+                    for i in others:
+                        want[i] = max(floor, int(round(want[i] * ratio)))
+                    want[filler] = max(
+                        floor, width - sum(want[i] for i in others)
+                    )
+                else:
+                    want[filler] = max(floor, target_filler)
+            changed = {i: w for i, w in want.items() if w != hdr.sectionSize(i)}
+            if not changed:
+                return
+            hdr.blockSignals(True)
+            try:
+                for i, w in changed.items():
+                    hdr.resizeSection(i, w)
+            finally:
+                hdr.blockSignals(False)
+            # Mirror the settled widths so both headers agree.
+            self._sync_header_from_table()
+        except Exception:
+            pass
+
     def _save_queue_layout(self) -> None:
         """Persist the queue table's view (widths/sort/hidden/order)."""
         try:
@@ -1271,6 +1411,20 @@ class DashboardView(QWidget):
         except Exception:
             pass
 
+    def _schedule_header_sync(self) -> None:
+        """Mirror the table header onto the display header after layout settles.
+
+        QHeaderView emits sectionResized *before* the new size is applied:
+        reading sectionSize() inside the handler returns the old value, so a
+        synchronous copy would persist stale widths (and the last column's
+        label would drift off-centre). A zero-delay timer runs once the
+        resize has been applied.
+        """
+        try:
+            QTimer.singleShot(0, self._sync_header_from_table)
+        except Exception:
+            pass
+
     def _on_display_header_resized(self, logical: int, _old: int, new: int) -> None:
         if self._syncing_header:
             return
@@ -1279,16 +1433,25 @@ class DashboardView(QWidget):
             self._table.horizontalHeader().resizeSection(logical, new)
         finally:
             self._syncing_header = False
+        # The user set this width: it wins over the fit's downscale.
+        self._queue_unscaled = None
+        # The queue has no horizontal scrollbar: the filler column takes up
+        # the difference so the columns keep filling the viewport (and the
+        # last label stays centred in its column).
+        self._fit_queue_columns()
+        # Resizing one section changes the filler's width too; mirror the
+        # settled widths so both headers agree.
+        self._schedule_header_sync()
         self._save_queue_layout()
 
     def _on_table_header_resized(self, logical: int, _old: int, new: int) -> None:
         if self._syncing_header:
             return
-        self._syncing_header = True
-        try:
-            self._queue_header.resizeSection(logical, new)
-        finally:
-            self._syncing_header = False
+        # The table header changed on its own (restored view, content fit):
+        # keep the columns filling the viewport, then mirror every section
+        # (not just the changed one) so both headers agree.
+        self._fit_queue_columns()
+        self._schedule_header_sync()
 
     def _on_display_header_moved(self, logical: int, old_visual: int, new_visual: int) -> None:
         if self._syncing_header:
@@ -1298,6 +1461,13 @@ class DashboardView(QWidget):
             self._table.horizontalHeader().moveSection(old_visual, new_visual)
         finally:
             self._syncing_header = False
+        # The user reordered the columns: the fit starts from the widths
+        # as they are now.
+        self._queue_unscaled = None
+        # The move can change which column is the filler; re-fit, then copy
+        # the resulting order and widths back onto the display header.
+        self._fit_queue_columns()
+        self._schedule_header_sync()
         self._save_queue_layout()
 
     def _on_table_header_moved(self, logical: int, old_visual: int, new_visual: int) -> None:
@@ -1308,6 +1478,8 @@ class DashboardView(QWidget):
             self._queue_header.moveSection(old_visual, new_visual)
         finally:
             self._syncing_header = False
+        self._fit_queue_columns()
+        self._sync_header_from_table()
 
     def _on_header_clicked(self, logical: int) -> None:
         """Sort the table like its own header click would (toggle on repeat)."""
@@ -1335,6 +1507,9 @@ class DashboardView(QWidget):
             self._queue_header.setSectionHidden(idx, not visible)
         except Exception:
             pass
+        # Hiding/showing a column changes the total width: re-fit so the
+        # remaining columns keep filling the viewport.
+        self._fit_queue_columns()
 
     def _apply_default_column_visibility(self) -> None:
         for i, (_key, _h, visible) in enumerate(COLUMNS):
@@ -1354,6 +1529,9 @@ class DashboardView(QWidget):
             action.toggled.connect(
                 lambda checked, i=idx: (
                     self._set_column_visible(i, checked),
+                    # The user changed the column set: the fit starts over
+                    # from the widths as they are now.
+                    setattr(self, "_queue_unscaled", None),
                     self._save_queue_layout(),
                 )
             )
@@ -1380,8 +1558,10 @@ class DashboardView(QWidget):
             snap = getattr(self, "_queue_snap", None)
             clear_table_state(self._config.app.workspace, "dashboard_queue")
             self._table.enable_auto_fit()
+            self._queue_unscaled = None
             if isinstance(snap, dict):
                 apply_table_view(self._table.horizontalHeader(), snap)
+            self._fit_queue_columns()
             self._sync_header_from_table()
             # Mirror the sort indicator onto the display header, then
             # repaint rows (repopulation re-sorts exactly like a fresh
@@ -1942,7 +2122,18 @@ class DashboardView(QWidget):
 
         Enter/Return opens the focused row (double-click alone locks out
         keyboard-only users), F5 refreshes, Escape clears the search box.
+
+        The table's viewport is watched as well: when the window (or the
+        vertical scrollbar) changes its width, the queue columns are
+        re-fitted so they keep filling it.
         """
+        if event.type() == QEvent.Type.Resize:
+            try:
+                if obj is self._table or obj is self._table.viewport():
+                    self._schedule_column_fit()
+                    return False
+            except Exception:
+                pass
         if obj is self._table and event.type() == QEvent.Type.KeyPress:
             key = event.key()
             if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):

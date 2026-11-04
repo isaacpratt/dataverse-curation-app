@@ -19,7 +19,7 @@ from ui.theme import (
     OUTLINE_VARIANT,
     SURFACE_CONTAINER_LOWEST,
 )
-from ui.widgets import AppButton
+from ui.widgets import AppButton, make_page_heading
 
 
 def _app_version() -> str:
@@ -94,11 +94,9 @@ class AboutPane(QWidget):
         outer.setContentsMargins(24, 24, 24, 24)
         outer.setSpacing(16)
 
-        heading = QLabel("About")
-        heading.setStyleSheet(
-            f"font-size: 22px; font-weight: 600; color: {ON_SURFACE}; "
-            "border: none; background: transparent;"
-        )
+        # Shared page-heading contract (HeadlineLG theme token) — same title
+        # look as Settings, Review configuration, and Log.
+        heading, _subtitle = make_page_heading("About")
         outer.addWidget(heading)
 
         card = QFrame()

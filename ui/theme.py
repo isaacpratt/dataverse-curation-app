@@ -389,6 +389,12 @@ QComboBox:on {{
 }}
 
 /* ===== Table ===== */
+/* Item views mark the current cell/row with the selection tint. Qt's native
+   focus rectangle (the black box drawn around the current cell) is noise on
+   top of that tint, so it is suppressed app-wide. */
+QAbstractItemView {{
+    outline: 0;
+}}
 QTableWidget {{
     background: {SURFACE_CONTAINER_LOWEST};
     border: none;
@@ -844,9 +850,17 @@ def _install_interaction_tracking(app) -> None:
 
 
 def selectable_labels(root) -> None:
-    """Make every QLabel under root selectable with mouse + keyboard."""
+    """Make every QLabel under root selectable with mouse + keyboard.
+
+    The selection is themed: the system highlight colour is not used (it
+    renders as a black box behind the text on a dark palette), the app
+    paints the same light-blue selection its inputs use. A rich-text
+    label also paints its document background with the palette's Base
+    role, which is kept transparent so no box shows behind the text.
+    """
     try:
         from PySide6.QtCore import Qt
+        from PySide6.QtGui import QColor, QPalette
         from PySide6.QtWidgets import QLabel
 
         for lbl in root.findChildren(QLabel):
@@ -855,6 +869,12 @@ def selectable_labels(root) -> None:
                 lbl.setTextInteractionFlags(
                     flags | Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
                 )
+                pal = lbl.palette()
+                pal.setColor(QPalette.Base, Qt.transparent)
+                pal.setColor(QPalette.Window, Qt.transparent)
+                pal.setColor(QPalette.Highlight, QColor(PRIMARY_FIXED))
+                pal.setColor(QPalette.HighlightedText, QColor(ON_SURFACE))
+                lbl.setPalette(pal)
             except Exception:
                 continue
     except Exception:

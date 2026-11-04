@@ -41,7 +41,7 @@ from ui.theme import (
     TERTIARY,
     action_button_style,
 )
-from ui.widgets import AppButton, make_search_field
+from ui.widgets import AppButton, make_page_heading, make_search_field
 
 
 class LogPage(QWidget):
@@ -51,14 +51,18 @@ class LogPage(QWidget):
         super().__init__(parent)
         self.setObjectName("LogPage")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
+        # Same page padding as every other full-page view (MARGIN_PAGE).
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
+
+        # Shared page-heading contract (HeadlineLG theme token) — the title
+        # sits on its own row like Settings/Review configuration/About, and
+        # the controls live in the toolbar row below it.
+        title, _subtitle = make_page_heading("Dataverse Communication Log")
+        layout.addWidget(title)
 
         header = QHBoxLayout()
         header.setSpacing(8)
-        title = QLabel("Dataverse Communication Log")
-        title.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {ON_SURFACE}; background: transparent; border: none;")
-        header.addWidget(title)
         # Severity legend: chips reuse the highlighter's exact fills, so the
         # key shows what a line actually looks like (colour never explains
         # itself; reachable without hovering).
