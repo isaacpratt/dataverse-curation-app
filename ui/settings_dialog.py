@@ -92,7 +92,11 @@ class _ShellWorker(QThread):
         try:
             ok, title, message = self._func()
         except Exception as exc:  # never leave the UI hanging silently
-            ok, title, message = False, "Extensions", f"Failed:\n{exc}"
+            ok, title, message = (
+                False,
+                t("settings.extensions.dialog_title"),
+                t("settings.extensions.shell_failed", exc=exc),
+            )
         self.done.emit(ok, title, message)
 
 

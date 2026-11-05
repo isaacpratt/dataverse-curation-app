@@ -239,6 +239,166 @@ def test_no_orphan_catalog_entries():
     assert orphans == [], "unused catalogue entries:\n" + "\n".join(orphans)
 
 
+# ------------------------------------------------------------ prose sweep
+
+# A literal is "prose" when it reads as words a person could see: it has a
+# space or sentence punctuation.  Everything else (CSS, HTML, SQL, URLs,
+# date formats, regexes, key sequences, identifiers) is structural and is
+# recognised by shape or by the call it is passed to.
+_CSS = re.compile(
+    r"px\b|font-|border|background|color:|padding|letter-spacing|"
+    r"QWidget|QFrame|QLabel|QPushButton|QTreeWidget|QPlainTextEdit|QScrollArea|"
+    r"QProgressBar|QTable|QComboBox|QListWidget|QTab|::|#[0-9a-fA-F]{6}"
+)
+_HTML = re.compile(r"<[a-zA-Z/!][^>]*>")
+_SQL = re.compile(
+    r"\b(SELECT|INSERT INTO|UPDATE|DELETE FROM|FROM|WHERE|GROUP BY|ORDER BY|"
+    r"CREATE TABLE|DROP TABLE)\b",
+    re.I,
+)
+_URLISH = re.compile(r"://|^[/\\]|\.(?:json|csv|md|xlsx?|sav|jsonld)$")
+_DATE_FORMAT = re.compile(r"^%[YmdHMSjyBbA-Za-z%\-:. ]+$")
+_REGEX_CALLS = {
+    "compile", "match", "fullmatch", "search", "sub", "subn",
+    "findall", "finditer", "split", "escape",
+}
+_KEYSEQ_CALLS = {"QKeySequence", "QKeySequence.StandardKey"}
+
+# Prose that is deliberately NOT interface copy, and why it stays in code.
+# Keyed by file, then by literal.  A new prose literal in these files still
+# fails the test — only the listed values are excused.
+_STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
+    "ui/checks_tree.py": {
+        "no check": "legacy id for the status filter; the combo emits 'unchecked'",
+    },
+    "ui/dashboard.py": {
+        "whole repository": "cache-slot token for 'no collection selected'",
+        "IN REVIEW": "Dataverse state name compared against the server value",
+        "dashboard: ready (no token)": "startup-probe label (opt-in temp file)",
+        "dashboard: crawl started": "startup-probe label (opt-in temp file)",
+        "JetBrains Mono": "font family name for the mono face",
+    },
+    "ui/dataset_detail.py": {
+        "<a href='": "rich-text link markup",
+        "; text-decoration:none;'>": "rich-text link markup",
+        "not executed": "needle matched against an engine check description",
+    },
+    "ui/dialogs.py": {
+        "max retries exceeded": "needle matched against raw exception text",
+        "failed to establish a new connection": "needle matched against raw exception text",
+        "name or service not known": "needle matched against raw exception text",
+        "network is unreachable": "needle matched against raw exception text",
+        "temporary failure in name resolution": "needle matched against raw exception text",
+        "connection refused": "needle matched against raw exception text",
+        "connection aborted": "needle matched against raw exception text",
+        "timed out": "needle matched against raw exception text",
+        "rejected the guestbook response": "needle matched against raw exception text",
+        "guestbook response entry is required": "needle matched against raw exception text",
+        "invalid api token": "needle matched against raw exception text",
+        "api token": "needle matched against raw exception text",
+        "not found": "needle matched against raw exception text",
+        "no route to host": "needle matched against raw exception text",
+    },
+    "ui/theme.py": {
+        "Inter, 'Segoe UI', sans-serif": "font stack for the UI face",
+        "'JetBrains Mono', Consolas, monospace": "font stack for the mono face",
+        "Segoe UI": "font family name",
+        "needs review": "needle matched against a Dataverse curation label",
+        "author contacted": "needle matched against a Dataverse curation label",
+        "contact author": "needle matched against a Dataverse curation label",
+    },
+    "main.py": {
+        "main.py imported": "startup-probe label (opt-in temp file)",
+        "args parsed": "startup-probe label (opt-in temp file)",
+        "PySide6 + ui.main_window imported": "startup-probe label (opt-in temp file)",
+        "config loaded": "startup-probe label (opt-in temp file)",
+        "QApplication created": "startup-probe label (opt-in temp file)",
+        "theme applied": "startup-probe label (opt-in temp file)",
+        "MainWindow constructed": "startup-probe label (opt-in temp file)",
+        "window shown": "startup-probe label (opt-in temp file)",
+        "first paint": "startup-probe label (opt-in temp file)",
+    },
+}
+
+
+def _docstring_lines(tree) -> set[int]:
+    out: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            body = getattr(node, "body", [])
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                out.add(body[0].value.lineno)
+    return out
+
+
+def _structural_argument_lines(tree) -> set[int]:
+    """Lines whose string is a regex, a key sequence or a stylesheet."""
+    out: set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        fn = node.func
+        name = getattr(fn, "id", None) or getattr(fn, "attr", None) or ""
+        tail = name.split(".")[-1]
+        if tail not in _REGEX_CALLS and tail not in _KEYSEQ_CALLS and tail != "setStyleSheet":
+            continue
+        for arg in list(node.args) + [kw.value for kw in node.keywords]:
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                out.add(arg.lineno)
+    return out
+
+
+def _prose_literals(path: Path) -> list[tuple[int, str]]:
+    """Prose-shaped string literals in ``path`` that are not structural."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    docs = _docstring_lines(tree)
+    structural = _structural_argument_lines(tree)
+    out: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+            continue
+        if node.lineno in docs or node.lineno in structural:
+            continue
+        value = node.value
+        stripped = value.strip()
+        if len(stripped) < 2 or not re.search(r"[A-Za-z]", stripped):
+            continue
+        if _CSS.search(value) or _HTML.search(value) or _SQL.search(value):
+            continue
+        if _URLISH.search(value) or _DATE_FORMAT.match(stripped):
+            continue
+        if re.fullmatch(r"[A-Za-z0-9_.\-]+", stripped):
+            continue
+        if " " not in value and not re.search(r"[:!?;,]", value):
+            continue
+        out.append((node.lineno, value))
+    return out
+
+
+def test_no_unlisted_prose_literals():
+    """No prose may live in a module unless the catalogue or the allowlist owns it.
+
+    The call-based scan above cannot see text that reaches the screen
+    through a variable — a title and message packed into a tuple and shown
+    later, for instance.  This sweep reads the literals themselves, so such
+    a leak fails the build too.
+    """
+    problems = []
+    for path in _app_files():
+        relative = path.relative_to(_UI_DIR.parent).as_posix()
+        excused = _STRUCTURAL_PROSE.get(relative, {})
+        for line, value in _prose_literals(path):
+            if value in excused:
+                continue
+            problems.append(f"{relative}:{line} -> {value!r}")
+    assert problems == [], "unlisted prose in the interface layer:\n" + "\n".join(problems)
+
+
 def test_lookup_keys_are_reachable():
     known = set(keys())
     unknown = sorted({key for _p, _l, key, _s in _lookup_calls() if key not in known})

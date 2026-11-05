@@ -413,6 +413,7 @@
       "busy": "Another task is already running — please wait…",
       "pip_success": "{package} {verb} successfully.",
       "pip_failed": "pip {args} failed:\n{stderr}",
+      "shell_failed": "Failed:\n{exc}",
       "install_frozen": "Pip install is not available in the frozen portable. Use the full build or run from source:\n  pip install {package}",
       "install_frozen_status": "Install not available in frozen build.",
       "uninstall_frozen": "Pip uninstall is not available in the frozen portable. Manage packages from source:\n  pip uninstall {package}",
