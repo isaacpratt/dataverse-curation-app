@@ -398,6 +398,13 @@ def _check_mcmaster(metadata: dict, blocks: dict[str, Any], inventory: list[dict
     _lt_val = " · ".join(_lt_parts) if _lt_parts else "—"
     add("License and Terms of Use", "McMaster — Recommended (Checklist: Data License)", _lt_val, bool(license_val))
 
+    # Access restrictions / embargo (same handler as the ruleset engine so
+    # the legacy fallback and the default ruleset stay in parity).
+    from engine.checks.access_check import access_conditions
+
+    _access_ok, _access_val = access_conditions(metadata, inventory)
+    add("Access, Embargo & Terms of Access", "McMaster — Recommended (Checklist: Data License / Access)", _access_val, _access_ok)
+
     time_ok = has("citation", "timePeriodCovered") or has("citation", "dateOfCollection")
     add("Time Period / Date of Collection", "McMaster — Recommended (Checklist: More Metadata — Time)", f"{val('citation','timePeriodCovered')} / {val('citation','dateOfCollection')}".strip(" /") or "—", time_ok)
     geo = _field(blocks, "geospatial", "geographicCoverage") or _field(blocks, "citation", "geographicCoverage")

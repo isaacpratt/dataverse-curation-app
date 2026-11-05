@@ -632,12 +632,16 @@ class CheckWorker(QThread):
     # Overall check fraction (0..1) for a progress ring.
     progressFraction = Signal(float)
 
-    def __init__(self, dataset_dir: Path, persistent_id: str, label: str, parent=None):
+    def __init__(self, dataset_dir: Path, persistent_id: str, label: str,
+                 inventory: list | None = None, metadata: dict | None = None,
+                 parent=None):
         super().__init__(parent)
         register_worker(self)
         self._dataset_dir = dataset_dir
         self._pid = persistent_id
         self._label = label
+        self._inventory = inventory
+        self._metadata = metadata
 
     def run(self) -> None:
         import os
@@ -667,6 +671,8 @@ class CheckWorker(QThread):
                 progress_fraction=_frac,
                 max_workers=workers,
                 is_cancelled=self.isInterruptionRequested,
+                inventory=self._inventory,
+                metadata=self._metadata,
             )
             if self.isInterruptionRequested():
                 return

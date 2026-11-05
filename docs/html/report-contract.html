@@ -70,7 +70,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td><code>persistent_id</code>, <code>label</code></td><td>Dataset identity, from the inventory / detail header</td></tr>
 <tr><td><code>engine_version</code></td><td>Schema version; the GUI guards incompatible payloads</td></tr>
 <tr><td><code>timestamp</code></td><td>ISO-8601 UTC production time (<code>datetime.now(timezone.utc).isoformat()</code>)</td></tr>
-<tr><td><code>dataset_checks</code></td><td>Whole-dataset findings: extension census (<code>inventory.extensions</code> + <code>zero_byte</code>/<code>executables</code>/<code>system_junk</code>) and the no-automated-check hint (<code>inventory.unchecked_types</code>)</td></tr>
+<tr><td><code>dataset_checks</code></td><td>Whole-dataset findings: extension census (<code>inventory.extensions</code> + <code>zero_byte</code>/<code>executables</code>/<code>system_junk</code>), access restrictions (<code>inventory.restricted_files</code>/<code>inventory.embargoed_files</code> — file names, embargo dates, terms of access) and the no-automated-check hint (<code>inventory.unchecked_types</code>)</td></tr>
 <tr><td><code>files[]</code></td><td>One entry per staged file (<code>path</code> relative POSIX, <code>size_bytes</code>, <code>mime_type</code>). Empty <code>checks</code> = no check applied or file skipped</td></tr>
 <tr><td><code>checks[]</code></td><td>One <code>CheckResult</code> per check that ran on the file (or dataset): <code>check_id</code>, <code>level</code>, <code>passed</code>, <code>message</code>, <code>details</code></td></tr>
 </table>
@@ -91,10 +91,10 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <h2>Check-ID namespaces</h2>
 <table>
 <tr><th>Namespace</th><th>Examples</th><th>Scope</th></tr>
-<tr><td><code>inventory.*</code></td><td><code>inventory.extensions</code>, <code>inventory.zero_byte</code>, <code>inventory.executables</code>, <code>inventory.system_junk</code>, <code>inventory.unchecked_types</code></td><td>dataset-level (21 registered modules in <code>engine/checks/__init__.py:registry</code>)</td></tr>
+<tr><td><code>inventory.*</code></td><td><code>inventory.extensions</code>, <code>inventory.zero_byte</code>, <code>inventory.executables</code>, <code>inventory.system_junk</code>, <code>inventory.restricted_files</code>, <code>inventory.embargoed_files</code>, <code>inventory.unchecked_types</code></td><td>dataset-level (22 registered modules in <code>engine/checks/__init__.py:registry</code>)</td></tr>
 <tr><td><code>format.&lt;format&gt;.*</code></td><td><code>format.csv.structure</code>, <code>format.gpkg.layers</code>, <code>format.pdf.text</code>, <code>format.secrets</code></td><td>per-file</td></tr>
 </table>
-<p>Registered checks live in <code>engine/checks/__init__.py:registry</code> (21 modules) — see <a href="engine-port.html">Engine port</a> for the R→Python matrix and <a href="checks-reference.html">Checks reference</a> for semantics. <code>engine/runner.py:list_planned_checks</code> enumerates IDs before execution — shown in the Auto-Checks card as planned badges, then as results.</p>
+<p>Registered checks live in <code>engine/checks/__init__.py:registry</code> (22 modules) — see <a href="engine-port.html">Engine port</a> for the R→Python matrix and <a href="checks-reference.html">Checks reference</a> for semantics. <code>engine/runner.py:list_planned_checks</code> enumerates IDs before execution — shown in the Auto-Checks card as planned badges, then as results.</p>
 
 <h2>Serialization and export</h2>
 <ul>

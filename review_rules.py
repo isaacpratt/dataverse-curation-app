@@ -181,6 +181,10 @@ def _builtin_mcmaster() -> dict[str, Any]:
            _mc_req("McMaster — Recommended (Checklist: Data License)"),
            "license_terms",
            "No data license is set. Please choose an appropriate license for the dataset."),
+        fr("license", "termsOfAccess", "Access, Embargo & Terms of Access", "optional",
+           _mc_req("McMaster — Recommended (Checklist: Data License / Access)"),
+           "access_conditions",
+           "Please confirm the access conditions for this dataset, including any embargo date and terms of access."),
         fr("citation", "timePeriodCovered", "Time Period / Date of Collection", "optional",
            _mc_req("McMaster — Recommended (Checklist: More Metadata — Time)"),
            "time_anyof",
@@ -213,6 +217,8 @@ def _builtin_mcmaster() -> dict[str, Any]:
             "*": "{check_id}: {message}",
             "inventory.zero_byte": "The file '{path}' is empty (0 bytes). Please remove it or upload the complete file.",
             "inventory.unchecked_types": "Some files need manual review: {message}",
+            "inventory.restricted_files": "The dataset has {message}. Please confirm the access conditions for these files.",
+            "inventory.embargoed_files": "The dataset has {message}. Please confirm the embargo date and terms of access.",
         },
         "response_header": (
             "Hello,\n\nThank you for depositing your dataset ({dataset_title}, {persistent_id}). "
@@ -431,7 +437,8 @@ def _blocks(metadata: dict[str, Any]) -> dict[str, Any]:
 
 
 def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any],
-                  block: str, field: str, rule: dict[str, Any] | None = None) -> tuple[bool, str]:
+                  block: str, field: str, rule: dict[str, Any] | None = None,
+                  inventory: list[dict[str, Any]] | None = None) -> tuple[bool, str]:
     m = _mc()
     rule = rule if isinstance(rule, dict) else {}
     if handler == "nonempty":
@@ -586,6 +593,13 @@ def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any]
         toa = latest.get("termsOfAccess") or metadata.get("termsOfAccess") or ""
         val = toa.get("value", "") if isinstance(toa, dict) else str(toa or "")
         return bool(val.strip()), val or "—"
+    if handler == "access_conditions":
+        # Restricted/embargoed files live in the inventory; the embargo date
+        # and terms of access are shown together so the review presents the
+        # complete access condition.
+        from engine.checks.access_check import access_conditions
+
+        return access_conditions(metadata, inventory)
     if handler == "time_anyof":
         has = m._nonempty(m._field(blocks, "citation", "timePeriodCovered")) or \
             m._nonempty(m._field(blocks, "citation", "dateOfCollection"))
@@ -910,7 +924,9 @@ def evaluate_ruleset(metadata: dict[str, Any], ruleset: dict[str, Any],
             req = str(fr.get("requirement") or "")
             level = fr.get("level") if fr.get("level") in ("required", "optional") else "required"
             handler = str(fr.get("handler") or "nonempty")
-            ok, val = _eval_handler(handler, metadata or {}, blocks, block, field, fr)
+            ok, val = _eval_handler(
+                handler, metadata or {}, blocks, block, field, fr, inventory=inventory
+            )
             # rule_id carries the handler: several rules may share one field
             # (author names vs ORCiDs both live on citation.author) and the
             # Response findings list keys off rule_id.

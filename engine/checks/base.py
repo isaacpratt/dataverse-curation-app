@@ -57,3 +57,14 @@ class Check:
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         raise NotImplementedError
+
+    def run_dataset(
+        self, files: list[Path], context: dict[str, Any] | None = None
+    ) -> list[CheckResult]:
+        """Dataset-level entry point.
+
+        ``context`` carries optional dataset metadata the runner knows
+        (currently ``inventory`` and ``metadata``). Checks that only need
+        the file list inherit this default and ignore it.
+        """
+        return self.run(files)

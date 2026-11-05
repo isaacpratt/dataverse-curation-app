@@ -49,6 +49,23 @@ def _safe_run(check_cls, files: list[Path]) -> list[CheckResult]:
         ]
 
 
+def _safe_run_dataset(
+    check_cls, files: list[Path], context: dict
+) -> list[CheckResult]:
+    """Run a dataset-level check, passing the inventory/metadata context."""
+    try:
+        return check_cls().run_dataset(files, context)
+    except Exception as exc:
+        return [
+            CheckResult(
+                check_id=check_cls.check_id,
+                level="error",
+                passed=False,
+                message=f"check crashed ({exc})",
+            )
+        ]
+
+
 def _check_description(check_cls) -> str:
     doc = (check_cls.__doc__ or "").strip().split("\n")[0]
     return doc[:80] if doc else check_cls.check_id
@@ -103,6 +120,8 @@ def run_report(
     progress_fraction=None,
     max_workers: int = 1,
     is_cancelled=None,
+    inventory: list[dict] | None = None,
+    metadata: dict | None = None,
 ) -> DatasetReport:
     """Run all applicable checks on a staged dataset directory.
 
@@ -110,7 +129,9 @@ def run_report(
     are per-file isolated via `run_per_file`). `is_cancelled` is an optional
     zero-arg callable polled between files for cooperative cancellation.
     `progress_fraction` is an optional callback receiving (done, total) so
-    a UI can show a determinate progress ring.
+    a UI can show a determinate progress ring. `inventory`/`metadata` are
+    passed to dataset-level checks (access restrictions, embargo dates and
+    terms of access); without them those checks report as skipped.
     """
     dataset_dir = Path(dataset_dir)
     try:
@@ -139,13 +160,14 @@ def run_report(
         except Exception:
             return False
 
+    dataset_context = {"inventory": inventory, "metadata": metadata}
     _report_progress(f"Found {len(files)} file(s), starting {len(dataset_level_checks())} dataset-level check(s)…")
     dataset_checks: list[CheckResult] = []
     for check_cls in dataset_level_checks():
         if _cancelled():
             break
         _report_progress(f"Running {check_cls.check_id} …")
-        dataset_checks.extend(_safe_run(check_cls, files))
+        dataset_checks.extend(_safe_run_dataset(check_cls, files, dataset_context))
 
     _report_progress(f"Running per-file checks on {len(files)} file(s)…")
 
@@ -259,13 +281,20 @@ def run_report_to_file(
     label: str = "",
     max_workers: int = 1,
     fmt: str = "json",
+    inventory: list[dict] | None = None,
+    metadata: dict | None = None,
 ) -> DatasetReport:
     """Write the report in json, md, or both (sibling extension swap).
 
     fmt="both" writes out_path as given plus the sibling (.json<->.md).
     """
     report = run_report(
-        dataset_dir, persistent_id=persistent_id, label=label, max_workers=max_workers
+        dataset_dir,
+        persistent_id=persistent_id,
+        label=label,
+        max_workers=max_workers,
+        inventory=inventory,
+        metadata=metadata,
     )
     out_path = Path(out_path)
     fmt = (fmt or "json").lower()

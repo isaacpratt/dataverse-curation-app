@@ -89,6 +89,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td><code>containers_check</code></td><td><code>format.containers.*</code></td><td>Zip <code>testzip</code>, tar members, traversal (<code>..</code>/absolute), encrypted entries; capped 10k members / 2 GiB</td><td>Corrupt (error); traversal + encrypted (warning)</td></tr>
 <tr><td><code>fastq_check</code></td><td><code>format.fastq.*</code></td><td>Gzip-aware 4-line validation (header/<code>+</code>/seq-qual length), length/GC on capped sample</td><td>Malformed incl. length mismatch (warning); no valid reads (error)</td></tr>
 <tr><td><code>extensions_check</code> (dataset)</td><td><code>inventory.*</code></td><td>Extension census, 0-byte files, executables, OS junk (nested <code>__MACOSX</code> incl.)</td><td>0-byte (error); executables/junk (warning)</td></tr>
+<tr><td><code>access_check</code> (dataset)</td><td><code>inventory.restricted_files</code>, <code>inventory.embargoed_files</code></td><td>Names restricted and embargoed files from the Dataverse inventory; each finding carries the embargo date and the dataset's terms of access</td><td>Restricted/embargoed file(s) (warning); skipped without an inventory (staged-only run)</td></tr>
 </table>
 <div class="callout warn">MATLAB <code>.mat</code> (and any format without a module) is reported once per dataset as <code>inventory.unchecked_types</code> (warning) — manual review required. <code>scipy</code> stays optional by design.</div>
 
