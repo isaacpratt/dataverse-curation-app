@@ -78,7 +78,7 @@ Get-Content $env:TEMP\docent-startup.log</code></pre>
 <tr><td><code>engine/dispatcher.py</code></td><td>Registry-driven path → checks; one strippable outer layer (<code>.fq.gz</code>→fastq, <code>.tar.gz</code>→tar); empty <code>extensions</code> = dataset-level</td></tr>
 <tr><td><code>engine/runner.py</code></td><td><code>run_report</code>, <code>run_report_to_file(fmt=json|md|both)</code>, <code>list_planned_checks</code>; symlinks skipped; <code>_safe_run</code> isolation; <code>inventory.unchecked_types</code> hint</td></tr>
 <tr><td><code>engine/tests/test_audit_fixes.py</code></td><td>32 regression tests for the audit batches (dispatch, missing-lib contract, traversal/atomicity, caps, taxonomy)</td></tr>
-<tr><td><code>ui/</code></td><td><code>widgets.py</code> kit; <code>main_window.py</code>; <code>dashboard.py</code> (COLUMNS 12, <code>_SortItem</code>, cache-first + <code>diff_dashboard_datasets</code>); <code>dataset_detail.py</code>; <code>review_config.py</code>; <code>settings_dialog.py</code>; <code>about_pane.py</code>; <code>workers.py</code> (5 QThreads); <code>dialogs.py</code> (selectable + <code>describe_error</code> + <code>confirm_save_discard_cancel</code>); <code>workflow.py</code> (Qt-free step derivation); <code>checks_tree.py</code>; <code>icons.py</code>; <code>log_panel.py</code> (<code>LogPage</code>); <code>download_dialog.py</code>; <code>theme.py</code> (single-source tokens, <code>asset_path()</code>/<code>mark_icon_path()</code>)</td></tr>
+<tr><td><code>ui/</code></td><td><code>widgets.py</code> kit; <code>main_window.py</code>; <code>dashboard.py</code> (COLUMNS 12, <code>_SortItem</code>, cache-first + <code>diff_dashboard_datasets</code>); <code>dataset_detail.py</code>; <code>review_config.py</code>; <code>settings_dialog.py</code>; <code>about_pane.py</code>; <code>workers.py</code> (5 QThreads); <code>dialogs.py</code> (selectable + <code>describe_error</code> + <code>confirm_save_discard_cancel</code>); <code>workflow.py</code> (Qt-free step derivation); <code>checks_tree.py</code>; <code>icons.py</code>; <code>log_panel.py</code> (<code>LogPage</code>); <code>download_dialog.py</code>; <code>i18n.py</code> + <code>assets/strings.json</code> (interface text); <code>status_text.py</code> (check taxonomy &rarr; display text); <code>theme.py</code> (single-source tokens, <code>asset_path()</code>/<code>mark_icon_path()</code>)</td></tr>
 </table>
 
 <h2>Adding a check</h2>
@@ -96,6 +96,24 @@ Get-Content $env:TEMP\docent-startup.log</code></pre>
 <li>Asserted equivalent findings; differences encoded as CI fixtures.</li>
 </ol>
 <p>Notable divergences documented in <a href="engine-port.html">Engine port</a>: sas7bdat magic at offset 80, gpkg pure-SQLite, netcdf per-dim capped slices, containers zip integrity, fastq gzip-aware capped sampling, csv delimiter-sniff fallback.</p>
+
+<h2>Interface text (string catalogue)</h2>
+<p>All user-visible interface copy lives in one UTF-8 JSON file: <code>ui/assets/strings.json</code>. Modules never spell out UI wording; they look it up through <code>ui/i18n.py</code>.</p>
+<table>
+<tr><th>File</th><th>Role</th></tr>
+<tr><td><code>ui/assets/strings.json</code></td><td>The catalogue. Nested objects give each screen a namespace (<code>app</code>, <code>common</code>, <code>status</code>, <code>dashboard</code>, <code>detail</code>, <code>review</code>, <code>settings</code>, <code>download</code>, <code>log</code>, <code>checks</code>, <code>workers</code>, <code>main</code>, <code>ring</code>, <code>about</code>, <code>dialogs</code>). Values are plain strings; <code>{name}</code> marks a placeholder filled at the call site.</td></tr>
+<tr><td><code>ui/i18n.py</code></td><td><code>t(key, **values)</code> renders one string, <code>tn(key, count, **values)</code> picks a plural variant, <code>has/keys/reload</code> support tooling and tests. A missing key returns the key itself, so a typo degrades instead of crashing a screen.</td></tr>
+<tr><td><code>ui/status_text.py</code></td><td>Maps the engine's stable classifier keys (<code>passed</code>, <code>failed-warning</code>, <code>failed-error</code>, <code>skipped</code>) onto catalogue entries, so the GUI never reads the engine's English labels back as data.</td></tr>
+<tr><td><code>ui/tests/test_strings.py</code></td><td>Fails the build when the catalogue and the code drift apart: unknown keys, missing placeholders, values that cannot format, a module that hard-codes interface copy again, and catalogue entries nothing references (an orphan entry is rot — it looks like live copy but no screen can show it).</td></tr>
+</table>
+<pre><code>from ui.i18n import t
+
+self._btn = AppButton(t("detail.header.download_all"))
+self._status.setText(t("detail.status.metadata_loaded", count=len(inventory)))</code></pre>
+<p><b>Conventions.</b> Keep the English wording byte-identical when moving a string — the existing tests assert exact copy. Escape literal braces as <code>{{</code> / <code>}}</code>. Namespaces follow the module that owns the text (<code>detail.*</code> for <code>ui/dataset_detail.py</code>); shared words such as <code>common.save</code>, <code>common.cancel</code> and <code>status.badges.*</code> are reused rather than duplicated. <code>ui/assets</code> already ships through the existing <code>--add-data "ui/assets;ui/assets"</code> PyInstaller rule, so frozen builds need no extra packaging step.</p>
+<p><b>Keys must be static.</b> Build the key at the call site, never from a fragment: <code>t(f"main.caption.{kind}")</code> hides the key from the string test, so a rename would render the raw key in the title bar. Keep a small lookup table instead (<code>_CAPTION_KEYS = {"min": "main.caption.min", …}</code>) — the test then sees every key as a plain string and can prove it exists.</p>
+<p><b>Out of scope.</b> The engine and the report contract are deliberately <em>not</em> externalised: check messages, result levels and the JSON/Markdown report fields are data consumed by other tools, not interface copy. QSS, object names, internal dictionary keys, URLs and format identifiers stay in code. The headless CLI messages in <code>main.py</code> are catalogue entries under <code>app.cli</code>.</p>
+<p><b>Data tokens stay in code.</b> A few strings look like copy but are part of a machine contract, so they are shared constants rather than catalogue entries: the dataset state token <code>dataverse_client.STATE_IN_REVIEW</code> (rendered by the dashboard through <code>dashboard.display_state.review</code>), the Dataverse state names compared by the status filter (<code>DRAFT</code>, <code>PUBLISHED</code>, <code>IN REVIEW</code>, <code>DEACCESSIONED</code>), the cache-slot token behind <code>dashboard_cache_key()</code>, the "no label" filter sentinel, and the network-error needles in <code>ui/dialogs.py</code> that are matched against raw exception text. Translating any of them would change behaviour, not just wording.</p>
 
 <h2>Packaging</h2>
 <pre><code>make build         # both: lite onedir + full onedir folder in dist/
@@ -115,6 +133,7 @@ make smoke         # size report + headless --help check</code></pre>
 <li>Selectable dialogs (<code>ui/dialogs.py:show_warning/show_critical/show_info</code>) for traceback-bearing errors; log every request via <code>applog.log_response</code>; the Log page's <code>QSyntaxHighlighter</code> paints ERROR red, WARNING yellow, IPs, SQL keywords, XML tags, Java backtraces.</li>
 <li>Parent every <code>QThread</code> to its view, chain <code>deleteLater</code>, adopt before discarding (<code>MainWindow._open_dataset</code>) — never destroy a live <code>QThread</code>.</li>
 <li>Theme: no hardcoded hex outside <code>theme.py</code> (enforced by <code>ui/tests/test_theme_tokens.py</code>).</li>
+<li>Interface text: no hardcoded copy outside <code>ui/assets/strings.json</code> (enforced by <code>ui/tests/test_strings.py</code>). Add a catalogue key first, then reference it with <code>t()</code>.</li>
 </ul>
 
 </div></main>

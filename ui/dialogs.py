@@ -3,6 +3,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QTextEdit, QVBoxLayout
 
+from ui.i18n import t
 from ui.theme import ERROR, PRIMARY, WARNING
 
 _ICON_COLORS = {
@@ -13,47 +14,40 @@ _ICON_COLORS = {
 
 # Plain-language rewrites for the failures workers actually raise. Matched
 # against the whole worker message (exception + traceback), case-insensitive.
+# Each entry carries the catalogue key for its headline.
 _NETWORK_HINTS = (
     (
         ("max retries exceeded", "failed to establish a new connection",
          "name or service not known", "getaddrinfo", "network is unreachable",
          "temporary failure in name resolution", "connection refused",
          "connectionreset", "connection aborted"),
-        "Could not reach the Dataverse server. Check your network connection or "
-        "the Base URL in Settings (Ctrl+,), then try again.",
+        "dialogs.network.unreachable",
     ),
     (
         ("timed out", "timeout"),
-        "The Dataverse server did not respond in time. It may be busy — try again "
-        "in a moment.",
+        "dialogs.network.timeout",
     ),
     (
         ("rejected the guestbook response", "guestbook response entry is required",
          "guestbookresponse"),
-        "Dataverse rejected the guestbook answers. Fill in every required field "
-        "(including any account field the server asks for), then try again.",
+        "dialogs.network.guestbook_rejected",
     ),
     (
         ("guestbook",),
-        "This dataset requires a Guestbook response, but the download window did "
-        "not have its fields. Reload the dataset metadata and try again — the "
-        "download window will show the guestbook form.",
+        "dialogs.network.guestbook_missing",
     ),
     (
         ("401", "403", "unauthorized", "forbidden", "invalid api token",
          "api token", "authentication"),
-        "Dataverse rejected the request — the API token may be missing, expired, or "
-        "lacking access. Update it in Settings (Ctrl+,), then try again.",
+        "dialogs.network.auth",
     ),
     (
         ("404", "not found", "no route to host"),
-        "The Dataverse URL or collection looks wrong (404). Check the Base URL and "
-        "collection alias in Settings (Ctrl+,).",
+        "dialogs.network.not_found",
     ),
     (
         ("ssl", "certificate", "handshake"),
-        "The secure connection to the Dataverse failed (certificate/SSL error). "
-        "Check the Base URL, or ask IT about the server certificate.",
+        "dialogs.network.ssl",
     ),
 )
 
@@ -66,12 +60,12 @@ def describe_error(msg: str) -> tuple[str, str]:
     """
     raw = (msg or "").strip()
     low = raw.lower()
-    for needles, headline in _NETWORK_HINTS:
+    for needles, key in _NETWORK_HINTS:
         if any(n in low for n in needles):
-            return headline, raw
+            return t(key), raw
     first_line = raw.splitlines()[0].strip() if raw else ""
     if not first_line:
-        return "Something went wrong. The technical details are below.", raw
+        return t("dialogs.generic_error"), raw
     if len(first_line) > 200:
         first_line = first_line[:197] + "..."
     return first_line, raw
@@ -125,7 +119,7 @@ def _show(
         det.setReadOnly(True)
         det.setPlainText(details)
         det.setMinimumHeight(120)
-        det.setPlaceholderText("Technical details")
+        det.setPlaceholderText(t("dialogs.technical_details"))
         layout.addWidget(det, 1)
 
     state = {"retry": False}
@@ -160,11 +154,13 @@ def show_info(parent, title: str, text: str, details: str = "", retry=None) -> N
     _show(parent, title, text, "info", details, retry)
 
 
-def confirm(parent, title: str, text: str, *, confirm_label: str = "Delete") -> bool:
+def confirm(parent, title: str, text: str, *, confirm_label: str = "") -> bool:
     """Yes/No confirmation for destructive actions. Defaults to No."""
     from PySide6.QtWidgets import QHBoxLayout
 
     from ui.icons import icon_label as _dlg_icon
+
+    confirm_label = confirm_label or t("common.delete")
 
     dlg = QDialog(parent)
     dlg.setWindowTitle(title)

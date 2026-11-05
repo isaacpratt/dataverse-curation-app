@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from config import Config
+from ui.i18n import t
 from ui.ring import RingProgress
 from ui.theme import (
     BACKGROUND,
@@ -58,19 +59,25 @@ class _BarLabel(QLabel):
 # Full column model. `key` maps to dataset dict + enriched local dates.
 # `default_visible=False` columns start hidden but can be enabled via Columns…
 COLUMNS: list[tuple[str, str, bool]] = [
-    ("title", "Dataset Title", True),
-    ("persistent_id", "Persistent ID", False),
-    ("contact", "Submitting Author", True),
-    ("depositor", "Depositor", False),
-    ("date_created", "Date Created", True),
-    ("date_published", "Date Published", False),
-    ("collection", "Collection", False),
-    ("file_count", "Files", True),
-    ("total_size_bytes", "Size", True),
-    ("state", "Status", True),
-    ("curation_label", "Curation Label", True),
-    ("downloaded_at", "Downloaded", True),
+    ("title", t("dashboard.columns.title"), True),
+    ("persistent_id", t("dashboard.columns.persistent_id"), False),
+    ("contact", t("dashboard.columns.contact"), True),
+    ("depositor", t("dashboard.columns.depositor"), False),
+    ("date_created", t("dashboard.columns.date_created"), True),
+    ("date_published", t("dashboard.columns.date_published"), False),
+    ("collection", t("dashboard.columns.collection"), False),
+    ("file_count", t("dashboard.columns.file_count"), True),
+    ("total_size_bytes", t("dashboard.columns.total_size_bytes"), True),
+    ("state", t("dashboard.columns.state"), True),
+    ("curation_label", t("dashboard.columns.curation_label"), True),
+    ("downloaded_at", t("dashboard.columns.downloaded_at"), True),
 ]
+
+# Sentinel stored as the combo's *data* for the "No label" row. The wording
+# the user reads comes from the catalogue (``dashboard.filters.label_none``);
+# this token only identifies the row internally, so a curation label that
+# happens to be called "No label" cannot collide with it.
+_NO_LABEL_SENTINEL = "__no_label__"
 
 _COLUMN_WIDTHS = {
     "title": 300,
@@ -261,26 +268,31 @@ class _SortItem(QTableWidgetItem):
 def _display_state(state: str) -> str:
     s = (state or "").upper()
     if "REVIEW" in s:
-        return "In Review"
+        return t("dashboard.display_state.review")
     if s == "DRAFT":
-        return "Draft"
+        return t("dashboard.display_state.draft")
     if s in ("RELEASED", "PUBLISHED"):
-        return "Published"
+        return t("dashboard.display_state.published")
     if s == "DEACCESSIONED":
-        return "Deaccessioned"
+        return t("dashboard.display_state.deaccessioned")
     if not s:
-        return "—"
+        return t("dashboard.display_state.unknown")
     return s.title()
 
 
 _DASHBOARD_CACHE_NAME = "dashboard_cache.json"
+
+# Cache-slot token for "no collection selected". Internal and deliberately
+# untranslated: it keys the on-disk cache, it is never shown to the user
+# (the interface wording is ``dashboard.status.whole_repository``).
+_CACHE_SLOT_ALL_COLLECTIONS = "whole repository"
 
 
 def dashboard_cache_key(base_url: str, collection: str) -> str:
     """Cache slot per instance + collection (both normalized, never raises)."""
     try:
         base = (base_url or "").rstrip("/").lower()
-        coll = (collection or "").strip().lower() or "whole repository"
+        coll = (collection or "").strip().lower() or _CACHE_SLOT_ALL_COLLECTIONS
         return f"{base}|{coll}"
     except Exception:
         return "default"
@@ -539,11 +551,23 @@ class DashboardView(QWidget):
         self._metric_subs: list[str] = []
         # When the numbers below were last measured ("never" pre-crawl) —
         # carried in every card's tooltip so a 0 is never a mystery.
-        self._last_refresh = "never"
+        self._last_refresh = t("dashboard.metrics.never")
         for accent, label, sub_text in [
-            ("tertiary", "Pending Datasets", "drafts in queue"),
-            ("primary", "In Review", "locked for review"),
-            ("error", "Needs Action", "awaiting decision"),
+            (
+                "tertiary",
+                t("dashboard.metrics.pending.label"),
+                t("dashboard.metrics.pending.sub"),
+            ),
+            (
+                "primary",
+                t("dashboard.metrics.review.label"),
+                t("dashboard.metrics.review.sub"),
+            ),
+            (
+                "error",
+                t("dashboard.metrics.action.label"),
+                t("dashboard.metrics.action.sub"),
+            ),
         ]:
             card = self._make_metric_card(accent, label, sub_text)
             self._metrics_row.addWidget(card, 1)
@@ -573,7 +597,7 @@ class DashboardView(QWidget):
         hdr_layout.setContentsMargins(16, 12, 16, 12)
         hdr_layout.setSpacing(12)
 
-        hdr_title = QLabel("Curation Queue")
+        hdr_title = QLabel(t("dashboard.queue.title"))
         hdr_title.setStyleSheet(
             f"font-size: 16px; font-weight: 600; color: {ON_SURFACE}; "
             "background: transparent; border: none;"
@@ -586,18 +610,18 @@ class DashboardView(QWidget):
         search_layout = QHBoxLayout(search_wrap)
         search_layout.setContentsMargins(0, 0, 0, 0)
         search_layout.setSpacing(0)
-        self._filter_edit = make_search_field("Search datasets, authors...")
+        self._filter_edit = make_search_field(t("dashboard.queue.search"))
         self._filter_edit.textChanged.connect(lambda _t: self._filter_timer.start())
         search_layout.addWidget(self._filter_edit, 1)
         hdr_layout.addWidget(search_wrap, 1)
 
         self._state_filter = make_combo(
             [
-                ("All Datasets", "All"),
-                ("Draft unsubmitted", "DRAFT"),
-                ("Published", "PUBLISHED"),
-                ("In Review", "IN REVIEW"),
-                ("Deaccessioned", "DEACCESSIONED"),
+                (t("dashboard.filters.all"), "All"),
+                (t("dashboard.filters.draft"), "DRAFT"),
+                (t("dashboard.filters.published"), "PUBLISHED"),
+                (t("dashboard.filters.in_review"), "IN REVIEW"),
+                (t("dashboard.filters.deaccessioned"), "DEACCESSIONED"),
             ],
             min_width=130,
         )
@@ -605,27 +629,29 @@ class DashboardView(QWidget):
         hdr_layout.addWidget(self._state_filter)
 
         self._label_filter = make_combo(
-            [("All Curation Labels", ""), ("No label", "No label")],
+            [
+                (t("dashboard.filters.label_all"), ""),
+                (t("dashboard.filters.label_none"), _NO_LABEL_SENTINEL),
+            ],
             min_width=150,
-            tip="Filter by the Dataverse curation label "
-            "(per-instance set, pulled fresh on every refresh)",
+            tip=t("dashboard.filters.label_tip"),
         )
         self._label_filter.currentTextChanged.connect(self._apply_filter)
         hdr_layout.addWidget(self._label_filter)
 
         self._collection_filter = make_combo(
-            [("All collections", "")],
+            [(t("dashboard.filters.collection_all"), "")],
             min_width=150,
-            tip="Filter by subcollection (populated from the pulled datasets)",
+            tip=t("dashboard.filters.collection_tip"),
         )
         self._collection_filter.currentTextChanged.connect(self._apply_filter)
         hdr_layout.addWidget(self._collection_filter)
 
-        self._columns_btn = AppButton("Columns…", kind="chip")
+        self._columns_btn = AppButton(t("dashboard.queue.columns"), kind="chip")
         self._columns_btn.clicked.connect(self._show_columns_menu)
         hdr_layout.addWidget(self._columns_btn)
 
-        refresh = AppButton("Refresh", kind="secondary")
+        refresh = AppButton(t("common.refresh"), kind="secondary")
         refresh.clicked.connect(self.reload)
         self._refresh_btn = refresh
         hdr_layout.addWidget(refresh)
@@ -762,7 +788,7 @@ class DashboardView(QWidget):
                 mark.setPixmap(
                     _pix.scaledToHeight(16, Qt.SmoothTransformation)
                 )
-                mark.setToolTip("Dataverse Docent")
+                mark.setToolTip(t("app.name"))
         except Exception:
             pass
         mark.setStyleSheet("border: none; background: transparent;")
@@ -805,10 +831,12 @@ class DashboardView(QWidget):
 
         has_token = bool((self._config.dataverse.api_token or "").strip())
         if not has_token and not self._restoring:
-            self._progress.setText("Enter an API key in Settings (top nav) to load datasets.")
+            self._progress.setText(t("dashboard.progress.api_key"))
         elif has_token:
             self._progress.setText(
-                "Restoring your last view…" if self._restoring else "Contacting Dataverse…"
+                t("dashboard.progress.restoring")
+                if self._restoring
+                else t("dashboard.progress.contacting")
             )
 
     # -- curation labels (per-instance set, remembered with each pull) -----
@@ -841,10 +869,20 @@ class DashboardView(QWidget):
             total = len(getattr(self, "_all_datasets", []) or [])
             lbl = getattr(self, "_status_lbl", None)
             if lbl is not None:
-                lbl.setText(f"{scope}: {len(shown_ds)}/{total} datasets shown")
+                lbl.setText(
+                    t(
+                        "dashboard.status.scope",
+                        scope=scope,
+                        shown=len(shown_ds),
+                        total=total,
+                    )
+                )
                 lbl.setToolTip(
-                    f"Active Dataverse: {base}\n"
-                    f"Collection: {alias or 'whole repository'}"
+                    t(
+                        "dashboard.status.scope_tip",
+                        base=base,
+                        collection=alias or t("dashboard.status.whole_repository"),
+                    )
                 )
         except Exception:
             pass
@@ -903,10 +941,10 @@ class DashboardView(QWidget):
             if self._cache_loaded:
                 self._progress.setText(
                     self._progress.text()
-                    + " — enter an API key in Settings to check for updates."
+                    + t("dashboard.progress.api_key_suffix")
                 )
             else:
-                self._progress.setText("Enter an API key in Settings (top nav) to load datasets.")
+                self._progress.setText(t("dashboard.progress.api_key"))
             mark("dashboard: ready (no token)")
             return
         self.reload()
@@ -984,11 +1022,14 @@ class DashboardView(QWidget):
             except Exception:
                 pass
             saved = (entry.get("saved_at") or "")[:16].replace("T", " ")
-            self._last_refresh = saved or "earlier session"
+            self._last_refresh = saved or t("dashboard.metrics.earlier_session")
             self._sync_status_bar()
             self._progress.setText(
-                f"Showing {len(self._all_datasets)} cached datasets"
-                f"{(' from ' + saved) if saved else ''} — checking for changes…"
+                t(
+                    "dashboard.progress.cached",
+                    count=len(self._all_datasets),
+                    from_=t("dashboard.progress.cached_from", when=saved) if saved else "",
+                )
             )
             return True
         except Exception:
@@ -1003,7 +1044,9 @@ class DashboardView(QWidget):
         try:
             self._collection_filter.blockSignals(True)
             self._collection_filter.clear()
-            self._collection_filter.addItem("All collections", "")
+            self._collection_filter.addItem(
+                t("dashboard.filters.collection_all"), ""
+            )
             for coll in sorted({str(ds.get("collection") or "") for ds in self._all_datasets} - {""}):
                 self._collection_filter.addItem(coll, coll)
             idx = self._collection_filter.findData(current)
@@ -1025,10 +1068,12 @@ class DashboardView(QWidget):
         try:
             self._label_filter.blockSignals(True)
             self._label_filter.clear()
-            self._label_filter.addItem("All Curation Labels", "")
+            self._label_filter.addItem(t("dashboard.filters.label_all"), "")
             for label in self._curation_labels:
                 self._label_filter.addItem(label, label)
-            self._label_filter.addItem("No label", "No label")
+            self._label_filter.addItem(
+                t("dashboard.filters.label_none"), _NO_LABEL_SENTINEL
+            )
             idx = self._label_filter.findData(current)
             self._label_filter.setCurrentIndex(idx if idx >= 0 else 0)
         finally:
@@ -1060,8 +1105,14 @@ class DashboardView(QWidget):
             from applog import get_app_log
 
             get_app_log().info(
-                "Curation label filter options: "
-                + (", ".join(f"'{lbl}'" for lbl in seen) if seen else "(none)")
+                t(
+                    "dashboard.log.label_filter_options",
+                    labels=(
+                        ", ".join(f"'{lbl}'" for lbl in seen)
+                        if seen
+                        else t("common.none_in_parentheses")
+                    ),
+                )
             )
         except Exception:
             pass
@@ -1123,7 +1174,7 @@ class DashboardView(QWidget):
         head_wrap = QHBoxLayout()
         head_wrap.setSpacing(10)
         head_wrap.addWidget(icon, 0, Qt.AlignVCenter)
-        self._empty_head = QLabel("No datasets loaded yet")
+        self._empty_head = QLabel(t("dashboard.empty.none_loaded"))
         self._empty_head.setStyleSheet(
             f"font-size: 15px; font-weight: 700; color: {ON_SURFACE}; "
             "background: transparent; border: none;"
@@ -1131,10 +1182,7 @@ class DashboardView(QWidget):
         head_wrap.addWidget(self._empty_head, 1, Qt.AlignVCenter)
         inner.addLayout(head_wrap)
 
-        self._empty_body = QLabel(
-            "Add a Dataverse API key in Settings, then refresh to pull "
-            "drafts and in-review datasets into the curation queue."
-        )
+        self._empty_body = QLabel(t("dashboard.empty.none_loaded_body"))
         self._empty_body.setWordWrap(True)
         self._empty_body.setStyleSheet(
             f"font-size: 12px; color: {ON_SURFACE_VARIANT}; "
@@ -1145,7 +1193,7 @@ class DashboardView(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
         btn_row.addStretch(1)
-        settings_btn = AppButton("Open Settings", kind="primary", size="md")
+        settings_btn = AppButton(t("dashboard.empty.open_settings"), kind="primary", size="md")
         settings_btn.clicked.connect(self.settingsRequested)
         btn_row.addWidget(settings_btn)
         inner.addLayout(btn_row)
@@ -1173,25 +1221,14 @@ class DashboardView(QWidget):
         try:
             if show:
                 if restoring:
-                    self._empty_head.setText("Restoring your last view…")
-                    self._empty_body.setText(
-                        "Painting the datasets from your last session — the "
-                        "change check follows in the background."
-                    )
+                    self._empty_head.setText(t("dashboard.empty.restoring"))
+                    self._empty_body.setText(t("dashboard.empty.restoring_body"))
                 elif has_token:
-                    self._empty_head.setText("No datasets in this collection")
-                    self._empty_body.setText(
-                        "The connected collection returned no datasets. "
-                        "Check the collection alias in Settings, or refresh "
-                        "once more."
-                    )
+                    self._empty_head.setText(t("dashboard.empty.no_collection"))
+                    self._empty_body.setText(t("dashboard.empty.no_collection_body"))
                 else:
-                    self._empty_head.setText("No datasets loaded yet")
-                    self._empty_body.setText(
-                        "Add a Dataverse API key in Settings, then refresh to "
-                        "pull drafts and in-review datasets into the curation "
-                        "queue."
-                    )
+                    self._empty_head.setText(t("dashboard.empty.none_loaded"))
+                    self._empty_body.setText(t("dashboard.empty.none_loaded_body"))
             self._empty_overlay.setVisible(show)
         except Exception:
             pass
@@ -1217,7 +1254,13 @@ class DashboardView(QWidget):
         lay.addWidget(
             _metric_icon(icon_map.get(accent, "circle"), size=18, color=border_color), 0
         )
-        lbl = QLabel(f"{label.upper()}  ·  {sub}")
+        lbl = QLabel(
+            t(
+                "dashboard.metrics.card_label",
+                label=label.upper(),
+                sub=sub,
+            )
+        )
         lbl.setStyleSheet(
             f"font-size: 11px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
             "letter-spacing: 0.5px; border: none; background: transparent;"
@@ -1363,11 +1406,13 @@ class DashboardView(QWidget):
             from ui.icons import icon as _menu_icon
 
             reset_action = QAction(
-                _menu_icon("rotate-ccw"), "Reset columns && sorting", menu
+                _menu_icon("rotate-ccw"),
+                t("dashboard.columns_menu.reset"),
+                menu,
             )
         except Exception:
-            reset_action = QAction("Reset columns && sorting", menu)
-        reset_action.setToolTip("Restore default widths, order, visibility and sort")
+            reset_action = QAction(t("dashboard.columns_menu.reset"), menu)
+        reset_action.setToolTip(t("dashboard.columns_menu.reset_tip"))
         reset_action.triggered.connect(self._reset_queue_layout)
         menu.addAction(reset_action)
         menu.exec(pos)
@@ -1420,7 +1465,7 @@ class DashboardView(QWidget):
         self._startup_started = True
         self._restoring = False
         if self._worker is not None and self._worker.isRunning():
-            self._progress.setText("Already loading — please wait…")
+            self._progress.setText(t("dashboard.progress.already_loading"))
             return
         # The collection may have changed in Settings: reseed the label
         # filter for the new top-level collection from disk (no network).
@@ -1455,7 +1500,7 @@ class DashboardView(QWidget):
         if not (self._config.dataverse.api_token or "").strip():
             self._refresh_btn.setEnabled(True)
             if not had_rows:
-                self._progress.setText("Enter an API key in Settings (top nav) to load datasets.")
+                self._progress.setText(t("dashboard.progress.api_key"))
             self._update_metrics()
             return
 
@@ -1469,10 +1514,13 @@ class DashboardView(QWidget):
             pass
         if had_rows:
             self._progress.setText(
-                f"Checking for changes… (showing {len(self._all_datasets)} cached datasets)"
+                t(
+                    "dashboard.progress.checking_cached",
+                    count=len(self._all_datasets),
+                )
             )
         else:
-            self._progress.setText("Contacting Dataverse…")
+            self._progress.setText(t("dashboard.progress.contacting"))
 
         collection = (
             getattr(self._config.dataverse, "collection", "")
@@ -1636,7 +1684,7 @@ class DashboardView(QWidget):
                     "%Y-%m-%d %H:%M"
                 )
             except Exception:
-                self._last_refresh = "just now"
+                self._last_refresh = t("dashboard.metrics.just_now")
             self._merge_row_labels()
             self._rebuild_collection_filter()
             # Persist this crawl so the next app open paints instantly.
@@ -1655,33 +1703,38 @@ class DashboardView(QWidget):
                 total = len(datasets)
                 if not had_previous:
                     self._progress.setText(
-                        f"{total} datasets shown — double-click a row to open"
+                        t("dashboard.progress.first_result", total=total)
                     )
                 elif not (n_new or n_chg or n_del):
                     self._progress.setText(
-                        f"No changes — {total} datasets up to date. Double-click a row to open"
+                        t("dashboard.progress.no_changes", total=total)
                     )
                 else:
                     parts = []
                     if n_new:
-                        parts.append(f"{n_new} new")
+                        parts.append(t("dashboard.progress.new", count=n_new))
                     if n_chg:
-                        parts.append(f"{n_chg} updated")
+                        parts.append(t("dashboard.progress.updated", count=n_chg))
                     if n_del:
-                        parts.append(f"{n_del} removed")
+                        parts.append(t("dashboard.progress.removed", count=n_del))
                     self._progress.setText(
-                        f"{', '.join(parts)} — {total} datasets shown. Double-click a row to open"
+                        t(
+                            "dashboard.progress.changes",
+                            changes=", ".join(parts),
+                            total=total,
+                        )
                     )
             except Exception:
                 pass
         except Exception as exc:
             import traceback
             self._refresh_btn.setEnabled(True)
-            self._progress.setText("Error rendering results — details in dialog")
+            self._progress.setText(t("dashboard.progress.render_error"))
             from ui.dialogs import show_warning
             show_warning(
-                self, "Dashboard",
-                "Couldn't display the dataset list.",
+                self,
+                t("dashboard.dialogs.render_title"),
+                t("dashboard.dialogs.render_text"),
                 details=f"{exc}\n\n{traceback.format_exc()}",
             )
 
@@ -1701,23 +1754,29 @@ class DashboardView(QWidget):
         loading = self._worker is not None and self._worker.isRunning()
         restoring = bool(getattr(self, "_restoring", False))
         if not self._crawled:
-            state = "Checking…" if (loading or restoring) else "Not fetched"
+            state = (
+                t("dashboard.metrics.checking")
+                if (loading or restoring)
+                else t("dashboard.metrics.not_fetched")
+            )
             if loading:
-                note = "Crawl in progress — counts land when it finishes."
+                note = t("dashboard.metrics.note_loading")
             elif restoring:
-                note = "Restoring the cached view — counts land once it paints."
+                note = t("dashboard.metrics.note_restoring")
             else:
-                note = (
-                    "No crawl has completed yet — add an API key in Settings, "
-                    "then press Refresh."
-                )
+                note = t("dashboard.metrics.note_idle")
             for card, sub in zip(self._metric_cards, self._metric_subs, strict=False):
                 v_lbl = card.findChild(QLabel, "metricValue")
                 if v_lbl:
                     v_lbl.setText(state)
                     v_lbl.setStyleSheet(_METRIC_STATE_STYLE)
                 card.setToolTip(
-                    f"{sub}\n{note}\nLast refresh: {self._last_refresh}"
+                    t(
+                        "dashboard.metrics.tooltip",
+                        sub=sub,
+                        note=note,
+                        when=self._last_refresh,
+                    )
                 )
             self._update_empty_state()
             return
@@ -1750,7 +1809,13 @@ class DashboardView(QWidget):
             if v_lbl:
                 v_lbl.setText(str(val))
                 v_lbl.setStyleSheet(_METRIC_VALUE_STYLE)
-            card.setToolTip(f"{sub}\nLast refresh: {self._last_refresh}")
+            card.setToolTip(
+                t(
+                    "dashboard.metrics.tooltip_refreshed",
+                    sub=sub,
+                    when=self._last_refresh,
+                )
+            )
         self._update_empty_state()
 
     def _cell_text(self, ds: dict, key: str) -> str:
@@ -1823,7 +1888,7 @@ class DashboardView(QWidget):
                         continue
                     elif wanted not in ("PUBLISHED", "DRAFT", "IN REVIEW", "DEACCESSIONED") and wanted != ds_state:
                         continue
-                if wanted_label == "No label":
+                if wanted_label == _NO_LABEL_SENTINEL:
                     if str(ds.get("curation_label") or "").strip():
                         continue
                 elif wanted_label:
@@ -1847,19 +1912,18 @@ class DashboardView(QWidget):
             self._update_metrics()
             self._sync_status_bar()
             if not self._all_datasets:
-                self._progress.setText(
-                    "No datasets found in this collection. Check the collection alias "
-                    "or add an API token for drafts."
-                )
+                self._progress.setText(t("dashboard.progress.no_datasets"))
             elif not filtered:
                 self._progress.setText(
-                    f"No datasets match filter — {len(self._all_datasets)} total. "
-                    "Clear the filter to see all."
+                    t(
+                        "dashboard.progress.no_match",
+                        total=len(self._all_datasets),
+                    )
                 )
             else:
                 # Counts + scope live in the status bar now — the pill keeps
                 # the standing hint instead of repeating them.
-                self._progress.setText("Double-click a row to open it")
+                self._progress.setText(t("dashboard.progress.open_hint"))
 
             # Painting window: the table is a QTableWidget (one heap
             # item per cell), so 25k rows × 12 columns is 300k items
@@ -1868,8 +1932,12 @@ class DashboardView(QWidget):
             paint_rows = filtered[: DashboardView._MAX_PAINTED_ROWS]
             if len(paint_rows) < len(filtered):
                 self._progress.setText(
-                    f"Showing {len(paint_rows):,} of {len(filtered):,} matching "
-                    f"({len(self._all_datasets):,} total) — narrow the filter to see more"
+                    t(
+                        "dashboard.progress.painted_cap",
+                        shown=len(paint_rows),
+                        matching=len(filtered),
+                        total=len(self._all_datasets),
+                    )
                 )
 
             self._table.setSortingEnabled(False)
@@ -1881,15 +1949,19 @@ class DashboardView(QWidget):
                     item = _SortItem(text_val)
                     item.setToolTip(text_val)
                     if key == "total_size_bytes":
-                        if text_val == "—":
+                        if text_val == t("dashboard.display_state.unknown"):
                             if ds.get("size_pending"):
-                                item.setToolTip("Beyond the enrichment cap — open the dataset to load its file inventory")
+                                item.setToolTip(t("dashboard.table.size_pending"))
                             else:
-                                item.setToolTip("Size unknown — open the dataset to load its file inventory")
+                                item.setToolTip(t("dashboard.table.size_unknown"))
                         elif ds.get("size_enriched"):
-                            item.setToolTip(f"{text_val} — summed from live file inventory")
+                            item.setToolTip(
+                                t("dashboard.table.size_enriched", value=text_val)
+                            )
                         elif ds.get("size_from_cache"):
-                            item.setToolTip(f"{text_val} — summed from downloaded metadata")
+                            item.setToolTip(
+                                t("dashboard.table.size_cached", value=text_val)
+                            )
                     sort_key = self._cell_sort_key(ds, key)
                     item.setData(Qt.UserRole, sort_key)
                     if key in ("date_created", "date_published", "downloaded_at",
@@ -1908,11 +1980,12 @@ class DashboardView(QWidget):
         except Exception as exc:
             import traceback
             self._refresh_btn.setEnabled(True)
-            self._progress.setText("Error rendering results — details in dialog")
+            self._progress.setText(t("dashboard.progress.render_error"))
             from ui.dialogs import show_warning
             show_warning(
-                self, "Dashboard",
-                "Couldn't display the dataset list.",
+                self,
+                t("dashboard.dialogs.render_title"),
+                t("dashboard.dialogs.render_text"),
                 details=f"{exc}\n\n{traceback.format_exc()}",
             )
 
@@ -1920,7 +1993,7 @@ class DashboardView(QWidget):
         from ui.dialogs import describe_error, show_warning
         self._worker = None
         self._refresh_btn.setEnabled(True)
-        self._progress.setText("Error — details in dialog (Retry available)")
+        self._progress.setText(t("dashboard.progress.load_error"))
         # Red ring: the failure is visible without opening the dialog.
         try:
             self._ring.show()
@@ -1930,7 +2003,7 @@ class DashboardView(QWidget):
         headline, details = describe_error(msg)
         show_warning(
             self,
-            "Can't load datasets",
+            t("dashboard.dialogs.load_title"),
             headline,
             details=details,
             retry=self.reload,

@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.i18n import t
 from ui.theme import (
     AMBER_700,
     BACKGROUND,
@@ -413,7 +414,9 @@ def add_info_tip(header_layout, *paragraphs: str, name: str = "") -> QToolButton
     btn.setAutoRaise(True)
     btn.setCursor(Qt.WhatsThisCursor)
     btn.setToolTip(tip)
-    btn.setAccessibleName(f"About {name}" if name else "Section help")
+    btn.setAccessibleName(
+        t("common.about_named", name=name) if name else t("common.section_help")
+    )
     btn.setAccessibleDescription(tip)
     btn.setStyleSheet(
         "QToolButton#InfoTip { background: transparent; border: none; "

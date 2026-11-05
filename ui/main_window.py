@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 from config import Config
 from ui.dashboard import DashboardView
 from ui.dialogs import show_warning
+from ui.i18n import t
 from ui.icons import icon as lucide_icon
 from ui.theme import (
     BACKGROUND,
@@ -238,12 +239,21 @@ _CAPTION_GLYPHS = {
     "restore": QStyle.SP_TitleBarNormalButton,
     "close": QStyle.SP_TitleBarCloseButton,
 }
-_CAPTION_TIPS = {"min": "Minimize", "max": "Maximize", "restore": "Restore", "close": "Close"}
-_CAPTION_A11Y = {
-    "min": "Minimize window",
-    "max": "Maximize window",
-    "restore": "Restore window",
-    "close": "Close window",
+
+# Caption labels come from the catalogue. The tables keep every lookup
+# static — a built-up key ("main.caption." + kind) would hide the key from
+# ui/tests/test_strings.py, which proves every referenced key exists.
+_CAPTION_KEYS = {
+    "min": "main.caption.min",
+    "max": "main.caption.max",
+    "restore": "main.caption.restore",
+    "close": "main.caption.close",
+}
+_CAPTION_A11Y_KEYS = {
+    "min": "main.caption.min_a11y",
+    "max": "main.caption.max_a11y",
+    "restore": "main.caption.restore_a11y",
+    "close": "main.caption.close_a11y",
 }
 
 
@@ -285,8 +295,10 @@ class _CaptionButton(QPushButton):
         self._hovered = False
         self.setFixedSize(46, 32)
         self.setCursor(Qt.PointingHandCursor)
-        self.setToolTip(_CAPTION_TIPS[kind])
-        self.setAccessibleName(_CAPTION_A11Y[kind])
+        self.setToolTip(t(_CAPTION_KEYS.get(kind, _CAPTION_KEYS["close"])))
+        self.setAccessibleName(
+            t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"]))
+        )
         self.setIconSize(QSize(14, 14))
         self.setStyleSheet(_WIN_CLOSE_QSS if kind == "close" else _WIN_BTN_QSS)
         self._apply_icon()
@@ -296,7 +308,7 @@ class _CaptionButton(QPushButton):
         if kind == self._kind:
             return
         self._kind = kind
-        self.setToolTip(_CAPTION_TIPS[kind])
+        self.setToolTip(t(_CAPTION_KEYS.get(kind, _CAPTION_KEYS["close"])))
         self._apply_icon()
 
     def _apply_icon(self) -> None:
@@ -352,7 +364,7 @@ class MainWindow(QMainWindow):
         self._config = config
         self._metadata_cache: dict[str, tuple[dict, list]] = {}
         self._open_pids: list[tuple[str, str]] = []
-        self.setWindowTitle("Dataverse Docent")
+        self.setWindowTitle(t("main.window_title"))
         # Window-level icon so the Windows taskbar always shows the 16x16
         # mark (main.py also sets it on QApplication; dialogs inherit).
         try:
@@ -403,10 +415,12 @@ class MainWindow(QMainWindow):
         nav_lay.setContentsMargins(12, 0, 0, 0)
         nav_lay.setSpacing(6)
 
-        self._nav_dashboard = AppButton("Dashboard", kind="nav-active", size=None)
+        self._nav_dashboard = AppButton(
+            t("main.nav.dashboard"), kind="nav-active", size=None
+        )
         self._nav_dashboard.setCursor(Qt.PointingHandCursor)
         self._nav_dashboard.setFixedHeight(32)
-        self._nav_dashboard.setToolTip("Back to the dashboard (Alt+Left)")
+        self._nav_dashboard.setToolTip(t("main.nav.dashboard_tip"))
         self._nav_dashboard.clicked.connect(self._show_dashboard)
         nav_lay.addWidget(self._nav_dashboard)
 
@@ -422,16 +436,16 @@ class MainWindow(QMainWindow):
         self._nav_settings.setCheckable(True)
         self._nav_settings.setCursor(Qt.PointingHandCursor)
         self._nav_settings.setFixedSize(32, 32)
-        self._nav_settings.setToolTip("Settings")
-        self._nav_settings.setAccessibleName("Settings")
+        self._nav_settings.setToolTip(t("main.nav.settings"))
+        self._nav_settings.setAccessibleName(t("main.nav.settings"))
         self._nav_settings.toggled.connect(self._on_settings_toggled)
         nav_lay.addWidget(self._nav_settings)
 
         self._nav_requirements = AppButton("", kind="nav", size=None)
         self._nav_requirements.setCursor(Qt.PointingHandCursor)
         self._nav_requirements.setFixedSize(32, 32)
-        self._nav_requirements.setToolTip("Configure Rules")
-        self._nav_requirements.setAccessibleName("Configure Rules")
+        self._nav_requirements.setToolTip(t("main.nav.rules"))
+        self._nav_requirements.setAccessibleName(t("main.nav.rules"))
         self._nav_requirements.clicked.connect(self._show_review_config)
         nav_lay.addWidget(self._nav_requirements)
 
@@ -439,8 +453,8 @@ class MainWindow(QMainWindow):
         self._nav_log.setCheckable(True)
         self._nav_log.setCursor(Qt.PointingHandCursor)
         self._nav_log.setFixedSize(32, 32)
-        self._nav_log.setToolTip("Log")
-        self._nav_log.setAccessibleName("Log")
+        self._nav_log.setToolTip(t("main.nav.log"))
+        self._nav_log.setAccessibleName(t("main.nav.log"))
         self._nav_log.toggled.connect(self._on_log_toggled)
         nav_lay.addWidget(self._nav_log)
 
@@ -448,8 +462,8 @@ class MainWindow(QMainWindow):
         self._nav_help.setCheckable(True)
         self._nav_help.setFixedSize(32, 32)
         self._nav_help.setCursor(Qt.PointingHandCursor)
-        self._nav_help.setToolTip("About")
-        self._nav_help.setAccessibleName("About")
+        self._nav_help.setToolTip(t("main.nav.about"))
+        self._nav_help.setAccessibleName(t("main.nav.about"))
         self._nav_help.toggled.connect(self._on_about_toggled)
         nav_lay.addWidget(self._nav_help)
         self._sync_nav_icons()
@@ -814,7 +828,11 @@ class MainWindow(QMainWindow):
         try:
             self._dashboard.reload()
         except Exception as exc:
-            show_warning(self, "Dashboard", f"Could not refresh dashboard:\n{exc}")
+            show_warning(
+                self,
+                t("main.warnings.dashboard_title"),
+                t("main.warnings.dashboard_refresh", exc=exc),
+            )
 
     def _on_settings_saved(self) -> None:
         self._show_pane(None)
@@ -878,7 +896,7 @@ class MainWindow(QMainWindow):
             if w:
                 w.deleteLater()
         if not self._open_pids:
-            hint = QLabel("No dataset open")
+            hint = QLabel(t("main.no_dataset"))
             hint.setStyleSheet(
                 f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;"
             )
@@ -909,7 +927,9 @@ class MainWindow(QMainWindow):
             # NOTE: split-chip one-off (see ui/widgets.py) — not AppButton by design.
             open_btn = QPushButton(label)
             open_btn.setCursor(Qt.PointingHandCursor)
-            open_btn.setToolTip(f"{label}\n{pid}\nClick to open")
+            open_btn.setToolTip(
+                t("main.chip_open", label=label, pid=pid)
+            )
             open_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
             open_btn.setFixedHeight(28)
             open_btn.setMaximumWidth(220)
@@ -928,8 +948,8 @@ class MainWindow(QMainWindow):
             lay.addWidget(open_btn)
             close_btn = QPushButton()
             close_btn.setCursor(Qt.PointingHandCursor)
-            close_btn.setToolTip(f"Close {label}")
-            close_btn.setAccessibleName(f"Close {label}")
+            close_btn.setToolTip(t("main.chip_close", label=label))
+            close_btn.setAccessibleName(t("main.chip_close", label=label))
             close_btn.setFixedSize(28, 28)
             try:
                 from PySide6.QtCore import QSize as _QSize
@@ -1280,10 +1300,14 @@ class MainWindow(QMainWindow):
                     return
                 try:
                     if int(hr) == 0:
-                        _get_log().info(f"DWM frame: {what} applied")
+                        _get_log().info(t("main.log.dwm_applied", what=what))
                     else:
                         _get_log().error(
-                            f"DWM frame: {what} failed (HRESULT 0x{int(hr) & 0xFFFFFFFF:08X})"
+                            t(
+                                "main.log.dwm_failed",
+                                what=what,
+                                code=f"{int(hr) & 0xFFFFFFFF:08X}",
+                            )
                         )
                 except Exception:
                     pass
@@ -1295,7 +1319,7 @@ class MainWindow(QMainWindow):
             hr_frame = dwmapi.DwmExtendFrameIntoClientArea(
                 wintypes.HWND(hwnd), ctypes.byref(margins)
             )
-            _report("1px extended frame (border + shadow)", hr_frame)
+            _report(t("main.log.dwm_frame"), hr_frame)
             # Win11 22000+: standard rounded corners (fails harmlessly on
             # Win10, where the attribute does not exist — logged, not raised).
             _DWMWA_WINDOW_CORNER_PREFERENCE = 33
@@ -1307,7 +1331,7 @@ class MainWindow(QMainWindow):
                 ctypes.byref(pref),
                 ctypes.sizeof(pref),
             )
-            _report("rounded corners", hr_corners)
+            _report(t("main.log.dwm_corners"), hr_corners)
         except Exception:
             pass
 
@@ -1541,7 +1565,11 @@ class MainWindow(QMainWindow):
             self._style_nav_for_detail(True)
             self._rebuild_chips()
         except Exception as exc:
-            show_warning(self, "Review configuration", f"Could not open review configuration:\n{exc}")
+            show_warning(
+                self,
+                t("main.warnings.review_title"),
+                t("main.warnings.review_open", exc=exc),
+            )
 
     def _on_review_config_saved(self) -> None:
         if self._detail is not None:

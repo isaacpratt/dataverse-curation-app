@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 import applog
+from ui.i18n import t
 from ui.theme import (
     AMBER_700,
     ERROR,
@@ -56,7 +57,7 @@ class LogPage(QWidget):
 
         header = QHBoxLayout()
         header.setSpacing(8)
-        title = QLabel("Dataverse Communication Log")
+        title = QLabel(t("log.title"))
         title.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {ON_SURFACE}; background: transparent; border: none;")
         header.addWidget(title)
         # Severity legend: chips reuse the highlighter's exact fills, so the
@@ -64,55 +65,55 @@ class LogPage(QWidget):
         # itself; reachable without hovering).
         legend = QHBoxLayout()
         legend.setSpacing(4)
-        err_chip = QLabel("ERROR")
+        err_chip = QLabel(t("log.err_chip"))
         err_chip.setStyleSheet(
             f"font-size: 10px; font-weight: 700; color: {ON_ERROR}; background: {ERROR};"
             " border: none; border-radius: 4px; padding: 1px 6px;"
         )
-        err_chip.setToolTip("Lines containing ERROR render on the brand error fill (bold)")
+        err_chip.setToolTip(t("log.err_tip"))
         legend.addWidget(err_chip)
-        warn_chip = QLabel("WARN")
+        warn_chip = QLabel(t("log.warn_chip"))
         warn_chip.setStyleSheet(
             f"font-size: 10px; font-weight: 700; color: {ON_ERROR_CONTAINER}; background: {ERROR_CONTAINER};"
             " border: none; border-radius: 4px; padding: 1px 6px;"
         )
-        warn_chip.setToolTip("Lines containing WARN/WARNING render on the warm fill (bold)")
+        warn_chip.setToolTip(t("log.warn_tip"))
         legend.addWidget(warn_chip)
-        plain_chip = QLabel("INFO · DEBUG plain")
+        plain_chip = QLabel(t("log.plain_chip"))
         plain_chip.setStyleSheet(
             f"font-size: 10px; color: {ON_SURFACE_VARIANT}; background: transparent;"
             " border: none; padding: 1px 0;"
         )
-        plain_chip.setToolTip("Everything else stays unstyled; identifiers and details keep their accents")
+        plain_chip.setToolTip(t("log.plain_tip"))
         legend.addWidget(plain_chip)
         header.addLayout(legend)
         header.addStretch(1)
         # Search box: filter visible lines (case-insensitive substring).
         # Standard search field — same 36px box + 13px text as the
         # dashboard/detail/review filters (was a bespoke 28px/12px box).
-        self._search = make_search_field("Search log…", min_width=180)
+        self._search = make_search_field(t("log.search"), min_width=180)
         self._search.textChanged.connect(self._on_search_changed)
         header.addWidget(self._search)
         # Live toggle — standard secondary button, same face/height as the
         # Clear log + Refresh buttons beside it (was a bespoke 28px/10px box).
-        self._live_btn = AppButton("Live", kind="secondary")
+        self._live_btn = AppButton(t("log.live"), kind="secondary")
         self._live_btn.setCheckable(True)
         self._live_btn.setChecked(True)
         self._live_btn.setStyleSheet(action_button_style(False))
-        self._live_btn.setToolTip("Follow new log lines as they arrive (click to pause)")
+        self._live_btn.setToolTip(t("log.live_tip"))
         self._live_btn.toggled.connect(self._on_live_toggled)
         self._style_live_btn()
         header.addWidget(self._live_btn)
-        clear_btn = AppButton("Clear log", kind="secondary")
+        clear_btn = AppButton(t("log.clear"), kind="secondary")
         clear_btn.setStyleSheet(action_button_style(False))
-        clear_btn.setToolTip("Clear the log buffer")
-        clear_btn.setAccessibleName("Clear log buffer")
+        clear_btn.setToolTip(t("log.clear_tip"))
+        clear_btn.setAccessibleName(t("log.clear_a11y"))
         clear_btn.clicked.connect(self._clear)
         header.addWidget(clear_btn)
-        refresh_btn = AppButton("Refresh", kind="secondary")
+        refresh_btn = AppButton(t("log.refresh"), kind="secondary")
         refresh_btn.setStyleSheet(action_button_style(False))
-        refresh_btn.setToolTip("Refresh log now")
-        refresh_btn.setAccessibleName("Refresh log now")
+        refresh_btn.setToolTip(t("log.refresh_tip"))
+        refresh_btn.setAccessibleName(t("log.refresh_a11y"))
         refresh_btn.clicked.connect(self._refresh)
         header.addWidget(refresh_btn)
         layout.addLayout(header)
@@ -122,10 +123,7 @@ class LogPage(QWidget):
         font = QFont("Consolas")
         font.setStyleHint(QFont.Monospace)
         self._view.setFont(font)
-        self._view.setPlaceholderText(
-            "Nothing logged yet — run checks, download files, or refresh the "
-            "dashboard and every Dataverse request will appear here."
-        )
+        self._view.setPlaceholderText(t("log.placeholder"))
         self._view.setStyleSheet(
             f"QPlainTextEdit {{ background: {SURFACE_CONTAINER_LOW}; color: {ON_SURFACE}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 6px 8px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; }}"
         )
@@ -164,7 +162,7 @@ class LogPage(QWidget):
         from ui.icons import icon as _live_icon
 
         live = self._live_btn.isChecked()
-        self._live_btn.setText("Live" if live else "Paused")
+        self._live_btn.setText(t("log.live") if live else t("log.paused"))
         try:
             self._live_btn.setIcon(
                 _live_icon("circle-dot", color=PRIMARY_DEEP)
@@ -176,13 +174,13 @@ class LogPage(QWidget):
     def _on_live_toggled(self, checked: bool) -> None:
         self._style_live_btn()
         if checked:
-            self._live_btn.setToolTip("Follow new log lines as they arrive (click to pause)")
+            self._live_btn.setToolTip(t("log.live_tip"))
             self._last_len = -1  # force a catch-up refresh
             self._last_display = None
             if not self._timer.isActive():
                 self._timer.start(800)
         else:
-            self._live_btn.setToolTip("Paused — new lines are buffered (click to resume)")
+            self._live_btn.setToolTip(t("log.paused_tip"))
             self._timer.stop()
 
     def _refresh(self) -> None:
@@ -194,9 +192,9 @@ class LogPage(QWidget):
             pass
         if needle:
             lines = [ln for ln in lines if needle in ln.lower()]
-            display = "\n".join(lines) or "(no matching lines)"
+            display = "\n".join(lines) or t("log.no_match")
         else:
-            display = "\n".join(lines) or "(log is empty)"
+            display = "\n".join(lines) or t("log.empty")
         # Length alone no longer tracks the buffer when filtering — compare text.
         if display != getattr(self, "_last_display", None) or len(lines) != self._last_len:
             self._view.setPlainText(display)
@@ -208,11 +206,16 @@ class LogPage(QWidget):
                 total = len(applog.lines())
                 if needle:
                     self._live_btn.setToolTip(
-                        f"Showing {len(lines)} of {total} line(s) matching “{self._search.text().strip()}”"
+                        t(
+                            "log.matching_tip",
+                            shown=len(lines),
+                            total=total,
+                            query=self._search.text().strip(),
+                        )
                     )
                 else:
                     self._live_btn.setToolTip(
-                        f"Follow new log lines as they arrive — {total} line(s) buffered (click to pause)"
+                        t("log.buffered_tip", total=total)
                     )
             except Exception:
                 pass
