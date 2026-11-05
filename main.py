@@ -96,6 +96,11 @@ def main(argv: list[str] | None = None) -> int:
         help=t("app.cli.headless_help"),
     )
     parser.add_argument(
+        "--gallery",
+        action="store_true",
+        help=t("app.cli.gallery_help"),
+    )
+    parser.add_argument(
         "dataset_dir", nargs="?", help=t("app.cli.dataset_dir_help")
     )
     parser.add_argument("--out", default="curation_report.json", help=t("app.cli.out_help"))
@@ -231,6 +236,16 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         pass
     mark("theme applied")
+
+    if args.gallery:
+        # The component gallery needs no server, token or workspace: it
+        # shows the kit, not the data.
+        from ui.gallery import build_gallery
+
+        gallery = build_gallery()
+        gallery.show()
+        mark("gallery shown")
+        return app.exec()
 
     # Global crash guard — show a copyable dialog instead of silently exiting
     def _excepthook(exc_type, exc, tb):

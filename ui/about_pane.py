@@ -13,14 +13,19 @@ from PySide6.QtWidgets import (
 
 from ui.i18n import t
 from ui.theme import (
-    BACKGROUND,
-    ON_SECONDARY_CONTAINER,
-    ON_SURFACE,
-    ON_SURFACE_VARIANT,
-    OUTLINE_VARIANT,
-    SURFACE_CONTAINER_LOWEST,
+    BORDER_SUBTLE,
+    SURFACE_CARD,
+    TEXT_SUBTLE,
+    page_background_qss,
+    surface_frame_qss,
+    transparent_surface_qss,
 )
-from ui.widgets import AppButton
+from ui.widgets import (
+    AppButton,
+    make_action_button,
+    make_body_label,
+    make_page_heading,
+)
 
 
 def _app_version() -> str:
@@ -95,23 +100,21 @@ class AboutPane(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds below this pane.
         self.setObjectName("AboutPane")
-        self.setStyleSheet(f"QWidget#AboutPane {{ background: {BACKGROUND}; }}")
+        self.setStyleSheet(page_background_qss("AboutPane"))
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 24, 24, 24)
         outer.setSpacing(16)
 
-        heading = QLabel(t("about.heading"))
-        heading.setStyleSheet(
-            f"font-size: 22px; font-weight: 600; color: {ON_SURFACE}; "
-            "border: none; background: transparent;"
-        )
+        # Shared page-heading contract (HeadlineLG theme token)
+        # same title look as Settings, Review configuration and Log.
+        heading, _subtitle = make_page_heading(t("about.heading"))
         outer.addWidget(heading)
 
         card = QFrame()
         card.setObjectName("Card")
         card.setStyleSheet(
-            f"QFrame#Card {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; }}"
+            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card")
         )
         body = QVBoxLayout(card)
         body.setContentsMargins(20, 20, 20, 20)
@@ -121,14 +124,13 @@ class AboutPane(QWidget):
             t(
                 "about.title",
                 version=_app_version(),
-                muted=ON_SECONDARY_CONTAINER,
+                muted=TEXT_SUBTLE,
             )
         )
         title.setTextFormat(Qt.RichText)
-        title.setStyleSheet(
-            f"font-size: 16px; font-weight: 600; color: {ON_SURFACE}; "
-            "border: none; background: transparent;"
-        )
+        # The product title wears the theme's HeadlineMD token (16px
+        # semibold) - the app's card-title look, with no inline style.
+        title.setObjectName("HeadlineMD")
         title.setWordWrap(True)
         # App mark beside the title (2026-10-06 Dataverse Docent rebrand;
         # 2026-10-07 bumped to the icon's native 64×64).
@@ -145,7 +147,7 @@ class AboutPane(QWidget):
                 mark.setPixmap(pix.scaledToHeight(64, Qt.SmoothTransformation))
         except Exception:
             pass
-        mark.setStyleSheet("border: none; background: transparent;")
+        mark.setStyleSheet(transparent_surface_qss("DocentMark"))
         mark.setFixedWidth(64)
         head_row.addWidget(mark, 0, Qt.AlignTop)
         head_row.addWidget(title, 1)
@@ -158,39 +160,24 @@ class AboutPane(QWidget):
 
         left = QVBoxLayout()
         left.setSpacing(10)
-        blurb = QLabel(t("about.blurb"))
-        blurb.setWordWrap(True)
-        blurb.setStyleSheet(
-            f"font-size: 13px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;"
-        )
+        blurb = make_body_label(t("about.blurb"))
         left.addWidget(blurb)
-
-        bullets = QLabel(t("about.bullets"))
+        bullets = make_body_label(t("about.bullets"))
         bullets.setTextFormat(Qt.RichText)
-        bullets.setWordWrap(True)
-        bullets.setStyleSheet(
-            f"font-size: 13px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;"
-        )
         left.addWidget(bullets)
         cols.addLayout(left, 3)
 
         right = QVBoxLayout()
         right.setSpacing(8)
         diag_head = QLabel(t("about.diagnostics"))
-        diag_head.setStyleSheet(
-            f"font-size: 11px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
-            "letter-spacing: 0.5px; border: none; background: transparent;"
-        )
+        diag_head.setObjectName("LabelMD")
         right.addWidget(diag_head)
         diag = QLabel(_diag_text())
         diag.setTextFormat(Qt.PlainText)
         diag.setWordWrap(True)
-        diag.setStyleSheet(
-            f"font-size: 12px; color: {ON_SURFACE_VARIANT}; border: none; "
-            "background: transparent; font-family: 'JetBrains Mono', Consolas, monospace;"
-        )
+        diag.setObjectName("MonoSM")
         right.addWidget(diag)
-        copy_btn = AppButton(t("about.copy"), kind="secondary")
+        copy_btn = make_action_button(t("about.copy"), kind="secondary")
         copy_btn.setToolTip(t("about.copy_tip"))
         copy_btn.clicked.connect(lambda: self._copy_diagnostics(copy_btn))
         right.addWidget(copy_btn)
@@ -210,7 +197,7 @@ class AboutPane(QWidget):
 
         row = QHBoxLayout()
         row.setSpacing(8)
-        back_btn = AppButton(t("about.close"), kind="secondary")
+        back_btn = make_action_button(t("about.close"), kind="secondary")
         back_btn.setAccessibleName(t("about.close_a11y"))
         back_btn.clicked.connect(lambda: self.discarded.emit())
         try:

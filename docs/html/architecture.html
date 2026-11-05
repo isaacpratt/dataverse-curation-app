@@ -58,8 +58,106 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td>Metadata completeness</td><td><code>metadata_check.py</code> + <code>review_rules.py</code></td><td>Rule-driven completeness from versioned rulesets (<code>mcmaster-default</code> derived from the McMaster Curation Log / Depositor Checklist — source PDFs retired 2026-10-07, rules live in code — and <code>minimal</code>), per-author ORCID + author count + license/terms handlers, README/text-search content rules, <code>requirements_profiles.json</code> v2, per-Dataverse assignment.</td></tr>
 <tr><td>Local state</td><td><code>storage.py</code> (+ <code>ui/dashboard.py</code> cache helpers)</td><td>SQLite <code>state.db</code> (datasets/files/check_results/curation_actions) + JSON caches: <code>dataset_sizes.json</code>, <code>curation_labels.json</code>, <code>dashboard_cache.json</code> (instant paint + change-only refresh), <code>table_layout.json</code> (<code>restore_table_state → bool</code> locks auto-fit when a saved view applied).</td></tr>
 <tr><td>App log</td><td><code>applog.py</code></td><td>In-memory ring buffer (<code>AppLog</code>, 2000 lines), <code>log_response(method, URL, status, ms, summary)</code> with token redaction, surfaced in the Log stack page.</td></tr>
-<tr><td>GUI</td><td><code>ui/</code> (17 modules)</td><td>Dashboard (12 columns, filters, cache-first paint + <code>diff_dashboard_datasets</code>, painted-row window), dataset detail (main + sticky sidebar, assessment pushes label via <code>set_curation_label</code>), settings / review-config / about / log stack pages, workers (<code>Crawl/Download/Check/Metadata/MetadataBlocks</code>), selectable dialogs, manifest tree (<code>checks_tree.py</code>), progress ring (<code>ring.py</code> + pure <code>progress.py</code>), shared kit (<code>widgets.py</code>) + theme tokens (<code>theme.py</code>, incl. visible <code>QHeaderView</code> dividers).</td></tr>
+<tr><td>GUI</td><td><code>ui/</code> (17 modules)</td><td>Dashboard (12 columns, filters, cache-first paint + <code>diff_dashboard_datasets</code>, painted-row window), dataset detail (main + sticky sidebar, assessment pushes label via <code>set_curation_label</code>), settings / review-config / about / log stack pages, workers (<code>Crawl/Download/Check/Metadata/MetadataBlocks</code>), selectable dialogs, manifest tree (<code>checks_tree.py</code>), progress ring (<code>ring.py</code> + pure <code>progress.py</code>), shared kit (<code>widgets.py</code>: <code>AppTable</code>/<code>AppTree</code>, the builders, the component gallery) + the layout controller (<code>table_layout.py</code>) + the theme (<code>theme.py</code>: palette, role layer, contrast contract, visible <code>QHeaderView</code> dividers) &mdash; see the UI layering contract below.</td></tr>
 </table>
+
+<h2>UI layering contract</h2>
+<p>Every pixel the app draws comes from one place, and there are exactly three layers. A view composes them; it never paints.</p>
+<div class="flow">
+<div class="step"><b><span class="n">1</span>Palette</b><code>ui/theme.py</code> &mdash; what a colour <i>is</i>: <code>PRIMARY</code>, <code>SURFACE_CONTAINER_LOW</code>, <code>ERROR</code>. Raw values, no meaning attached.</div>
+<div class="arrow">&rarr;</div>
+<div class="step"><b><span class="n">2</span>Role</b>What a colour is <i>for</i>: <code>ACCENT_PRIMARY</code>, <code>SURFACE_CARD</code>, <code>TEXT_DANGER</code>. Plain aliases over the palette, so a theme swap is a table edit.</div>
+<div class="arrow">&rarr;</div>
+<div class="step"><b><span class="n">3</span>Component</b>The kit (<code>ui/widgets.py</code>): <code>make_action_button()</code>, <code>make_badge()</code>, <code>make_list()</code>. What the user touches.</div>
+</div>
+<div class="callout">Only <code>ui/theme.py</code> and <code>ui/widgets.py</code> may name a palette entry. A view names a role (<code>SURFACE_CARD</code>), the kit builds the component, and the theme owns the rules. The rules are checked, not reviewed: <code>ui/tests/test_theme_conformance.py</code> fails the build when a view paints for itself, names a raw colour, builds a raw input widget, or builds a button sheet by hand.</div>
+
+<h3>The role layer</h3>
+<table>
+<tr><th>Group</th><th>Roles</th><th>What it is for</th></tr>
+<tr><td>Text</td><td><code>TEXT_PRIMARY</code>, <code>TEXT_MUTED</code>, <code>TEXT_SUBTLE</code>, <code>TEXT_ON_ACCENT</code>, <code>TEXT_ON_TINT</code>, <code>TEXT_ON_SECONDARY</code>, <code>TEXT_ON_ERROR</code>, <code>TEXT_DANGER</code>, <code>TEXT_SUCCESS</code>, <code>TEXT_WARNING</code>, <code>TEXT_AMBER</code>, <code>TEXT_DISABLED</code></td><td>Copy on a known surface. Each role names the surface it is meant to sit on, which is what makes the pairing checkable.</td></tr>
+<tr><td>Surface</td><td><code>SURFACE_PAGE</code>, <code>SURFACE_CARD</code>, <code>SURFACE_TINT</code>, <code>SURFACE_SUBTLE</code>, <code>SURFACE_ROW</code>, <code>SURFACE_HEADER</code>, <code>SURFACE_RAISED</code>, <code>SURFACE_ALT</code>, <code>SURFACE_DISABLED</code></td><td>The plane a component sits on: the page behind everything, a card, a header band, a disabled control's face.</td></tr>
+<tr><td>Border</td><td><code>BORDER_SUBTLE</code>, <code>BORDER_STRONG</code>, <code>BORDER_DISABLED</code></td><td>An edge that separates (subtle), an edge that carries meaning (strong), an edge of a control that cannot be used.</td></tr>
+<tr><td>Accent</td><td><code>ACCENT_PRIMARY</code>, <code>ACCENT_PRIMARY_HOVER</code>, <code>ACCENT_PRIMARY_PRESSED</code>, <code>ACCENT_PRIMARY_DISABLED</code>, <code>ACCENT_PRIMARY_DEEP</code>, <code>ACCENT_TINT</code>, <code>ACCENT_FOCUS_TINT</code>, <code>ACCENT_SECONDARY</code>, <code>ACCENT_TERTIARY</code></td><td>The brand fill and its states. A component asks for &ldquo;the accent&rdquo;, not for &ldquo;blue&rdquo;.</td></tr>
+<tr><td>State</td><td><code>STATE_ERROR_BG</code>, <code>STATE_ERROR_SURFACE</code>, <code>STATE_ERROR_BORDER</code>, <code>STATE_ERROR_TEXT</code>, <code>STATE_ERROR_GRAPHIC</code>, <code>STATE_SUCCESS_TEXT</code>, <code>STATE_SUCCESS_GRAPHIC</code>, <code>STATE_WARNING_TEXT</code>, <code>STATE_WARNING_GRAPHIC</code></td><td>How a failure, a pass and a caution look. Text and graphic roles are separate because their contrast floors differ.</td></tr>
+</table>
+
+<h3>The contrast contract</h3>
+<p>The pairing rules the app actually paints are data, not folklore: <code>theme.CONTRAST_PAIRS</code> and <code>theme.BADGE_CONTRAST_PAIRS</code> list every foreground/background pair with the ratio it must clear. <code>ui/tests/test_contrast.py</code> reads that table, so a palette change that breaks legibility fails the build instead of shipping.</p>
+<table>
+<tr><th>Kind</th><th>Floor</th><th>Why</th></tr>
+<tr><td>text</td><td>4.5:1</td><td>WCAG 2.1 AA for normal-size text.</td></tr>
+<tr><td>graphic</td><td>3:1</td><td>WCAG 2.1 AA for icons and other non-text marks.</td></tr>
+<tr><td>disabled</td><td>3:1</td><td>Disabled controls are exempt from WCAG 1.4.3. The app holds them to 3:1 anyway, so a control that cannot be used still reads as present.</td></tr>
+</table>
+<p>The contract caught three real defects. The disabled primary button painted white on a pale blue face (2.35:1 &mdash; unreadable); it now wears the primary text role on the muted fill (7.29:1). The muted text role was 2.54:1 on a card; it is now 3.70:1. The green badge fill was 3.30:1 against white and is now 5.02:1.</p>
+
+<h3>One button system</h3>
+<p><code>theme.button_qss(kind)</code> generates the app-level object-name rule; <code>theme.button_qss(kind, selector="QPushButton")</code> generates the widget-level copy. Both come from the same function, so they cannot drift &mdash; and they had: the app-level sheet had no disabled state at all while the inline copy had one that was unreadable. The kit's <code>make_action_button()</code> carries the scoped copy, because a widget-level stylesheet replaces the application sheet for that subtree and a button face inside a styled panel does not paint otherwise.</p>
+<pre><code>from ui.widgets import make_action_button
+
+save = make_action_button("Save", kind="primary", tip="Save the draft")</code></pre>
+<p><code>tools/probes/probe_buttons.py</code> checks the two sheets agree property by property, that the app sheet carries one rule per kind, and that the disabled primary label still clears 3:1.</p>
+<table>
+<tr><th>Kind</th><th>Face</th><th>Used for</th></tr>
+<tr><td><code>primary</code></td><td>brand fill, label on the fill</td><td>The one committing action on a surface.</td></tr>
+<tr><td><code>secondary</code></td><td>outline on the card</td><td>Every other action.</td></tr>
+<tr><td><code>ghost</code></td><td>no fill until hover</td><td>Low-emphasis actions beside a stronger one.</td></tr>
+<tr><td><code>chip</code></td><td>rounded, tinted</td><td>Filters and toggles.</td></tr>
+<tr><td><code>cell</code></td><td>compact outline (0 8px padding)</td><td>A table action cell. The standard action padding (7px 14px) made two buttons need 294px against a 240px column, clipping both; the cell face is the same system at cell width.</td></tr>
+<tr><td><code>link</code></td><td>left-aligned brand text</td><td>A row that navigates to a section of the page.</td></tr>
+<tr><td><code>nav-active</code> / <code>nav</code></td><td>bar item, filled when active</td><td>The navigation bar.</td></tr>
+</table>
+<p>A label wears a token rather than a painted style: the object name carries the token (<code>HeadlineLG</code>, <code>BodyMD</code>, <code>CaptionSM</code>, <code>MonoSM</code>, <code>HintSM</code>, <code>AccentSM</code>, <code>SuccessSM</code>, <code>WarningSM</code>, <code>DangerSM</code>, <code>LabelStrongSM</code>, <code>StateMD</code>, <code>LabelMD</code>), and the theme owns the rule for each. A widget whose text changes at runtime (a connection verdict, a status pill) changes its object name and re-polishes, so it lands on the token that matches its state.</p>
+
+<h3>The guards</h3>
+<table>
+<tr><th>Guard</th><th>Rule</th><th>Test</th></tr>
+<tr><td>No inline stylesheet in a view</td><td>A view asks the theme for a rule or the kit for a component. The one escape is an explicit <code># theme-allow:</code> marker on the line.</td><td><code>test_no_view_writes_its_own_stylesheet</code></td></tr>
+<tr><td>No raw palette name in a view</td><td>Only the theme and the kit name palette entries. The palette set is derived from the theme's own source, so a new palette entry is covered the moment it is written.</td><td><code>test_no_view_names_a_raw_palette_entry</code></td></tr>
+<tr><td>No raw input widget in a view</td><td>The standard text inputs, lists, check boxes, progress bars, combos and buttons come from the kit.</td><td><code>test_no_view_builds_a_raw_input_widget</code></td></tr>
+<tr><td>No button or badge sheet in a view</td><td><code>make_action_button()</code> and <code>make_badge()</code> own those faces.</td><td><code>test_no_view_builds_a_button_or_badge_sheet_itself</code></td></tr>
+</table>
+<p>They parse the source with <code>ast</code>, so they are cheap, exact and need no window. The gallery (<code>ui/gallery.py</code>) is a view too and obeys the same rules: it is the kit on one page, built only through the kit.</p>
+
+<h2>Table component contract</h2>
+<p>Every table and tree in the app is built from <code>ui/widgets.py</code> and persists its column layout through <code>ui/table_layout.py</code>. The rules below are enforced by <code>ui/tests/test_table_layout.py</code>, <code>ui/tests/test_table_geometry.py</code> and <code>ui/tests/test_type_scale.py</code>, and checked by the probes in <code>tools/probes/</code>.</p>
+
+<h3>The parts</h3>
+<table>
+<tr><th>Part</th><th>File</th><th>Contract</th></tr>
+<tr><td><code>AppTable</code></td><td><code>ui/widgets.py</code></td><td><code>QTableWidget</code> with a themed header, hidden vertical header, row selection, Ctrl+C copy, no grid and <code>NoFrame</code> (the 1px frame would inset a flush table by a pixel inside its card). Emits <code>columns_fitted</code> (a content fit finished) and <code>user_layout_changed</code> (the <i>user</i> dragged an edge or moved a column).</td></tr>
+<tr><td><code>AppTree</code></td><td><code>ui/widgets.py</code></td><td>The tree sibling of <code>AppTable</code>: a <code>QTreeView</code> (the manifest is model-driven), same header chrome, transparent scrollbar lanes, movable and resizable columns, and the same <code>user_layout_changed</code> signal.</td></tr>
+<tr><td><code>AppTreeWidget</code></td><td><code>ui/widgets.py</code></td><td>The <code>QTreeWidget</code> sibling, for the trees that host their own cell widgets (the metadata field rules and their per-field combo). Same chrome and the same <code>user_layout_changed</code> signal.</td></tr>
+<tr><td><code>TableLayout</code></td><td><code>ui/table_layout.py</code></td><td>One controller per header. It owns the construction snapshot, the restore, the persistence and the reset, so no view repeats that wiring.</td></tr>
+<tr><td><code>make_reset_columns_button()</code></td><td><code>ui/widgets.py</code></td><td>The one reset affordance: a 28px ghost button with the rotate-ccw icon, an accessible name and a tooltip.</td></tr>
+<tr><td><code>header_section_qss()</code> / <code>scrollbar_lane_qss()</code></td><td><code>ui/theme.py</code></td><td>The shared header and scrollbar rules. A widget-level stylesheet replaces the app-level rules for that subtree, so the local sheets repeat them from these mixins instead of by hand.</td></tr>
+</table>
+
+<h3>Only user gestures are persisted</h3>
+<div class="callout">A programmatic resize &mdash; a content fit, a viewport refit, a state restore &mdash; must never overwrite the layout the user chose. It runs inside <code>layout.suppressed()</code>, and the controller ignores the signals it emits. Four copies of &ldquo;wire <code>sectionResized</code> straight to a save&rdquo; is how the file manifest lost the user's widths on every refresh.</div>
+<pre><code>self._layout = TableLayout(workspace, "dataset_files", tree.header(), view=tree)
+self._layout.restore()          # the saved layout wins over the content fit
+
+with self._layout.suppressed(): # the app's own change: not persisted
+    tree.fit_columns_to_contents(floors={0: 260})
+
+self._layout.reset()            # clears the saved entry, restores the snapshot</code></pre>
+<p>The controller binds to <code>view.user_layout_changed</code> when the view has it (<code>AppTable</code>, <code>AppTree</code>, <code>AppTreeWidget</code>) and to the header's own signals otherwise; the <code>suppressed()</code> scope tells the two apart. It stores itself on the header via <code>header.setProperty("tableLayout", self)</code>, so a view that forgets to keep a reference does not silently lose the persistence.</p>
+<p>The kit's views report a gesture only when the user could have caused it: a section the layout owns (a <code>Stretch</code> or <code>Fixed</code> section, or the last section of a stretching header) is sized by the layout, and Qt reports those resizes the same way it reports a drag. Without that check every window resize would rewrite the saved layout.</p>
+
+<h3>Layout schema</h3>
+<p><code>workspace/table_layout.json</code> holds one entry per table, keyed by a stable name (<code>dashboard_queue</code>, <code>dataset_files</code>, <code>review_fields</code>, <code>extensions</code>). Each entry carries <code>"v"</code>: the schema version (<code>storage.TABLE_LAYOUT_VERSION</code>). <code>storage.table_layout_entry_valid(entry, column_count)</code> accepts a legacy entry (no <code>"v"</code>) whose width list matches the column count and rejects an entry written for a different table shape &mdash; a stale layout is ignored rather than squeezing the wrong columns. A newer version than the app understands is ignored too, never half-applied.</p>
+
+<h3>Geometry</h3>
+<ul>
+<li>The queue has no horizontal scrollbar, so the visible column widths add up to the viewport width exactly. One pixel over is still a clipped column, so the fit shaves the difference off the widest sections.</li>
+<li>The queue's column bar <b>is</b> the table's own header. The split header (the table's header hidden, a second display header painted above it) is available as a fallback behind <code>ui/dashboard.py:SPLIT_QUEUE_HEADER</code>; it needed a two-way size and order sync, which is where the clipped columns and the off-centre last label came from.</li>
+<li>A table or tree flush inside a card paints its own corners: Qt never clips children to a parent's border-radius, so the end caps stay square and the scrollbar lanes stay transparent. A filled lane paints the page colour over the card's rounded bottom-right corner, and the card border ends in a white notch.</li>
+</ul>
+
+<h3>Type scale</h3>
+<p>Every text size comes from <code>ui/theme.py</code>: <code>FONT_MICRO</code> 10, <code>FONT_CAPTION</code> 11, <code>FONT_SMALL</code> 12, <code>FONT_BODY</code> 13, <code>FONT_SECTION</code> 15, <code>FONT_TITLE</code> 16, <code>FONT_HEADLINE</code> 22. A label wears a <b>token</b> (its object name is the token: <code>HeadlineLG</code>, <code>CardTitle</code>, <code>BodyMD</code>, <code>CaptionSM</code>, <code>LabelMD</code>, <code>DisplayLG</code>, <code>StateMD</code>); a widget that needs its own stylesheet takes the size from the constants. <code>ui/tests/test_type_scale.py</code> fails if a module outside the theme writes a raw <code>font-size: Npx</code>.</p>
 
 <h2>Threading model</h2>
 <div class="callout">The GUI thread never blocks. Workers are parented to their views with <code>deleteLater</code> chained on completion; a discarded detail view's live workers are adopted by the main window — a live <code>QThread</code> is never destroyed. One check run at a time per dataset; results persist as <code>DatasetReport</code> so a crash loses nothing. The Log page polls <code>applog.get_app_log().lines()</code> on an 800 ms <code>QTimer</code> (Live toggle, gated to page visibility, search debounced at 200 ms).</div>
@@ -82,7 +180,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td><code>workspace/dataset_sizes.json</code></td><td>Summed inventory sizes (dashboard Size column)</td></tr>
 <tr><td><code>workspace/curation_labels.json</code></td><td>Per-instance label sets, keyed by base URL (probe-pure)</td></tr>
 <tr><td><code>workspace/dashboard_cache.json</code></td><td>Last crawl per instance+collection (instant paint + change-only refresh)</td></tr>
-<tr><td><code>workspace/table_layout.json</code></td><td>Column widths/sort/hidden/order for dashboard, dataset tables, extensions, review-fields tree</td></tr>
+<tr><td><code>workspace/table_layout.json</code></td><td>Column widths/sort/hidden/order for dashboard, dataset tables, extensions, review-fields tree &mdash; versioned entries (<code>storage.TABLE_LAYOUT_VERSION</code>), written only by user gestures (see <b>Table component contract</b> below)</td></tr>
 <tr><td><code>config.json</code></td><td>URL, token, collection alias, workspace path (gitignored; next to the exe or the <code>config.example.json</code> default; <code>--config/--dataverse</code> overrides)</td></tr>
 <tr><td><code>requirements_profiles.json</code></td><td>Versioned review rulesets (field + text-search rules, per-rule response templates, editable on the Review configuration page)</td></tr>
 </table>
@@ -113,6 +211,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td>2026-09-25 → 10-02</td><td>Theme tokens single-sourced (<code>test_theme_tokens.py</code> enforces); keyboard parity + plain-language errors; caption <code>HTCLIENT</code> fix; colour-not-outline focus; named loading states; guarded decision combo; Copy diagnostics (never the token); title-bar <code>WM_NCCALCSIZE</code> healing</td></tr>
 <tr><td>2026-10-06</td><td><b>Dataverse Docent</b> rebrand (app/About/README/docs; dashboard bottom status bar; <code>docent.png</code> app art); critique re-run 28→26/40 with probe suites promoted to permanent tests + CI workflow; mid-download <b>Cancel</b>; log inline severity legend</td></tr>
 <tr><td>2026-10-07</td><td>Status unified into the <b>one dashboard pill</b> (scope + message live inside <code>StatusPill</code>, row ends before the mark); About mark at native <b>64×64</b>; dashboard + taskbar/window icon → <b><code>16x16.png</code></b> (<code>theme.mark_icon_path()</code>); both PNGs moved to <code>ui/assets/</code> via <code>theme.asset_path()</code></td></tr>
+<tr><td>2026-11-04</td><td>Table contract: one layout controller per header (<code>ui/table_layout.py</code>) that persists <b>user gestures only</b> (programmatic fits run inside <code>suppressed()</code>); the queue's split header demoted to an opt-in fallback (<code>SPLIT_QUEUE_HEADER</code>) so the table's own header is the column bar; one reset-columns affordance; shared header/scrollbar QSS mixins; one type scale (theme tokens + <code>FONT_*</code> constants); versioned <code>table_layout.json</code> entries; probes in <code>tools/probes/</code> promoted to pytest contracts</td></tr>
 <tr><td>2026-10-07</td><td>Lite artefact <b>onefile → onedir</b> (window ~2.1 s vs 21–24 s re-extraction) and exe/Explorer/taskbar icon unified on <code>docent-mark.ico</code> (<code>--icon</code> in <code>build-lite.ps1</code> <b>and</b> the Makefile, which previously shipped no icon); safe trims <code>tkinter</code>/<code>turtle</code>/<code>PIL.ImageTk</code>/<code>PIL.SpiderImagePlugin</code>/<code>PIL._avif</code>; parent-dir fallbacks for sibling libs, <code>config.json</code> and <code>requirements_profiles.json</code> (fresh files land above the build folder PyInstaller wipes)</td></tr>
 <tr><td>2026-11-04</td><td><b>Settings unsaved-changes guard</b>: baseline-snapshot dirty tracking (edit-then-restore clears itself), a shared <code>PaneFooter</code> (Save/Revert/status) reused by Settings and Review configuration, <code>persist()</code> split from the close-and-refresh <code>saved</code> signal via <code>configurationChanged</code>, and one <code>_can_leave_settings()</code> guard on every exit including window close (Save / Discard / Cancel, Cancel default). <b>Detail workflow rail</b>: a six-step rail (Metadata → Changes → Download → Checks → Export → Respond) replaces the Review/Response tab row; pure Qt-free derivation in <code>ui/workflow.py</code>, navigation-only steps that never start a download or export</td></tr>
 </table>

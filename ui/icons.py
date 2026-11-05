@@ -11,13 +11,21 @@ from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer  # noqa: F401 (forces PyInstaller to bundle QtSvg)
 from PySide6.QtWidgets import QLabel
 
-from ui.theme import ERROR, ON_SECONDARY_CONTAINER, ON_SURFACE, SUCCESS, WARNING, asset_path
+from ui.theme import (
+    STATE_ERROR_GRAPHIC,
+    STATE_SUCCESS_GRAPHIC,
+    STATE_WARNING_GRAPHIC,
+    TEXT_ON_TINT,
+    TEXT_PRIMARY,
+    asset_path,
+    transparent_qss,
+)
 
-INK = ON_SURFACE
-MUTED = ON_SECONDARY_CONTAINER
-GREEN = SUCCESS
-AMBER = WARNING
-RED = ERROR
+INK = TEXT_PRIMARY
+MUTED = TEXT_ON_TINT
+GREEN = STATE_SUCCESS_GRAPHIC
+AMBER = STATE_WARNING_GRAPHIC
+RED = STATE_ERROR_GRAPHIC
 
 _ICON_CACHE: dict = {}
 _SVG_CACHE: dict = {}
@@ -90,9 +98,7 @@ def icon_label(name: str, size: int = 16, color: str | None = None) -> QLabel:
         )
         lbl.setFixedSize(int(size) + 4, int(size) + 4)
         lbl.setAlignment(Qt.AlignCenter)
-        lbl.setStyleSheet(
-            "QLabel { background: transparent; border: none; }"
-        )
+        lbl.setStyleSheet(transparent_qss("QLabel"))
     except Exception:
         pass
     return lbl

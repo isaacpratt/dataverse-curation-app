@@ -19,7 +19,6 @@ from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -27,12 +26,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLineEdit,
-    QListWidget,
     QListWidgetItem,
     QSplitter,
-    QTextEdit,
-    QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -41,18 +36,22 @@ from PySide6.QtWidgets import (
 from config import Config
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.i18n import t
-from ui.theme import (
-    BACKGROUND,
-    ON_SECONDARY_CONTAINER,
-    ON_SURFACE,
-    SURFACE_CONTAINER,
-    SURFACE_CONTAINER_HIGH,
-    SURFACE_CONTAINER_LOW,
-    SURFACE_CONTAINER_LOWEST,
-    action_button_style,
-    selectable_labels,
+from ui.table_layout import TableLayout
+from ui.theme import page_background_qss, selectable_labels
+from ui.widgets import (
+    AppTreeWidget,
+    PaneFooter,
+    make_action_button,
+    make_card,
+    make_checkbox,
+    make_combo,
+    make_line_edit,
+    make_list,
+    make_multiline_input,
+    make_page_heading,
+    make_reset_columns_button,
+    make_search_field,
 )
-from ui.widgets import AppButton, PaneFooter, make_card, make_combo, make_search_field
 
 _LEVELS = ["required", "optional", "unchecked"]
 
@@ -67,8 +66,8 @@ class ContentRuleDialog(QDialog):
         rule = rule or {}
         lay = QVBoxLayout(self)
         form = QFormLayout()
-        self._label = QLineEdit(str(rule.get("label") or ""))
-        self._label.setPlaceholderText(t("review.rule_dialog.label_placeholder"))
+        self._label = make_line_edit(t("review.rule_dialog.label_placeholder"))
+        self._label.setText(str(rule.get("label") or ""))
         form.addRow(t("review.rule_dialog.label"), self._label)
         self._level = make_combo(
             [
@@ -81,9 +80,9 @@ class ContentRuleDialog(QDialog):
         self._level.setCurrentIndex(0 if lvl != "optional" else 1)
         form.addRow(t("review.rule_dialog.level"), self._level)
         scope = rule.get("scope") if isinstance(rule.get("scope"), list) else ["filenames"]
-        self._cb_files = QCheckBox(t("review.rule_dialog.scope_files"))
-        self._cb_meta = QCheckBox(t("review.rule_dialog.scope_metadata"))
-        self._cb_content = QCheckBox(t("review.rule_dialog.scope_content"))
+        self._cb_files = make_checkbox(t("review.rule_dialog.scope_files"))
+        self._cb_meta = make_checkbox(t("review.rule_dialog.scope_metadata"))
+        self._cb_content = make_checkbox(t("review.rule_dialog.scope_content"))
         self._cb_files.setChecked("filenames" in scope)
         self._cb_meta.setChecked("metadata" in scope)
         self._cb_content.setChecked("file-content" in scope)
@@ -106,19 +105,18 @@ class ContentRuleDialog(QDialog):
         idx = {"filename-glob": 0, "substring": 1, "regex": 2}.get(m, 0)
         self._match.setCurrentIndex(idx)
         form.addRow(t("review.rule_dialog.match"), self._match)
-        self._pattern = QLineEdit(str(rule.get("pattern") or ""))
-        self._pattern.setPlaceholderText(
-            t("review.rule_dialog.pattern_placeholder")
-        )
+        self._pattern = make_line_edit(t("review.rule_dialog.pattern_placeholder"))
+        self._pattern.setText(str(rule.get("pattern") or ""))
         form.addRow(t("review.rule_dialog.pattern"), self._pattern)
-        self._case = QCheckBox(t("review.rule_dialog.case_sensitive"))
-        self._case.setChecked(bool(rule.get("case_sensitive")))
+        self._case = make_checkbox(
+            t("review.rule_dialog.case_sensitive"),
+            checked=bool(rule.get("case_sensitive")),
+        )
         form.addRow("", self._case)
         lay.addLayout(form)
         lay.addWidget(QLabel(t("review.rule_dialog.response_label")))
-        self._template = QTextEdit()
+        self._template = make_multiline_input(fixed=False, min_height=120)
         self._template.setPlainText(str(rule.get("response_template") or ""))
-        self._template.setMinimumHeight(120)
         lay.addWidget(self._template, 1)
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self.accept)
@@ -197,10 +195,11 @@ class ReviewConfigView(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds below this view.
         self.setObjectName("ReviewConfigView")
-        self.setStyleSheet(f"QWidget#ReviewConfigView {{ background: {BACKGROUND}; }}")
+        self.setStyleSheet(page_background_qss("ReviewConfigView"))
 
-        title = QLabel(t("review.title"))
-        title.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {ON_SURFACE};")
+        # Shared page-heading contract (HeadlineLG theme token) - same
+        # title look as Settings, Log and About.
+        title, _subtitle = make_page_heading(t("review.title"))
         outer.addWidget(title)
 
         outer.addWidget(self._build_topbar())
@@ -289,21 +288,20 @@ class ReviewConfigView(QWidget):
             (t("review.duplicate"), self._on_duplicate),
             (t("review.delete"), self._on_delete),
         ]:
-            b = AppButton(text, kind="secondary", size="sm")
+            b = make_action_button(text, kind="secondary", size="sm")
             b.clicked.connect(slot)
             row.addWidget(b)
         body.addLayout(row)
         row2 = QHBoxLayout()
         row2.setSpacing(8)
         row2.addWidget(QLabel(t("review.dataverses_label")))
-        self._dataverses_edit = QLineEdit()
-        self._dataverses_edit.setPlaceholderText(
+        self._dataverses_edit = make_line_edit(
             t("review.dataverses_placeholder")
         )
         self._dataverses_edit.setToolTip(t("review.dataverses_tip"))
         self._dataverses_edit.editingFinished.connect(self._on_dataverses_edited)
         row2.addWidget(self._dataverses_edit, 1)
-        self._fields_btn = AppButton(
+        self._fields_btn = make_action_button(
             t("review.load_fields"), kind="secondary", size="sm"
         )
         self._fields_btn.clicked.connect(self._on_load_fields)
@@ -341,34 +339,29 @@ class ReviewConfigView(QWidget):
         )
         self._level_filter.currentIndexChanged.connect(lambda _i: self._refresh_field_table())
         header_lay.addWidget(self._level_filter)
-        self._blocks_btn = AppButton(
+        self._blocks_btn = make_action_button(
             t("review.collapse_all"), kind="secondary", size="md"
         )
-        self._blocks_btn.setStyleSheet(action_button_style(False))
         self._blocks_btn.setToolTip(t("review.blocks_tip"))
         self._blocks_btn.clicked.connect(self._on_toggle_blocks)
         header_lay.addWidget(self._blocks_btn)
-        self._fields_reset_btn = AppButton("", kind="ghost", size="sm")
-        self._fields_reset_btn.setFixedSize(28, 28)
-        self._fields_reset_btn.setAccessibleName(t("review.reset_fields_a11y"))
-        try:
-            from ui.icons import icon as _reset_icon
-
-            self._fields_reset_btn.setIcon(_reset_icon("rotate-ccw"))
-        except Exception:
-            self._fields_reset_btn.setText(t("review.reset"))
-        self._fields_reset_btn.setToolTip(t("review.reset_tip"))
+        self._fields_reset_btn = make_reset_columns_button(
+            "",
+            tip=t("review.reset_tip"),
+            accessible_name=t("review.reset_fields_a11y"),
+            fallback_text=t("review.reset"),
+        )
         self._fields_reset_btn.clicked.connect(self._on_reset_field_view)
         header_lay.addWidget(self._fields_reset_btn)
         hint = QLabel(t("review.checks_hint"))
         hint.setWordWrap(True)
-        hint.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER};")
+        hint.setObjectName("CaptionSM")
         body.addWidget(hint)
         # Block-grouped tree (replaces the flat table): block parents with
         # native expand/collapse, one child row per field rule with its
         # level combo. Sorting stays OFF on purpose — children are cell
         # *widgets*, which Qt does not move when rows sort.
-        self._field_tree = QTreeWidget()
+        self._field_tree = AppTreeWidget(row_height=None, flush=False)
         self._field_tree.setColumnCount(2)
         self._field_tree.setHeaderLabels(
             [t("review.column_field"), t("review.column_check")]
@@ -378,50 +371,30 @@ class ReviewConfigView(QWidget):
         self._field_tree.setAnimated(True)
         self._field_tree.setIndentation(18)
         self._field_tree.setMinimumHeight(260)
-        self._field_tree.setStyleSheet(
-            f"QTreeWidget {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {SURFACE_CONTAINER_HIGH}; border-radius: 8px; "
-            f"font-size: 12px; color: {ON_SURFACE}; }}"
-            "QTreeWidget::item { border: none; }"
-            f"QTreeWidget::item:hover {{ background: {SURFACE_CONTAINER_LOW}; }}"
-            f"QTreeWidget::item:selected {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; }}"
-        )
-        try:
-            from ui.icons import tree_branch_qss as _branch_qss
-
-            self._field_tree.setStyleSheet(self._field_tree.styleSheet() + _branch_qss())
-        except Exception:
-            pass
+        # The standard tree chrome comes with the widget (framed: this
+        # tree lives inside a card body).
         _fld_header = self._field_tree.header()
         _fld_header.setStretchLastSection(False)
         _fld_header.setSectionResizeMode(0, QHeaderView.Stretch)
         _fld_header.setSectionResizeMode(1, QHeaderView.Interactive)
         self._field_tree.setColumnWidth(1, 150)
-        # Remember the user's column widths/order across sessions.
-        # Snapshot the construction view first for the header reset button.
+        # Remember the user's column widths/order across sessions. The
+        # controller owns the persistence: it saves user gestures only.
         try:
-            from storage import (
-                restore_table_state,
-                save_table_state,
-                snapshot_table_view,
+            self._fields_layout = TableLayout(
+                self._config.app.workspace,
+                "review_fields",
+                _fld_header,
+                view=self._field_tree,
             )
-
-            self._fields_snap = snapshot_table_view(_fld_header)
-            restore_table_state(self._config.app.workspace, "review_fields", _fld_header)
-
-            def _save_field_view(*_a) -> None:
-                save_table_state(
-                    self._config.app.workspace, "review_fields", _fld_header
-                )
-
-            _fld_header.sectionResized.connect(_save_field_view)
-            _fld_header.sectionMoved.connect(_save_field_view)
+            self._fields_layout.restore()
         except Exception:
             pass
         self._floor_check_column()
         self._field_tree.itemSelectionChanged.connect(self._on_field_selected)
         body.addWidget(self._field_tree, 1)
         body.addWidget(QLabel(t("review.text_rules_label")))
-        self._content_list = QListWidget()
+        self._content_list = make_list()
         self._content_list.setMinimumHeight(110)
         self._content_list.itemSelectionChanged.connect(self._on_content_selected)
         body.addWidget(self._content_list)
@@ -431,7 +404,7 @@ class ReviewConfigView(QWidget):
             (t("review.edit_rule"), self._on_content_edit),
             (t("review.delete"), self._on_content_delete),
         ]:
-            b = AppButton(text, kind="secondary", size="sm")
+            b = make_action_button(text, kind="secondary", size="sm")
             b.clicked.connect(slot)
             row.addWidget(b)
         row.addStretch(1)
@@ -442,26 +415,26 @@ class ReviewConfigView(QWidget):
         card, body, _t, _h = make_card(t("review.card_response"))
         self._sel_label = QLabel(t("review.select_template"))
         self._sel_label.setWordWrap(True)
-        self._sel_label.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {ON_SURFACE};")
+        self._sel_label.setObjectName("LabelStrongSM")
         body.addWidget(self._sel_label)
-        self._template_edit = QTextEdit()
-        self._template_edit.setPlaceholderText(t("review.template_placeholder"))
-        self._template_edit.setMinimumHeight(130)
+        self._template_edit = make_multiline_input(
+            t("review.template_placeholder"),
+            fixed=False,
+            min_height=130,
+        )
         self._template_edit.textChanged.connect(self._on_template_edited)
         body.addWidget(self._template_edit)
         body.addWidget(QLabel(t("review.draft_header")))
-        self._header_edit = QTextEdit()
-        self._header_edit.setMinimumHeight(70)
+        self._header_edit = make_multiline_input(fixed=False, min_height=70)
         self._header_edit.textChanged.connect(self._on_header_footer_edited)
         body.addWidget(self._header_edit)
         body.addWidget(QLabel(t("review.draft_footer")))
-        self._footer_edit = QTextEdit()
-        self._footer_edit.setMinimumHeight(70)
+        self._footer_edit = make_multiline_input(fixed=False, min_height=70)
         self._footer_edit.textChanged.connect(self._on_header_footer_edited)
         body.addWidget(self._footer_edit, 1)
         note = QLabel(t("review.filecheck_note"))
         note.setWordWrap(True)
-        note.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER};")
+        note.setObjectName("CaptionSM")
         body.addWidget(note)
         return card
 
@@ -784,12 +757,9 @@ class ReviewConfigView(QWidget):
     def _on_reset_field_view(self) -> None:
         """Reset the field tree to its construction view, then rebuild."""
         try:
-            from storage import apply_table_view, clear_table_state
-
-            snap = getattr(self, "_fields_snap", None)
-            clear_table_state(self._config.app.workspace, "review_fields")
-            if isinstance(snap, dict):
-                apply_table_view(self._field_tree.header(), snap)
+            layout = getattr(self, "_fields_layout", None)
+            if layout is not None:
+                layout.reset()
             self._floor_check_column()
             self._refresh_field_table()
         except Exception:

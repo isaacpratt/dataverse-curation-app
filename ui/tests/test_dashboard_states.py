@@ -22,8 +22,14 @@ class _FakeWorker:
 
 
 def _mval(card):
-    lbl = card.findChild(QLabel, "metricValue")
-    return lbl.text() if lbl else None
+    # The value label carries its theme token as its object name
+    # (DisplayLG / StateMD), so it is found by type, not by a fixed name.
+    labels = [
+        lbl
+        for lbl in card.findChildren(QLabel)
+        if lbl.objectName() in ("DisplayLG", "StateMD")
+    ]
+    return labels[0].text() if labels else None
 
 
 def test_idle_metrics_read_not_fetched(win, monkeypatch):
@@ -55,8 +61,12 @@ def test_crawled_metrics_read_digits_at_22px(win, monkeypatch):
     dash._update_metrics()
     vals = [_mval(c) for c in dash._metric_cards]
     assert all(v.isdigit() for v in vals), vals
-    style = dash._metric_cards[0].findChild(QLabel, "metricValue").styleSheet()
-    assert "font-size: 22px" in style
+    # The value wears the theme's DisplayLG token (22px bold) -- not an
+    # inline stylesheet, so the page cannot drift from the type scale.
+    label = dash._metric_value_labels[0]
+    assert label.objectName() == "DisplayLG"
+    assert label.styleSheet() == ""
+    assert label.font().pixelSize() == 22
 
 
 def test_state_switch_restores_12px_muted_style(win, monkeypatch):
@@ -66,8 +76,10 @@ def test_state_switch_restores_12px_muted_style(win, monkeypatch):
     monkeypatch.setattr(dash, "_crawled", False)
     monkeypatch.setattr(dash, "_worker", None)
     dash._update_metrics()
-    style = dash._metric_cards[0].findChild(QLabel, "metricValue").styleSheet()
-    assert "font-size: 12px" in style
+    label = dash._metric_value_labels[0]
+    assert label.objectName() == "StateMD"
+    assert label.styleSheet() == ""
+    assert label.font().pixelSize() == 12
 
 
 def test_metric_tooltips_always_carry_last_refresh(win, monkeypatch):

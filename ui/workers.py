@@ -1,5 +1,6 @@
 """Background workers for network and engine tasks."""
 
+import atexit
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -26,6 +27,50 @@ _POOL_SIZE = 8
 _INBOX_TTL_S = 600.0
 _inbox_cache: dict = {}
 _inbox_lock = __import__("threading").Lock()
+
+# Every QThread the app starts is tracked here, so the process can stop
+# them before teardown. A QThread destroyed while it is still running
+# aborts the process (Qt prints "QThread: Destroyed while thread is
+# still running" and calls abort), which is reachable when the user
+# quits mid-scan and when an offscreen probe ends with a worker live.
+_LIVE_WORKERS: set = set()
+
+
+def register_worker(worker: QThread) -> None:
+    """Track a QThread so the process can stop it before teardown."""
+    _LIVE_WORKERS.add(worker)
+    worker.finished.connect(lambda w=worker: _LIVE_WORKERS.discard(w))
+    # The app quitting is the clean path: stop the workers there, before
+    # the application object (and the widgets holding the threads) dies.
+    try:
+        from PySide6.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(stop_all_workers)
+    except Exception:
+        pass
+
+
+def stop_all_workers(timeout_ms: int = 10000) -> None:
+    """Stop every tracked worker and wait for it to finish.
+
+    The workers check ``isInterruptionRequested()`` between steps, so
+    they stop promptly rather than running their task to the end.
+    """
+    for worker in list(_LIVE_WORKERS):
+        try:
+            if worker.isRunning():
+                worker.requestInterruption()
+                worker.wait(timeout_ms)
+        except Exception:
+            pass
+    _LIVE_WORKERS.clear()
+
+
+# The process can end without a clean quit (a probe, a Ctrl+C in a
+# console): stop the workers there too.
+atexit.register(stop_all_workers)
 
 
 def _inbox_key(base_url: str, pid: str, api_token: str) -> tuple:
@@ -68,6 +113,7 @@ class CrawlWorker(QThread):
 
     def __init__(self, base_url: str, api_token: str, subtree: str, parent=None):
         super().__init__(parent)
+        register_worker(self)
         self._base_url = base_url
         self._api_token = api_token
         self._subtree = subtree
@@ -508,6 +554,7 @@ class DownloadWorker(QThread):
         guestbook_response: dict | None = None,
     ):
         super().__init__(parent)
+        register_worker(self)
         self._client = client
         self._workspace = workspace
         self._pid = persistent_id
@@ -587,6 +634,7 @@ class CheckWorker(QThread):
 
     def __init__(self, dataset_dir: Path, persistent_id: str, label: str, parent=None):
         super().__init__(parent)
+        register_worker(self)
         self._dataset_dir = dataset_dir
         self._pid = persistent_id
         self._label = label
@@ -641,6 +689,7 @@ class MetadataBlocksWorker(QThread):
 
     def __init__(self, base_url: str, api_token: str, workspace, parent=None):
         super().__init__(parent)
+        register_worker(self)
         self._base_url = base_url
         self._api_token = api_token
         self._workspace = workspace
@@ -684,6 +733,7 @@ class MetadataWorker(QThread):
     def __init__(self, base_url: str, api_token: str, persistent_id: str, parent=None,
                  collection: str = ""):
         super().__init__(parent)
+        register_worker(self)
         self._base_url = base_url
         self._api_token = api_token
         self._pid = persistent_id

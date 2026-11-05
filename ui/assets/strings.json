@@ -18,7 +18,8 @@
       "cannot_create_output": "cannot create output directory ({exc})",
       "run_failed": "headless run failed: {exc}",
       "report_written": "Report written to {written} ({files} files, {warnings} finding(s))",
-      "config_warning": "config warning: {exc} — using defaults"
+      "config_warning": "config warning: {exc} — using defaults",
+      "gallery_help": "open the component gallery (every kit component on one page)"
     }
   },
   "common": {
@@ -38,7 +39,8 @@
     "none_in_parentheses": "(none)",
     "separator": " — ",
     "dirty_chip": "● unsaved",
-    "dirty_tip": "Unsaved changes — Save or Revert before leaving."
+    "dirty_tip": "Unsaved changes — Save or Revert before leaving.",
+    "reset_columns_tip": "Reset column widths and order to defaults"
   },
   "status": {
     "error": "Error",
@@ -838,7 +840,9 @@
       "download_all_staged": "Download All ({staged}/{total} staged)",
       "staged_tip": "{staged} of {total} file(s) already staged — only missing files will be fetched after approval",
       "open_folder_nothing": "Nothing downloaded yet — download the dataset first.",
-      "could_not_open": "Could not open {path}:\n{exc}"
+      "could_not_open": "Could not open {path}:\n{exc}",
+      "reset_columns_a11y": "Reset file manifest columns",
+      "reset_columns_tip": "Reset columns, sort and widths to default"
     },
     "decision": {
       "option_approve": "Approve & Publish",
@@ -931,6 +935,113 @@
     },
     "accessible": {
       "step": "{label}, {state} step"
+    }
+  },
+  "gallery": {
+    "window_title": "Dataverse Docent - component gallery",
+    "heading": "Component gallery",
+    "subheading": "Every component the app ships, built through the kit.",
+    "footer": "Text colours come from the theme's roles; the contrast contract is checked by ui/tests/test_contrast.py.",
+    "footer_tip": "Muted text role: {colour}",
+    "type_scale": {
+      "title": "Type scale",
+      "subtitle": "One size per role: the theme owns the type scale, a view names the role.",
+      "sample": "The quick brown fox jumps over the lazy dog"
+    },
+    "buttons": {
+      "title": "Buttons",
+      "subtitle": "One system: the app-level rules and the scoped copies come from one generator.",
+      "primary": "Primary",
+      "secondary": "Secondary",
+      "ghost": "Ghost",
+      "chip": "Chip",
+      "cell": "Cell",
+      "link": "Link",
+      "disabled": "Disabled",
+      "size_primary": "{size} primary",
+      "size_secondary": "{size} secondary",
+      "size_ghost": "{size} ghost"
+    },
+    "badges": {
+      "title": "Badges",
+      "subtitle": "A status label picks a role; the fill and the text are checked for contrast.",
+      "draft": "Draft",
+      "review": "In Review",
+      "hold": "Hold",
+      "needs_review": "Needs Review",
+      "approve": "Approved",
+      "publish": "Published",
+      "reject": "Rejected",
+      "author_contacted": "Author Contacted",
+      "deaccessioned": "Deaccessioned",
+      "pass": "PASS",
+      "fail": "FAIL",
+      "live": "LIVE",
+      "identifier": "doi:10.5072/FK2/ABC123"
+    },
+    "roles": {
+      "title": "Roles",
+      "subtitle": "The palette says what a colour is; a role says what it is for.",
+      "swatch_tip": "{name}: {colour}",
+      "page": "Page",
+      "card": "Card",
+      "tint": "Tint",
+      "subtle": "Subtle",
+      "raised": "Raised",
+      "border": "Border",
+      "text": "Text",
+      "muted_text": "Muted text",
+      "subtle_text": "Subtle text",
+      "on_tint": "On tint"
+    },
+    "inputs": {
+      "title": "Inputs",
+      "subtitle": "One field shape: the same height, focus ring and radius everywhere.",
+      "search_label": "Search",
+      "search_placeholder": "Search the queue",
+      "single_line_label": "Single line",
+      "single_line_placeholder": "A single-line field",
+      "dropdown_label": "Dropdown",
+      "dropdown_placeholder": "Select a level",
+      "dropdown_required": "Required",
+      "dropdown_optional": "Optional",
+      "multi_line_label": "Multi-line",
+      "multi_line_placeholder": "Write a note",
+      "read_only_label": "Read-only",
+      "read_only_content": "A read-only plain-text view",
+      "check_box_label": "Check box",
+      "check_box_checked": "Include the guestbook response",
+      "check_box_disabled": "A disabled option",
+      "progress_label": "Progress"
+    },
+    "containers": {
+      "title": "Containers",
+      "subtitle": "Cards, chips and the metric tile.",
+      "card_title": "Card",
+      "card_body": "A card holds a title, a body and a header row.",
+      "card_action": "Action",
+      "chip_a": "doi:10.5072/FK2/ABC123",
+      "chip_b": "doi:10.5072/FK2/XYZ789",
+      "metric_label": "DATASETS"
+    },
+    "data": {
+      "title": "Data",
+      "subtitle": "Tables, trees and lists share one header and one lane.",
+      "column_dataset": "Dataset",
+      "column_state": "State",
+      "column_files": "Files",
+      "doi_a": "doi:10.5072/FK2/ABC123",
+      "doi_b": "doi:10.5072/FK2/XYZ789",
+      "doi_c": "doi:10.5072/FK2/AAA000",
+      "state_review": "In Review",
+      "state_approved": "Approved",
+      "state_draft": "Draft",
+      "tree_repository": "Repository",
+      "tree_one": "Dataset one",
+      "tree_two": "Dataset two",
+      "list_manifest": "File manifest",
+      "list_fields": "Metadata fields",
+      "list_extensions": "Extensions"
     }
   }
 }

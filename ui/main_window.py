@@ -20,7 +20,6 @@ from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShort
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
-    QLabel,
     QMainWindow,
     QPushButton,
     QScrollArea,
@@ -37,23 +36,22 @@ from ui.dialogs import show_warning
 from ui.i18n import t
 from ui.icons import icon as lucide_icon
 from ui.theme import (
-    BACKGROUND,
-    ERROR,
-    ON_ERROR_CONTAINER,
-    ON_PRIMARY,
-    ON_SECONDARY_CONTAINER,
-    ON_SECONDARY_FIXED,
-    ON_SURFACE,
-    ON_SURFACE_VARIANT,
-    OUTLINE_VARIANT,
-    PRIMARY,
-    PRIMARY_FIXED_DIM,
-    SECONDARY_CONTAINER,
-    SURFACE_CONTAINER,
-    SURFACE_CONTAINER_HIGH,
-    SURFACE_CONTAINER_LOWEST,
+    ACCENT_FOCUS_TINT,
+    ACCENT_SECONDARY,
+    BORDER_SUBTLE,
+    STATE_ERROR_BG,
+    STATE_ERROR_GRAPHIC,
+    SURFACE_CARD,
+    SURFACE_RAISED,
+    TEXT_MUTED,
+    TEXT_ON_ACCENT,
+    TEXT_ON_SECONDARY,
+    TEXT_PRIMARY,
+    page_background_qss,
+    surface_frame_qss,
+    transparent_surface_qss,
 )
-from ui.widgets import AppButton
+from ui.widgets import AppButton, make_caption_label, make_split_chip
 
 
 def _declare_dwm_signatures(dwmapi, margins_type) -> None:
@@ -213,23 +211,31 @@ def _maximized_client_rect(hwnd: int):
 # :hover state, leaving the background white while the cursor sits still.
 # The property forces a restyle from enter/leaveEvent instead of relying
 # on the state-driven paint.
+#
+# These are window chrome, not app buttons: a frameless window's caption
+# control keeps the square Windows caption face and the red close hover,
+# which the kit's button kinds cannot express (the marker at the call
+# site records that exception).
 _WIN_BTN_QSS = (
-    f"QPushButton {{ background: transparent; color: {ON_SURFACE}; border: none; "
+    f"QPushButton {{ background: transparent; color: {TEXT_PRIMARY}; border: none; "
     "border-radius: 0px; }"
     # Keyboard-focus tint: before hover so hover feedback wins when both apply.
-    f"QPushButton[focusVisible=\"true\"] {{ background: {PRIMARY_FIXED_DIM}; }}"
+    f"QPushButton[focusVisible=\"true\"] {{ background: {ACCENT_FOCUS_TINT}; }}"
     f"QPushButton:hover, QPushButton[hovered=\"true\"] {{ "
-    f"background: {SURFACE_CONTAINER_HIGH}; }}"
-    f"QPushButton:pressed {{ background: {SECONDARY_CONTAINER}; }}"
+    f"background: {SURFACE_RAISED}; }}"
+    f"QPushButton:pressed {{ background: {ACCENT_SECONDARY}; }}"
 )
 _WIN_CLOSE_QSS = (
-    f"QPushButton {{ background: transparent; color: {ON_SURFACE}; border: none; "
+    f"QPushButton {{ background: transparent; color: {TEXT_PRIMARY}; border: none; "
     "border-radius: 0px; }"
-    f"QPushButton[focusVisible=\"true\"] {{ background: {PRIMARY_FIXED_DIM}; }}"
+    f"QPushButton[focusVisible=\"true\"] {{ background: {ACCENT_FOCUS_TINT}; }}"
     f"QPushButton:hover, QPushButton[hovered=\"true\"] {{ "
-    f"background: {ERROR}; color: {ON_PRIMARY}; }}"
-    f"QPushButton:pressed {{ background: {ON_ERROR_CONTAINER}; color: {ON_PRIMARY}; }}"
+    f"background: {STATE_ERROR_GRAPHIC}; color: {TEXT_ON_ACCENT}; }}"
+    f"QPushButton:pressed {{ background: {STATE_ERROR_BG}; color: {TEXT_ON_ACCENT}; }}"
 )
+
+# The nav's hairline separators: a 1px frame in the subtle border colour.
+_SEPARATOR_QSS = surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, radius="0px")
 
 # QStyle standard pixmaps: the exact glyphs Windows paints in a native
 # caption (text characters never matched them, especially restore).
@@ -300,6 +306,9 @@ class _CaptionButton(QPushButton):
             t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"]))
         )
         self.setIconSize(QSize(14, 14))
+        # theme-allow: a frameless window's caption button is window chrome,
+        # not an app button (square caption face, red close hover) — the kit's
+        # button kinds cannot express it.
         self.setStyleSheet(_WIN_CLOSE_QSS if kind == "close" else _WIN_BTN_QSS)
         self._apply_icon()
 
@@ -325,7 +334,7 @@ class _CaptionButton(QPushButton):
             if self._kind == "close" and (
                 self._hovered or self.underMouse() or self.isDown()
             ):
-                glyph = _tinted_icon(glyph, ON_PRIMARY, 14)
+                glyph = _tinted_icon(glyph, TEXT_ON_ACCENT, 14)
             self.setIcon(glyph)
         except Exception:
             pass
@@ -434,7 +443,7 @@ class MainWindow(QMainWindow):
 
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
-        sep.setStyleSheet(f"color: {OUTLINE_VARIANT};")
+        sep.setStyleSheet(_SEPARATOR_QSS)
         sep.setFixedWidth(1)
         nav_lay.addWidget(sep)
 
@@ -478,14 +487,14 @@ class MainWindow(QMainWindow):
 
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.VLine)
-        sep2.setStyleSheet(f"color: {OUTLINE_VARIANT};")
+        sep2.setStyleSheet(_SEPARATOR_QSS)
         sep2.setFixedWidth(1)
         nav_lay.addWidget(sep2)
 
         # Open dataset chips — full titles, never DOI-truncated
         self._chips_wrap = QWidget()
         self._chips_wrap.setObjectName("ChipsWrap")
-        self._chips_wrap.setStyleSheet("QWidget#ChipsWrap { background: transparent; border: none; }")
+        self._chips_wrap.setStyleSheet(transparent_surface_qss("ChipsWrap"))
         self._chips_wrap.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._chips_lay = QHBoxLayout(self._chips_wrap)
         self._chips_lay.setContentsMargins(4, 0, 8, 0)
@@ -497,7 +506,7 @@ class MainWindow(QMainWindow):
         # top-right corner (nav layout right margin is 0 for this reason).
         self._win_controls = QWidget()
         self._win_controls.setObjectName("WinControls")
-        self._win_controls.setStyleSheet("QWidget#WinControls { background: transparent; border: none; }")
+        self._win_controls.setStyleSheet(transparent_surface_qss("WinControls"))
         win_lay = QHBoxLayout(self._win_controls)
         win_lay.setContentsMargins(6, 0, 0, 0)
         win_lay.setSpacing(0)
@@ -597,7 +606,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet(f"QScrollArea {{ background: {BACKGROUND}; border: none; }}")
+        scroll.setStyleSheet(page_background_qss())
         scroll.setWidget(pane)
         return scroll
 
@@ -722,7 +731,7 @@ class MainWindow(QMainWindow):
     def _set_nav_icon(self, btn, name: str, active: bool) -> None:
         """Lucide glyph for a nav button, tinted to its active state."""
         try:
-            color = ON_SECONDARY_FIXED if active else ON_SURFACE_VARIANT
+            color = TEXT_ON_SECONDARY if active else TEXT_MUTED
             btn.setIcon(lucide_icon(name, color=color, size=16))
             btn.setIconSize(QSize(16, 16))
         except Exception:
@@ -904,10 +913,7 @@ class MainWindow(QMainWindow):
             if w:
                 w.deleteLater()
         if not self._open_pids:
-            hint = QLabel(t("main.no_dataset"))
-            hint.setStyleSheet(
-                f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;"
-            )
+            hint = make_caption_label(t("main.no_dataset"))
             self._chips_lay.addWidget(hint)
             self._chips_lay.addStretch()
             return
@@ -925,63 +931,17 @@ class MainWindow(QMainWindow):
             # FULL title, never DOI-truncated; tooltip carries the persistent ID.
             # Each chip has an x-icon button to close that dataset.
             label = (title or pid).strip() or pid
-            chip = QFrame()
-            chip.setObjectName("DatasetChip")
-            chip.setStyleSheet("QFrame#DatasetChip { background: transparent; border: none; }")
-            lay = QHBoxLayout(chip)
-            lay.setContentsMargins(0, 0, 0, 0)
-            lay.setSpacing(0)
             is_active = active_pid is not None and pid == active_pid
-            # NOTE: split-chip one-off (see ui/widgets.py) — not AppButton by design.
-            open_btn = QPushButton(label)
-            open_btn.setCursor(Qt.PointingHandCursor)
-            open_btn.setToolTip(
-                t("main.chip_open", label=label, pid=pid)
+            # The chip is two halves of one control: the label opens the
+            # dataset, the x closes it. The kit owns that shape.
+            chip = make_split_chip(
+                label,
+                active=is_active,
+                tip=t("main.chip_open", label=label, pid=pid),
+                close_tip=t("main.chip_close", label=label),
+                on_open=lambda _c=False, p=pid, t=title: self._open_dataset(p, t),
+                on_close=lambda _c=False, p=pid: self._close_dataset(p),
             )
-            open_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-            open_btn.setFixedHeight(28)
-            open_btn.setMaximumWidth(220)
-            open_btn.setMinimumWidth(60)
-            open_btn.setStyleSheet(
-                f"QPushButton {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; border: 1px solid {PRIMARY}; "
-                "border-top-left-radius: 8px; border-bottom-left-radius: 8px; "
-                "padding: 0 10px 0 10px; font-size: 11px; font-weight: 700; text-align: left; }"
-                if is_active else
-                f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; border: 1px solid {OUTLINE_VARIANT}; "
-                "border-top-left-radius: 8px; border-bottom-left-radius: 8px; "
-                "padding: 0 10px 0 10px; font-size: 11px; font-weight: 600; text-align: left; }"
-                f"QPushButton:hover {{ border: 1px solid {PRIMARY}; }}"
-            )
-            open_btn.clicked.connect(lambda _c, p=pid, t=title: self._open_dataset(p, t))
-            lay.addWidget(open_btn)
-            close_btn = QPushButton()
-            close_btn.setCursor(Qt.PointingHandCursor)
-            close_btn.setToolTip(t("main.chip_close", label=label))
-            close_btn.setAccessibleName(t("main.chip_close", label=label))
-            close_btn.setFixedSize(28, 28)
-            try:
-                from PySide6.QtCore import QSize as _QSize
-
-                from ui.icons import icon as _chip_icon
-
-                close_btn.setIcon(
-                    _chip_icon("x", color=ON_SURFACE if is_active else ON_SECONDARY_CONTAINER)
-                )
-                close_btn.setIconSize(_QSize(12, 12))
-            except Exception:
-                close_btn.setText("×")
-            close_btn.setStyleSheet(
-                f"QPushButton {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; border: 1px solid {PRIMARY}; "
-                "border-left: none; border-top-right-radius: 8px; border-bottom-right-radius: 8px; "
-                "font-size: 13px; font-weight: 700; }"
-                if is_active else
-                f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SECONDARY_CONTAINER}; border: 1px solid {OUTLINE_VARIANT}; "
-                "border-left: none; border-top-right-radius: 8px; border-bottom-right-radius: 8px; "
-                "font-size: 13px; font-weight: 700; }"
-                f"QPushButton:hover {{ color: {ERROR}; border: 1px solid {ERROR}; border-left: none; }}"
-            )
-            close_btn.clicked.connect(lambda _c, p=pid: self._close_dataset(p))
-            lay.addWidget(close_btn)
             self._chips_lay.addWidget(chip)
         self._chips_lay.addStretch()
 
