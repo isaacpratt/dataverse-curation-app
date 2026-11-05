@@ -5,6 +5,7 @@ check_id namespaces.
 """
 
 from engine.checks import (
+    access_check,
     code_check,
     containers_check,
     csv_check,
@@ -31,6 +32,7 @@ from engine.checks.base import Check, CheckResult
 
 _MODULES = (
     extensions_check,
+    access_check,
     csv_check,
     xlsx_check,
     sav_check,

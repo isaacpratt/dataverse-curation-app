@@ -3513,7 +3513,14 @@ class DatasetDetailView(QWidget):
         self._set_status(t("detail.status.running_checks"))
         self._progress.setVisible(True)
         self._progress.setRange(0, 0)
-        self._check_worker = CheckWorker(staged, self._pid, self._title, self)
+        self._check_worker = CheckWorker(
+            staged,
+            self._pid,
+            self._title,
+            inventory=self._inventory if isinstance(self._inventory, list) else None,
+            metadata=self._metadata if isinstance(self._metadata, dict) else None,
+            parent=self,
+        )
         self._check_worker.progress.connect(lambda msg: self._set_status(msg))
         self._check_worker.progressFraction.connect(self._on_ring_fraction)
         self._check_worker.finished.connect(self._on_checks_finished)
