@@ -993,9 +993,9 @@ class DatasetDetailView(QWidget):
                     self._check_btn.setFocus()
             elif key == "export":
                 if self._report is None:
-                    self._set_status("Run checks first — then Export reports… becomes available.")
+                    self._set_status(t("detail.workflow.run_checks_first"))
                 else:
-                    self._set_status("Use Export reports… in the header to save the JSON + Markdown.")
+                    self._set_status(t("detail.workflow.export_hint"))
                 if self._history_btn is not None:
                     self._history_btn.setFocus()
         except Exception:

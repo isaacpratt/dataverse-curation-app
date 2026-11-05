@@ -547,8 +547,8 @@ class PaneFooter(QFrame):
         self,
         parent: QWidget | None = None,
         *,
-        save_text: str = "Save",
-        revert_text: str = "Revert",
+        save_text: str = "",
+        revert_text: str = "",
         save_tip: str = "",
         revert_tip: str = "",
     ) -> None:
@@ -571,19 +571,23 @@ class PaneFooter(QFrame):
             "background: transparent; border: none;"
         )
         layout.addWidget(self.status, 1)
-        self.dirty_chip = QLabel("● unsaved")
+        self.dirty_chip = QLabel(t("common.dirty_chip"))
         self.dirty_chip.setStyleSheet(
             f"font-size: 11px; font-weight: 600; color: {AMBER_700}; "
             "background: transparent; border: none;"
         )
-        self.dirty_chip.setToolTip("Unsaved changes — Save or Revert before leaving.")
+        self.dirty_chip.setToolTip(t("common.dirty_tip"))
         self.dirty_chip.hide()
         layout.addWidget(self.dirty_chip)
-        self.revert_btn = AppButton(revert_text, kind="secondary", size="sm", tip=revert_tip)
+        self.revert_btn = AppButton(
+            revert_text or t("common.revert"), kind="secondary", size="sm", tip=revert_tip
+        )
         self.revert_btn.setStyleSheet(action_button_style(False))
         self.revert_btn.clicked.connect(self.revertRequested)
         layout.addWidget(self.revert_btn)
-        self.save_btn = AppButton(save_text, kind="primary", size="sm", tip=save_tip)
+        self.save_btn = AppButton(
+            save_text or t("common.save"), kind="primary", size="sm", tip=save_tip
+        )
         self.save_btn.setStyleSheet(action_button_style(True))
         self.save_btn.clicked.connect(self.saveRequested)
         layout.addWidget(self.save_btn)

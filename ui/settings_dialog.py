@@ -379,8 +379,8 @@ class SettingsPane(QWidget):
         # uses, so both pages speak one visual language.
         self._footer = PaneFooter(
             self,
-            save_tip="Save to config.json (Ctrl+S)",
-            revert_tip="Discard unsaved edits and reload the saved configuration",
+            save_tip=t("settings.save.footer_tip"),
+            revert_tip=t("settings.revert.footer_tip"),
         )
         self._footer.saveRequested.connect(self._on_save)
         self._footer.revertRequested.connect(self._on_revert)
@@ -544,8 +544,8 @@ class SettingsPane(QWidget):
             return True
         action = confirm_save_discard_cancel(
             parent or self,
-            "Unsaved settings",
-            "You have unsaved settings changes. Save them before leaving?",
+            t("settings.unsaved.title"),
+            t("settings.unsaved.message"),
         )
         if action == "save":
             return self.persist()
@@ -559,13 +559,13 @@ class SettingsPane(QWidget):
             return
         if not confirm(
             self,
-            "Revert settings",
-            "Discard unsaved settings changes and reload the saved configuration?",
-            confirm_label="Revert",
+            t("settings.revert.title"),
+            t("settings.revert.confirm"),
+            confirm_label=t("common.revert"),
         ):
             return
         self._load_from_config()
-        self._footer.set_status("Reverted to saved settings.")
+        self._footer.set_status(t("settings.revert.done"))
 
     def _on_preset_changed(self, label: str) -> None:
         preset_url = PRESETS.get(label, "")

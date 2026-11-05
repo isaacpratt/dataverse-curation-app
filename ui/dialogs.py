@@ -222,9 +222,11 @@ def confirm_save_discard_cancel(parent, title: str, text: str) -> str:
 
     buttons = QDialogButtonBox()
     # Order: Save (AcceptRole), Discard (DestructiveRole), Cancel (RejectRole)
-    save_btn = buttons.addButton("Save", QDialogButtonBox.ButtonRole.AcceptRole)
-    discard_btn = buttons.addButton("Discard", QDialogButtonBox.ButtonRole.DestructiveRole)
-    cancel_btn = buttons.addButton(QDialogButtonBox.Cancel)
+    save_btn = buttons.addButton(t("common.save"), QDialogButtonBox.ButtonRole.AcceptRole)
+    discard_btn = buttons.addButton(
+        t("common.discard"), QDialogButtonBox.ButtonRole.DestructiveRole
+    )
+    cancel_btn = buttons.addButton(t("common.cancel"), QDialogButtonBox.RejectRole)
     cancel_btn.setDefault(True)  # Cancel is the safe default
 
     result = {"action": "cancel"}
