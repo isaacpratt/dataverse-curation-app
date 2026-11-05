@@ -1,8 +1,24 @@
 name: CI
+
 on:
+  # Master pushes are tested directly.
   push:
+    branches: [master]
+  # Every pull request into master is tested, and the result is reported on
+  # the PR itself. Scoping push to master means a feature branch gets one
+  # run (through the PR) instead of two (push + pull_request).
   pull_request:
+    branches: [master]
   workflow_dispatch:
+
+# The workflow only reads the repository; it never needs write access.
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the running check obsolete.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -11,8 +27,11 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # checkout v5 and setup-python v6 run on Node 24; the v4/v5 pair
+      # targeted Node 20, which GitHub now forces onto a newer runtime and
+      # reports as a deprecation warning on every run.
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -40,8 +59,9 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # Same action versions as the test job (Node 24).
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip

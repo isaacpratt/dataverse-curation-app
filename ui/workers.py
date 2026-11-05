@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from ui.i18n import t
 from ui.progress import (
     PHASE_DISCOVERY,
     PHASE_ENRICHMENT,
@@ -145,12 +146,12 @@ class CrawlWorker(QThread):
 
         try:
             from applog import get_app_log
-            from dataverse_client import DataverseClient
+            from dataverse_client import STATE_IN_REVIEW, DataverseClient
 
-            self.progress.emit(f"Connecting to {self._base_url} …")
+            self.progress.emit(t("workers.connecting", base_url=self._base_url))
             client = DataverseClient(self._base_url, self._api_token)
-            coll = self._subtree.strip() or "whole repository"
-            self.progress.emit(f"Fetching all datasets in {coll} (paginated Search API) …")
+            coll = self._subtree.strip() or t("workers.whole_repository")
+            self.progress.emit(t("workers.fetching_all", collection=coll))
             self._emit_fraction(phase_fraction(PHASE_DISCOVERY, 0, 0))
 
             def _on_discovery_page(page: int, pages_total: int, collected: int) -> None:
@@ -159,14 +160,20 @@ class CrawlWorker(QThread):
                 try:
                     if pages_total > 0:
                         self.progress.emit(
-                            f"Fetching datasets… page {page} of {pages_total} "
-                            f"({collected} found)"
+                            t(
+                                "workers.fetching_page",
+                                page=page,
+                                pages=pages_total,
+                                found=collected,
+                            )
                         )
                         self._emit_fraction(
                             phase_fraction(PHASE_DISCOVERY, page, pages_total)
                         )
                     else:
-                        self.progress.emit(f"Fetching datasets… {collected} found")
+                        self.progress.emit(
+                            t("workers.fetching_found", found=collected)
+                        )
                         self._emit_fraction(
                             phase_fraction(PHASE_DISCOVERY, collected, 0)
                         )
@@ -188,7 +195,7 @@ class CrawlWorker(QThread):
                 total_rows = len(datasets)
                 if total_rows:
                     self.progress.emit(
-                        f"Enriching {total_rows} dataset(s) with file sizes…"
+                        t("workers.enriching", count=total_rows)
                     )
                 emitted: set = set()
                 pending_batch: list = []
@@ -196,7 +203,7 @@ class CrawlWorker(QThread):
                 def _on_enrich_progress(done: int, total: int) -> None:
                     try:
                         self.progress.emit(
-                            f"Enriching dataset details… {done}/{total}"
+                            t("workers.enriching_progress", done=done, total=total)
                         )
                         self._emit_fraction(
                             phase_fraction(PHASE_ENRICHMENT, done, total)
@@ -250,9 +257,16 @@ class CrawlWorker(QThread):
                 except Exception:
                     n_enriched, n_pending = 0, 0
                 if n_enriched:
-                    tail = f" (+{n_pending} beyond cap)" if n_pending else ""
+                    tail = (
+                        t("workers.beyond_cap", count=n_pending)
+                        if n_pending else ""
+                    )
                     self.progress.emit(
-                        f"Enriched {n_enriched} dataset(s) with live sizes{tail} — checking review locks…"
+                        t(
+                            "workers.enriched",
+                            count=n_enriched,
+                            tail=tail,
+                        )
                     )
             except Exception:
                 pass
@@ -284,11 +298,16 @@ class CrawlWorker(QThread):
                     ds, flag = fut.result()
                     done_n += 1
                     if flag:
-                        ds["state"] = "In Review"
+                        ds["state"] = STATE_IN_REVIEW
                         in_review_n += 1
                     if done_n % 10 == 0 or done_n == total:
                         self.progress.emit(
-                            f"Checking review locks… {done_n}/{total} ({in_review_n} in review)"
+                            t(
+                                "workers.checking_locks",
+                                done=done_n,
+                                total=total,
+                                in_review=in_review_n,
+                            )
                         )
                         self._emit_fraction(
                             phase_fraction(PHASE_LOCKS, done_n, total)
@@ -317,19 +336,20 @@ class CrawlWorker(QThread):
                     str(me.get("displayName") or me.get("identifier") or "").strip()
                 )
                 if superuser is True:
+                    who_display = who or t("workers.user_fallback")
                     self.progress.emit(
-                        f"Connected as {who or 'user'} (superuser) — fetching curation-label report …"
+                        t("workers.connected_superuser", who=who_display)
                     )
                     get_app_log().info(
-                        f"Identity: {who or 'user'} is a superuser — bulk curation report"
+                        t("workers.identity_superuser", who=who_display)
                     )
                 elif superuser is False:
+                    who_display = who or t("workers.user_fallback")
                     self.progress.emit(
-                        f"Connected as {who or 'user'} — per-draft curation labels …"
+                        t("workers.connected_user", who=who_display)
                     )
                     get_app_log().info(
-                        f"Identity: {who or 'user'} is not a superuser — "
-                        "per-draft label reads (no bulk report attempt)"
+                        t("workers.identity_user", who=who_display)
                     )
             except Exception:
                 pass
@@ -363,14 +383,22 @@ class CrawlWorker(QThread):
                     if r.get("label") and r["label"] not in labels:
                         labels.append(r["label"])
                 self.progress.emit(
-                    f"Curation report: {len(report)} draft(s), "
-                    f"{len(labels)} label(s) in use"
+                    t(
+                        "workers.curation_report",
+                        drafts=len(report),
+                        labels=len(labels),
+                    )
                 )
                 self._emit_fraction(phase_fraction(PHASE_LABELS, 1, 1))
                 try:
                     get_app_log().info(
-                        "Curation report: labels in use on drafts: "
-                        + (", ".join(f"'{lbl}'" for lbl in labels) if labels else "(none)")
+                        t(
+                            "workers.curation_report_log",
+                            labels=", ".join(
+                                t("workers.labels_in_use", labels=lbl)
+                                for lbl in labels
+                            ) or t("common.none_in_parentheses"),
+                        )
                     )
                 except Exception:
                     pass
@@ -393,7 +421,7 @@ class CrawlWorker(QThread):
                         ds["curation_assigner"] = ""
                 total = len(drafts)
                 if total == 0:
-                    self.progress.emit("No drafts — skipping per-dataset label reads.")
+                    self.progress.emit(t("workers.no_drafts"))
                 with ThreadPoolExecutor(max_workers=_POOL_SIZE) as pool:
                     futures = [pool.submit(_read_status, ds) for ds in drafts]
                     done_n = 0
@@ -408,7 +436,9 @@ class CrawlWorker(QThread):
                         ds["curation_assigner"] = status.get("assigner", "")
                         done_n += 1
                         if done_n % 10 == 0 or done_n == total:
-                            self.progress.emit(f"Reading curation labels… {done_n}/{total}")
+                            self.progress.emit(
+                                t("workers.reading_labels", done=done_n, total=total)
+                            )
                             self._emit_fraction(
                                 phase_fraction(PHASE_LABELS, done_n, total)
                             )
@@ -439,9 +469,9 @@ class CrawlWorker(QThread):
                     is not None
                 )
                 if was_cached:
-                    self.progress.emit("Using cached curation labels for this collection …")
+                    self.progress.emit(t("workers.using_cached_labels"))
                 else:
-                    self.progress.emit("Fetching allowed curation labels (one call) …")
+                    self.progress.emit(t("workers.fetching_allowed_labels"))
                 if self.isInterruptionRequested():
                     return
                 fetched = client.fetch_allowed_labels_shared(
@@ -476,16 +506,18 @@ class CrawlWorker(QThread):
                 pass
             if labels:
                 shown = ", ".join(labels[:5]) + ("…" if len(labels) > 5 else "")
-                self.progress.emit(f"Curation labels: {shown}")
+                self.progress.emit(t("workers.curation_labels", labels=shown))
             else:
-                self.progress.emit(
-                    "No curation labels found — none configured, or the token "
-                    "lacks PublishDataset permission (see log for 403s)"
-                )
+                self.progress.emit(t("workers.no_curation_labels"))
             try:
                 get_app_log().info(
-                    "Curation labels discovered (report in-use ∪ allowed probes): "
-                    + (", ".join(f"'{lbl}'" for lbl in labels) if labels else "(none)")
+                    t(
+                        "workers.curation_labels_log",
+                        labels=", ".join(
+                            t("workers.labels_in_use", labels=lbl)
+                            for lbl in labels
+                        ) or t("common.none_in_parentheses"),
+                    )
                 )
             except Exception:
                 pass
@@ -494,8 +526,7 @@ class CrawlWorker(QThread):
             except Exception:
                 pass
             self.progress.emit(
-                f"Received {total} dataset(s), {in_review_n} in review — "
-                "use the filter bar to narrow by status/text"
+                t("workers.received", total=total, in_review=in_review_n)
             )
             self.finished.emit(datasets)
         except Exception as exc:

@@ -23,6 +23,7 @@ from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
+from ui.i18n import t
 from ui.progress import ease_step
 from ui.theme import (
     ACCENT_PRIMARY,
@@ -51,7 +52,7 @@ class RingProgress(QWidget):
         super().__init__(parent)
         self.setObjectName("RingProgress")
         self.setFixedSize(diameter, diameter)
-        self.setAccessibleName("Progress")
+        self.setAccessibleName(t("ring.name"))
         self._diameter = diameter
         self._target: float | None = None
         self._displayed = 0.0
@@ -221,15 +222,18 @@ class RingProgress(QWidget):
 
     def accessibleDescription(self) -> str:
         if self._error:
-            return "Progress failed"
+            return t("ring.failed")
         if self._complete:
-            return "Progress complete"
+            return t("ring.complete")
         if self._target is None:
-            return "Progress running, total unknown"
+            return t("ring.unknown")
         try:
-            return f"Progress {int(round(self._displayed * 100))} percent"
+            return t(
+                "ring.percent",
+                percent=int(round(self._displayed * 100)),
+            )
         except Exception:
-            return "Progress running"
+            return t("ring.running")
 
     def _paint_state(self) -> str:
         """Test/debug helper: one word describing the current state."""

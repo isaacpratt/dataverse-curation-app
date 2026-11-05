@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 from config import Config
 from ui.dashboard import DashboardView
 from ui.dialogs import show_warning
+from ui.i18n import t
 from ui.icons import icon as lucide_icon
 from ui.theme import (
     ACCENT_FOCUS_TINT,
@@ -244,12 +245,21 @@ _CAPTION_GLYPHS = {
     "restore": QStyle.SP_TitleBarNormalButton,
     "close": QStyle.SP_TitleBarCloseButton,
 }
-_CAPTION_TIPS = {"min": "Minimize", "max": "Maximize", "restore": "Restore", "close": "Close"}
-_CAPTION_A11Y = {
-    "min": "Minimize window",
-    "max": "Maximize window",
-    "restore": "Restore window",
-    "close": "Close window",
+
+# Caption labels come from the catalogue. The tables keep every lookup
+# static — a built-up key ("main.caption." + kind) would hide the key from
+# ui/tests/test_strings.py, which proves every referenced key exists.
+_CAPTION_KEYS = {
+    "min": "main.caption.min",
+    "max": "main.caption.max",
+    "restore": "main.caption.restore",
+    "close": "main.caption.close",
+}
+_CAPTION_A11Y_KEYS = {
+    "min": "main.caption.min_a11y",
+    "max": "main.caption.max_a11y",
+    "restore": "main.caption.restore_a11y",
+    "close": "main.caption.close_a11y",
 }
 
 
@@ -291,8 +301,10 @@ class _CaptionButton(QPushButton):
         self._hovered = False
         self.setFixedSize(46, 32)
         self.setCursor(Qt.PointingHandCursor)
-        self.setToolTip(_CAPTION_TIPS[kind])
-        self.setAccessibleName(_CAPTION_A11Y[kind])
+        self.setToolTip(t(_CAPTION_KEYS.get(kind, _CAPTION_KEYS["close"])))
+        self.setAccessibleName(
+            t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"]))
+        )
         self.setIconSize(QSize(14, 14))
         # theme-allow: a frameless window's caption button is window chrome,
         # not an app button (square caption face, red close hover) — the kit's
@@ -301,11 +313,19 @@ class _CaptionButton(QPushButton):
         self._apply_icon()
 
     def set_glyph(self, kind: str) -> None:
-        """Swap the glyph (maximize <-> restore) and its tooltip."""
+        """Swap the glyph (maximize <-> restore) and its labels.
+
+        The accessible name follows the action, not the button: a screen
+        reader must hear "Restore window" once the window is maximized, not
+        "Maximize window" on a button that restores it.
+        """
         if kind == self._kind:
             return
         self._kind = kind
-        self.setToolTip(_CAPTION_TIPS[kind])
+        self.setToolTip(t(_CAPTION_KEYS.get(kind, _CAPTION_KEYS["close"])))
+        self.setAccessibleName(
+            t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"]))
+        )
         self._apply_icon()
 
     def _apply_icon(self) -> None:
@@ -361,7 +381,7 @@ class MainWindow(QMainWindow):
         self._config = config
         self._metadata_cache: dict[str, tuple[dict, list]] = {}
         self._open_pids: list[tuple[str, str]] = []
-        self.setWindowTitle("Dataverse Docent")
+        self.setWindowTitle(t("main.window_title"))
         # Window-level icon so the Windows taskbar always shows the 16x16
         # mark (main.py also sets it on QApplication; dialogs inherit).
         try:
@@ -412,10 +432,12 @@ class MainWindow(QMainWindow):
         nav_lay.setContentsMargins(12, 0, 0, 0)
         nav_lay.setSpacing(6)
 
-        self._nav_dashboard = AppButton("Dashboard", kind="nav-active", size=None)
+        self._nav_dashboard = AppButton(
+            t("main.nav.dashboard"), kind="nav-active", size=None
+        )
         self._nav_dashboard.setCursor(Qt.PointingHandCursor)
         self._nav_dashboard.setFixedHeight(32)
-        self._nav_dashboard.setToolTip("Back to the dashboard (Alt+Left)")
+        self._nav_dashboard.setToolTip(t("main.nav.dashboard_tip"))
         self._nav_dashboard.clicked.connect(self._show_dashboard)
         nav_lay.addWidget(self._nav_dashboard)
 
@@ -431,16 +453,16 @@ class MainWindow(QMainWindow):
         self._nav_settings.setCheckable(True)
         self._nav_settings.setCursor(Qt.PointingHandCursor)
         self._nav_settings.setFixedSize(32, 32)
-        self._nav_settings.setToolTip("Settings")
-        self._nav_settings.setAccessibleName("Settings")
+        self._nav_settings.setToolTip(t("main.nav.settings"))
+        self._nav_settings.setAccessibleName(t("main.nav.settings"))
         self._nav_settings.toggled.connect(self._on_settings_toggled)
         nav_lay.addWidget(self._nav_settings)
 
         self._nav_requirements = AppButton("", kind="nav", size=None)
         self._nav_requirements.setCursor(Qt.PointingHandCursor)
         self._nav_requirements.setFixedSize(32, 32)
-        self._nav_requirements.setToolTip("Configure Rules")
-        self._nav_requirements.setAccessibleName("Configure Rules")
+        self._nav_requirements.setToolTip(t("main.nav.rules"))
+        self._nav_requirements.setAccessibleName(t("main.nav.rules"))
         self._nav_requirements.clicked.connect(self._show_review_config)
         nav_lay.addWidget(self._nav_requirements)
 
@@ -448,8 +470,8 @@ class MainWindow(QMainWindow):
         self._nav_log.setCheckable(True)
         self._nav_log.setCursor(Qt.PointingHandCursor)
         self._nav_log.setFixedSize(32, 32)
-        self._nav_log.setToolTip("Log")
-        self._nav_log.setAccessibleName("Log")
+        self._nav_log.setToolTip(t("main.nav.log"))
+        self._nav_log.setAccessibleName(t("main.nav.log"))
         self._nav_log.toggled.connect(self._on_log_toggled)
         nav_lay.addWidget(self._nav_log)
 
@@ -457,8 +479,8 @@ class MainWindow(QMainWindow):
         self._nav_help.setCheckable(True)
         self._nav_help.setFixedSize(32, 32)
         self._nav_help.setCursor(Qt.PointingHandCursor)
-        self._nav_help.setToolTip("About")
-        self._nav_help.setAccessibleName("About")
+        self._nav_help.setToolTip(t("main.nav.about"))
+        self._nav_help.setAccessibleName(t("main.nav.about"))
         self._nav_help.toggled.connect(self._on_about_toggled)
         nav_lay.addWidget(self._nav_help)
         self._sync_nav_icons()
@@ -602,7 +624,7 @@ class MainWindow(QMainWindow):
 
             self._settings = SettingsPane(self._config)
             self._settings.saved.connect(self._on_settings_saved)
-            self._settings.discarded.connect(lambda: self._show_pane(None))
+            self._settings.configurationChanged.connect(self._on_configuration_changed)
             # Scroll-wrapped: tall panes scroll in place, never grow the window.
             self._settings_page = self._wrap_pane_page(self._settings)
             self._stack.addWidget(self._settings_page)
@@ -731,10 +753,29 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _show_pane(self, name) -> None:
-        """Show one pane exclusively (settings/about) or switch to log page."""
+    def _can_leave_settings(self) -> bool:
+        """Guard every exit from a dirty Settings pane."""
+        if self._content_role() != "settings":
+            return True
+        pane = getattr(self, "_settings", None)
+        if pane is None:
+            return True
+        try:
+            return bool(pane.confirm_leave(self))
+        except Exception:
+            return True
+
+    def _show_pane(self, name) -> bool:
+        """Show one pane exclusively (settings/about) or switch to log page.
+
+        Returns False when a dirty Settings pane cancelled the switch.
+        """
         try:
             role = self._content_role()
+            if role == "settings" and name != "settings":
+                if not self._can_leave_settings():
+                    self._refresh_nav_state()
+                    return False
             if name in ("settings", "about"):
                 # Exclusive like before: opening a page switches stack.
                 if role not in ("settings", "about"):
@@ -763,6 +804,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         self._refresh_nav_state()
+        return True
 
     def _on_log_toggled(self, checked: bool) -> None:
         self._show_pane("log" if checked else None)
@@ -773,7 +815,18 @@ class MainWindow(QMainWindow):
                 self._ensure_settings().reload()
             except Exception:
                 pass
-        self._show_pane("settings" if checked else None)
+        if not self._show_pane("settings" if checked else None):
+            # Cancel kept the pane open; snap the toggle back without
+            # re-entering this handler.
+            try:
+                self._nav_settings.blockSignals(True)
+                self._nav_settings.setChecked(True)
+            finally:
+                try:
+                    self._nav_settings.blockSignals(False)
+                except Exception:
+                    pass
+                self._refresh_nav_state()
 
     def _on_about_toggled(self, checked: bool) -> None:
         self._show_pane("about" if checked else None)
@@ -788,14 +841,24 @@ class MainWindow(QMainWindow):
             pass
         self._show_pane("settings")
 
-    def _on_settings_saved(self) -> None:
-        self._show_pane(None)
+    def _on_configuration_changed(self) -> None:
         try:
             self._dashboard.reload()
         except Exception as exc:
-            show_warning(self, "Dashboard", f"Could not refresh dashboard:\n{exc}")
+            show_warning(
+                self,
+                t("main.warnings.dashboard_title"),
+                t("main.warnings.dashboard_refresh", exc=exc),
+            )
+
+    def _on_settings_saved(self) -> None:
+        self._show_pane(None)
 
     def _open_dataset(self, persistent_id: str, title: str) -> None:
+        # A dirty Settings pane must be resolved before the stack switches.
+        if not self._can_leave_settings():
+            self._refresh_nav_state()
+            return
         # Imported here, not at module level: the detail view drags in the
         # whole network stack (requests, dataverse_client, download manager,
         # metadata rules). None of it is needed to show the dashboard.
@@ -850,7 +913,7 @@ class MainWindow(QMainWindow):
             if w:
                 w.deleteLater()
         if not self._open_pids:
-            hint = make_caption_label("No dataset open")
+            hint = make_caption_label(t("main.no_dataset"))
             self._chips_lay.addWidget(hint)
             self._chips_lay.addStretch()
             return
@@ -874,7 +937,8 @@ class MainWindow(QMainWindow):
             chip = make_split_chip(
                 label,
                 active=is_active,
-                tip=f"{label}\n{pid}\nClick to open",
+                tip=t("main.chip_open", label=label, pid=pid),
+                close_tip=t("main.chip_close", label=label),
                 on_open=lambda _c=False, p=pid, t=title: self._open_dataset(p, t),
                 on_close=lambda _c=False, p=pid: self._close_dataset(p),
             )
@@ -882,6 +946,10 @@ class MainWindow(QMainWindow):
         self._chips_lay.addStretch()
 
     def closeEvent(self, event) -> None:
+        # Do not lose unsaved Settings edits on window close.
+        if not self._can_leave_settings():
+            event.ignore()
+            return
         # Never destroy a running QThread: stop the dashboard crawl and
         # adopted workers, requesting interruption and waiting boundedly.
         # Note: QThread.quit() is a no-op for overridden run() loops without
@@ -976,6 +1044,9 @@ class MainWindow(QMainWindow):
         self._metadata_cache[pid] = (metadata, inventory)
 
     def _show_dashboard(self) -> None:
+        if not self._can_leave_settings():
+            self._refresh_nav_state()
+            return
         self._stack.setCurrentWidget(self._dashboard)
         self._pane_return = None
         self._style_nav_for_detail(False)
@@ -1197,10 +1268,14 @@ class MainWindow(QMainWindow):
                     return
                 try:
                     if int(hr) == 0:
-                        _get_log().info(f"DWM frame: {what} applied")
+                        _get_log().info(t("main.log.dwm_applied", what=what))
                     else:
                         _get_log().error(
-                            f"DWM frame: {what} failed (HRESULT 0x{int(hr) & 0xFFFFFFFF:08X})"
+                            t(
+                                "main.log.dwm_failed",
+                                what=what,
+                                code=f"{int(hr) & 0xFFFFFFFF:08X}",
+                            )
                         )
                 except Exception:
                     pass
@@ -1212,7 +1287,7 @@ class MainWindow(QMainWindow):
             hr_frame = dwmapi.DwmExtendFrameIntoClientArea(
                 wintypes.HWND(hwnd), ctypes.byref(margins)
             )
-            _report("1px extended frame (border + shadow)", hr_frame)
+            _report(t("main.log.dwm_frame"), hr_frame)
             # Win11 22000+: standard rounded corners (fails harmlessly on
             # Win10, where the attribute does not exist — logged, not raised).
             _DWMWA_WINDOW_CORNER_PREFERENCE = 33
@@ -1224,7 +1299,7 @@ class MainWindow(QMainWindow):
                 ctypes.byref(pref),
                 ctypes.sizeof(pref),
             )
-            _report("rounded corners", hr_corners)
+            _report(t("main.log.dwm_corners"), hr_corners)
         except Exception:
             pass
 
@@ -1442,6 +1517,9 @@ class MainWindow(QMainWindow):
 
     def _show_review_config(self) -> None:
         """Show the full-page Review configuration (replaces the old dialog)."""
+        if not self._can_leave_settings():
+            self._refresh_nav_state()
+            return
         try:
             if getattr(self, "_review_config", None) is None:
                 from ui.review_config import ReviewConfigView
@@ -1455,7 +1533,11 @@ class MainWindow(QMainWindow):
             self._style_nav_for_detail(True)
             self._rebuild_chips()
         except Exception as exc:
-            show_warning(self, "Review configuration", f"Could not open review configuration:\n{exc}")
+            show_warning(
+                self,
+                t("main.warnings.review_title"),
+                t("main.warnings.review_open", exc=exc),
+            )
 
     def _on_review_config_saved(self) -> None:
         if self._detail is not None:

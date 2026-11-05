@@ -27,19 +27,19 @@ the Scan column and a details tooltip.
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
-from engine.status import classify, status_label
+from engine.status import classify
+from ui.i18n import t
 from ui.icons import file_icon, icon, status_icon
+from ui.status_text import badge_text, status_text
 
-COLUMNS = ["Name", "Size", "Format", "Scan"]
+COLUMNS = [
+    t("checks.columns.name"),
+    t("checks.columns.size"),
+    t("checks.columns.format"),
+    t("checks.columns.scan"),
+]
 
 _KIND_ROLE = Qt.UserRole + 1
-
-CHECK_BADGE = {
-    "passed": "PASS",
-    "failed-warning": "WARN",
-    "failed-error": "FAIL",
-    "skipped": "SKIPPED",
-}
 
 # Legacy text glyphs (pre-Lucide). Kept so update_carets() can strip them
 # from any model built before the icon switch; nothing emits them anymore.
@@ -114,7 +114,7 @@ def update_carets(model, is_expanded) -> None:
 
 
 def check_badge_text(result) -> str:
-    return CHECK_BADGE.get(classify(result), "PASS")
+    return badge_text(result)
 
 
 def format_details_tooltip(result) -> str:
@@ -126,7 +126,7 @@ def format_details_tooltip(result) -> str:
     shown = {k: v for k, v in details.items() if k != "skipped"}
     if details.get("skipped"):
         reason = details.get("reason") or details.get("required", "")
-        parts.append(f"Skipped: {reason}" if reason else "Skipped")
+        parts.append(t("checks.skipped_reason", reason=reason) if reason else t("checks.skipped"))
     if shown:
         import json as _json
 
@@ -198,7 +198,7 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
     for parent in parents:
         parent_item = None
         if not flat:
-            label = "Files" if parent == "." else parent + "/"
+            label = t("checks.files_folder") if parent == "." else parent + "/"
             parent_item = _new_item(label, label)
             try:
                 parent_item.setIcon(icon("folder"))
@@ -215,7 +215,7 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
             staged = bool(is_staged(path)) if is_staged else False
             # Tabular originals: name the server derivative behind the file.
             note = (
-                f"\nTabular ingest — server derivative: {derivative}"
+                "\n" + t("checks.tabular_ingest", derivative=derivative)
                 if derivative and derivative != path
                 else ""
             )
@@ -223,33 +223,39 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
             inv_entry = inv_by_path.get(path)
             if isinstance(inv_entry, dict):
                 if inv_entry.get("restricted"):
-                    note += "\nAccess: restricted"
+                    note += "\n" + t("checks.access_restricted")
                 embargo = str(inv_entry.get("embargo_date") or "").strip()
                 if embargo:
-                    note += f"\nEmbargo until {embargo[:10]}"
+                    note += "\n" + t("checks.embargo_until", date=embargo[:10])
                 retention = str(inv_entry.get("retention") or "").strip()
                 if retention:
-                    note += f"\nRetention: {retention}"
+                    note += "\n" + t("checks.retention", retention=retention)
                 ingest_status = str(inv_entry.get("ingest_status") or "").strip()
                 ingest_error = str(inv_entry.get("ingest_error") or "").strip()
                 if ingest_status or ingest_error:
-                    bits = [f"Tabular ingest status: {ingest_status}"] if ingest_status else []
+                    bits = (
+                        [t("checks.ingest_status", status=ingest_status)]
+                        if ingest_status else []
+                    )
                     if ingest_error:
-                        bits.append(f"ingest error: {ingest_error}")
-                    note += "\n" + " — ".join(bits)
+                        bits.append(t("checks.ingest_error", error=ingest_error))
+                    note += "\n" + t("common.separator").join(bits)
             entry = by_path.get(path)
             checks = list(entry.checks) if entry else []
             if report is None:
-                scan = "— run checks after download" if not staged else "Not checked"
+                scan = (
+                    t("checks.run_after_download") if not staged
+                    else t("common.not_checked")
+                )
                 tip = path
             elif entry is None:
-                scan = "Not in report"
-                tip = f"{path}\nNot present in the check report."
+                scan = t("checks.not_in_report")
+                tip = f"{path}\n{t('checks.not_present')}"
             elif not checks:
-                scan = "No automated check — manual review"
-                tip = f"{path}\nNo automated check for this format."
+                scan = t("checks.no_automated")
+                tip = f"{path}\n{t('checks.no_auto_format')}"
             else:
-                scan = status_label(checks)
+                scan = status_text(checks)
                 tip = path + "\n" + "\n".join(
                     f"[{c.level}] {c.check_id}: {c.message}" for c in checks
                 )[:2000]
@@ -263,7 +269,7 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
             except Exception:
                 pass
             name_item.setData({"kind": "file", "path": path, "base": base}, _KIND_ROLE)
-            size_item = _new_item(hs(size), f"{size} bytes")
+            size_item = _new_item(hs(size), t("checks.size_bytes", size=size))
             fmt_item = _new_item(fmt, fmt)
             scan_item = _new_item(scan, tip)
             file_row = [name_item, size_item, fmt_item, scan_item]
@@ -286,7 +292,10 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
                 )
                 c_size = _new_item("")
                 c_fmt = _new_item("")
-                c_scan = _new_item(f"{badge} — {check.message}", format_details_tooltip(check))
+                c_scan = _new_item(
+                    f"{badge}{t('common.separator')}{check.message}",
+                    format_details_tooltip(check),
+                )
                 name_item.appendRow([c_name, c_size, c_fmt, c_scan])
             if parent_item is not None:
                 parent_item.appendRow(file_row)
@@ -301,28 +310,39 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
             counts = {"error": 0, "warning": 0, "skipped": 0, "clean": 0, "unchecked": 0}
             for i in range(folder.rowCount()):
                 scan_text = folder.child(i, 3).text() if folder.child(i, 3) else ""
-                if scan_text.startswith("Error"):
+                if scan_text.startswith(t("status.error")):
                     worst = max(worst, 4)
                     counts["error"] += 1
-                elif scan_text.startswith("Warning"):
+                elif scan_text.startswith(t("status.warning")):
                     worst = max(worst, 3)
                     counts["warning"] += 1
-                elif scan_text.startswith("Skipped"):
+                elif scan_text.startswith(t("status.skipped")):
                     worst = max(worst, 2)
                     counts["skipped"] += 1
-                elif scan_text.startswith("Clean"):
+                elif scan_text.startswith(t("status.clean")):
                     counts["clean"] += 1
                 else:
                     counts["unchecked"] += 1
-            label = {4: "Error", 3: "Warning", 2: "Skipped"}.get(worst, "")
+            label = {
+                4: t("status.error"),
+                3: t("status.warning"),
+                2: t("status.skipped"),
+            }.get(worst, "")
             total = folder.rowCount()
             if label:
                 model.item(r, 3).setText(
-                    f"{label} · {counts['error']} err, {counts['warning']} warn, "
-                    f"{counts['skipped']} skipped, {counts['clean']} clean ({total} files)"
+                    t(
+                        "status.folder.label",
+                        label=label,
+                        errors=counts["error"],
+                        warnings=counts["warning"],
+                        skipped=counts["skipped"],
+                        clean=counts["clean"],
+                        total=total,
+                    )
                 )
             else:
-                model.item(r, 3).setText(f"{total} file(s)")
+                model.item(r, 3).setText(t("status.folder.count", total=total))
     return model
 
 
@@ -349,15 +369,15 @@ def matches_status_filter(scan_text: str, check_rows: list[str], filt: str) -> b
     for badge in check_rows:
         kinds.add(badge)
     if f == "issues":
-        return scan_text.startswith(("Error", "Warning"))
+        return scan_text.startswith((t("status.error"), t("status.warning")))
     if f == "errors":
-        return scan_text.startswith("Error")
+        return scan_text.startswith(t("status.error"))
     if f == "warnings":
-        return scan_text.startswith("Warning")
+        return scan_text.startswith(t("status.warning"))
     if f == "skipped":
-        return "skipped" in kinds or scan_text.startswith("Skipped")
+        return "skipped" in kinds or scan_text.startswith(t("status.skipped"))
     if f == "clean":
-        return scan_text.startswith("Clean")
+        return scan_text.startswith(t("status.clean"))
     if f in ("no check", "unchecked"):
-        return scan_text.startswith("No automated")
+        return scan_text.startswith(t("checks.no_automated_prefix"))
     return True

@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,
     BORDER_SUBTLE,
@@ -68,13 +69,17 @@ from ui.theme import (
     label_badge_style,
     scrollbar_lane_qss,
     transparent_surface_qss,
+    workflow_step_qss,
 )
+from ui.workflow import STEP_ORDER, Workflow
 
 __all__ = [
     "AppButton",
     "AppTable",
     "AppTree",
     "AppTreeWidget",
+    "PaneFooter",
+    "WorkflowRail",
     "flush_table_style",
     "flush_list_style",
     "tree_style",
@@ -784,6 +789,7 @@ def make_split_chip(
     *,
     active: bool = False,
     tip: str = "",
+    close_tip: str = "",
     on_open=None,
     on_close=None,
     parent: QWidget | None = None,
@@ -814,8 +820,8 @@ def make_split_chip(
 
     close_btn = QPushButton()
     close_btn.setCursor(Qt.PointingHandCursor)
-    close_btn.setToolTip(f"Close {label}")
-    close_btn.setAccessibleName(f"Close {label}")
+    close_btn.setToolTip(close_tip or f"Close {label}")
+    close_btn.setAccessibleName(close_tip or f"Close {label}")
     close_btn.setFixedSize(28, 28)
     try:
         from ui.icons import icon as _chip_icon
@@ -949,7 +955,9 @@ def make_metric_value(text: str = "") -> QLabel:
 def make_reset_columns_button(
     name: str,
     *,
-    tip: str = "Reset column widths and order to defaults",
+    tip: str = "",
+    accessible_name: str = "",
+    fallback_text: str = "Reset",
     parent: QWidget | None = None,
 ) -> AppButton:
     """Ghost icon button that resets a table's columns to their defaults.
@@ -960,14 +968,14 @@ def make_reset_columns_button(
     """
     btn = AppButton("", kind="ghost", size="sm", parent=parent)
     btn.setFixedSize(28, 28)
-    btn.setAccessibleName(f"Reset {name} columns")
+    btn.setAccessibleName(accessible_name or f"Reset {name} columns")
     try:
         from ui.icons import icon as _icon
 
         btn.setIcon(_icon("rotate-ccw"))
     except Exception:
-        btn.setText("Reset")
-    btn.setToolTip(tip)
+        btn.setText(fallback_text)
+    btn.setToolTip(tip or t("common.reset_columns_tip"))
     return btn
 
 
@@ -1044,7 +1052,9 @@ def add_info_tip(header_layout, *paragraphs: str, name: str = "") -> QToolButton
     btn.setAutoRaise(True)
     btn.setCursor(Qt.WhatsThisCursor)
     btn.setToolTip(tip)
-    btn.setAccessibleName(f"About {name}" if name else "Section help")
+    btn.setAccessibleName(
+        t("common.about_named", name=name) if name else t("common.section_help")
+    )
     btn.setAccessibleDescription(tip)
     btn.setStyleSheet(
         "QToolButton#InfoTip { background: transparent; border: none; "
@@ -1153,3 +1163,132 @@ def make_combo(items=None, parent: QWidget | None = None, *, height: int = 36,
         else:
             combo.addItem(str(entry))
     return combo
+
+
+class PaneFooter(QFrame):
+    """Shared Save/Revert footer for stack pages.
+
+    One vocabulary for pages that edit durable configuration: Settings
+    (General + Extensions tabs) and Review configuration. The status label
+    carries the last save/revert message; the dirty chip is opt-in so each
+    page can show it only while it has unsaved edits.
+
+    Signals:
+        saveRequested — the page should persist its edits.
+        revertRequested — the page should discard and reload.
+    """
+
+    saveRequested = Signal()
+    revertRequested = Signal()
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        save_text: str = "",
+        revert_text: str = "",
+        save_tip: str = "",
+        revert_tip: str = "",
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("PaneFooter")
+        self.setStyleSheet(
+            f"QFrame#PaneFooter {{ background: transparent; "
+            f"border-top: 1px solid {BORDER_SUBTLE}; }}"
+        )
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 10, 0, 0)
+        layout.setSpacing(8)
+        self.status = QLabel("")
+        self.status.setWordWrap(True)
+        self.status.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        self.status.setObjectName("CaptionSM")
+        layout.addWidget(self.status, 1)
+        self.dirty_chip = QLabel(t("common.dirty_chip"))
+        self.dirty_chip.setObjectName("WarningSM")
+        self.dirty_chip.setToolTip(t("common.dirty_tip"))
+        self.dirty_chip.hide()
+        layout.addWidget(self.dirty_chip)
+        self.revert_btn = make_action_button(
+            revert_text or t("common.revert"), kind="secondary", size="sm", tip=revert_tip
+        )
+        self.revert_btn.clicked.connect(self.revertRequested)
+        layout.addWidget(self.revert_btn)
+        self.save_btn = make_action_button(
+            save_text or t("common.save"), kind="primary", size="sm", tip=save_tip
+        )
+        self.save_btn.clicked.connect(self.saveRequested)
+        layout.addWidget(self.save_btn)
+
+    def set_status(self, text: str) -> None:
+        self.status.setText(text or "")
+
+    def set_dirty(self, dirty: bool) -> None:
+        self.dirty_chip.setVisible(bool(dirty))
+        self.revert_btn.setEnabled(bool(dirty))
+
+
+class WorkflowRail(QWidget):
+    """Compact six-step progress rail for a dataset.
+
+    Guidance, not a gate: every step is clickable in every state, and the
+    widget itself runs nothing (it only emits the clicked step's key). State
+    comes from the pure :func:`ui.workflow.derive_workflow`; the current
+    step also carries bold text and an accessible name so the meaning never
+    depends on colour alone.
+    """
+
+    stepClicked = Signal(str)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("WorkflowRail")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 4, 0, 0)
+        layout.setSpacing(4)
+        self.buttons: dict[str, QPushButton] = {}
+        self._indexes: dict[str, int] = {}
+        for i, key in enumerate(STEP_ORDER):
+            self._indexes[key] = i + 1
+            btn = QPushButton("")
+            btn.setObjectName("WorkflowStep")
+            btn.setFlat(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setMinimumWidth(0)
+            btn.clicked.connect(lambda _c, k=key: self.stepClicked.emit(k))
+            layout.addWidget(btn)
+            self.buttons[key] = btn
+            if i < len(STEP_ORDER) - 1:
+                connector = QLabel("\u203a")
+                connector.setObjectName("WorkflowSeparator")
+                layout.addWidget(connector)
+        layout.addStretch(1)
+        self.hint = QLabel("")
+        self.hint.setObjectName("WorkflowHint")
+        self.hint.setWordWrap(False)
+        self.hint.setMinimumWidth(0)
+        self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.hint.setObjectName("CaptionSM")
+        layout.addWidget(self.hint)
+
+    @staticmethod
+    def _style_for(state: str) -> str:
+        """Return the step's face for its state - the theme owns the rule."""
+        return workflow_step_qss(state)
+
+    def set_workflow(self, workflow: Workflow) -> None:
+        """Paint each step and the next-step hint; never disables a step."""
+        for step in workflow.steps:
+            btn = self.buttons.get(step.key)
+            if btn is None:
+                continue
+            mark = "\u2713" if step.state == "done" else str(self._indexes.get(step.key, 0))
+            btn.setText(f"{mark}  {step.label}")
+            btn.setStyleSheet(self._style_for(step.state))
+            btn.setToolTip(step.hint)
+            btn.setAccessibleName(step.accessible)
+            btn.setAccessibleDescription(step.hint)
+        self.hint.setText(workflow.hint)
+        self.hint.setToolTip(workflow.hint)

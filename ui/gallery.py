@@ -11,8 +11,9 @@ Run it with::
     python main.py --gallery
 
 The gallery is itself a view, so it obeys the same contract as every
-other one: it names roles, not palette entries, and it builds
-components, not raw widgets. The conformance test covers it too.
+other one: it names roles, not palette entries, it builds components,
+not raw widgets, and its copy lives in the string catalogue. The
+conformance test covers it too.
 """
 
 from PySide6.QtCore import Qt
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,
     BORDER_SUBTLE,
@@ -69,35 +71,84 @@ from ui.widgets import (
 __all__ = ["GalleryWindow", "build_gallery"]
 
 
-# The label tokens the theme defines, in the order they scale down.
+# The label tokens the theme defines, in the order they scale down. The
+# token is the object name; the note says what the token is for.
 _TYPE_SCALE = (
-    ("DisplayLG", "DisplayLG", "22px bold"),
-    ("HeadlineLG", "HeadlineLG", "22px semibold"),
-    ("HeadlineMD", "HeadlineMD", "17px semibold"),
-    ("CardTitle", "CardTitle", "15px semibold"),
-    ("BodyMD", "BodyMD", "13px"),
-    ("BodySM", "BodySM", "12px muted"),
-    ("HintSM", "HintSM", "12px subtle"),
-    ("LabelMD", "LabelMD", "11px semibold tracked"),
-    ("LabelStrongSM", "LabelStrongSM", "11px semibold strong"),
-    ("CaptionSM", "CaptionSM", "11px muted"),
-    ("AccentSM", "AccentSM", "12px brand"),
-    ("SuccessSM", "SuccessSM", "12px success"),
-    ("WarningSM", "WarningSM", "12px warning"),
-    ("DangerSM", "DangerSM", "12px danger"),
+    ("DisplayLG", "22px bold"),
+    ("HeadlineLG", "22px semibold"),
+    ("HeadlineMD", "17px semibold"),
+    ("CardTitle", "15px semibold"),
+    ("BodyMD", "13px"),
+    ("BodySM", "12px muted"),
+    ("HintSM", "12px subtle"),
+    ("LabelMD", "11px semibold tracked"),
+    ("LabelStrongSM", "11px semibold strong"),
+    ("CaptionSM", "11px muted"),
+    ("AccentSM", "12px brand"),
+    ("SuccessSM", "12px success"),
+    ("WarningSM", "12px warning"),
+    ("DangerSM", "12px danger"),
 )
 
-# The badge roles the theme ships, with a sample label for each.
+# The curation labels the theme gives a badge role to. The label text
+# drives the role (the theme matches the copy, the way it matches a
+# real Dataverse curation label), so the role follows the wording.
 _BADGE_SAMPLES = (
-    ("Draft", "draft"),
-    ("In Review", "review"),
-    ("Hold", "hold"),
-    ("Needs Review", "needs review"),
-    ("Approved", "approve"),
-    ("Published", "publish"),
-    ("Rejected", "reject"),
-    ("Author Contacted", "author contacted"),
-    ("Deaccessioned", "deaccessioned"),
+    "gallery.badges.draft",
+    "gallery.badges.review",
+    "gallery.badges.hold",
+    "gallery.badges.needs_review",
+    "gallery.badges.approve",
+    "gallery.badges.publish",
+    "gallery.badges.reject",
+    "gallery.badges.author_contacted",
+    "gallery.badges.deaccessioned",
+)
+
+# The role swatches the gallery shows: the catalogue key for the role's
+# name and the colour the role stands for.
+_ROLE_SWATCHES = (
+    ("gallery.roles.page", SURFACE_PAGE),
+    ("gallery.roles.card", SURFACE_CARD),
+    ("gallery.roles.tint", SURFACE_TINT),
+    ("gallery.roles.subtle", SURFACE_SUBTLE),
+    ("gallery.roles.raised", SURFACE_RAISED),
+    ("gallery.roles.border", BORDER_SUBTLE),
+    ("gallery.roles.text", TEXT_PRIMARY),
+    ("gallery.roles.muted_text", TEXT_MUTED),
+    ("gallery.roles.subtle_text", TEXT_SUBTLE),
+    ("gallery.roles.on_tint", TEXT_ON_TINT),
+)
+
+# Every button kind, with the catalogue key for its label.
+_BUTTON_KINDS = (
+    ("primary", "gallery.buttons.primary"),
+    ("secondary", "gallery.buttons.secondary"),
+    ("ghost", "gallery.buttons.ghost"),
+    ("chip", "gallery.buttons.chip"),
+    ("cell", "gallery.buttons.cell"),
+    ("link", "gallery.buttons.link"),
+)
+
+# The sample rows the table shows: the keys for the name and the state,
+# and the file count (a number, not copy).
+_DATA_ROWS = (
+    ("gallery.data.doi_a", "gallery.data.state_review", 42),
+    ("gallery.data.doi_b", "gallery.data.state_approved", 7),
+    ("gallery.data.doi_c", "gallery.data.state_draft", 0),
+)
+
+# The sample rows the tree and the list show.
+_DATA_TREE = (
+    "gallery.data.tree_repository",
+    "gallery.data.tree_one",
+    "gallery.data.tree_two",
+)
+
+_DATA_LIST = (
+    "gallery.data.list_manifest",
+    "gallery.data.list_fields",
+    "gallery.data.list_extensions",
 )
 
 
@@ -106,7 +157,7 @@ def _swatch(background: str, label: str) -> QWidget:
     box = QFrame()
     box.setFixedSize(44, 28)
     box.setStyleSheet(surface_frame_qss(background, TEXT_ON_TINT, radius="6px"))
-    box.setToolTip(f"{label}: {background}")
+    box.setToolTip(t("gallery.roles.swatch_tip", name=label, colour=background))
     return box
 
 
@@ -136,11 +187,11 @@ def _row(*widgets: QWidget, spacing: int = 8) -> QHBoxLayout:
 def _type_scale_section() -> QWidget:
     """Every label token the theme defines."""
     host, lay = _section(
-        "Type scale",
-        "One size per role: the theme owns the type scale, a view names the role.",
+        t("gallery.type_scale.title"),
+        t("gallery.type_scale.subtitle"),
     )
-    for object_name, _label, note in _TYPE_SCALE:
-        sample = QLabel("The quick brown fox jumps over the lazy dog")
+    for object_name, note in _TYPE_SCALE:
+        sample = QLabel(t("gallery.type_scale.sample"))
         sample.setObjectName(object_name)
         sample.setWordWrap(True)
         lay.addWidget(sample)
@@ -151,20 +202,32 @@ def _type_scale_section() -> QWidget:
 def _button_section() -> QWidget:
     """Every button kind, in every size, plus the disabled state."""
     host, lay = _section(
-        "Buttons",
-        "One system: the app-level rules and the scoped copies come from one generator.",
+        t("gallery.buttons.title"),
+        t("gallery.buttons.subtitle"),
     )
-    for kind in ("primary", "secondary", "ghost", "chip", "cell", "link"):
-        enabled = make_action_button(f"{kind.title()}", kind=kind)
-        disabled = make_action_button("Disabled", kind=kind)
+    for kind, key in _BUTTON_KINDS:
+        enabled = make_action_button(t(key), kind=kind)
+        disabled = make_action_button(t("gallery.buttons.disabled"), kind=kind)
         disabled.setEnabled(False)
         lay.addLayout(_row(enabled, disabled))
     for size in ("sm", "md", "lg"):
         lay.addLayout(
             _row(
-                make_action_button(f"{size.upper()} primary", kind="primary", size=size),
-                make_action_button(f"{size.upper()} secondary", kind="secondary", size=size),
-                make_action_button(f"{size.upper()} ghost", kind="ghost", size=size),
+                make_action_button(
+                    t("gallery.buttons.size_primary", size=size.upper()),
+                    kind="primary",
+                    size=size,
+                ),
+                make_action_button(
+                    t("gallery.buttons.size_secondary", size=size.upper()),
+                    kind="secondary",
+                    size=size,
+                ),
+                make_action_button(
+                    t("gallery.buttons.size_ghost", size=size.upper()),
+                    kind="ghost",
+                    size=size,
+                ),
             )
         )
     return host
@@ -173,10 +236,10 @@ def _button_section() -> QWidget:
 def _badge_section() -> QWidget:
     """Show the badge roles, and the badge faces built from explicit roles."""
     host, lay = _section(
-        "Badges",
-        "A status label picks a role; the fill and the text are checked for contrast.",
+        t("gallery.badges.title"),
+        t("gallery.badges.subtitle"),
     )
-    badges = [make_badge(label, label=key) for label, key in _BADGE_SAMPLES]
+    badges = [make_badge(t(key), label=t(key)) for key in _BADGE_SAMPLES]
     wrap = QWidget()
     row = QHBoxLayout(wrap)
     row.setContentsMargins(0, 0, 0, 0)
@@ -188,19 +251,23 @@ def _badge_section() -> QWidget:
     lay.addLayout(
         _row(
             make_badge(
-                "PASS",
+                t("gallery.badges.pass"),
                 background=ACCENT_PRIMARY,
                 foreground=SURFACE_CARD,
                 border=ACCENT_PRIMARY,
             ),
             make_badge(
-                "FAIL",
+                t("gallery.badges.fail"),
                 background=STATE_ERROR_BG,
                 foreground=STATE_ERROR_TEXT,
                 border=STATE_ERROR_TEXT,
             ),
-            make_badge("LIVE", background=STATE_SUCCESS_GRAPHIC, foreground=SURFACE_CARD),
-            make_badge("doi:10.5072/FK2/ABC123", label="identifier", mono=True),
+            make_badge(
+                t("gallery.badges.live"),
+                background=STATE_SUCCESS_GRAPHIC,
+                foreground=SURFACE_CARD,
+            ),
+            make_badge(t("gallery.badges.identifier"), label="identifier", mono=True),
         )
     )
     return host
@@ -209,30 +276,19 @@ def _badge_section() -> QWidget:
 def _role_section() -> QWidget:
     """Show the role layer: what each colour is FOR."""
     host, lay = _section(
-        "Roles",
-        "The palette says what a colour is; a role says what it is for.",
-    )
-    rows = (
-        ("Page", SURFACE_PAGE),
-        ("Card", SURFACE_CARD),
-        ("Tint", SURFACE_TINT),
-        ("Subtle", SURFACE_SUBTLE),
-        ("Raised", SURFACE_RAISED),
-        ("Border", BORDER_SUBTLE),
-        ("Text", TEXT_PRIMARY),
-        ("Muted text", TEXT_MUTED),
-        ("Subtle text", TEXT_SUBTLE),
-        ("On tint", TEXT_ON_TINT),
+        t("gallery.roles.title"),
+        t("gallery.roles.subtitle"),
     )
     grid = QWidget()
     grid_lay = QHBoxLayout(grid)
     grid_lay.setContentsMargins(0, 0, 0, 0)
     grid_lay.setSpacing(10)
-    for name, colour in rows:
+    for key, colour in _ROLE_SWATCHES:
         cell = QWidget()
         cell_lay = QVBoxLayout(cell)
         cell_lay.setContentsMargins(0, 0, 0, 0)
         cell_lay.setSpacing(4)
+        name = t(key)
         cell_lay.addWidget(_swatch(colour, name))
         cell_lay.addWidget(make_caption_label(name))
         grid_lay.addWidget(cell)
@@ -244,31 +300,33 @@ def _role_section() -> QWidget:
 def _input_section() -> QWidget:
     """Show the standard inputs."""
     host, lay = _section(
-        "Inputs",
-        "One field shape: the same height, focus ring and radius everywhere.",
+        t("gallery.inputs.title"),
+        t("gallery.inputs.subtitle"),
     )
-    lay.addWidget(make_field_label("Search"))
-    lay.addWidget(make_search_field("Search the queue"))
-    lay.addWidget(make_field_label("Single line"))
-    lay.addWidget(make_line_edit("A single-line field"))
-    lay.addWidget(make_field_label("Dropdown"))
+    lay.addWidget(make_field_label(t("gallery.inputs.search_label")))
+    lay.addWidget(make_search_field(t("gallery.inputs.search_placeholder")))
+    lay.addWidget(make_field_label(t("gallery.inputs.single_line_label")))
+    lay.addWidget(make_line_edit(t("gallery.inputs.single_line_placeholder")))
+    lay.addWidget(make_field_label(t("gallery.inputs.dropdown_label")))
     lay.addWidget(
         make_combo(
             [
-                ("Select a level", ""),
-                ("Required", "required"),
-                ("Optional", "optional"),
+                (t("gallery.inputs.dropdown_placeholder"), ""),
+                (t("gallery.inputs.dropdown_required"), "required"),
+                (t("gallery.inputs.dropdown_optional"), "optional"),
             ]
         )
     )
-    lay.addWidget(make_field_label("Multi-line"))
-    lay.addWidget(make_multiline_input("Write a note", height=96))
-    lay.addWidget(make_field_label("Read-only"))
-    lay.addWidget(make_plain_text_view("A read-only plain-text view"))
-    lay.addWidget(make_field_label("Check box"))
-    lay.addWidget(make_checkbox("Include the guestbook response", checked=True))
-    lay.addWidget(make_checkbox("A disabled option"))
-    lay.addWidget(make_field_label("Progress"))
+    lay.addWidget(make_field_label(t("gallery.inputs.multi_line_label")))
+    lay.addWidget(
+        make_multiline_input(t("gallery.inputs.multi_line_placeholder"), height=96)
+    )
+    lay.addWidget(make_field_label(t("gallery.inputs.read_only_label")))
+    lay.addWidget(make_plain_text_view(t("gallery.inputs.read_only_content")))
+    lay.addWidget(make_field_label(t("gallery.inputs.check_box_label")))
+    lay.addWidget(make_checkbox(t("gallery.inputs.check_box_checked"), checked=True))
+    lay.addWidget(make_checkbox(t("gallery.inputs.check_box_disabled")))
+    lay.addWidget(make_field_label(t("gallery.inputs.progress_label")))
     bar = make_progress_bar()
     bar.setRange(0, 100)
     bar.setValue(60)
@@ -278,16 +336,21 @@ def _input_section() -> QWidget:
 
 def _container_section() -> QWidget:
     """Show the container components: cards, chips, metric tiles."""
-    host, lay = _section("Containers", "Cards, chips and the metric tile.")
-    card, body, _title, header = make_card("Card")
-    body.addWidget(make_body_label("A card holds a title, a body and a header row."))
-    header.addWidget(make_action_button("Action", kind="ghost", size="sm"))
+    host, lay = _section(
+        t("gallery.containers.title"),
+        t("gallery.containers.subtitle"),
+    )
+    card, body, _title, header = make_card(t("gallery.containers.card_title"))
+    body.addWidget(make_body_label(t("gallery.containers.card_body")))
+    header.addWidget(
+        make_action_button(t("gallery.containers.card_action"), kind="ghost", size="sm")
+    )
     lay.addWidget(card)
 
     lay.addLayout(
         _row(
-            make_split_chip("doi:10.5072/FK2/ABC123", active=True),
-            make_split_chip("doi:10.5072/FK2/XYZ789"),
+            make_split_chip(t("gallery.containers.chip_a"), active=True),
+            make_split_chip(t("gallery.containers.chip_b")),
         )
     )
 
@@ -296,7 +359,7 @@ def _container_section() -> QWidget:
     tile_lay = QVBoxLayout(tile)
     tile_lay.setContentsMargins(16, 12, 16, 12)
     tile_lay.setSpacing(2)
-    tile_lay.addWidget(make_field_label("DATASETS"))
+    tile_lay.addWidget(make_field_label(t("gallery.containers.metric_label")))
     tile_lay.addWidget(make_metric_value("12"))
     lay.addWidget(tile)
     return host
@@ -304,30 +367,36 @@ def _container_section() -> QWidget:
 
 def _data_section() -> QWidget:
     """Show the data components: table, tree and list."""
-    host, lay = _section("Data", "Tables, trees and lists share one header and one lane.")
+    host, lay = _section(
+        t("gallery.data.title"),
+        t("gallery.data.subtitle"),
+    )
 
-    table = AppTable(["Dataset", "State", "Files"], widths={0: 220, 1: 140, 2: 80})
-    for name, state, files in (
-        ("doi:10.5072/FK2/ABC123", "In Review", "42"),
-        ("doi:10.5072/FK2/XYZ789", "Approved", "7"),
-        ("doi:10.5072/FK2/AAA000", "Draft", "0"),
-    ):
+    table = AppTable(
+        [
+            t("gallery.data.column_dataset"),
+            t("gallery.data.column_state"),
+            t("gallery.data.column_files"),
+        ],
+        widths={0: 220, 1: 140, 2: 80},
+    )
+    for name_key, state_key, files in _DATA_ROWS:
         row = table.rowCount()
         table.insertRow(row)
-        table.setItem(row, 0, _table_item(name))
-        table.setItem(row, 1, _table_item(state))
-        table.setItem(row, 2, _table_item(files))
+        table.setItem(row, 0, _table_item(t(name_key)))
+        table.setItem(row, 1, _table_item(t(state_key)))
+        table.setItem(row, 2, _table_item(str(files)))
     lay.addWidget(table)
 
     tree = AppTreeWidget(flush=False)
-    for label in ("Repository", "Dataset one", "Dataset two"):
-        item = _tree_item(label)
+    for key in _DATA_TREE:
+        item = _tree_item(t(key))
         tree.addTopLevelItem(item)
     lay.addWidget(tree)
 
     lst = make_list()
-    for text in ("File manifest", "Metadata fields", "Extensions"):
-        lst.addItem(text)
+    for key in _DATA_LIST:
+        lst.addItem(t(key))
     lay.addWidget(lst)
     return host
 
@@ -351,7 +420,7 @@ class GalleryWindow(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Dataverse Docent - component gallery")
+        self.setWindowTitle(t("gallery.window_title"))
         self.resize(960, 900)
         self.setObjectName("GalleryWindow")
         self.setStyleSheet(page_background_qss("GalleryWindow"))
@@ -361,8 +430,8 @@ class GalleryWindow(QWidget):
         outer.setSpacing(16)
 
         title, subtitle = make_page_heading(
-            "Component gallery",
-            "Every component the app ships, built through the kit.",
+            t("gallery.heading"),
+            t("gallery.subheading"),
         )
         outer.addWidget(title)
         if subtitle is not None:
@@ -391,15 +460,12 @@ class GalleryWindow(QWidget):
         scroll.setWidget(content)
         outer.addWidget(scroll, 1)
 
-        footer = QLabel(
-            "Text colours come from the theme's roles; the contrast contract "
-            "is checked by ui/tests/test_contrast.py."
-        )
+        footer = QLabel(t("gallery.footer"))
         footer.setObjectName("CaptionSM")
         footer.setWordWrap(True)
         footer.setTextFormat(Qt.PlainText)
         outer.addWidget(footer)
-        footer.setToolTip(f"Muted text role: {TEXT_MUTED}")
+        footer.setToolTip(t("gallery.footer_tip", colour=TEXT_MUTED))
 
 
 def build_gallery(parent: QWidget | None = None) -> GalleryWindow:

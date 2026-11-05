@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from startup_probe import mark
+from ui.i18n import t
 
 mark("main.py imported")
 
@@ -88,37 +89,39 @@ if _TYPE_CHECKING:  # pragma: no cover  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Dataverse Docent")
+    parser = argparse.ArgumentParser(description=t("app.cli.description"))
     parser.add_argument(
         "--headless",
         action="store_true",
-        help="run checks on a local directory and write a JSON report",
+        help=t("app.cli.headless_help"),
     )
     parser.add_argument(
         "--gallery",
         action="store_true",
-        help="open the component gallery (every kit component on one page)",
+        help=t("app.cli.gallery_help"),
     )
     parser.add_argument(
-        "dataset_dir", nargs="?", help="staged dataset directory (headless mode)"
+        "dataset_dir", nargs="?", help=t("app.cli.dataset_dir_help")
     )
-    parser.add_argument("--out", default="curation_report.json", help="output report path")
+    parser.add_argument("--out", default="curation_report.json", help=t("app.cli.out_help"))
     parser.add_argument(
         "--format",
         default="json",
         choices=("json", "md", "both"),
-        help="report format: json, md, or both (default: json)",
+        help=t("app.cli.format_help"),
     )
-    parser.add_argument("--persistent-id", default="", help="dataset persistent ID")
+    parser.add_argument(
+        "--persistent-id", default="", help=t("app.cli.persistent_id_help")
+    )
     parser.add_argument(
         "--config",
         default="config.json",
-        help="path to config.json (default: ./config.json)",
+        help=t("app.cli.config_help"),
     )
     parser.add_argument(
         "--dataverse",
         default=None,
-        help="override dataverse base URL (e.g. https://demo.borealisdata.ca)",
+        help=t("app.cli.dataverse_help"),
     )
     args = parser.parse_args(argv)
     mark("args parsed")
@@ -131,21 +134,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.headless:
         if not args.dataset_dir:
-            parser.error("headless mode requires a dataset_dir")
+            parser.error(t("app.cli.headless_requires_dir"))
         if args.dataverse or args.config != "config.json":
             # Both flags are GUI-only (config/token/network); accepting them
             # here would silently ignore what the user asked for.
-            parser.error("--dataverse/--config are GUI-only and ignored in headless mode")
+            parser.error(t("app.cli.headless_gui_only"))
         dataset_path = Path(args.dataset_dir)
         if not dataset_path.exists():
-            parser.error(f"dataset_dir not found: {args.dataset_dir}")
+            parser.error(t("app.cli.dir_not_found", path=args.dataset_dir))
         if not dataset_path.is_dir():
-            parser.error(f"dataset_dir is not a directory: {args.dataset_dir}")
+            parser.error(t("app.cli.dir_not_a_directory", path=args.dataset_dir))
         out_path = Path(args.out)
         try:
             out_path.parent.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            parser.error(f"cannot create output directory ({exc})")
+            parser.error(t("app.cli.cannot_create_output", exc=exc))
         from engine.runner import run_report_to_file
 
         try:
@@ -156,7 +159,7 @@ def main(argv: list[str] | None = None) -> int:
                 fmt=args.format,
             )
         except Exception as exc:
-            print(f"headless run failed: {exc}", file=sys.stderr)
+            print(t("app.cli.run_failed", exc=exc), file=sys.stderr)
             return 2
         errors = sum(
             1
@@ -182,7 +185,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.format == "both":
             sibling = out_path.with_suffix(".md" if out_path.suffix.lower() != ".md" else ".json")
             written = f"{out_path} + {sibling}"
-        print(f"Report written to {written} ({len(report.files)} files, {warnings} finding(s))")
+        print(
+            t(
+                "app.cli.report_written",
+                written=written,
+                files=len(report.files),
+                warnings=warnings,
+            )
+        )
         # CI-usable exit code: 1 when error-level findings exist, 0 otherwise.
         # Warnings alone do not fail the run.
         return 1 if errors else 0
@@ -199,7 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         # Corrupt config: fall back to defaults but tell the user loudly
         # instead of silently discarding their workspace/token.
-        print(f"config warning: {exc} — using defaults", file=sys.stderr)
+        print(t("app.cli.config_warning", exc=exc), file=sys.stderr)
         from config import Config as _Config
 
         cfg = _Config()
@@ -245,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             from ui.dialogs import show_critical
 
-            show_critical(None, "Unexpected error", msg)
+            show_critical(None, t("app.unexpected_error"), msg)
         except Exception:
             print(msg, file=sys.stderr)
 

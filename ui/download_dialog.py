@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from download_manager import DownloadQuote
+from ui.i18n import t
 from ui.theme import TEXT_WARNING
 from ui.widgets import (
     make_action_button,
@@ -53,7 +54,7 @@ class DownloadApprovalDialog(QDialog):
         account: dict | None = None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("Approve download")
+        self.setWindowTitle(t("download.title"))
         self.setMinimumWidth(480)
         self._guestbook = guestbook if isinstance(guestbook, dict) and guestbook else None
         self._account = account if isinstance(account, dict) else {}
@@ -63,9 +64,11 @@ class DownloadApprovalDialog(QDialog):
         self._error = QLabel("")
         layout = QVBoxLayout(self)
         msg = QLabel(
-            f"This dataset contains <b>{quote.file_count}</b> file(s) "
-            f"totalling <b>{_human_size(quote.total_size_bytes)}</b>.<br><br>"
-            "No files have been downloaded yet. Approve to fetch the bundle?"
+            t(
+                "download.summary",
+                count=quote.file_count,
+                size=_human_size(quote.total_size_bytes),
+            )
         )
         msg.setWordWrap(True)
         layout.addWidget(msg)
@@ -80,7 +83,7 @@ class DownloadApprovalDialog(QDialog):
                 warn_row.addWidget(_warn_icon("triangle-alert", size=16, color=TEXT_WARNING))
             except Exception:
                 pass
-            warn = QLabel("Large dataset — download may take a while.")
+            warn = QLabel(t("download.large_warning"))
             warn.setObjectName("WarningSM")
             warn_row.addWidget(warn, 1)
             layout.addLayout(warn_row)
@@ -94,10 +97,10 @@ class DownloadApprovalDialog(QDialog):
         # Inline faces: app-level QSS demonstrably fails to paint button
         # backgrounds inside some QDialog subtrees, which leaves the white
         # primary text on a white dialog (invisible Download button).
-        cancel_btn = make_action_button("Cancel", kind="secondary")
+        cancel_btn = make_action_button(t("common.cancel"), kind="secondary")
         cancel_btn.clicked.connect(self.reject)
         buttons.addWidget(cancel_btn)
-        download_btn = make_action_button("Download", kind="primary")
+        download_btn = make_action_button(t("download.button"), kind="primary")
         download_btn.setDefault(True)
         download_btn.clicked.connect(self.accept)
         buttons.addWidget(download_btn)
@@ -125,10 +128,8 @@ class DownloadApprovalDialog(QDialog):
     def _build_guestbook(self, layout: QVBoxLayout) -> None:
         gb = self._guestbook or {}
         title = QLabel(
-            f"<b>{gb.get('name') or 'Guestbook'}</b><br>"
-            "This dataset asks for a guestbook response before download. "
-            "Fields marked * are required (prefilled from your Dataverse "
-            "account where available)."
+            f"<b>{gb.get('name') or t('download.guestbook_default_name')}</b><br>"
+            f"{t('download.guestbook_intro')}"
         )
         title.setWordWrap(True)
         layout.addWidget(title)
@@ -138,10 +139,10 @@ class DownloadApprovalDialog(QDialog):
         form.setSpacing(8)
         defaults = self._account_defaults(self._account)
         for key, label, required in (
-            ("name", "Name", gb.get("nameRequired")),
-            ("email", "Email", gb.get("emailRequired")),
-            ("institution", "Institution", gb.get("institutionRequired")),
-            ("position", "Position", gb.get("positionRequired")),
+            ("name", t("download.field_name"), gb.get("nameRequired")),
+            ("email", t("download.field_email"), gb.get("emailRequired")),
+            ("institution", t("download.field_institution"), gb.get("institutionRequired")),
+            ("position", t("download.field_position"), gb.get("positionRequired")),
         ):
             self._add_base_field(form, key, label, bool(required), defaults.get(key, ""))
         for question in gb.get("customQuestions") or []:
@@ -164,9 +165,11 @@ class DownloadApprovalDialog(QDialog):
         required: bool,
         prefill: str = "",
     ) -> None:
-        caption = QLabel(f"{label}{' *' if required else ''}")
+        caption = QLabel(
+            f"{label}{t('download.required_marker') if required else ''}"
+        )
         form.addWidget(caption)
-        edit = make_line_edit("From your Dataverse account")
+        edit = make_line_edit(t("download.account_placeholder"))
         if prefill:
             edit.setText(prefill)
         caption.setBuddy(edit)
@@ -175,15 +178,15 @@ class DownloadApprovalDialog(QDialog):
         self._base_specs.append((key, label, required))
 
     def _add_question(self, form: QVBoxLayout, question: dict) -> None:
-        label = str(question.get("question") or "Question")
+        label = str(question.get("question") or t("download.question_fallback"))
         if question.get("required"):
-            label += " *"
+            label += t("download.required_marker")
         caption = QLabel(label)
         caption.setWordWrap(True)
         form.addWidget(caption)
         qtype = str(question.get("type") or "text").lower()
         if qtype == "options":
-            options = [("— Select —", "")]
+            options = [(t("download.select_placeholder"), "")]
             for option in question.get("optionValues") or []:
                 if isinstance(option, dict):
                     value = str(option.get("value") or "")
@@ -219,14 +222,13 @@ class DownloadApprovalDialog(QDialog):
                 if required and not self._base_inputs[key].text().strip()
             ]
             missing += [
-                str(q.get("question") or "Question")
+                str(q.get("question") or t("download.question_fallback"))
                 for q, widget in self._question_inputs
                 if q.get("required") and not self._value(widget)
             ]
             if missing:
                 self._error.setText(
-                    "Please fill in the required guestbook field(s): "
-                    + ", ".join(missing)
+                    t("download.missing_fields", fields=", ".join(missing))
                 )
                 self._error.setVisible(True)
                 return

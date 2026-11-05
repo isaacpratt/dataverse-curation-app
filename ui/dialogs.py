@@ -3,6 +3,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
 
+from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,
     STATE_ERROR_GRAPHIC,
@@ -18,47 +19,40 @@ _ICON_COLORS = {
 
 # Plain-language rewrites for the failures workers actually raise. Matched
 # against the whole worker message (exception + traceback), case-insensitive.
+# Each entry carries the catalogue key for its headline.
 _NETWORK_HINTS = (
     (
         ("max retries exceeded", "failed to establish a new connection",
          "name or service not known", "getaddrinfo", "network is unreachable",
          "temporary failure in name resolution", "connection refused",
          "connectionreset", "connection aborted"),
-        "Could not reach the Dataverse server. Check your network connection or "
-        "the Base URL in Settings (Ctrl+,), then try again.",
+        "dialogs.network.unreachable",
     ),
     (
         ("timed out", "timeout"),
-        "The Dataverse server did not respond in time. It may be busy — try again "
-        "in a moment.",
+        "dialogs.network.timeout",
     ),
     (
         ("rejected the guestbook response", "guestbook response entry is required",
          "guestbookresponse"),
-        "Dataverse rejected the guestbook answers. Fill in every required field "
-        "(including any account field the server asks for), then try again.",
+        "dialogs.network.guestbook_rejected",
     ),
     (
         ("guestbook",),
-        "This dataset requires a Guestbook response, but the download window did "
-        "not have its fields. Reload the dataset metadata and try again — the "
-        "download window will show the guestbook form.",
+        "dialogs.network.guestbook_missing",
     ),
     (
         ("401", "403", "unauthorized", "forbidden", "invalid api token",
          "api token", "authentication"),
-        "Dataverse rejected the request — the API token may be missing, expired, or "
-        "lacking access. Update it in Settings (Ctrl+,), then try again.",
+        "dialogs.network.auth",
     ),
     (
         ("404", "not found", "no route to host"),
-        "The Dataverse URL or collection looks wrong (404). Check the Base URL and "
-        "collection alias in Settings (Ctrl+,).",
+        "dialogs.network.not_found",
     ),
     (
         ("ssl", "certificate", "handshake"),
-        "The secure connection to the Dataverse failed (certificate/SSL error). "
-        "Check the Base URL, or ask IT about the server certificate.",
+        "dialogs.network.ssl",
     ),
 )
 
@@ -71,12 +65,12 @@ def describe_error(msg: str) -> tuple[str, str]:
     """
     raw = (msg or "").strip()
     low = raw.lower()
-    for needles, headline in _NETWORK_HINTS:
+    for needles, key in _NETWORK_HINTS:
         if any(n in low for n in needles):
-            return headline, raw
+            return t(key), raw
     first_line = raw.splitlines()[0].strip() if raw else ""
     if not first_line:
-        return "Something went wrong. The technical details are below.", raw
+        return t("dialogs.generic_error"), raw
     if len(first_line) > 200:
         first_line = first_line[:197] + "..."
     return first_line, raw
@@ -126,9 +120,10 @@ def _show(
         layout.addWidget(edit, 1)
     if details:
         det = make_multiline_input(
-            "Technical details", read_only=True, fixed=False, min_height=120
+            t("dialogs.technical_details"), read_only=True, fixed=False, min_height=120
         )
         det.setPlainText(details)
+        det.setPlaceholderText(t("dialogs.technical_details"))
         layout.addWidget(det, 1)
 
     state = {"retry": False}
@@ -163,11 +158,13 @@ def show_info(parent, title: str, text: str, details: str = "", retry=None) -> N
     _show(parent, title, text, "info", details, retry)
 
 
-def confirm(parent, title: str, text: str, *, confirm_label: str = "Delete") -> bool:
+def confirm(parent, title: str, text: str, *, confirm_label: str = "") -> bool:
     """Yes/No confirmation for destructive actions. Defaults to No."""
     from PySide6.QtWidgets import QHBoxLayout
 
     from ui.icons import icon_label as _dlg_icon
+
+    confirm_label = confirm_label or t("common.delete")
 
     dlg = QDialog(parent)
     dlg.setWindowTitle(title)
@@ -197,3 +194,59 @@ def confirm(parent, title: str, text: str, *, confirm_label: str = "Delete") -> 
     yes_btn.setAutoDefault(True)
     no_btn.setAutoDefault(True)
     return dlg.exec() == QDialog.DialogCode.Accepted
+
+
+def confirm_save_discard_cancel(parent, title: str, text: str) -> str:
+    """Ask Save / Discard / Cancel for dirty settings and return the choice.
+
+    Returns "save", "discard", or "cancel".
+    """
+    from PySide6.QtWidgets import QDialogButtonBox, QHBoxLayout
+
+    from ui.icons import icon_label as _dlg_icon
+
+    dlg = QDialog(parent)
+    dlg.setWindowTitle(title)
+    dlg.setMinimumWidth(460)
+    layout = QVBoxLayout(dlg)
+    try:
+        header_row = QHBoxLayout()
+        header_row.setSpacing(8)
+        header_row.addWidget(_dlg_icon("triangle-alert", size=18, color=STATE_WARNING_GRAPHIC))
+        header = QLabel(f"<b>{title}</b>")
+        header.setTextFormat(Qt.RichText)
+        header_row.addWidget(header, 1)
+        layout.addLayout(header_row)
+    except Exception:
+        pass
+    label = QLabel(text)
+    label.setWordWrap(True)
+    label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+    layout.addWidget(label)
+
+    buttons = QDialogButtonBox()
+    # Order: Save (AcceptRole), Discard (DestructiveRole), Cancel (RejectRole)
+    save_btn = buttons.addButton(t("common.save"), QDialogButtonBox.ButtonRole.AcceptRole)
+    discard_btn = buttons.addButton(
+        t("common.discard"), QDialogButtonBox.ButtonRole.DestructiveRole
+    )
+    cancel_btn = buttons.addButton(t("common.cancel"), QDialogButtonBox.RejectRole)
+    cancel_btn.setDefault(True)  # Cancel is the safe default
+
+    result = {"action": "cancel"}
+
+    def _on_click(btn):
+        if btn is save_btn:
+            result["action"] = "save"
+            dlg.accept()
+        elif btn is discard_btn:
+            result["action"] = "discard"
+            dlg.accept()
+        else:
+            result["action"] = "cancel"
+            dlg.reject()
+
+    buttons.clicked.connect(_on_click)
+    layout.addWidget(buttons)
+    dlg.exec()
+    return result["action"]

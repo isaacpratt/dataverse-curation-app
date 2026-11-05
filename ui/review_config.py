@@ -35,10 +35,12 @@ from PySide6.QtWidgets import (
 
 from config import Config
 from ui.dialogs import show_critical, show_info, show_warning
+from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import page_background_qss, selectable_labels
 from ui.widgets import (
     AppTreeWidget,
+    PaneFooter,
     make_action_button,
     make_card,
     make_checkbox,
@@ -59,22 +61,28 @@ class ContentRuleDialog(QDialog):
 
     def __init__(self, parent=None, rule: dict[str, Any] | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Content rule")
+        self.setWindowTitle(t("review.rule_dialog.title"))
         self.resize(520, 560)
         rule = rule or {}
         lay = QVBoxLayout(self)
         form = QFormLayout()
-        self._label = make_line_edit("e.g. README file")
+        self._label = make_line_edit(t("review.rule_dialog.label_placeholder"))
         self._label.setText(str(rule.get("label") or ""))
-        form.addRow("Label:", self._label)
-        self._level = make_combo([("Required", "required"), ("Optional", "optional")], min_width=160)
+        form.addRow(t("review.rule_dialog.label"), self._label)
+        self._level = make_combo(
+            [
+                (t("review.rule_dialog.required"), "required"),
+                (t("review.rule_dialog.optional"), "optional"),
+            ],
+            min_width=160,
+        )
         lvl = str(rule.get("level") or "required")
         self._level.setCurrentIndex(0 if lvl != "optional" else 1)
-        form.addRow("Level:", self._level)
+        form.addRow(t("review.rule_dialog.level"), self._level)
         scope = rule.get("scope") if isinstance(rule.get("scope"), list) else ["filenames"]
-        self._cb_files = make_checkbox("Filenames / inventory paths (no download needed)")
-        self._cb_meta = make_checkbox("Metadata values")
-        self._cb_content = make_checkbox("Text inside staged files (needs download)")
+        self._cb_files = make_checkbox(t("review.rule_dialog.scope_files"))
+        self._cb_meta = make_checkbox(t("review.rule_dialog.scope_metadata"))
+        self._cb_content = make_checkbox(t("review.rule_dialog.scope_content"))
         self._cb_files.setChecked("filenames" in scope)
         self._cb_meta.setChecked("metadata" in scope)
         self._cb_content.setChecked("file-content" in scope)
@@ -84,25 +92,29 @@ class ContentRuleDialog(QDialog):
         scope_box.addWidget(self._cb_content)
         scope_wrap = QWidget()
         scope_wrap.setLayout(scope_box)
-        form.addRow("Search in:", scope_wrap)
+        form.addRow(t("review.rule_dialog.scope"), scope_wrap)
         self._match = make_combo(
-            [("Filename pattern (readme*)", "filename-glob"),
-             ("Text contains", "substring"), ("Regular expression", "regex")],
+            [
+                (t("review.rule_dialog.match_glob"), "filename-glob"),
+                (t("review.rule_dialog.match_substring"), "substring"),
+                (t("review.rule_dialog.match_regex"), "regex"),
+            ],
             min_width=200,
         )
         m = str(rule.get("match") or "filename-glob")
         idx = {"filename-glob": 0, "substring": 1, "regex": 2}.get(m, 0)
         self._match.setCurrentIndex(idx)
-        form.addRow("Match:", self._match)
-        self._pattern = make_line_edit("readme*  or  funding acknowledgement  or  \\bCC-BY\\b")
+        form.addRow(t("review.rule_dialog.match"), self._match)
+        self._pattern = make_line_edit(t("review.rule_dialog.pattern_placeholder"))
         self._pattern.setText(str(rule.get("pattern") or ""))
-        form.addRow("Pattern:", self._pattern)
+        form.addRow(t("review.rule_dialog.pattern"), self._pattern)
         self._case = make_checkbox(
-            "Case sensitive", checked=bool(rule.get("case_sensitive"))
+            t("review.rule_dialog.case_sensitive"),
+            checked=bool(rule.get("case_sensitive")),
         )
         form.addRow("", self._case)
         lay.addLayout(form)
-        lay.addWidget(QLabel("Response text when this rule fails:"))
+        lay.addWidget(QLabel(t("review.rule_dialog.response_label")))
         self._template = make_multiline_input(fixed=False, min_height=120)
         self._template.setPlainText(str(rule.get("response_template") or ""))
         lay.addWidget(self._template, 1)
@@ -128,11 +140,20 @@ class ContentRuleDialog(QDialog):
         import re as _re
 
         base = _re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-") or "rule"
+        is_required = (self._level.currentData() or "required") == "required"
         return {
             "id": rule_id or base,
             "label": label,
             "level": self._level.currentData() or "required",
-            "requirement": f"Custom — {'Required' if (self._level.currentData() or 'required') == 'required' else 'Recommended'} ({label})",
+            "requirement": t(
+                "review.rule_dialog.requirement",
+                level=t(
+                    "review.rule_dialog.required"
+                    if is_required
+                    else "review.rule_dialog.recommended"
+                ),
+                label=label,
+            ),
             "scope": scope,
             "match": self._match.currentData() or "filename-glob",
             "pattern": pattern,
@@ -176,9 +197,9 @@ class ReviewConfigView(QWidget):
         self.setObjectName("ReviewConfigView")
         self.setStyleSheet(page_background_qss("ReviewConfigView"))
 
-        # Shared page-heading contract (HeadlineLG theme token) — same
-        # title look as Settings, Log, and About.
-        title, _subtitle = make_page_heading("Review configuration")
+        # Shared page-heading contract (HeadlineLG theme token) - same
+        # title look as Settings, Log and About.
+        title, _subtitle = make_page_heading(t("review.title"))
         outer.addWidget(title)
 
         outer.addWidget(self._build_topbar())
@@ -190,9 +211,21 @@ class ReviewConfigView(QWidget):
         split.setStretchFactor(1, 2)
         outer.addWidget(split, 1)
 
-        self._status = QLabel("")
-        self._status.setObjectName("CaptionSM")
-        outer.addWidget(self._status)
+        # Shared Save/Revert footer (same component as Settings): one
+        # vocabulary for pages that persist configuration.
+        self._footer = PaneFooter(
+            self,
+            save_tip=t("review.footer.save_tip"),
+            revert_tip=t("review.footer.revert_tip"),
+        )
+        self._footer.saveRequested.connect(self._on_save)
+        self._footer.revertRequested.connect(self._on_revert)
+        outer.addWidget(self._footer)
+        # Compatibility aliases used by the status/dirty helpers.
+        self._status = self._footer.status
+        self._dirty_chip = self._footer.dirty_chip
+        self._save_btn = self._footer.save_btn
+        self._footer.set_dirty(False)
 
         selectable_labels(self)
         self._refresh_all()
@@ -243,52 +276,46 @@ class ReviewConfigView(QWidget):
     # -- builders ----------------------------------------------------------
 
     def _build_topbar(self) -> QWidget:
-        card, body, _t, _h = make_card("Ruleset")
+        card, body, _t, _h = make_card(t("review.card_ruleset"))
         row = QHBoxLayout()
         row.setSpacing(8)
-        row.addWidget(QLabel("Ruleset:"))
+        row.addWidget(QLabel(t("review.ruleset_label")))
         self._ruleset_combo = make_combo(min_width=260)
         self._ruleset_combo.currentIndexChanged.connect(self._on_ruleset_changed)
         row.addWidget(self._ruleset_combo, 1)
-        self._dirty_chip = QLabel("● unsaved")
-        # The unsaved marker is a caution: it wears the theme's warning
-        # token rather than painting its own amber.
-        self._dirty_chip.setObjectName("WarningSM")
-        self._dirty_chip.hide()
-        row.addWidget(self._dirty_chip)
-        for text, slot in [("New…", self._on_new), ("Duplicate", self._on_duplicate), ("Delete", self._on_delete)]:
+        for text, slot in [
+            (t("review.new"), self._on_new),
+            (t("review.duplicate"), self._on_duplicate),
+            (t("review.delete"), self._on_delete),
+        ]:
             b = make_action_button(text, kind="secondary", size="sm")
             b.clicked.connect(slot)
             row.addWidget(b)
         body.addLayout(row)
         row2 = QHBoxLayout()
         row2.setSpacing(8)
-        row2.addWidget(QLabel("Use for Dataverse(s):"))
+        row2.addWidget(QLabel(t("review.dataverses_label")))
         self._dataverses_edit = make_line_edit(
-            "*  or  https://demo.borealisdata.ca, https://…"
+            t("review.dataverses_placeholder")
         )
-        self._dataverses_edit.setToolTip("Comma-separated base URLs, or * for every Dataverse")
+        self._dataverses_edit.setToolTip(t("review.dataverses_tip"))
         self._dataverses_edit.editingFinished.connect(self._on_dataverses_edited)
         row2.addWidget(self._dataverses_edit, 1)
         self._fields_btn = make_action_button(
-            "Load fields from Dataverse", kind="secondary", size="sm"
+            t("review.load_fields"), kind="secondary", size="sm"
         )
         self._fields_btn.clicked.connect(self._on_load_fields)
         row2.addWidget(self._fields_btn)
-        self._save_btn = make_action_button("Save", kind="primary", size="sm")
-        self._save_btn.clicked.connect(self._on_save)
-        row2.addWidget(self._save_btn)
-        revert = make_action_button("Revert", kind="secondary", size="sm")
-        revert.clicked.connect(self._on_revert)
-        row2.addWidget(revert)
         body.addLayout(row2)
         return card
 
     def _build_rules_card(self) -> QWidget:
-        card, body, _t, header_lay = make_card("Checks")
+        card, body, _t, header_lay = make_card(t("review.card_checks"))
         # Filters live in the card header (file-manifest pattern): text
         # search + required-status dropdown + expand/collapse toggle.
-        self._field_filter = make_search_field("Filter fields...", height=36, min_width=160)
+        self._field_filter = make_search_field(
+            t("review.filter_placeholder"), height=36, min_width=160
+        )
         # Debounced like the dashboard search: rebuild the tree 200 ms after
         # the last keystroke so typing never loses focus mid-word.
         from PySide6.QtCore import QTimer as _QTimer
@@ -300,24 +327,33 @@ class ReviewConfigView(QWidget):
         self._field_filter.textChanged.connect(lambda _t: self._filter_timer.start())
         header_lay.addWidget(self._field_filter)
         self._level_filter = make_combo(
-            [("All statuses", "all"), ("Required", "required"),
-             ("Optional", "optional"), ("Not checked", "unchecked")],
+            [
+                (t("review.level_all"), "all"),
+                (t("review.level_required"), "required"),
+                (t("review.level_optional"), "optional"),
+                (t("review.level_unchecked"), "unchecked"),
+            ],
             height=36,
             min_width=130,
-            tip="Show only fields with this required status",
+            tip=t("review.level_filter_tip"),
         )
         self._level_filter.currentIndexChanged.connect(lambda _i: self._refresh_field_table())
         header_lay.addWidget(self._level_filter)
-        self._blocks_btn = make_action_button("Collapse all", kind="secondary", size="md")
-        self._blocks_btn.setToolTip("Expand or collapse every metadata block")
+        self._blocks_btn = make_action_button(
+            t("review.collapse_all"), kind="secondary", size="md"
+        )
+        self._blocks_btn.setToolTip(t("review.blocks_tip"))
         self._blocks_btn.clicked.connect(self._on_toggle_blocks)
         header_lay.addWidget(self._blocks_btn)
         self._fields_reset_btn = make_reset_columns_button(
-            "metadata fields", tip="Reset columns and widths to default"
+            "",
+            tip=t("review.reset_tip"),
+            accessible_name=t("review.reset_fields_a11y"),
+            fallback_text=t("review.reset"),
         )
         self._fields_reset_btn.clicked.connect(self._on_reset_field_view)
         header_lay.addWidget(self._fields_reset_btn)
-        hint = QLabel("Required / Optional / Not checked — per metadata field broadcast by the Dataverse, grouped by block.")
+        hint = QLabel(t("review.checks_hint"))
         hint.setWordWrap(True)
         hint.setObjectName("CaptionSM")
         body.addWidget(hint)
@@ -327,7 +363,9 @@ class ReviewConfigView(QWidget):
         # *widgets*, which Qt does not move when rows sort.
         self._field_tree = AppTreeWidget(row_height=None, flush=False)
         self._field_tree.setColumnCount(2)
-        self._field_tree.setHeaderLabels(["Field", "Check"])
+        self._field_tree.setHeaderLabels(
+            [t("review.column_field"), t("review.column_check")]
+        )
         self._field_tree.setRootIsDecorated(True)
         self._field_tree.setExpandsOnDoubleClick(True)
         self._field_tree.setAnimated(True)
@@ -355,13 +393,17 @@ class ReviewConfigView(QWidget):
         self._floor_check_column()
         self._field_tree.itemSelectionChanged.connect(self._on_field_selected)
         body.addWidget(self._field_tree, 1)
-        body.addWidget(QLabel("Text rules (e.g. README — search filenames, metadata, file contents):"))
+        body.addWidget(QLabel(t("review.text_rules_label")))
         self._content_list = make_list()
         self._content_list.setMinimumHeight(110)
         self._content_list.itemSelectionChanged.connect(self._on_content_selected)
         body.addWidget(self._content_list)
         row = QHBoxLayout()
-        for text, slot in [("Add rule…", self._on_content_add), ("Edit…", self._on_content_edit), ("Delete", self._on_content_delete)]:
+        for text, slot in [
+            (t("review.add_rule"), self._on_content_add),
+            (t("review.edit_rule"), self._on_content_edit),
+            (t("review.delete"), self._on_content_delete),
+        ]:
             b = make_action_button(text, kind="secondary", size="sm")
             b.clicked.connect(slot)
             row.addWidget(b)
@@ -370,28 +412,27 @@ class ReviewConfigView(QWidget):
         return card
 
     def _build_templates_card(self) -> QWidget:
-        card, body, _t, _h = make_card("Response text")
-        self._sel_label = QLabel("Select a field or text rule to edit its response text.")
+        card, body, _t, _h = make_card(t("review.card_response"))
+        self._sel_label = QLabel(t("review.select_template"))
         self._sel_label.setWordWrap(True)
         self._sel_label.setObjectName("LabelStrongSM")
         body.addWidget(self._sel_label)
         self._template_edit = make_multiline_input(
-            "Standard sentence inserted into the Response draft when this check fails…\n"
-            "Placeholders: {field} {value} {dataset_title} {persistent_id} {path} {message}",
+            t("review.template_placeholder"),
             fixed=False,
             min_height=130,
         )
         self._template_edit.textChanged.connect(self._on_template_edited)
         body.addWidget(self._template_edit)
-        body.addWidget(QLabel("Draft header (opening paragraph):"))
+        body.addWidget(QLabel(t("review.draft_header")))
         self._header_edit = make_multiline_input(fixed=False, min_height=70)
         self._header_edit.textChanged.connect(self._on_header_footer_edited)
         body.addWidget(self._header_edit)
-        body.addWidget(QLabel("Draft footer (closing paragraph):"))
+        body.addWidget(QLabel(t("review.draft_footer")))
         self._footer_edit = make_multiline_input(fixed=False, min_height=70)
         self._footer_edit.textChanged.connect(self._on_header_footer_edited)
         body.addWidget(self._footer_edit, 1)
-        note = QLabel("File-check findings (warnings/errors) use these templates too — edit per-check text under the ruleset JSON for now; the common cases are covered by the default “{check_id}: {message}” template.")
+        note = QLabel(t("review.filecheck_note"))
         note.setWordWrap(True)
         note.setObjectName("CaptionSM")
         body.addWidget(note)
@@ -467,12 +508,12 @@ class ReviewConfigView(QWidget):
             # License / terms rules live under a synthetic "license" block so
             # they group under one heading in the field tree.
             if b == "license" and not str(label or "").strip():
-                return "License and Terms of Use"
+                return t("review.block_license")
             if str(label or "").strip():
                 return str(label).strip()
-            return (b[:1].upper() + b[1:]) if b else "Other"
+            return (b[:1].upper() + b[1:]) if b else t("review.block_other")
         except Exception:
-            return str(block or "Other")
+            return str(block or t("review.block_other"))
 
     def _refresh_all(self) -> None:
         self._loading = True
@@ -544,7 +585,9 @@ class ReviewConfigView(QWidget):
             for block in ordered:
                 label = group_labels.get(block, block)
                 rows = sorted(groups[block], key=lambda e: str(e.get("label") or e.get("field") or ""))
-                top = QTreeWidgetItem([f"{label} ({len(rows)})"])
+                top = QTreeWidgetItem(
+                    [t("review.block_count", label=label, count=len(rows))]
+                )
                 try:
                     fnt = top.font(0)
                     fnt.setBold(True)
@@ -552,7 +595,14 @@ class ReviewConfigView(QWidget):
                 except Exception:
                     pass
                 top.setData(0, Qt.UserRole, {"kind": "block", "block": block})
-                top.setToolTip(0, f"Metadata block “{label}” — {len(rows)} field(s)")
+                top.setToolTip(
+                    0,
+                    t(
+                        "review.block_tip",
+                        label=label,
+                        count=len(rows),
+                    ),
+                )
                 top.setExpanded(True)
                 # Top item joins the tree first: setItemWidget needs the
                 # child row present before the combo is attached.
@@ -560,13 +610,29 @@ class ReviewConfigView(QWidget):
                 for e in rows:
                     block, field = e["block"], e["field"]
                     child = QTreeWidgetItem([str(e.get("label") or field)])
-                    child.setToolTip(0, f"{block}.{field} — {e['handler']}" + (f"\n{e['req']}" if e["req"] else ""))
+                    child.setToolTip(
+                        0,
+                        t(
+                            "review.messages.field_rule_tip",
+                            block=block,
+                            field=field,
+                            handler=e["handler"],
+                        )
+                        + (f"\n{e['req']}" if e["req"] else ""),
+                    )
                     child.setData(0, Qt.UserRole, {"kind": "field"})
                     # Compact 32px combos: the standard 36px face makes
                     # 35-row blocks (citation) scroll forever; 32px still
                     # clears the 12px text + theme padding without clipping.
-                    combo = make_combo([("Required", "required"), ("Optional", "optional"), ("Not checked", "unchecked")],
-                                       height=32, min_width=110)
+                    combo = make_combo(
+                        [
+                            (t("review.level_required"), "required"),
+                            (t("review.level_optional"), "optional"),
+                            (t("review.level_unchecked"), "unchecked"),
+                        ],
+                        height=32,
+                        min_width=110,
+                    )
                     combo.setCurrentIndex({"required": 0, "optional": 1, "unchecked": 2}.get(e["level"], 2))
                     combo.setProperty("kind", e["kind"])
                     combo.setProperty("block", block)
@@ -589,8 +655,16 @@ class ReviewConfigView(QWidget):
                 pass
         try:
             self._status.setText(
-                f"{n_fields} field(s) in {len(groups)} block(s) shown"
-                + (" — live Dataverse catalog" if self._schema else " — built-in catalog (press “Load fields from Dataverse”)")
+                t(
+                    "review.messages.fields_shown",
+                    fields=n_fields,
+                    blocks=len(groups),
+                )
+                + (
+                    t("review.messages.live_catalog")
+                    if self._schema
+                    else t("review.messages.builtin_catalog")
+                )
             )
         except Exception:
             pass
@@ -632,7 +706,9 @@ class ReviewConfigView(QWidget):
     def _update_blocks_btn(self) -> None:
         try:
             self._blocks_btn.setText(
-                "Collapse all" if not self._blocks_any_collapsed() else "Expand all"
+                t("review.collapse_all")
+                if not self._blocks_any_collapsed()
+                else t("review.expand_all")
             )
         except Exception:
             pass
@@ -658,8 +734,11 @@ class ReviewConfigView(QWidget):
         try:
             header = self._field_tree.header()
             _probe = make_combo(
-                [("Required", "required"), ("Optional", "optional"),
-                 ("Not checked", "unchecked")],
+                [
+                    (t("review.level_required"), "required"),
+                    (t("review.level_optional"), "optional"),
+                    (t("review.level_unchecked"), "unchecked"),
+                ],
                 height=32, min_width=110,
             )
             _need = _probe.sizeHint().width() + 8
@@ -694,9 +773,23 @@ class ReviewConfigView(QWidget):
                 if not isinstance(cr, dict):
                     continue
                 scope = ", ".join(cr.get("scope") or [])
-                item = QListWidgetItem(f"{cr.get('label','rule')}  [{cr.get('level','required')}]  ({scope})")
+                item = QListWidgetItem(
+                    t(
+                        "review.content_item",
+                        label=cr.get("label", "rule"),
+                        level=cr.get("level", "required"),
+                        scope=scope,
+                    )
+                )
                 item.setData(Qt.UserRole, str(cr.get("id") or ""))
-                item.setToolTip(f"Pattern: {cr.get('pattern','')}\nMatch: {cr.get('match','')}\n{cr.get('response_template','')[:200]}")
+                item.setToolTip(
+                    t(
+                        "review.content_item_tip",
+                        pattern=cr.get("pattern", ""),
+                        match=cr.get("match", ""),
+                        template=cr.get("response_template", "")[:200],
+                    )
+                )
                 self._content_list.addItem(item)
         finally:
             try:
@@ -735,13 +828,11 @@ class ReviewConfigView(QWidget):
         if self._loading or self._dirty:
             return
         self._dirty = True
-        self._dirty_chip.show()
+        self._footer.set_dirty(True)
 
     def _clear_dirty(self) -> None:
-        if not self._dirty:
-            return
         self._dirty = False
-        self._dirty_chip.hide()
+        self._footer.set_dirty(False)
 
     def _on_field_selected(self) -> None:
         """Point the template editor at the selected field row."""
@@ -782,9 +873,20 @@ class ReviewConfigView(QWidget):
                     label = next((f.get("label") or field for f in self._schema_fields()
                                   if f.get("block") == block and f.get("field") == field), field)
                     found = {"block": block, "field": field, "label": label,
-                             "requirement": f"Custom — {'Required' if level == 'required' else 'Recommended'} ({label})",
+                             "requirement": t(
+                                 "review.rule_dialog.requirement",
+                                 level=(
+                                     t("review.rule_dialog.required")
+                                     if level == "required"
+                                     else t("review.rule_dialog.recommended")
+                                 ),
+                                 label=label,
+                             ),
                              "handler": "nonempty",
-                             "response_template": f"The dataset is missing {label}. Please provide it."}
+                             "response_template": t(
+                                 "review.messages.missing_field_template",
+                                 label=label,
+                             )}
                     rules.append(found)
                     handler = "nonempty"
                 found["level"] = level
@@ -800,7 +902,16 @@ class ReviewConfigView(QWidget):
                     combo.setProperty("kind", "rule" if found is not None and level != "unchecked" else "new")
                     if found is not None and level != "unchecked":
                         tip_req = str(found.get("requirement") or "")
-                        child.setToolTip(0, f"{block}.{field} — {handler}" + (f"\n{tip_req}" if tip_req else ""))
+                        child.setToolTip(
+                            0,
+                            t(
+                                "review.messages.field_rule_tip",
+                                block=block,
+                                field=field,
+                                handler=handler,
+                            )
+                            + (f"\n{tip_req}" if tip_req else ""),
+                        )
             except Exception:
                 pass
             self._show_template_for_selection()
@@ -832,7 +943,12 @@ class ReviewConfigView(QWidget):
                            if isinstance(c, dict) and str(c.get("id")) == self._sel_key), None)
                 if cr is None:
                     return
-                self._sel_label.setText(f"Response text — text rule “{cr.get('label','')}”")
+                self._sel_label.setText(
+                    t(
+                        "review.selection.content_rule",
+                        label=cr.get("label", ""),
+                    )
+                )
                 self._template_edit.setPlainText(str(cr.get("response_template") or ""))
             else:
                 parts = self._sel_key.split("\x1f")
@@ -856,10 +972,15 @@ class ReviewConfigView(QWidget):
                     except Exception:
                         fr = None
                 if fr is None:
-                    self._sel_label.setText("Select a field or text rule to edit its response text.")
+                    self._sel_label.setText(t("review.select_template"))
                     self._template_edit.setPlainText("")
                     return
-                self._sel_label.setText(f"Response text — “{fr.get('label', fr.get('field'))}”")
+                self._sel_label.setText(
+                    t(
+                        "review.selection.field_rule",
+                        label=fr.get("label", fr.get("field")),
+                    )
+                )
                 self._template_edit.setPlainText(str(fr.get("response_template") or ""))
         finally:
             self._template_edit.blockSignals(False)
@@ -909,7 +1030,11 @@ class ReviewConfigView(QWidget):
             return
         rule = dlg.result_rule()
         if rule is None:
-            show_warning(self, "Content rule", "Label and pattern are required.")
+            show_warning(
+                self,
+                t("review.rule_dialog.title"),
+                t("review.messages.label_pattern_required"),
+            )
             return
         existing = {str(c.get("id")) for c in (self._current_ruleset().get("content_rules") or []) if isinstance(c, dict)}
         base, n = rule["id"], 2
@@ -925,14 +1050,22 @@ class ReviewConfigView(QWidget):
     def _on_content_edit(self) -> None:
         cr = self._selected_content_rule()
         if cr is None:
-            show_info(self, "Content rule", "Select a text rule first.")
+            show_info(
+                self,
+                t("review.rule_dialog.title"),
+                t("review.messages.select_rule_first"),
+            )
             return
         dlg = ContentRuleDialog(self, cr)
         if dlg.exec() != QDialog.Accepted:
             return
         updated = dlg.result_rule(rule_id=str(cr.get("id") or ""))
         if updated is None:
-            show_warning(self, "Content rule", "Label and pattern are required.")
+            show_warning(
+                self,
+                t("review.rule_dialog.title"),
+                t("review.messages.label_pattern_required"),
+            )
             return
         cr.update(updated)
         self._mark_dirty()
@@ -955,12 +1088,20 @@ class ReviewConfigView(QWidget):
     def _on_new(self) -> None:
         from PySide6.QtWidgets import QInputDialog
 
-        name, ok = QInputDialog.getText(self, "New ruleset", "Ruleset key (e.g. mylab):")
+        name, ok = QInputDialog.getText(
+            self,
+            t("review.dialogs.new_ruleset_title"),
+            t("review.dialogs.new_ruleset_label"),
+        )
         if not ok or not (name or "").strip():
             return
         key = name.strip()
         if key in (self._rulesets or {}):
-            show_warning(self, "Ruleset", f"Ruleset '{key}' already exists.")
+            show_warning(
+                self,
+                t("review.dialogs.ruleset_title"),
+                t("review.messages.ruleset_exists", key=key),
+            )
             return
         try:
             src = copy.deepcopy(self._current_ruleset())
@@ -971,17 +1112,30 @@ class ReviewConfigView(QWidget):
             self._refresh_all()
             self._mark_dirty()
         except Exception as exc:
-            show_critical(self, "Ruleset", f"Could not create ruleset:\n{exc}")
+            show_critical(
+                self,
+                t("review.dialogs.ruleset_title"),
+                t("review.messages.create_failed", exc=exc),
+            )
 
     def _on_duplicate(self) -> None:
         from PySide6.QtWidgets import QInputDialog
 
-        name, ok = QInputDialog.getText(self, "Duplicate ruleset", "New key:", text=f"{self._current}-copy")
+        name, ok = QInputDialog.getText(
+            self,
+            t("review.dialogs.duplicate_ruleset_title"),
+            t("review.dialogs.duplicate_ruleset_label"),
+            text=f"{self._current}-copy",
+        )
         if not ok or not (name or "").strip():
             return
         key = name.strip()
         if key in (self._rulesets or {}):
-            show_warning(self, "Ruleset", f"Ruleset '{key}' already exists.")
+            show_warning(
+                self,
+                t("review.dialogs.ruleset_title"),
+                t("review.messages.ruleset_exists", key=key),
+            )
             return
         self._rulesets[key] = copy.deepcopy(self._current_ruleset())
         self._rulesets[key]["label"] = key
@@ -991,46 +1145,56 @@ class ReviewConfigView(QWidget):
 
     def _on_delete(self) -> None:
         if self._current in ("mcmaster-default", "minimal"):
-            show_warning(self, "Ruleset", "The built-in rulesets cannot be deleted (duplicate one to customize).")
+            show_warning(
+                self,
+                t("review.dialogs.ruleset_title"),
+                t("review.messages.built_in_protected"),
+            )
             return
         if len(self._rulesets or {}) <= 1:
-            show_warning(self, "Ruleset", "Cannot delete the last ruleset.")
+            show_warning(
+                self,
+                t("review.dialogs.ruleset_title"),
+                t("review.messages.last_ruleset"),
+            )
             return
         from ui.dialogs import confirm
         deleted = self._current
         n_rules = len(((self._rulesets.get(self._current) or {}).get("field_rules")) or [])
         if not confirm(
             self,
-            "Delete ruleset",
-            f"Delete '{deleted}' and its {n_rules} field rule(s)? "
-            "This cannot be undone.",
-            confirm_label="Delete",
+            t("review.dialogs.delete_ruleset_title"),
+            t("review.messages.delete_confirm", name=deleted, count=n_rules),
+            confirm_label=t("review.delete"),
         ):
             return
         try:
             del self._rulesets[self._current]
             self._current = "mcmaster-default" if "mcmaster-default" in self._rulesets else sorted(self._rulesets.keys())[0]
             self._refresh_all()
-            self._status.setText(f"Deleted '{deleted}'.")
+            self._status.setText(t("review.messages.deleted", name=deleted))
             self._mark_dirty()
         except Exception as exc:
-            show_critical(self, "Ruleset", f"Could not delete ruleset:\n{exc}")
+            show_critical(
+                self,
+                t("review.dialogs.ruleset_title"),
+                t("review.messages.delete_failed", exc=exc),
+            )
 
     def _on_revert(self) -> None:
         from ui.dialogs import confirm
         if not confirm(
             self,
-            "Revert changes",
-            "Discard every unsaved edit and reload the last saved rules? "
-            "This cannot be undone.",
-            confirm_label="Revert",
+            t("review.dialogs.revert_title"),
+            t("review.messages.revert_confirm"),
+            confirm_label=t("review.revert"),
         ):
             return
         try:
             self._rulesets = copy.deepcopy(self._rr.load_rulesets())
             self._current = self._pick_initial_key()
             self._refresh_all()
-            self._status.setText("Reverted to saved rules.")
+            self._status.setText(t("review.messages.reverted"))
             self._clear_dirty()
         except Exception:
             pass
@@ -1039,7 +1203,11 @@ class ReviewConfigView(QWidget):
         try:
             path = self._rr.save_rulesets(self._rulesets)
         except Exception as exc:
-            show_critical(self, "Review configuration", f"Could not save:\n{exc}")
+            show_critical(
+                self,
+                t("review.title"),
+                t("review.messages.save_failed", exc=exc),
+            )
             return
         try:
             import metadata_check as _mc
@@ -1047,9 +1215,13 @@ class ReviewConfigView(QWidget):
             _mc.refresh_profiles_from_rulesets()
         except Exception:
             pass
-        self._status.setText(f"Saved to {path}")
+        self._status.setText(t("review.messages.saved_to", path=path))
         self._clear_dirty()
-        show_info(self, "Review configuration", f"Saved to {Path(path).resolve()}")
+        show_info(
+            self,
+            t("review.title"),
+            t("review.messages.saved_to", path=Path(path).resolve()),
+        )
         try:
             self.saved.emit()
         except Exception:
@@ -1059,7 +1231,7 @@ class ReviewConfigView(QWidget):
         if self._worker is not None:
             try:
                 if self._worker.isRunning():
-                    self._status.setText("Already loading fields — please wait…")
+                    self._status.setText(t("review.messages.already_loading"))
                     return
             except Exception:
                 pass
@@ -1068,7 +1240,7 @@ class ReviewConfigView(QWidget):
             # only on protected instances (metadatablocks is usually public,
             # but the worker sends the token when present).
             pass
-        self._status.setText("Loading metadata fields from Dataverse…")
+        self._status.setText(t("review.messages.loading_fields"))
         self._fields_btn.setEnabled(False)
         try:
             from ui.workers import MetadataBlocksWorker
@@ -1084,21 +1256,31 @@ class ReviewConfigView(QWidget):
             self._worker.start()
         except Exception as exc:
             self._fields_btn.setEnabled(True)
-            show_critical(self, "Metadata fields", f"Could not start field load:\n{exc}")
+            show_critical(
+                self,
+                t("review.dialogs.metadata_fields_title"),
+                t("review.messages.load_start_failed", exc=exc),
+            )
 
     def _on_fields_finished(self, fields: list) -> None:
         self._fields_btn.setEnabled(True)
         if isinstance(fields, list) and fields:
             self._schema = [dict(f) for f in fields if isinstance(f, dict) and f.get("field")]
             self._refresh_field_table()
-            self._status.setText(f"Loaded {len(self._schema)} field(s) from Dataverse.")
+            self._status.setText(
+                t("review.messages.loaded_fields", count=len(self._schema))
+            )
         else:
-            self._status.setText("Dataverse returned no metadata fields — using the built-in catalog.")
+            self._status.setText(t("review.messages.no_fields"))
 
     def _on_fields_error(self, msg: str) -> None:
         self._fields_btn.setEnabled(True)
-        self._status.setText("Could not load fields — using the built-in catalog.")
-        show_warning(self, "Metadata fields", f"Could not load field catalog:\n{msg[:800]}")
+        self._status.setText(t("review.messages.load_failed"))
+        show_warning(
+            self,
+            t("review.dialogs.metadata_fields_title"),
+            t("review.messages.load_catalog_failed", message=msg[:800]),
+        )
 
     # -- host integration ----------------------------------------------------
 
