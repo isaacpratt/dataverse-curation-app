@@ -83,7 +83,7 @@ def _lookup(key: str) -> Any:
 
 
 def has(key: str) -> bool:
-    """True when ``key`` resolves to a string leaf."""
+    """Return True when ``key`` resolves to a string leaf."""
     return isinstance(_lookup(key), str)
 
 

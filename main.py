@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 from startup_probe import mark
-
 from ui.i18n import t
 
 mark("main.py imported")
