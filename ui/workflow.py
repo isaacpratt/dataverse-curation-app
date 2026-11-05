@@ -8,11 +8,16 @@ renders — metadata → changes → download → checks → export → respond.
 The rail is guidance, not a gate: a step may be blocked (its prerequisite
 is missing) but it is never disabled and clicking it never runs an action.
 Keeping the derivation pure makes its tests fast and network-free.
+
+The wording comes from ``ui/assets/strings.json``; this module stays Qt-free
+by using the standard-library catalogue loader only.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from ui.i18n import t
 
 STEP_ORDER: tuple[str, ...] = (
     "metadata",
@@ -23,19 +28,28 @@ STEP_ORDER: tuple[str, ...] = (
     "respond",
 )
 
-STEP_LABELS: dict[str, str] = {
-    "metadata": "Metadata",
-    "changes": "Changes",
-    "download": "Download",
-    "checks": "Checks",
-    "export": "Export",
-    "respond": "Respond",
+# The step label for each key lives in the string catalogue; the map below
+# only says which catalogue entry belongs to which step.  Keys are literal so
+# the string guard can see that every entry is referenced.
+STEP_LABEL_KEYS: dict[str, str] = {
+    "metadata": "workflow.step.metadata",
+    "changes": "workflow.step.changes",
+    "download": "workflow.step.download",
+    "checks": "workflow.step.checks",
+    "export": "workflow.step.export",
+    "respond": "workflow.step.respond",
 }
+
 
 DONE = "done"
 CURRENT = "current"
 AVAILABLE = "available"
 BLOCKED = "blocked"
+
+
+def step_labels() -> dict[str, str]:
+    """Return the step labels, read from the catalogue at call time."""
+    return {key: t(catalogue_key) for key, catalogue_key in STEP_LABEL_KEYS.items()}
 
 
 @dataclass(frozen=True)
@@ -96,45 +110,55 @@ def derive_workflow(inp: WorkflowInput) -> Workflow:
     base: dict[str, tuple[str, str]] = {}
 
     base["metadata"] = (
-        (DONE, "Metadata loaded") if meta else (AVAILABLE, "Load the dataset metadata")
+        (DONE, t("workflow.hint.metadata_loaded"))
+        if meta
+        else (AVAILABLE, t("workflow.hint.load_metadata"))
     )
 
     if inp.changes_loaded:
-        base["changes"] = (DONE, "Changes reviewed")
+        base["changes"] = (DONE, t("workflow.hint.changes_reviewed"))
     elif meta:
-        base["changes"] = (AVAILABLE, "Review what changed in this version")
+        base["changes"] = (AVAILABLE, t("workflow.hint.review_changes"))
     else:
-        base["changes"] = (BLOCKED, "Load metadata first")
+        base["changes"] = (BLOCKED, t("workflow.hint.load_metadata_first"))
 
     if download_done:
-        hint = "No files to download" if no_files else f"All {total} file(s) staged"
+        hint = (
+            t("workflow.hint.no_files")
+            if no_files
+            else t("workflow.hint.all_staged", total=total)
+        )
         base["download"] = (DONE, hint)
     elif meta and not inv_ok:
-        base["download"] = (AVAILABLE, "File list unavailable \u2014 retry Load metadata")
+        base["download"] = (AVAILABLE, t("workflow.hint.inventory_unavailable"))
     elif meta:
-        base["download"] = (AVAILABLE, f"{staged}/{total} staged" if total else "Download the files")
+        base["download"] = (
+            (AVAILABLE, t("workflow.hint.staged", staged=staged, total=total))
+            if total
+            else (AVAILABLE, t("workflow.hint.download_files"))
+        )
     else:
-        base["download"] = (BLOCKED, "Load metadata first")
+        base["download"] = (BLOCKED, t("workflow.hint.load_metadata_first"))
 
     checks_ready = staged > 0 or no_files
     if inp.report_ready:
-        base["checks"] = (DONE, "Checks complete")
+        base["checks"] = (DONE, t("workflow.hint.checks_complete"))
     elif checks_ready:
-        base["checks"] = (AVAILABLE, "Run the automated checks")
+        base["checks"] = (AVAILABLE, t("workflow.hint.run_checks"))
     else:
-        base["checks"] = (BLOCKED, "Download files first")
+        base["checks"] = (BLOCKED, t("workflow.hint.download_first"))
 
     if inp.exported:
-        base["export"] = (DONE, "Reports exported")
+        base["export"] = (DONE, t("workflow.hint.reports_exported"))
     elif inp.report_ready:
-        base["export"] = (AVAILABLE, "Export the reports")
+        base["export"] = (AVAILABLE, t("workflow.hint.export_reports"))
     else:
-        base["export"] = (BLOCKED, "Run checks first")
+        base["export"] = (BLOCKED, t("workflow.hint.run_checks_first"))
 
     if inp.decision_committed:
-        base["respond"] = (DONE, "Decision recorded")
+        base["respond"] = (DONE, t("workflow.hint.decision_recorded"))
     else:
-        base["respond"] = (AVAILABLE, "Draft the response")
+        base["respond"] = (AVAILABLE, t("workflow.hint.draft_response"))
 
     # -- one current step ------------------------------------------------
     done = {key for key, (state, _hint) in base.items() if state == DONE}
@@ -148,32 +172,37 @@ def derive_workflow(inp: WorkflowInput) -> Workflow:
                 break
 
     # -- next-step hint --------------------------------------------------
+    labels = step_labels()
     if current is None:
-        hint = "Workflow complete"
+        hint = t("workflow.hint.complete")
     elif current == "download" and 0 < staged < total:
-        hint = f"{staged}/{total} staged"
+        hint = t("workflow.hint.staged", staged=staged, total=total)
     elif inp.response_open and current == "respond":
         outstanding = next(
             (key for key in STEP_ORDER if key != "respond" and key not in done),
             None,
         )
-        hint = f"Next: {STEP_LABELS[outstanding]}" if outstanding else "Draft the response"
+        hint = (
+            t("workflow.hint.next", label=labels[outstanding])
+            if outstanding
+            else t("workflow.hint.draft_response")
+        )
     else:
-        hint = f"Next: {STEP_LABELS[current]}"
+        hint = t("workflow.hint.next", label=labels[current])
 
     steps: list[Step] = []
     for key in STEP_ORDER:
         state, step_hint = base[key]
         if key == current:
             state = CURRENT
-        label = STEP_LABELS[key]
+        label = labels[key]
         steps.append(
             Step(
                 key=key,
                 label=label,
                 state=state,
                 hint=step_hint,
-                accessible=f"{label}, {state} step",
+                accessible=t("workflow.accessible.step", label=label, state=state),
             )
         )
     return Workflow(steps=tuple(steps), current=current, hint=hint)

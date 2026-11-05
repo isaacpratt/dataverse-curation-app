@@ -27,6 +27,8 @@
     "not_checked": "Not checked",
     "cancel": "Cancel",
     "save": "Save",
+    "discard": "Discard",
+    "revert": "Revert",
     "delete": "Delete",
     "reset": "Reset",
     "refresh": "Refresh",
@@ -34,7 +36,9 @@
     "about_named": "About {name}",
     "section_help": "Section help",
     "none_in_parentheses": "(none)",
-    "separator": " — "
+    "separator": " — ",
+    "dirty_chip": "● unsaved",
+    "dirty_tip": "Unsaved changes — Save or Revert before leaving."
   },
   "status": {
     "error": "Error",
@@ -358,8 +362,7 @@
       "collection_placeholder": "collection alias, e.g. dv (empty = whole repository)",
       "collection": "Collection / collection alias",
       "workspace": "Workspace",
-      "test_connection": "Test connection",
-      "save_tip": "Save to config.json (Ctrl+S)"
+      "test_connection": "Test connection"
     },
     "user": {
       "heading": "Signed in user",
@@ -451,7 +454,18 @@
     "save": {
       "base_url_error": "Base URL must start with http:// or https://",
       "failed": "Could not save config.json:\n{exc}",
-      "saved_to": "Saved to config.json."
+      "saved_to": "Saved to config.json.",
+      "footer_tip": "Save to config.json (Ctrl+S)"
+    },
+    "revert": {
+      "footer_tip": "Discard unsaved edits and reload the saved configuration",
+      "title": "Revert settings",
+      "confirm": "Discard unsaved settings changes and reload the saved configuration?",
+      "done": "Reverted to saved settings."
+    },
+    "unsaved": {
+      "title": "Unsaved settings",
+      "message": "You have unsaved settings changes. Save them before leaving?"
     }
   },
   "review": {
@@ -460,7 +474,6 @@
     "card_checks": "Checks",
     "card_response": "Response text",
     "ruleset_label": "Ruleset:",
-    "dirty_chip": "● unsaved",
     "new": "New…",
     "duplicate": "Duplicate",
     "delete": "Delete",
@@ -469,6 +482,10 @@
     "dataverses_tip": "Comma-separated base URLs, or * for every Dataverse",
     "load_fields": "Load fields from Dataverse",
     "revert": "Revert",
+    "footer": {
+      "save_tip": "Save the rulesets to requirements_profiles.json",
+      "revert_tip": "Discard unsaved ruleset edits and reload the saved rules"
+    },
     "filter_placeholder": "Filter fields...",
     "level_all": "All statuses",
     "level_required": "Required",
@@ -605,9 +622,7 @@
       "run_checks": "Run checks",
       "run_checks_tip": "Download the dataset first — checks run on the staged files",
       "run_checks_tip_staged": "Run the automated curation checks on the staged files",
-      "review_tab": "Review",
       "response_tab": "Response",
-      "response_tab_tip": "Draft the review response for the dataset depositor",
       "show_raw_metadata": "Show all metadata fields",
       "hide_raw_metadata": "Hide raw metadata",
       "submitted_by": "Submitted by {depositor}",
@@ -615,6 +630,10 @@
       "open_link": "Open in Dataverse ↗",
       "open_link_draft": "Open in Dataverse — DRAFT ↗",
       "curation_label_set_by": "{label}\nSet {when} by {who}"
+    },
+    "workflow": {
+      "run_checks_first": "Run checks first — then Export reports… becomes available.",
+      "export_hint": "Use Export reports… in the header to save the JSON + Markdown."
     },
     "sections": {
       "title": "Sections",
@@ -877,6 +896,41 @@
       "save_dialog_failed": "Could not open the save dialog:\n{exc}",
       "write_failed": "Could not write the report:\n{exc}",
       "saved_log": "Reports saved to {markdown} + {json}"
+    }
+  },
+  "workflow": {
+    "step": {
+      "metadata": "Metadata",
+      "changes": "Changes",
+      "download": "Download",
+      "checks": "Checks",
+      "export": "Export",
+      "respond": "Respond"
+    },
+    "hint": {
+      "metadata_loaded": "Metadata loaded",
+      "load_metadata": "Load the dataset metadata",
+      "changes_reviewed": "Changes reviewed",
+      "review_changes": "Review what changed in this version",
+      "load_metadata_first": "Load metadata first",
+      "no_files": "No files to download",
+      "all_staged": "All {total} file(s) staged",
+      "inventory_unavailable": "File list unavailable — retry Load metadata",
+      "staged": "{staged}/{total} staged",
+      "download_files": "Download the files",
+      "checks_complete": "Checks complete",
+      "run_checks": "Run the automated checks",
+      "download_first": "Download files first",
+      "reports_exported": "Reports exported",
+      "export_reports": "Export the reports",
+      "run_checks_first": "Run checks first",
+      "decision_recorded": "Decision recorded",
+      "draft_response": "Draft the response",
+      "complete": "Workflow complete",
+      "next": "Next: {label}"
+    },
+    "accessible": {
+      "step": "{label}, {state} step"
     }
   }
 }

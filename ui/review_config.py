@@ -216,8 +216,8 @@ class ReviewConfigView(QWidget):
         # vocabulary for pages that persist configuration.
         self._footer = PaneFooter(
             self,
-            save_tip="Save the rulesets to requirements_profiles.json",
-            revert_tip="Discard unsaved ruleset edits and reload the saved rules",
+            save_tip=t("review.footer.save_tip"),
+            revert_tip=t("review.footer.revert_tip"),
         )
         self._footer.saveRequested.connect(self._on_save)
         self._footer.revertRequested.connect(self._on_revert)
