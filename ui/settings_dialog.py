@@ -34,9 +34,12 @@ from PySide6.QtWidgets import (
 from config import PRESETS, Config
 from dataverse_client import DataverseClient
 from ui.dialogs import show_critical, show_info, show_warning
+from ui.table_layout import TableLayout
 from ui.theme import (
     BACKGROUND,
     ERROR,
+    FONT_CAPTION,
+    FONT_SMALL,
     MUTED_BG,
     MUTED_BORDER,
     MUTED_TEXT,
@@ -69,7 +72,7 @@ from ui.widgets import (
 _CELL_BTN_STYLE = (
     f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; "
     f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 6px; padding: 0 8px; "
-    "font-weight: 600; font-size: 12px; }"
+    f"font-weight: 600; font-size: {FONT_SMALL}px; }}"
     f"QPushButton:hover {{ background: {SURFACE_CONTAINER_HIGH}; border: 1px solid {PRIMARY}; }}"
     f"QPushButton:pressed {{ background: {SECONDARY_CONTAINER}; }}"
     f"QPushButton:disabled {{ background: {MUTED_BG}; color: {MUTED_TEXT}; "
@@ -219,7 +222,7 @@ class SettingsPane(QWidget):
         self._conn_status.setTextInteractionFlags(
             Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
         )
-        self._conn_status.setStyleSheet(f"font-size: 12px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
+        self._conn_status.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
         conn_row.addWidget(self._conn_status, 1)
         
         # Vertical layout for test + save stacked
@@ -240,7 +243,7 @@ class SettingsPane(QWidget):
         # role by matching that identifier in the alias assignments).
         user_heading = QLabel("Signed in user")
         user_heading.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
+            f"font-size: {FONT_SMALL}px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
             "border: none; background: transparent; padding-top: 8px;"
         )
         form.addRow(user_heading)
@@ -256,7 +259,7 @@ class SettingsPane(QWidget):
         form.addRow("Collection role", self._user_role)
         self._user_status = QLabel("")
         self._user_status.setWordWrap(True)
-        self._user_status.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
+        self._user_status.setStyleSheet(f"font-size: {FONT_CAPTION}px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
         # Single-widget rows span both form columns — the hint must run the
         # full width instead of wrapping in the narrow value column
         # (2026-10-02 minor: the hint rendered as a cramped block).
@@ -298,28 +301,17 @@ class SettingsPane(QWidget):
             flush_table_style(last=False)
             + "QTableWidget::item { padding: 0px 12px; }"
         )
-        # Remember the user's column widths/order across sessions.
+        # Remember the user's column widths/order across sessions. The
+        # controller owns the persistence: it saves user gestures only.
         try:
-            from storage import (
-                restore_table_state,
-                save_table_state,
-                snapshot_table_view,
+            self._ext_layout = TableLayout(
+                self._config.app.workspace,
+                "extensions",
+                self.ext_table.horizontalHeader(),
+                view=self.ext_table,
             )
-
-            _ext_header = self.ext_table.horizontalHeader()
-            self._ext_snap = snapshot_table_view(_ext_header)
-            if restore_table_state(self._config.app.workspace, "extensions", _ext_header):
+            if self._ext_layout.restore():
                 self.ext_table.disable_auto_fit()
-            _ext_header.sectionResized.connect(
-                lambda *a: save_table_state(
-                    self._config.app.workspace, "extensions", _ext_header
-                )
-            )
-            _ext_header.sectionMoved.connect(
-                lambda *a: save_table_state(
-                    self._config.app.workspace, "extensions", _ext_header
-                )
-            )
         except Exception:
             pass
         ext_layout.addWidget(self.ext_table, 1)
@@ -820,7 +812,7 @@ class SettingsPane(QWidget):
         lbl.setTextInteractionFlags(
             Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
         )
-        lbl.setStyleSheet(f"font-size: 12px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;")
+        lbl.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;")
         return lbl
 
     def _clear_collection_role(self) -> None:
@@ -880,7 +872,7 @@ class SettingsPane(QWidget):
                 if lbl is not None:
                     lbl.setText("Not checked yet")
                     lbl.setStyleSheet(
-                        f"font-size: 12px; color: {ON_SURFACE_VARIANT}; "
+                        f"font-size: {FONT_SMALL}px; color: {ON_SURFACE_VARIANT}; "
                         "border: none; background: transparent;"
                     )
             if getattr(self, "_user_status", None) is not None:
@@ -904,7 +896,7 @@ class SettingsPane(QWidget):
                 self._user_display.setText(empty)
                 self._user_super.setText(empty)
                 self._user_super.setStyleSheet(
-                    "font-size: 12px; "
+                    f"font-size: {FONT_SMALL}px; "
                     f"color: {ON_SURFACE_VARIANT}; border: none; background: transparent;"
                 )
                 self._user_affil.setText(empty)
@@ -926,7 +918,7 @@ class SettingsPane(QWidget):
             is_super = bool(me.get("superuser"))
             self._user_super.setText("Yes" if is_super else "No")
             self._user_super.setStyleSheet(
-                "font-size: 12px; font-weight: 600; "
+                f"font-size: {FONT_SMALL}px; font-weight: 600; "
                 f"color: {SUCCESS_DARK if is_super else ON_SECONDARY_CONTAINER}; "
                 "border: none; background: transparent;"
             )
@@ -1019,7 +1011,7 @@ class SettingsPane(QWidget):
         try:
             color = SUCCESS_DARK if ok is True else (ERROR if ok is False else ON_SECONDARY_CONTAINER)
             self._conn_status.setStyleSheet(
-                f"font-size: 12px; color: {color}; border: none; background: transparent;"
+                f"font-size: {FONT_SMALL}px; color: {color}; border: none; background: transparent;"
             )
             self._conn_status.setText(text)
             self._conn_status.setToolTip(tip or text)

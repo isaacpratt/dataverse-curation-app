@@ -75,6 +75,8 @@ Get-Content $env:TEMP\docent-startup.log</code></pre>
 <tr><td><code>engine/dispatcher.py</code></td><td>Registry-driven path → checks; one strippable outer layer (<code>.fq.gz</code>→fastq, <code>.tar.gz</code>→tar); empty <code>extensions</code> = dataset-level</td></tr>
 <tr><td><code>engine/runner.py</code></td><td><code>run_report</code>, <code>run_report_to_file(fmt=json|md|both)</code>, <code>list_planned_checks</code>; symlinks skipped; <code>_safe_run</code> isolation; <code>inventory.unchecked_types</code> hint</td></tr>
 <tr><td><code>engine/tests/test_audit_fixes.py</code></td><td>32 regression tests for the audit batches (dispatch, missing-lib contract, traversal/atomicity, caps, taxonomy)</td></tr>
+<tr><td><code>ui/table_layout.py</code></td><td>The table layout controller: one per header; persists user gestures only (programmatic changes run inside <code>suppressed()</code>); owns the save, restore and reset</td></tr>
+<tr><td><code>tools/probes/</code></td><td>Offscreen UI probes (queue columns, manifest columns, page headings, card corner) &mdash; each against a throwaway workspace; the same contracts live in <code>ui/tests/</code></td></tr>
 <tr><td><code>ui/</code></td><td><code>widgets.py</code> kit; <code>main_window.py</code>; <code>dashboard.py</code> (COLUMNS 12, <code>_SortItem</code>, cache-first + <code>diff_dashboard_datasets</code>); <code>dataset_detail.py</code>; <code>review_config.py</code>; <code>settings_dialog.py</code>; <code>about_pane.py</code>; <code>workers.py</code> (5 QThreads); <code>dialogs.py</code> (selectable + <code>describe_error</code>); <code>checks_tree.py</code>; <code>icons.py</code>; <code>log_panel.py</code> (<code>LogPage</code>); <code>download_dialog.py</code>; <code>theme.py</code> (single-source tokens, <code>asset_path()</code>/<code>mark_icon_path()</code>)</td></tr>
 </table>
 
@@ -105,6 +107,46 @@ make smoke         # size report + headless --help check</code></pre>
 <li>Top-level imports in <code>main.py</code> guarantee <code>pyi_rth_pyside6</code> collects Qt plugins. Verify: output ends <code>Build complete! …\dist</code>, then smoke-launch and kill. Installer (Inno/WiX) is a later milestone.</li>
 </ul>
 
+<h2>UI conventions</h2>
+<p>The shared kit in <code>ui/widgets.py</code> and the theme in <code>ui/theme.py</code> are the only sources of the app's look. A new view builds its controls through the kit; it does not invent its own stylesheet.</p>
+<table>
+<tr><th>Rule</th><th>How</th></tr>
+<tr><td>One table and tree contract</td><td><code>AppTable</code> (a table), <code>AppTree</code> (a model-driven tree) and <code>AppTreeWidget</code> (a tree with cell widgets) &mdash; see <a href="architecture.html">Table component contract</a>. A view that needs a different table subclasses one of them, it does not build a <code>QTableWidget</code> from scratch.</td></tr>
+<tr><td>One layout owner</td><td><code>TableLayout</code> (<code>ui/table_layout.py</code>) per header. Never wire <code>sectionResized</code> straight to a save: a programmatic fit would overwrite the user's layout. A change counts as a user gesture only when the user could have caused it &mdash; the kit ignores a section the layout owns (stretch, fixed, or a stretched last section).</td></tr>
+<tr><td>One type scale</td><td>A label wears a token (its object name is the token) or takes its size from the theme's <code>FONT_*</code> constants. A raw <code>font-size: Npx</code> outside <code>theme.py</code> fails <code>ui/tests/test_type_scale.py</code>.</td></tr>
+<tr><td>One heading contract</td><td><code>make_page_heading()</code> for a full-page title, <code>make_section_heading()</code> inside a page, <code>make_card_title()</code> on a card. All of them set an object name; none writes an inline stylesheet.</td></tr>
+<tr><td>One reset affordance</td><td><code>make_reset_columns_button(name)</code> &mdash; the same ghost button with the rotate-ccw icon everywhere.</td></tr>
+<tr><td>Colours come from the theme</td><td>No hex literal outside <code>ui/theme.py</code> (enforced by <code>ui/tests/test_theme_tokens.py</code>).</td></tr>
+</table>
+
+<h2>Qt pitfalls</h2>
+<p>The bugs this app had were mostly Qt behaviours working exactly as documented. These are the ones that bite.</p>
+<table>
+<tr><th>Pitfall</th><th>What Qt does</th><th>What to do</th></tr>
+<tr><td>A widget-level stylesheet shadows the app-level one</td><td>Setting a stylesheet on a widget replaces the application stylesheet for that subtree. The app's <code>QHeaderView::section</code> rules stop applying inside a table that has its own sheet.</td><td>Repeat the rules from the theme's mixins: <code>header_section_qss(flush=)</code> and <code>scrollbar_lane_qss(scope=)</code> in <code>ui/theme.py</code>. One source, so the two sheets cannot drift.</td></tr>
+<tr><td><code>sectionResized</code> fires before the new size lands</td><td>Reading <code>header.sectionSize(i)</code> inside the handler returns the <i>old</i> value. A synchronous copy persists stale widths, and the last column's label drifts off-centre.</td><td>Defer the work: <code>QTimer.singleShot(0, self._fit_queue_columns)</code>.</td></tr>
+<tr><td>Children are not clipped to a parent's border-radius</td><td>A table flush inside a card paints its own corners, so a rounded card edge shows a notch where the table's square corner sits.</td><td>Flush tables and trees paint square top corners (they meet the card's top bar) and take the card's bottom radius themselves; the header's end caps stay square for the same reason.</td></tr>
+<tr><td>A filled scrollbar lane paints over the card's corner</td><td>The vertical scrollbar's lane inherits the page colour, so the card's border ends in a white notch at the bottom right.</td><td>Keep the lanes transparent (<code>scrollbar_lane_qss</code>) so the card's own surface shows through; thumbs and grooves keep coming from the global theme.</td></tr>
+<tr><td>An ancestor's background bleeds through a transparent widget</td><td>A styled lavender ancestor makes a table body transparent, and the rows render page-coloured instead of white.</td><td>Set the background explicitly in the widget's own sheet (<code>flush_table_style()</code>).</td></tr>
+<tr><td>Qt derives cell-widget geometry from the item content box</td><td>With a stylesheet active, the app's <code>QTableWidget::item</code> rule (padding + border) shrank every action cell, clipping the buttons inside it.</td><td>Zero the vertical padding for the action cells (<code>QTableWidget::item { padding: 0px 12px; }</code>).</td></tr>
+<tr><td><code>QHeaderView.lastVisibleSection()</code> does not exist in PySide6</td><td>Calling it raises <code>AttributeError</code>.</td><td>Walk the header: <code>logicalIndex(v)</code> over the visual range, then <code>isSectionHidden(logical)</code>.</td></tr>
+<tr><td>App-level QSS does not reach a label that has its own stylesheet</td><td>The label's own sheet wins for the properties it sets; the app's token rule still supplies the rest, but a label that sets <code>font-size</code> itself has left the type scale.</td><td>Set the object name to the token and leave the stylesheet empty &mdash; that is what <code>make_*</code> builders do.</td></tr>
+<tr><td>The offscreen platform has no fonts</td><td>Every glyph renders as tofu, so a text measurement says nothing.</td><td>Verify layout by geometry and pixels (section sizes, viewport widths, corner colours), never by the rendered text.</td></tr>
+</table>
+
+<h2>UI probes</h2>
+<p>The probes in <code>tools/probes/</code> are the pixel-and-geometry checks behind the table bugs. Each one runs offscreen against a throwaway workspace, prints a PASS/FAIL line per check and exits non-zero on a failure.</p>
+<pre><code>python tools/probes/probe_queue_columns.py    # the queue's columns fill the viewport, never clip
+python tools/probes/probe_manifest_columns.py  # the manifest fits, persists the user's widths, resets
+python tools/probes/probe_headings.py          # every full-page heading wears the same token
+python tools/probes/probe_card_corner.py       # a card's bottom-right corner stays connected</code></pre>
+<div class="callout ok"><b>The temp-workspace rule.</b> A probe must never write to the user's <code>workspace/table_layout.json</code>: a probe that saves there leaves the real app with a layout nobody chose. <code>tools/probes/_common.py:boot()</code> points <code>cfg.app.workspace</code> at a fresh temp directory and applies the theme; every probe goes through it. A new probe must do the same, and must stub out anything that would reach the network (the manifest probe replaces <code>_on_load_metadata</code>).</div>
+<p>The same contracts live in <code>ui/tests/</code> as pytest suites, so CI runs them: <code>test_table_layout.py</code> (the controller), <code>test_table_geometry.py</code> (the queue's geometry), <code>test_page_headings.py</code> (the heading contract), <code>test_type_scale.py</code> (the type scale). The probes stay useful for the things pytest cannot see &mdash; a pixel colour at a card's corner, a screenshot to eyeball.</p>
+<pre><code>python -m pytest ui/tests -q        # the UI contracts
+python -m pytest engine/tests -q    # the engine contracts
+python -m ruff check ui/           # lint</code></pre>
+<p><code>ui/tests/conftest.py</code> provides a session-scoped <code>qapp</code> and <code>win</code> (one offscreen application, one main window). The window is shared, so every test sets its own preconditions; a test that needs the dashboard on screen calls <code>win._show_dashboard()</code> first &mdash; the queue's fit is a no-op while the table is hidden.</p>
+
 <h2>Conventions</h2>
 <ul>
 <li>Python 3.10 typing, dataclasses; no external framework in <code>engine/</code> (stdlib + listed deps). Checks are pure functions of local files — <b>no network I/O inside <code>engine/</code></b>.</li>
@@ -112,9 +154,11 @@ make smoke         # size report + headless --help check</code></pre>
 <li>Selectable dialogs (<code>ui/dialogs.py:show_warning/show_critical/show_info</code>) for traceback-bearing errors; log every request via <code>applog.log_response</code>; the Log page's <code>QSyntaxHighlighter</code> paints ERROR red, WARNING yellow, IPs, SQL keywords, XML tags, Java backtraces.</li>
 <li>Parent every <code>QThread</code> to its view, chain <code>deleteLater</code>, adopt before discarding (<code>MainWindow._open_dataset</code>) — never destroy a live <code>QThread</code>.</li>
 <li>Theme: no hardcoded hex outside <code>theme.py</code> (enforced by <code>ui/tests/test_theme_tokens.py</code>).</li>
+<li>Type scale: no raw <code>font-size: Npx</code> outside <code>theme.py</code> (enforced by <code>ui/tests/test_type_scale.py</code>); a label wears a token.</li>
+<li>Tables: one controller per header (<code>ui/table_layout.py</code>); only user gestures are persisted; a programmatic fit runs inside <code>layout.suppressed()</code>.</li>
 </ul>
 
 </div></main>
-<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-10-29, verified against code.</div></footer>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-11-04, verified against code.</div></footer>
 </body>
 </html>

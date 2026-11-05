@@ -35,6 +35,8 @@ dataverse-curation-app/
 │   ├── runner.py         # run_report / list_planned_checks
 │   └── tests/            # pytest suite (200 tests; see CI)
 ├── ui/                   # PySide6 views (main window, dashboard, detail, settings/about panes, log page, workers, dialogs, theme, widgets incl. AppTable content-fit, progress ring)
+│   └── table_layout.py   # one layout controller per table header (persists user gestures only)
+├── tools/probes/         # offscreen UI probes (queue columns, manifest columns, page headings, card corner)
 ├── dataverse_client.py   # Native/Search API client (total-driven paginated search + pooled inventory enrichment, versions/compare/timestamps/notifications/curation labels)
 ├── download_manager.py   # approval-gated downloads, originals, skip-if-staged, verify (ok/problems/warnings)
 ├── metadata_check.py     # citation-block completeness (McMaster / Minimal profiles)
@@ -71,12 +73,12 @@ Outputs: `dist/curation-app-lite/curation-app-lite.exe` (onedir folder, fast lau
 
 ## Documentation
 
-- `docs/html/architecture.html` — components, threading, storage, packaging
+- `docs/html/architecture.html` — components, threading, storage, the table component contract, packaging
 - `docs/html/engine-port.html` — R-to-Python port matrix and go/no-go criteria
 - `docs/html/checks-reference.html` — what each auto-check examines, PASS semantics, issue taxonomy
 - `docs/html/dataverse-integration.html` — Native/Search API endpoints, auth, discovery + download flow
 - `docs/html/report-contract.html` — the JSON report format shared by engine and GUI
-- `docs/html/development.html` — setup, testing, adding checks, packaging
+- `docs/html/development.html` — setup, testing, adding checks, UI conventions, Qt pitfalls, probes, packaging
 - `docs/html/user-guide.html` — how a curator uses the app (dashboard, detail, metadata, log)
 - `docs/html/proposals.html` — proposed but not yet implemented changes (queued UX work, deferred checks, open decisions)
 

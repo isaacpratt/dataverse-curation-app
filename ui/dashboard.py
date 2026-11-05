@@ -25,22 +25,29 @@ from PySide6.QtWidgets import (
 
 from config import Config
 from ui.ring import RingProgress
+from ui.table_layout import TableLayout
 from ui.theme import (
     BACKGROUND,
     ERROR,
-    ON_SURFACE,
-    ON_SURFACE_VARIANT,
-    OUTLINE,
     OUTLINE_VARIANT,
     PRIMARY,
-    PRIMARY_FIXED,
     SURFACE_CONTAINER,
-    SURFACE_CONTAINER_HIGH,
     SURFACE_CONTAINER_LOWEST,
     TERTIARY,
     selectable_labels,
 )
-from ui.widgets import AppButton, AppTable, flush_table_style, make_combo, make_search_field
+from ui.widgets import (
+    AppButton,
+    AppTable,
+    flush_table_style,
+    make_caption_label,
+    make_card_title,
+    make_combo,
+    make_field_label,
+    make_search_field,
+    make_section_heading,
+    make_small_body_label,
+)
 from ui.workers import CrawlWorker
 
 
@@ -90,17 +97,38 @@ _COLUMN_WIDTHS = {
     "downloaded_at": 130,
 }
 
-# Metric-card value: the real count (22px bold) versus a named pre-crawl
-# state (12px muted words, 2026-10-02 P2) — the number slot never shows a
-# bare "—", so a visible "0" can only mean a completed check counted zero.
-_METRIC_VALUE_STYLE = (
-    f"font-size: 22px; font-weight: 700; color: {ON_SURFACE}; "
-    "border: none; background: transparent;"
-)
-_METRIC_STATE_STYLE = (
-    f"font-size: 12px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
-    "letter-spacing: 0.5px; border: none; background: transparent;"
-)
+# The queue's column bar: by default it is the table's own header. Qt
+# already starts the vertical scrollbar below the header row, so the
+# split header (the table's header hidden, a second display header
+# painted above it) bought nothing but two-way sync -- the source of
+# the clipped columns and the off-centre last label. The split stays
+# available as a fallback: flip this to True to get it back.
+SPLIT_QUEUE_HEADER = False
+
+# Metric-card value: the real count (DisplayLG, 22px bold) versus a named
+# pre-crawl state (StateMD, 12px muted words, 2026-10-02 P2) - the number
+# slot never shows a bare "-", so a visible "0" can only mean a completed
+# check counted zero. Both are theme tokens, not inline styles.
+_METRIC_VALUE_TOKEN = "DisplayLG"
+_METRIC_STATE_TOKEN = "StateMD"
+
+
+
+def _apply_metric_token(label: QLabel) -> None:
+    """Put a metric label on its theme token (DisplayLG / StateMD).
+
+    The metric card swaps between the value and the named state, so the
+    token changes at runtime: the object name carries the token, and the
+    widget is re-polished so the theme's rule for the new token applies.
+    """
+    token = str(label.property("metricToken") or _METRIC_VALUE_TOKEN)
+    if label.objectName() == token:
+        return
+    label.setObjectName(token)
+    style = label.style()
+    if style is not None:
+        style.unpolish(label)
+        style.polish(label)
 
 
 def _human_size(n: int) -> str:
@@ -540,6 +568,7 @@ class DashboardView(QWidget):
         self._metrics_row.setSpacing(16)
         self._metric_cards: list[QFrame] = []
         self._metric_subs: list[str] = []
+        self._metric_value_labels: list[QLabel] = []
         # When the numbers below were last measured ("never" pre-crawl) —
         # carried in every card's tooltip so a 0 is never a mystery.
         self._last_refresh = "never"
@@ -548,10 +577,11 @@ class DashboardView(QWidget):
             ("primary", "In Review", "locked for review"),
             ("error", "Needs Action", "awaiting decision"),
         ]:
-            card = self._make_metric_card(accent, label, sub_text)
+            card, value_label = self._make_metric_card(accent, label, sub_text)
             self._metrics_row.addWidget(card, 1)
             self._metric_cards.append(card)
             self._metric_subs.append(sub_text)
+            self._metric_value_labels.append(value_label)
         outer.addLayout(self._metrics_row)
 
         # ---- Curation Queue card ----
@@ -576,11 +606,7 @@ class DashboardView(QWidget):
         hdr_layout.setContentsMargins(16, 12, 16, 12)
         hdr_layout.setSpacing(12)
 
-        hdr_title = QLabel("Curation Queue")
-        hdr_title.setStyleSheet(
-            f"font-size: 16px; font-weight: 600; color: {ON_SURFACE}; "
-            "background: transparent; border: none;"
-        )
+        hdr_title = make_section_heading("Curation Queue")
         hdr_layout.addWidget(hdr_title)
 
         search_wrap = QWidget()
@@ -666,49 +692,27 @@ class DashboardView(QWidget):
             self._table.viewport().installEventFilter(self)
         except Exception:
             pass
-        # Split header: the table's own header is hidden so its vertical
-        # scrollbar spans rows only (starting underneath the header row).
-        # This display header shares the table model and renders the
-        # full-width header bar edge to edge above it.
+        # Column bar. By default the table's own header is the column bar:
+        # the header the user drags is the header that is painted, and Qt
+        # already starts the vertical scrollbar below the header row. The
+        # split header (a separate display header above the table) stays
+        # available behind SPLIT_QUEUE_HEADER as a fallback.
         self._syncing_header = False
         # Widths the fit scaled down (kept so a wider window restores them).
         self._queue_unscaled: dict[int, int] | None = None
-        self._table.horizontalHeader().setVisible(False)
-        self._queue_header = QHeaderView(Qt.Horizontal)
-        self._queue_header.setModel(self._table.model())
-        self._queue_header.setSectionsMovable(True)
-        self._queue_header.setSectionsClickable(True)
-        # Never stretch on the display header: its widths are mirrored from
-        # the table header (which is fitted to the viewport). Stretching
-        # here as well let the last label drift off-centre after a move
-        # or resize.
-        self._queue_header.setStretchLastSection(False)
-        self._queue_header.setFocusPolicy(Qt.NoFocus)
-        self._queue_header.setFixedHeight(
-            self._table.horizontalHeader().sizeHint().height()
-        )
-        # Same flush section rules as the table's own header had. The extra
-        # QHeaderView background fills the slack right of the last section
-        # (the vertical scrollbar's lane) so no page colour shows through.
-        # Also set section background/border explicitly since this stylesheet
-        # replaces the global theme for this header.
-        self._queue_header.setStyleSheet(
-            flush_table_style()
-            + f"QHeaderView {{ background: {SURFACE_CONTAINER}; }}"
-            + f"QHeaderView::section {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE_VARIANT}; padding: 8px 14px 8px 12px; border: none; border-bottom: 1px solid {OUTLINE_VARIANT}; border-right: 1px solid {OUTLINE_VARIANT}; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }}"
-            + f"QHeaderView::section:hover {{ background: {SURFACE_CONTAINER_HIGH}; border-right: 1px solid {OUTLINE}; }}"
-            + f"QHeaderView::section:pressed {{ background: {PRIMARY_FIXED}; border-right: 2px solid {PRIMARY}; }}"
-        )
-        self._sync_header_from_table()
-        self._queue_header.sectionResized.connect(self._on_display_header_resized)
-        self._table.horizontalHeader().sectionResized.connect(self._on_table_header_resized)
-        self._queue_header.sectionMoved.connect(self._on_display_header_moved)
-        self._table.horizontalHeader().sectionMoved.connect(self._on_table_header_moved)
-        self._queue_header.sectionClicked.connect(self._on_header_clicked)
-        # Content fit runs on the table header; mirror sizes to the display
-        # header (sync flag keeps the mirror from persisting as a user drag).
+        # None in native-header mode: there is no second header to sync.
+        self._queue_header = None
+        # The table reports user gestures (a dragged edge, a moved
+        # column): the fit follows them, and the layout controller saves
+        # them.
+        self._table.user_layout_changed.connect(self._on_user_layout_changed)
+        # Content fit runs on the table header; re-fit so the columns keep
+        # filling the viewport (and mirror them in split-header mode).
         self._table.columns_fitted.connect(self._on_columns_fitted)
-        queue_layout.addWidget(self._queue_header)
+        if SPLIT_QUEUE_HEADER:
+            self._build_split_queue_header(queue_layout)
+        else:
+            self._table.horizontalHeader().setVisible(True)
         # Table + first-run overlay occupy the same grid cell so the card
         # floats over the (empty) table without any layout surgery when
         # datasets arrive.
@@ -741,25 +745,15 @@ class DashboardView(QWidget):
         pill_lay.setContentsMargins(14, 6, 14, 6)
         pill_lay.setSpacing(8)
         self._status_lbl = _BarLabel("")
-        self._status_lbl.setStyleSheet(
-            f"font-size: 11px; color: {ON_SURFACE_VARIANT}; "
-            "background: transparent; border: none;"
-        )
+        self._status_lbl.setObjectName("CaptionSM")
         pill_lay.addWidget(self._status_lbl)
         pill_lay.setAlignment(self._status_lbl, Qt.AlignVCenter)
-        self._status_sep = QLabel("·")
-        self._status_sep.setStyleSheet(
-            f"font-size: 11px; color: {ON_SURFACE_VARIANT}; "
-            "background: transparent; border: none;"
-        )
+        self._status_sep = make_caption_label("·")
         self._status_sep.hide()
         pill_lay.addWidget(self._status_sep)
         pill_lay.setAlignment(self._status_sep, Qt.AlignVCenter)
         self._progress = _BarLabel("")
-        self._progress.setStyleSheet(
-            f"font-size: 11px; color: {ON_SURFACE_VARIANT}; "
-            "background: transparent; border: none;"
-        )
+        self._progress.setObjectName("CaptionSM")
         # Circular progress ring, alongside the status text (the text
         # stays the accessible source of truth; the ring shows pace).
         self._ring = RingProgress(diameter=18)
@@ -810,13 +804,13 @@ class DashboardView(QWidget):
         # restore the user's saved queue view (widths/sort/hidden/order)
         # after defaults and mirror it onto the display header.
         try:
-            from storage import restore_table_state, snapshot_table_view
-
-            self._queue_snap = snapshot_table_view(self._table.horizontalHeader())
-            if restore_table_state(
-                self._config.app.workspace, "dashboard_queue",
+            self._queue_layout = TableLayout(
+                self._config.app.workspace,
+                "dashboard_queue",
                 self._table.horizontalHeader(),
-            ):
+                view=self._table,
+            )
+            if self._queue_layout.restore():
                 self._table.disable_auto_fit()
             self._sync_header_from_table()
         except Exception:
@@ -1156,22 +1150,13 @@ class DashboardView(QWidget):
         head_wrap = QHBoxLayout()
         head_wrap.setSpacing(10)
         head_wrap.addWidget(icon, 0, Qt.AlignVCenter)
-        self._empty_head = QLabel("No datasets loaded yet")
-        self._empty_head.setStyleSheet(
-            f"font-size: 15px; font-weight: 700; color: {ON_SURFACE}; "
-            "background: transparent; border: none;"
-        )
+        self._empty_head = make_card_title("No datasets loaded yet")
         head_wrap.addWidget(self._empty_head, 1, Qt.AlignVCenter)
         inner.addLayout(head_wrap)
 
-        self._empty_body = QLabel(
+        self._empty_body = make_small_body_label(
             "Add a Dataverse API key in Settings, then refresh to pull "
             "drafts and in-review datasets into the curation queue."
-        )
-        self._empty_body.setWordWrap(True)
-        self._empty_body.setStyleSheet(
-            f"font-size: 12px; color: {ON_SURFACE_VARIANT}; "
-            "background: transparent; border: none;"
         )
         inner.addWidget(self._empty_body)
 
@@ -1250,23 +1235,59 @@ class DashboardView(QWidget):
         lay.addWidget(
             _metric_icon(icon_map.get(accent, "circle"), size=18, color=border_color), 0
         )
-        lbl = QLabel(f"{label.upper()}  ·  {sub}")
-        lbl.setStyleSheet(
-            f"font-size: 11px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
-            "letter-spacing: 0.5px; border: none; background: transparent;"
-        )
+        lbl = make_field_label(f"{label.upper()}  ·  {sub}")
         lay.addWidget(lbl, 1)
         v = QLabel("0")
-        v.setObjectName("metricValue")
-        v.setStyleSheet(_METRIC_VALUE_STYLE)
+        v.setProperty("metricToken", _METRIC_VALUE_TOKEN)
+        _apply_metric_token(v)
         v.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         lay.addWidget(v, 0)
-        return card
+        return card, v
+
+    def _build_split_queue_header(self, queue_layout) -> None:
+        """Build the fallback split header (SPLIT_QUEUE_HEADER = True).
+
+        The table's own header is hidden and a second header, sharing the
+        table's model, is painted above it. Every size and move has to be
+        mirrored between the two -- the native header does this for free.
+        """
+        self._table.horizontalHeader().setVisible(False)
+        self._queue_header = QHeaderView(Qt.Horizontal)
+        self._queue_header.setModel(self._table.model())
+        self._queue_header.setSectionsMovable(True)
+        self._queue_header.setSectionsClickable(True)
+        # Never stretch on the display header: its widths are mirrored from
+        # the table header (which is fitted to the viewport). Stretching
+        # here as well let the last label drift off-centre after a move
+        # or resize.
+        self._queue_header.setStretchLastSection(False)
+        self._queue_header.setFocusPolicy(Qt.NoFocus)
+        self._queue_header.setFixedHeight(
+            self._table.horizontalHeader().sizeHint().height()
+        )
+        # Same flush section rules as the table's own header had. The extra
+        # QHeaderView background fills the slack right of the last section
+        # (the vertical scrollbar's lane) so no page colour shows through.
+        self._queue_header.setStyleSheet(
+            flush_table_style()
+            + f"QHeaderView {{ background: {SURFACE_CONTAINER}; }}"
+        )
+        self._sync_header_from_table()
+        self._queue_header.sectionResized.connect(self._on_display_header_resized)
+        self._queue_header.sectionMoved.connect(self._on_display_header_moved)
+        self._queue_header.sectionClicked.connect(self._on_header_clicked)
+        queue_layout.addWidget(self._queue_header)
+
 
     # -- column visibility -------------------------------------------------
 
     def _sync_header_from_table(self) -> None:
-        """Copy sizes/hidden state from the table header to the display header."""
+        """Copy sizes/hidden state from the table header to the display header.
+
+        A no-op in native-header mode: there is no second header.
+        """
+        if self._queue_header is None:
+            return
         try:
             table_hdr = self._table.horizontalHeader()
             self._syncing_header = True
@@ -1385,6 +1406,19 @@ class DashboardView(QWidget):
                     )
                 else:
                     want[filler] = max(floor, target_filler)
+            # Rounding the scaled widths can leave the columns a pixel or
+            # two too wide (each width was rounded and floored on its
+            # own). Shave the difference off the widest sections so the
+            # total matches the viewport exactly -- one pixel over is
+            # still a clipped column.
+            overflow = sum(want[i] for i in visible) - width
+            if overflow > 0:
+                for i in sorted(visible, key=lambda j: -want[j]):
+                    if overflow <= 0:
+                        break
+                    take = min(overflow, max(0, want[i] - floor))
+                    want[i] -= take
+                    overflow -= take
             changed = {i: w for i, w in want.items() if w != hdr.sectionSize(i)}
             if not changed:
                 return
@@ -1400,16 +1434,16 @@ class DashboardView(QWidget):
             pass
 
     def _save_queue_layout(self) -> None:
-        """Persist the queue table's view (widths/sort/hidden/order)."""
-        try:
-            from storage import save_table_state
+        """Persist the queue table's view (widths/sort/hidden/order).
 
-            save_table_state(
-                self._config.app.workspace, "dashboard_queue",
-                self._table.horizontalHeader(),
-            )
-        except Exception:
-            pass
+        The layout controller owns the persistence: it saves user
+        gestures (a dragged edge, a moved column, a re-sort) and ignores
+        the app's own refits.
+        """
+        layout = getattr(self, "_queue_layout", None)
+        if layout is None:
+            return
+        layout.save()
 
     def _schedule_header_sync(self) -> None:
         """Mirror the table header onto the display header after layout settles.
@@ -1419,14 +1453,18 @@ class DashboardView(QWidget):
         synchronous copy would persist stale widths (and the last column's
         label would drift off-centre). A zero-delay timer runs once the
         resize has been applied.
+
+        A no-op in native-header mode: there is no second header.
         """
+        if self._queue_header is None:
+            return
         try:
             QTimer.singleShot(0, self._sync_header_from_table)
         except Exception:
             pass
 
     def _on_display_header_resized(self, logical: int, _old: int, new: int) -> None:
-        if self._syncing_header:
+        if self._syncing_header or self._queue_header is None:
             return
         self._syncing_header = True
         try:
@@ -1444,17 +1482,21 @@ class DashboardView(QWidget):
         self._schedule_header_sync()
         self._save_queue_layout()
 
-    def _on_table_header_resized(self, logical: int, _old: int, new: int) -> None:
+    def _on_user_layout_changed(self) -> None:
+        """Keep the queue filling its viewport after a user layout change.
+
+        The user resized or moved a column. The fit is deferred:
+        sectionResized can fire before Qt applied the new size, and the
+        fit must see the settled widths.
+        """
         if self._syncing_header:
             return
-        # The table header changed on its own (restored view, content fit):
-        # keep the columns filling the viewport, then mirror every section
-        # (not just the changed one) so both headers agree.
-        self._fit_queue_columns()
+        self._queue_unscaled = None
+        self._schedule_column_fit()
         self._schedule_header_sync()
 
     def _on_display_header_moved(self, logical: int, old_visual: int, new_visual: int) -> None:
-        if self._syncing_header:
+        if self._syncing_header or self._queue_header is None:
             return
         self._syncing_header = True
         try:
@@ -1470,18 +1512,7 @@ class DashboardView(QWidget):
         self._schedule_header_sync()
         self._save_queue_layout()
 
-    def _on_table_header_moved(self, logical: int, old_visual: int, new_visual: int) -> None:
-        if self._syncing_header:
-            return
-        self._syncing_header = True
-        try:
-            self._queue_header.moveSection(old_visual, new_visual)
-        finally:
-            self._syncing_header = False
-        self._fit_queue_columns()
-        self._sync_header_from_table()
-
-    def _on_header_clicked(self, logical: int) -> None:
+    def _on_header_clicked(self, logical: int) -> None:  # split-header mode
         """Sort the table like its own header click would (toggle on repeat)."""
         table_hdr = self._table.horizontalHeader()
         if table_hdr.sortIndicatorSection() == logical and table_hdr.isSortIndicatorShown():
@@ -1490,8 +1521,9 @@ class DashboardView(QWidget):
             order = Qt.AscendingOrder
         self._table.sortItems(logical, order)
         table_hdr.setSortIndicator(logical, order)
-        self._queue_header.setSortIndicator(logical, order)
-        self._queue_header.setSortIndicatorShown(True)
+        if self._queue_header is not None:
+            self._queue_header.setSortIndicator(logical, order)
+            self._queue_header.setSortIndicatorShown(True)
         self._save_queue_layout()
 
     def _set_column_visible(self, idx: int, visible: bool) -> None:
@@ -1503,10 +1535,11 @@ class DashboardView(QWidget):
         surface) saves after toggling.
         """
         self._table.setColumnHidden(idx, not visible)
-        try:
-            self._queue_header.setSectionHidden(idx, not visible)
-        except Exception:
-            pass
+        if self._queue_header is not None:
+            try:
+                self._queue_header.setSectionHidden(idx, not visible)
+            except Exception:
+                pass
         # Hiding/showing a column changes the total width: re-fit so the
         # remaining columns keep filling the viewport.
         self._fit_queue_columns()
@@ -1553,30 +1586,28 @@ class DashboardView(QWidget):
     def _reset_queue_layout(self) -> None:
         """Reset the queue table to its construction view, then repaint."""
         try:
-            from storage import apply_table_view, clear_table_state
-
-            snap = getattr(self, "_queue_snap", None)
-            clear_table_state(self._config.app.workspace, "dashboard_queue")
+            layout = getattr(self, "_queue_layout", None)
+            if layout is not None:
+                layout.reset()
             self._table.enable_auto_fit()
             self._queue_unscaled = None
-            if isinstance(snap, dict):
-                apply_table_view(self._table.horizontalHeader(), snap)
             self._fit_queue_columns()
             self._sync_header_from_table()
             # Mirror the sort indicator onto the display header, then
             # repaint rows (repopulation re-sorts exactly like a fresh
             # table, so reset reproduces startup order precisely).
-            try:
-                table_hdr = self._table.horizontalHeader()
-                self._queue_header.setSortIndicator(
-                    table_hdr.sortIndicatorSection(),
-                    table_hdr.sortIndicatorOrder(),
-                )
-                self._queue_header.setSortIndicatorShown(
-                    table_hdr.isSortIndicatorShown()
-                )
-            except Exception:
-                pass
+            if self._queue_header is not None:
+                try:
+                    table_hdr = self._table.horizontalHeader()
+                    self._queue_header.setSortIndicator(
+                        table_hdr.sortIndicatorSection(),
+                        table_hdr.sortIndicatorOrder(),
+                    )
+                    self._queue_header.setSortIndicatorShown(
+                        table_hdr.isSortIndicatorShown()
+                    )
+                except Exception:
+                    pass
             self._apply_filter()
         except Exception:
             pass
@@ -1891,11 +1922,16 @@ class DashboardView(QWidget):
                     "No crawl has completed yet — add an API key in Settings, "
                     "then press Refresh."
                 )
-            for card, sub in zip(self._metric_cards, self._metric_subs, strict=False):
-                v_lbl = card.findChild(QLabel, "metricValue")
+            for card, sub, v_lbl in zip(
+                self._metric_cards,
+                self._metric_subs,
+                self._metric_value_labels,
+                strict=False,
+            ):
                 if v_lbl:
                     v_lbl.setText(state)
-                    v_lbl.setStyleSheet(_METRIC_STATE_STYLE)
+                    v_lbl.setProperty("metricToken", _METRIC_STATE_TOKEN)
+                    _apply_metric_token(v_lbl)
                 card.setToolTip(
                     f"{sub}\n{note}\nLast refresh: {self._last_refresh}"
                 )
@@ -1923,13 +1959,17 @@ class DashboardView(QWidget):
                 if (st == "DRAFT" or "REVIEW" in st) and d.get("persistent_id") not in decided:
                     needs_action += 1
         vals = [pending, in_review, needs_action]
-        for card, sub, val in zip(
-            self._metric_cards, self._metric_subs, vals, strict=False
+        for card, sub, val, v_lbl in zip(
+            self._metric_cards,
+            self._metric_subs,
+            vals,
+            self._metric_value_labels,
+            strict=False,
         ):
-            v_lbl = card.findChild(QLabel, "metricValue")
             if v_lbl:
                 v_lbl.setText(str(val))
-                v_lbl.setStyleSheet(_METRIC_VALUE_STYLE)
+                v_lbl.setProperty("metricToken", _METRIC_VALUE_TOKEN)
+                _apply_metric_token(v_lbl)
             card.setToolTip(f"{sub}\nLast refresh: {self._last_refresh}")
         self._update_empty_state()
 

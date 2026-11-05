@@ -13,6 +13,10 @@ from PySide6.QtWidgets import (
 
 from ui.theme import (
     BACKGROUND,
+    FONT_BODY,
+    FONT_CAPTION,
+    FONT_SMALL,
+    FONT_TITLE,
     ON_SECONDARY_CONTAINER,
     ON_SURFACE,
     ON_SURFACE_VARIANT,
@@ -111,7 +115,7 @@ class AboutPane(QWidget):
         title = QLabel(f"Dataverse Docent <span style='color:{ON_SECONDARY_CONTAINER}'>v{_app_version()}</span>")
         title.setTextFormat(Qt.RichText)
         title.setStyleSheet(
-            f"font-size: 16px; font-weight: 600; color: {ON_SURFACE}; "
+            f"font-size: {FONT_TITLE}px; font-weight: 600; color: {ON_SURFACE}; "
             "border: none; background: transparent;"
         )
         title.setWordWrap(True)
@@ -152,7 +156,7 @@ class AboutPane(QWidget):
         )
         blurb.setWordWrap(True)
         blurb.setStyleSheet(
-            f"font-size: 13px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;"
+            f"font-size: {FONT_BODY}px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;"
         )
         left.addWidget(blurb)
 
@@ -166,7 +170,7 @@ class AboutPane(QWidget):
         bullets.setTextFormat(Qt.RichText)
         bullets.setWordWrap(True)
         bullets.setStyleSheet(
-            f"font-size: 13px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;"
+            f"font-size: {FONT_BODY}px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;"
         )
         left.addWidget(bullets)
         cols.addLayout(left, 3)
@@ -175,7 +179,7 @@ class AboutPane(QWidget):
         right.setSpacing(8)
         diag_head = QLabel("Diagnostics")
         diag_head.setStyleSheet(
-            f"font-size: 11px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
+            f"font-size: {FONT_CAPTION}px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
             "letter-spacing: 0.5px; border: none; background: transparent;"
         )
         right.addWidget(diag_head)
@@ -183,7 +187,7 @@ class AboutPane(QWidget):
         diag.setTextFormat(Qt.PlainText)
         diag.setWordWrap(True)
         diag.setStyleSheet(
-            f"font-size: 12px; color: {ON_SURFACE_VARIANT}; border: none; "
+            f"font-size: {FONT_SMALL}px; color: {ON_SURFACE_VARIANT}; border: none; "
             "background: transparent; font-family: 'JetBrains Mono', Consolas, monospace;"
         )
         right.addWidget(diag)

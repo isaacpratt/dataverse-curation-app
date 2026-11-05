@@ -109,6 +109,7 @@ MARGIN_CARD_H = 16    # card header/body horizontal padding
 MARGIN_CARD_V = 12    # card header/body vertical padding
 
 # --- Type scale (px) ---
+FONT_MICRO = 10      # log level badges (the smallest text in the app)
 FONT_HEADLINE = 22
 FONT_TITLE = 16
 FONT_SECTION = 15
@@ -178,6 +179,54 @@ def _chevron_qss() -> str:
     border-top: 6px solid {ON_SURFACE_VARIANT};
     margin-right: 8px;
 }}"""
+
+
+def header_section_qss(*, flush: bool = False) -> str:
+    """Table/tree header section rules — one source of truth.
+
+    A widget-level stylesheet replaces the app-level rules for that
+    subtree (Qt does not merge them), so every table that sets its own
+    stylesheet has to repeat the header rules. They are repeated from
+    here instead of by hand, so the app-level sheet and the local sheets
+    cannot drift apart.
+
+    flush=True squares the end caps: the header sits flush inside a card,
+    where a rounded cap would notch the unfilled corner.
+    """
+    radius = "0px" if flush else RADIUS_LG
+    return (
+        # The header is one continuous band: the area right of the last
+        # section (the vertical scrollbar's lane) carries the header's
+        # own background, not the page colour.
+        f"QHeaderView {{ background: {SURFACE_CONTAINER}; }} "
+        f"QHeaderView::section {{ background: {SURFACE_CONTAINER}; "
+        f"color: {ON_SURFACE_VARIANT}; padding: 8px 14px 8px 12px; "
+        f"border: none; border-bottom: 1px solid {OUTLINE_VARIANT}; "
+        f"border-right: 1px solid {OUTLINE_VARIANT}; font-size: {FONT_CAPTION}px; "
+        "font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; } "
+        f"QHeaderView::section:hover {{ background: {SURFACE_CONTAINER_HIGH}; "
+        f"border-right: 1px solid {OUTLINE}; }} "
+        f"QHeaderView::section:pressed {{ background: {PRIMARY_FIXED}; "
+        f"border-right: 2px solid {PRIMARY}; }} "
+        f"QHeaderView::section:first {{ border-top-left-radius: {radius}; }} "
+        f"QHeaderView::section:last {{ border-top-right-radius: {radius}; "
+        "border-right: none; } "
+    )
+
+
+def scrollbar_lane_qss(scope: str = "") -> str:
+    """Transparent scrollbar lanes for a widget scope.
+
+    A filled lane paints the page colour over the card's rounded
+    bottom-right corner, so the card border ends in a white notch. The
+    lanes stay transparent and the card's own surface shows through;
+    thumbs and grooves keep coming from the global theme.
+    """
+    prefix = f"{scope} " if scope else ""
+    return (
+        f"{prefix}QScrollBar:vertical {{ background: transparent; }} "
+        f"{prefix}QScrollBar:horizontal {{ background: transparent; }} "
+    )
 
 
 def global_qss() -> str:
@@ -406,33 +455,7 @@ QTableWidget::item {{
     padding: 10px 12px;
     border-bottom: 1px solid {SURFACE_CONTAINER_LOW};
 }}
-QHeaderView::section {{
-    background: {SURFACE_CONTAINER};
-    color: {ON_SURFACE_VARIANT};
-    padding: 8px 14px 8px 12px;
-    border: none;
-    border-bottom: 1px solid {OUTLINE_VARIANT};
-    border-right: 1px solid {OUTLINE_VARIANT};
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}}
-QHeaderView::section:hover {{
-    background: {SURFACE_CONTAINER_HIGH};
-    border-right: 1px solid {OUTLINE};
-}}
-QHeaderView::section:pressed {{
-    background: {PRIMARY_FIXED};
-    border-right: 2px solid {PRIMARY};
-}}
-QHeaderView::section:first {{
-    border-top-left-radius: {RADIUS_LG};
-}}
-QHeaderView::section:last {{
-    border-top-right-radius: {RADIUS_LG};
-    border-right: none;
-}}
+{header_section_qss()}
 QTableWidget::item:selected {{
     background: {SECONDARY_CONTAINER};
     color: {ON_SURFACE};
@@ -452,30 +475,55 @@ QToolTip {{
 }}
 
 /* ===== Labels ===== */
+/* The type scale (FONT_* above) is the only place a size is written. */
+QLabel#DisplayLG {{
+    font-size: {FONT_HEADLINE}px;
+    font-weight: 700;
+    color: {ON_SURFACE};
+}}
 QLabel#HeadlineLG {{
-    font-size: 22px;
+    font-size: {FONT_HEADLINE}px;
     font-weight: 600;
     color: {ON_SURFACE};
     letter-spacing: -0.2px;
 }}
 QLabel#HeadlineMD {{
-    font-size: 16px;
+    font-size: {FONT_TITLE}px;
     font-weight: 600;
     color: {ON_SURFACE};
 }}
 QLabel#BodyMD {{
-    font-size: 13px;
+    font-size: {FONT_BODY}px;
     color: {ON_SURFACE_VARIANT};
 }}
 QLabel#LabelMD {{
-    font-size: 11px;
+    font-size: {FONT_CAPTION}px;
+    font-weight: 600;
+    color: {ON_SURFACE_VARIANT};
+    letter-spacing: 0.5px;
+}}
+QLabel#CardTitle {{
+    font-size: {FONT_SECTION}px;
+    font-weight: 600;
+    color: {ON_SURFACE};
+}}
+QLabel#CaptionSM {{
+    font-size: {FONT_CAPTION}px;
+    color: {ON_SURFACE_VARIANT};
+}}
+QLabel#BodySM {{
+    font-size: {FONT_SMALL}px;
+    color: {ON_SURFACE_VARIANT};
+}}
+QLabel#StateMD {{
+    font-size: {FONT_SMALL}px;
     font-weight: 600;
     color: {ON_SURFACE_VARIANT};
     letter-spacing: 0.5px;
 }}
 QLabel#MonoSM {{
     font-family: {MONO_FAMILY};
-    font-size: 12px;
+    font-size: {FONT_SMALL}px;
     color: {ON_SURFACE_VARIANT};
 }}
 

@@ -32,7 +32,6 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QSplitter,
     QTextEdit,
-    QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -40,24 +39,25 @@ from PySide6.QtWidgets import (
 
 from config import Config
 from ui.dialogs import show_critical, show_info, show_warning
+from ui.table_layout import TableLayout
 from ui.theme import (
     AMBER_700,
     BACKGROUND,
+    FONT_CAPTION,
+    FONT_SMALL,
     ON_SECONDARY_CONTAINER,
     ON_SURFACE,
     ON_SURFACE_VARIANT,
-    SURFACE_CONTAINER,
-    SURFACE_CONTAINER_HIGH,
-    SURFACE_CONTAINER_LOW,
-    SURFACE_CONTAINER_LOWEST,
     action_button_style,
     selectable_labels,
 )
 from ui.widgets import (
     AppButton,
+    AppTreeWidget,
     make_card,
     make_combo,
     make_page_heading,
+    make_reset_columns_button,
     make_search_field,
 )
 
@@ -201,7 +201,7 @@ class ReviewConfigView(QWidget):
         outer.addWidget(split, 1)
 
         self._status = QLabel("")
-        self._status.setStyleSheet(f"font-size: 11px; color: {ON_SURFACE_VARIANT};")
+        self._status.setStyleSheet(f"font-size: {FONT_CAPTION}px; color: {ON_SURFACE_VARIANT};")
         outer.addWidget(self._status)
 
         selectable_labels(self)
@@ -262,7 +262,7 @@ class ReviewConfigView(QWidget):
         row.addWidget(self._ruleset_combo, 1)
         self._dirty_chip = QLabel("● unsaved")
         self._dirty_chip.setStyleSheet(
-            f"font-size: 11px; font-weight: 600; color: {AMBER_700};"
+            f"font-size: {FONT_CAPTION}px; font-weight: 600; color: {AMBER_700};"
         )
         self._dirty_chip.hide()
         row.addWidget(self._dirty_chip)
@@ -321,27 +321,20 @@ class ReviewConfigView(QWidget):
         self._blocks_btn.setToolTip("Expand or collapse every metadata block")
         self._blocks_btn.clicked.connect(self._on_toggle_blocks)
         header_lay.addWidget(self._blocks_btn)
-        self._fields_reset_btn = AppButton("", kind="ghost", size="sm")
-        self._fields_reset_btn.setFixedSize(28, 28)
-        self._fields_reset_btn.setAccessibleName("Reset metadata fields columns")
-        try:
-            from ui.icons import icon as _reset_icon
-
-            self._fields_reset_btn.setIcon(_reset_icon("rotate-ccw"))
-        except Exception:
-            self._fields_reset_btn.setText("Reset")
-        self._fields_reset_btn.setToolTip("Reset columns and widths to default")
+        self._fields_reset_btn = make_reset_columns_button(
+            "metadata fields", tip="Reset columns and widths to default"
+        )
         self._fields_reset_btn.clicked.connect(self._on_reset_field_view)
         header_lay.addWidget(self._fields_reset_btn)
         hint = QLabel("Required / Optional / Not checked — per metadata field broadcast by the Dataverse, grouped by block.")
         hint.setWordWrap(True)
-        hint.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER};")
+        hint.setStyleSheet(f"font-size: {FONT_CAPTION}px; color: {ON_SECONDARY_CONTAINER};")
         body.addWidget(hint)
         # Block-grouped tree (replaces the flat table): block parents with
         # native expand/collapse, one child row per field rule with its
         # level combo. Sorting stays OFF on purpose — children are cell
         # *widgets*, which Qt does not move when rows sort.
-        self._field_tree = QTreeWidget()
+        self._field_tree = AppTreeWidget(row_height=None, flush=False)
         self._field_tree.setColumnCount(2)
         self._field_tree.setHeaderLabels(["Field", "Check"])
         self._field_tree.setRootIsDecorated(True)
@@ -349,43 +342,23 @@ class ReviewConfigView(QWidget):
         self._field_tree.setAnimated(True)
         self._field_tree.setIndentation(18)
         self._field_tree.setMinimumHeight(260)
-        self._field_tree.setStyleSheet(
-            f"QTreeWidget {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {SURFACE_CONTAINER_HIGH}; border-radius: 8px; "
-            f"font-size: 12px; color: {ON_SURFACE}; }}"
-            "QTreeWidget::item { border: none; }"
-            f"QTreeWidget::item:hover {{ background: {SURFACE_CONTAINER_LOW}; }}"
-            f"QTreeWidget::item:selected {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; }}"
-        )
-        try:
-            from ui.icons import tree_branch_qss as _branch_qss
-
-            self._field_tree.setStyleSheet(self._field_tree.styleSheet() + _branch_qss())
-        except Exception:
-            pass
+        # The standard tree chrome comes with the widget (framed: this
+        # tree lives inside a card body).
         _fld_header = self._field_tree.header()
         _fld_header.setStretchLastSection(False)
         _fld_header.setSectionResizeMode(0, QHeaderView.Stretch)
         _fld_header.setSectionResizeMode(1, QHeaderView.Interactive)
         self._field_tree.setColumnWidth(1, 150)
-        # Remember the user's column widths/order across sessions.
-        # Snapshot the construction view first for the header reset button.
+        # Remember the user's column widths/order across sessions. The
+        # controller owns the persistence: it saves user gestures only.
         try:
-            from storage import (
-                restore_table_state,
-                save_table_state,
-                snapshot_table_view,
+            self._fields_layout = TableLayout(
+                self._config.app.workspace,
+                "review_fields",
+                _fld_header,
+                view=self._field_tree,
             )
-
-            self._fields_snap = snapshot_table_view(_fld_header)
-            restore_table_state(self._config.app.workspace, "review_fields", _fld_header)
-
-            def _save_field_view(*_a) -> None:
-                save_table_state(
-                    self._config.app.workspace, "review_fields", _fld_header
-                )
-
-            _fld_header.sectionResized.connect(_save_field_view)
-            _fld_header.sectionMoved.connect(_save_field_view)
+            self._fields_layout.restore()
         except Exception:
             pass
         self._floor_check_column()
@@ -409,7 +382,7 @@ class ReviewConfigView(QWidget):
         card, body, _t, _h = make_card("Response text")
         self._sel_label = QLabel("Select a field or text rule to edit its response text.")
         self._sel_label.setWordWrap(True)
-        self._sel_label.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {ON_SURFACE};")
+        self._sel_label.setStyleSheet(f"font-size: {FONT_SMALL}px; font-weight: 600; color: {ON_SURFACE};")
         body.addWidget(self._sel_label)
         self._template_edit = QTextEdit()
         self._template_edit.setPlaceholderText("Standard sentence inserted into the Response draft when this check fails…\nPlaceholders: {field} {value} {dataset_title} {persistent_id} {path} {message}")
@@ -428,7 +401,7 @@ class ReviewConfigView(QWidget):
         body.addWidget(self._footer_edit, 1)
         note = QLabel("File-check findings (warnings/errors) use these templates too — edit per-check text under the ruleset JSON for now; the common cases are covered by the default “{check_id}: {message}” template.")
         note.setWordWrap(True)
-        note.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER};")
+        note.setStyleSheet(f"font-size: {FONT_CAPTION}px; color: {ON_SECONDARY_CONTAINER};")
         body.addWidget(note)
         return card
 
@@ -713,12 +686,9 @@ class ReviewConfigView(QWidget):
     def _on_reset_field_view(self) -> None:
         """Reset the field tree to its construction view, then rebuild."""
         try:
-            from storage import apply_table_view, clear_table_state
-
-            snap = getattr(self, "_fields_snap", None)
-            clear_table_state(self._config.app.workspace, "review_fields")
-            if isinstance(snap, dict):
-                apply_table_view(self._field_tree.header(), snap)
+            layout = getattr(self, "_fields_layout", None)
+            if layout is not None:
+                layout.reset()
             self._floor_check_column()
             self._refresh_field_table()
         except Exception:

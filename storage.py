@@ -294,12 +294,46 @@ def _sort_order_value(raw: int):
         return int(raw)
 
 
+TABLE_LAYOUT_VERSION = 1
+"""Schema version of one entry in ``table_layout.json``.
+
+Bump when the meaning of a key changes. Entries without a version are
+legacy (v0) and still readable; entries with a newer version are ignored
+rather than half-applied.
+"""
+
+
+def table_layout_entry_valid(entry: Any, column_count: int) -> bool:
+    """Is a saved layout entry applicable to a header with this many columns?
+
+    A layout saved for a different table shape (an older build with more
+    or fewer columns) must not be applied: the widths would land on the
+    wrong columns and squeeze the table. Legacy entries (no "v" key) are
+    accepted when their width list matches the column count.
+    """
+    if not isinstance(entry, dict) or not entry:
+        return False
+    version = entry.get("v")
+    if version is not None:
+        try:
+            if int(version) > TABLE_LAYOUT_VERSION:
+                return False
+        except Exception:
+            return False
+    widths = entry.get("widths")
+    if not isinstance(widths, list):
+        return False
+    return len(widths) == int(column_count)
+
+
 def save_table_state(workspace: Path, name: str, header) -> None:
     """Persist a table's full view state (best-effort, never raises).
 
     Records column widths, the user's sort indicator, hidden columns, and
     the visual column order so the table reopens exactly as it was left.
     Extra keys are additive: older readers keep the "widths" contract.
+    The entry carries the schema version (see TABLE_LAYOUT_VERSION), so a
+    layout saved by a newer build is ignored instead of misapplied.
     """
     try:
         path = _table_layout_path(workspace)
@@ -310,7 +344,10 @@ def save_table_state(workspace: Path, name: str, header) -> None:
         if not isinstance(raw, dict):
             raw = {}
         count = header.count()
-        entry: dict = {"widths": [header.sectionSize(i) for i in range(count)]}
+        entry: dict = {
+            "v": TABLE_LAYOUT_VERSION,
+            "widths": [header.sectionSize(i) for i in range(count)],
+        }
         try:
             if header.isSortIndicatorShown():
                 entry["sort"] = [
@@ -480,6 +517,8 @@ def restore_table_state(workspace: Path, name: str, header) -> bool:
 
     Widths always come back; sort indicator, hidden columns, and visual
     order apply only when they were saved (newer saves only).
+    An entry saved for a different column count (an older table shape) is
+    ignored: it would squeeze the wrong columns.
     Returns True when a saved entry was applied (caller should skip
     content auto-fit so the user's layout wins).
     """
@@ -491,7 +530,7 @@ def restore_table_state(workspace: Path, name: str, header) -> bool:
         if not isinstance(raw, dict):
             return False
         entry = raw.get(name)
-        if not isinstance(entry, dict) or not entry:
+        if not table_layout_entry_valid(entry, header.count()):
             return False
         apply_table_view(header, entry)
         return True

@@ -27,6 +27,8 @@ from ui.theme import (
     AMBER_700,
     ERROR,
     ERROR_CONTAINER,
+    FONT_MICRO,
+    FONT_SMALL,
     LOG_IDENTIFIER_PALETTE,
     ON_ERROR,
     ON_ERROR_CONTAINER,
@@ -70,21 +72,21 @@ class LogPage(QWidget):
         legend.setSpacing(4)
         err_chip = QLabel("ERROR")
         err_chip.setStyleSheet(
-            f"font-size: 10px; font-weight: 700; color: {ON_ERROR}; background: {ERROR};"
+            f"font-size: {FONT_MICRO}px; font-weight: 700; color: {ON_ERROR}; background: {ERROR};"
             " border: none; border-radius: 4px; padding: 1px 6px;"
         )
         err_chip.setToolTip("Lines containing ERROR render on the brand error fill (bold)")
         legend.addWidget(err_chip)
         warn_chip = QLabel("WARN")
         warn_chip.setStyleSheet(
-            f"font-size: 10px; font-weight: 700; color: {ON_ERROR_CONTAINER}; background: {ERROR_CONTAINER};"
+            f"font-size: {FONT_MICRO}px; font-weight: 700; color: {ON_ERROR_CONTAINER}; background: {ERROR_CONTAINER};"
             " border: none; border-radius: 4px; padding: 1px 6px;"
         )
         warn_chip.setToolTip("Lines containing WARN/WARNING render on the warm fill (bold)")
         legend.addWidget(warn_chip)
         plain_chip = QLabel("INFO · DEBUG plain")
         plain_chip.setStyleSheet(
-            f"font-size: 10px; color: {ON_SURFACE_VARIANT}; background: transparent;"
+            f"font-size: {FONT_MICRO}px; color: {ON_SURFACE_VARIANT}; background: transparent;"
             " border: none; padding: 1px 0;"
         )
         plain_chip.setToolTip("Everything else stays unstyled; identifiers and details keep their accents")
@@ -131,7 +133,7 @@ class LogPage(QWidget):
             "dashboard and every Dataverse request will appear here."
         )
         self._view.setStyleSheet(
-            f"QPlainTextEdit {{ background: {SURFACE_CONTAINER_LOW}; color: {ON_SURFACE}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 6px 8px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; }}"
+            f"QPlainTextEdit {{ background: {SURFACE_CONTAINER_LOW}; color: {ON_SURFACE}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 6px 8px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: {FONT_SMALL}px; }}"
         )
         self._highlighter = LogHighlighter(self._view.document())
         layout.addWidget(self._view, 1)

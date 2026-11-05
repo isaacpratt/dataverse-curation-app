@@ -38,6 +38,8 @@ from ui.icons import icon as lucide_icon
 from ui.theme import (
     BACKGROUND,
     ERROR,
+    FONT_BODY,
+    FONT_CAPTION,
     ON_ERROR_CONTAINER,
     ON_PRIMARY,
     ON_SECONDARY_CONTAINER,
@@ -843,7 +845,7 @@ class MainWindow(QMainWindow):
         if not self._open_pids:
             hint = QLabel("No dataset open")
             hint.setStyleSheet(
-                f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;"
+                f"font-size: {FONT_CAPTION}px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;"
             )
             self._chips_lay.addWidget(hint)
             self._chips_lay.addStretch()
@@ -880,11 +882,11 @@ class MainWindow(QMainWindow):
             open_btn.setStyleSheet(
                 f"QPushButton {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; border: 1px solid {PRIMARY}; "
                 "border-top-left-radius: 8px; border-bottom-left-radius: 8px; "
-                "padding: 0 10px 0 10px; font-size: 11px; font-weight: 700; text-align: left; }"
+                f"padding: 0 10px 0 10px; font-size: {FONT_CAPTION}px; font-weight: 700; text-align: left; }}"
                 if is_active else
                 f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; border: 1px solid {OUTLINE_VARIANT}; "
                 "border-top-left-radius: 8px; border-bottom-left-radius: 8px; "
-                "padding: 0 10px 0 10px; font-size: 11px; font-weight: 600; text-align: left; }"
+                f"padding: 0 10px 0 10px; font-size: {FONT_CAPTION}px; font-weight: 600; text-align: left; }}"
                 f"QPushButton:hover {{ border: 1px solid {PRIMARY}; }}"
             )
             open_btn.clicked.connect(lambda _c, p=pid, t=title: self._open_dataset(p, t))
@@ -908,11 +910,11 @@ class MainWindow(QMainWindow):
             close_btn.setStyleSheet(
                 f"QPushButton {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; border: 1px solid {PRIMARY}; "
                 "border-left: none; border-top-right-radius: 8px; border-bottom-right-radius: 8px; "
-                "font-size: 13px; font-weight: 700; }"
+                f"font-size: {FONT_BODY}px; font-weight: 700; }}"
                 if is_active else
                 f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SECONDARY_CONTAINER}; border: 1px solid {OUTLINE_VARIANT}; "
                 "border-left: none; border-top-right-radius: 8px; border-bottom-right-radius: 8px; "
-                "font-size: 13px; font-weight: 700; }"
+                f"font-size: {FONT_BODY}px; font-weight: 700; }}"
                 f"QPushButton:hover {{ color: {ERROR}; border: 1px solid {ERROR}; border-left: none; }}"
             )
             close_btn.clicked.connect(lambda _c, p=pid: self._close_dataset(p))

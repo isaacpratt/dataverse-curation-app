@@ -29,31 +29,49 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QToolButton,
     QToolTip,
+    QTreeView,
+    QTreeWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from ui.theme import (
     BACKGROUND,
+    FONT_BODY,
+    FONT_SMALL,
     ON_SECONDARY_CONTAINER,
     ON_SURFACE,
     ON_SURFACE_VARIANT,
     OUTLINE_VARIANT,
     PRIMARY,
     SURFACE_CONTAINER,
+    SURFACE_CONTAINER_HIGH,
     SURFACE_CONTAINER_LOW,
     SURFACE_CONTAINER_LOWEST,
     enable_table_copy,
+    header_section_qss,
+    scrollbar_lane_qss,
 )
 
 __all__ = [
     "AppButton",
     "AppTable",
+    "AppTree",
+    "AppTreeWidget",
     "flush_table_style",
     "flush_list_style",
+    "tree_style",
     "make_card",
     "add_info_tip",
     "make_page_heading",
+    "make_section_heading",
+    "make_body_label",
+    "make_caption_label",
+    "make_field_label",
+    "make_small_body_label",
+    "make_card_title",
+    "make_metric_value",
+    "make_reset_columns_button",
     "make_search_field",
     "make_line_edit",
     "make_combo",
@@ -102,6 +120,32 @@ class AppButton(QPushButton):
         return self
 
 
+def _section_is_user_resizable(header, logical: int) -> bool:
+    """Tell whether the user could have dragged this section's edge.
+
+    A section the layout owns is never a user gesture, however Qt
+    reports the resize: a Stretch or Fixed section, or the last section
+    of a header that stretches its last section. Without this check a
+    window resize (which re-stretches those sections) would look like a
+    user drag and would be persisted as one.
+    """
+    try:
+        if header.sectionResizeMode(logical) != QHeaderView.Interactive:
+            return False
+    except Exception:
+        return True
+    try:
+        if header.stretchLastSection():
+            last = header.count() - 1
+            while last >= 0 and header.isSectionHidden(last):
+                last -= 1
+            if logical == last:
+                return False
+    except Exception:
+        pass
+    return True
+
+
 class AppTable(QTableWidget):
     """Build a standard table (sortable columns, row selection, no grid).
 
@@ -111,10 +155,13 @@ class AppTable(QTableWidget):
     depends on insertion order.
 
     Emits columns_fitted after a successful content fit so split-header
-    views (dashboard queue) can mirror the new section sizes.
+    views (dashboard queue) can mirror the new section sizes, and
+    user_layout_changed when the *user* resizes or moves a column — the
+    only layout change that may be persisted (see ui.table_layout).
     """
 
     columns_fitted = Signal()
+    user_layout_changed = Signal()
 
     def __init__(
         self,
@@ -156,6 +203,7 @@ class AppTable(QTableWidget):
         self._fitting = False
         self._fitted = False
         hdr.sectionResized.connect(self._on_user_section_resized)
+        hdr.sectionMoved.connect(self._on_user_section_moved)
         enable_table_copy(self)
 
     def showEvent(self, event) -> None:
@@ -180,11 +228,20 @@ class AppTable(QTableWidget):
         self.setRowCount(row_count)
         self.setSortingEnabled(was)
 
-    def _on_user_section_resized(self, *_args) -> None:
+    def _on_user_section_resized(self, logical: int, *_args) -> None:
         """Lock content auto-fit once the user drags a column edge."""
         if self._fitting:
             return
+        if not _section_is_user_resizable(self.horizontalHeader(), logical):
+            return
         self._auto_fit = False
+        self.user_layout_changed.emit()
+
+    def _on_user_section_moved(self, *_args) -> None:
+        """Note that the user dragged a column to a new position."""
+        if self._fitting:
+            return
+        self.user_layout_changed.emit()
 
     def disable_auto_fit(self) -> None:
         """Disable auto-fit after saved widths are restored — never overwrite the user's layout."""
@@ -297,6 +354,11 @@ def flush_table_style(last: bool = True) -> str:
     The background is explicit (not inherited from the app rule): without
     it, a styled lavender ancestor makes the whole table body transparent
     and rows render page-colored instead of white.
+
+    The header rules and the scrollbar lanes come from the theme's shared
+    mixins: a widget-level stylesheet replaces the app-level rules for
+    that subtree, so they have to be repeated here — from one source, so
+    they cannot drift.
     """
     bottom = "8px" if last else "0px"
     return (
@@ -304,14 +366,8 @@ def flush_table_style(last: bool = True) -> str:
         "border-top-left-radius: 0px; border-top-right-radius: 0px; "
         "border-bottom-left-radius: " + bottom + "; "
         "border-bottom-right-radius: " + bottom + "; } "
-        "QHeaderView::section:first { border-top-left-radius: 0px; } "
-        "QHeaderView::section:last { border-top-right-radius: 0px; } "
-        # Scrollbar lanes are transparent so the table's own painted surface
-        # and its rounded bottom-right corner show through, keeping the card
-        # border connected at the corner instead of ending in a white notch.
-        # Thumbs/grooves keep coming from the global theme.
-        "QTableWidget QScrollBar:vertical { background: transparent; } "
-        "QTableWidget QScrollBar:horizontal { background: transparent; } "
+        + header_section_qss(flush=True)
+        + scrollbar_lane_qss("QTableWidget")
     )
 
 
@@ -323,8 +379,178 @@ def flush_list_style(last: bool = True) -> str:
         "border-top-left-radius: 0px; border-top-right-radius: 0px; "
         "border-bottom-left-radius: " + bottom + "; "
         "border-bottom-right-radius: " + bottom + "; "
-        f"font-size: 12px; color: {ON_SURFACE_VARIANT}; }}"
+        f"font-size: {FONT_SMALL}px; color: {ON_SURFACE_VARIANT}; }}"
+        + scrollbar_lane_qss("QListWidget")
     )
+
+
+def tree_style(*, flush: bool = True, row_height: int | None = 30) -> str:
+    """Build the standard tree chrome (file manifest, metadata field list).
+
+    flush=True: square corners and no frame — the tree sits flush inside
+    a card, its header meeting the card's top bar. flush=False: the tree
+    keeps its own 8px frame (trees that live inside a card body).
+
+    row_height=None leaves the row height to the tree (rows that host
+    their own widgets, e.g. the per-field status combo).
+
+    The header rules and scrollbar lanes come from the theme mixins, so
+    every tree in the app wears the same header.
+    """
+    frame = (
+        "border: none;"
+        if flush
+        else f"border: 1px solid {SURFACE_CONTAINER_HIGH}; border-radius: 8px;"
+    )
+    item = (
+        f"QTreeView::item {{ height: {row_height}px; border: none; }} "
+        if row_height
+        else "QTreeView::item { border: none; } "
+    )
+    try:
+        from ui.icons import tree_branch_qss as _branch_qss
+
+        branch = _branch_qss()
+    except Exception:
+        branch = ""
+    return (
+        f"QTreeView {{ background: {SURFACE_CONTAINER_LOWEST}; {frame} "
+        f"font-size: {FONT_SMALL}px; color: {ON_SURFACE}; }} "
+        + item
+        + f"QTreeView::item:hover {{ background: {SURFACE_CONTAINER_LOW}; }} "
+        f"QTreeView::item:selected {{ background: {SURFACE_CONTAINER}; "
+        f"color: {ON_SURFACE}; }} "
+        + header_section_qss(flush=flush)
+        + scrollbar_lane_qss("QTreeView")
+        + branch
+    )
+
+
+class AppTree(QTreeView):
+    """Standard tree view — the tree sibling of AppTable.
+
+    Same contract as AppTable: themed header with square end caps when
+    flush inside a card, transparent scrollbar lanes, no grid, movable
+    and resizable columns.
+
+    A view (not a QTreeWidget): the trees in the app are model-driven
+    (the file manifest builds its own model with header data), so the
+    column titles come from the model.
+    """
+
+    user_layout_changed = Signal()
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        row_height: int = 30,
+        flush: bool = True,
+    ) -> None:
+        super().__init__(parent)
+        self.setHeaderHidden(False)
+        self.setUniformRowHeights(False)
+        self.setExpandsOnDoubleClick(True)
+        self.setAnimated(True)
+        self.setIndentation(18)
+        self.setRootIsDecorated(True)
+        self.setFrameStyle(QFrame.NoFrame)
+        self.setStyleSheet(tree_style(flush=flush, row_height=row_height))
+        self._fitting = False
+        hdr = self.header()
+        hdr.setSectionsMovable(True)
+        hdr.setSectionsClickable(True)
+        hdr.sectionResized.connect(self._on_user_section_resized)
+        hdr.sectionMoved.connect(self._on_user_section_moved)
+
+    def _on_user_section_resized(self, logical: int, *_args) -> None:
+        if self._fitting:
+            return
+        if not _section_is_user_resizable(self.header(), logical):
+            return
+        self.user_layout_changed.emit()
+
+    def _on_user_section_moved(self, *_args) -> None:
+        if self._fitting:
+            return
+        self.user_layout_changed.emit()
+
+    def fit_columns_to_contents(self, *, floors: dict | None = None) -> None:
+        """Size every column to its content, honouring per-column floors.
+
+        Signals stay blocked: a content fit is the app's doing, not the
+        user's, so it must never be persisted as a user resize (the
+        file manifest used to lose its saved widths on every refresh for
+        exactly this reason).
+        """
+        floors = floors or {}
+        hdr = self.header()
+        self._fitting = True
+        hdr.blockSignals(True)
+        try:
+            for i in range(hdr.count()):
+                try:
+                    self.resizeColumnToContents(i)
+                except Exception:
+                    continue
+                floor = int(floors.get(i, 0) or 0)
+                if floor and self.columnWidth(i) < floor:
+                    try:
+                        self.setColumnWidth(i, floor)
+                    except Exception:
+                        pass
+        finally:
+            hdr.blockSignals(False)
+            self._fitting = False
+
+
+class AppTreeWidget(QTreeWidget):
+    """Standard tree widget — the QTreeWidget sibling of AppTree.
+
+    Same contract as AppTree: themed chrome and user_layout_changed
+    when the *user* resizes or moves a column (the only layout change
+    that may be persisted).
+
+    A QTreeWidget (not a QTreeView): the trees that host their own cell
+    widgets — the metadata field rules with their per-field combo —
+    build their items directly.
+    """
+
+    user_layout_changed = Signal()
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        row_height: int | None = None,
+        flush: bool = False,
+    ) -> None:
+        super().__init__(parent)
+        self.setUniformRowHeights(False)
+        self.setExpandsOnDoubleClick(True)
+        self.setAnimated(True)
+        self.setIndentation(18)
+        self.setRootIsDecorated(True)
+        self.setFrameStyle(QFrame.NoFrame)
+        self.setStyleSheet(tree_style(flush=flush, row_height=row_height))
+        self._fitting = False
+        hdr = self.header()
+        hdr.setSectionsMovable(True)
+        hdr.setSectionsClickable(True)
+        hdr.sectionResized.connect(self._on_user_section_resized)
+        hdr.sectionMoved.connect(self._on_user_section_moved)
+
+    def _on_user_section_resized(self, logical: int, *_args) -> None:
+        if self._fitting:
+            return
+        if not _section_is_user_resizable(self.header(), logical):
+            return
+        self.user_layout_changed.emit()
+
+    def _on_user_section_moved(self, *_args) -> None:
+        if self._fitting:
+            return
+        self.user_layout_changed.emit()
 
 
 def make_page_heading(title: str, subtitle: str = "") -> tuple:
@@ -347,6 +573,95 @@ def make_page_heading(title: str, subtitle: str = "") -> tuple:
         sub.setObjectName("BodyMD")
         sub.setWordWrap(True)
     return head, sub
+
+
+def make_section_heading(title: str) -> QLabel:
+    """Section heading inside a page or card (``HeadlineMD`` token)."""
+    lbl = QLabel(title)
+    lbl.setObjectName("HeadlineMD")
+    return lbl
+
+
+def make_body_label(text: str = "", *, wrap: bool = True) -> QLabel:
+    """Body text (``BodyMD`` token)."""
+    lbl = QLabel(text)
+    lbl.setObjectName("BodyMD")
+    lbl.setWordWrap(wrap)
+    return lbl
+
+
+def make_caption_label(text: str = "", *, wrap: bool = True) -> QLabel:
+    """Small caption text (``CaptionSM`` token: 11px, muted).
+
+    The quietest text in the app: status strips, hints, footers.
+    """
+    lbl = QLabel(text)
+    lbl.setObjectName("CaptionSM")
+    lbl.setWordWrap(wrap)
+    return lbl
+
+
+def make_field_label(text: str = "", *, wrap: bool = True) -> QLabel:
+    """Field / metric label (``LabelMD`` token: 11px, semibold, tracked).
+
+    The label above or beside a value: an uppercase metric name, a
+    section label inside a card.
+    """
+    lbl = QLabel(text)
+    lbl.setObjectName("LabelMD")
+    lbl.setWordWrap(wrap)
+    return lbl
+
+
+def make_small_body_label(text: str = "", *, wrap: bool = True) -> QLabel:
+    """Small body text (``BodySM`` token: 12px, muted)."""
+    lbl = QLabel(text)
+    lbl.setObjectName("BodySM")
+    lbl.setWordWrap(wrap)
+    return lbl
+
+
+def make_card_title(text: str = "") -> QLabel:
+    """Card title (``CardTitle`` token: 15px, semibold)."""
+    lbl = QLabel(text)
+    lbl.setObjectName("CardTitle")
+    return lbl
+
+
+def make_metric_value(text: str = "") -> QLabel:
+    """Metric-card value (``DisplayLG`` token).
+
+    The number slot of a dashboard metric card: 22px bold. Distinct from
+    ``HeadlineLG`` (page titles are 22px semibold).
+    """
+    lbl = QLabel(text)
+    lbl.setObjectName("DisplayLG")
+    return lbl
+
+
+def make_reset_columns_button(
+    name: str,
+    *,
+    tip: str = "Reset column widths and order to defaults",
+    parent: QWidget | None = None,
+) -> AppButton:
+    """Ghost icon button that resets a table's columns to their defaults.
+
+    The same affordance everywhere (file manifest, metadata fields,
+    extensions): a 28px ghost button with the rotate-ccw icon, an
+    accessible name and a tooltip.
+    """
+    btn = AppButton("", kind="ghost", size="sm", parent=parent)
+    btn.setFixedSize(28, 28)
+    btn.setAccessibleName(f"Reset {name} columns")
+    try:
+        from ui.icons import icon as _icon
+
+        btn.setIcon(_icon("rotate-ccw"))
+    except Exception:
+        btn.setText("Reset")
+    btn.setToolTip(tip)
+    return btn
 
 
 def make_card(title: str, parent: QWidget | None = None) -> tuple:
@@ -376,10 +691,7 @@ def make_card(title: str, parent: QWidget | None = None) -> tuple:
     top_lay.setContentsMargins(16, 12, 16, 12)
     top_lay.setSpacing(12)
     title_lbl = QLabel(title)
-    title_lbl.setStyleSheet(
-        f"font-size: 15px; font-weight: 600; color: {ON_SURFACE}; "
-        "border: none; background: transparent;"
-    )
+    title_lbl.setObjectName("CardTitle")
     top_lay.addWidget(title_lbl)
     top_lay.addStretch(1)
     outer.addWidget(top)
@@ -451,7 +763,7 @@ def make_search_field(placeholder: str, parent: QWidget | None = None, *, height
     field.setStyleSheet(
         f"QLineEdit#SearchField {{ background: {SURFACE_CONTAINER_LOWEST}; "
         f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; "
-        "padding-left: 12px; font-size: 13px; }"
+        f"padding-left: 12px; font-size: {FONT_BODY}px; }}"
         f"QLineEdit#SearchField:focus {{ border: 1px solid {PRIMARY}; }}"
     )
     return field
@@ -469,7 +781,7 @@ def make_line_edit(placeholder: str = "", parent: QWidget | None = None, *,
     field.setStyleSheet(
         f"QLineEdit#SearchField {{ background: {SURFACE_CONTAINER_LOWEST}; "
         f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; "
-        "padding-left: 12px; font-size: 13px; }"
+        f"padding-left: 12px; font-size: {FONT_BODY}px; }}"
         f"QLineEdit#SearchField:focus {{ border: 1px solid {PRIMARY}; }}"
     )
     return field
