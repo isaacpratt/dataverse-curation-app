@@ -2018,8 +2018,8 @@ class DatasetDetailView(QWidget):
         # Reset columns button - restores default widths/order
         self._file_reset_btn = make_reset_columns_button(
             "",
-            tip=t("common.reset_columns_tip"),
-            accessible_name=t("common.reset_columns_tip"),
+            tip=t("detail.files.reset_columns_tip"),
+            accessible_name=t("detail.files.reset_columns_a11y"),
             fallback_text=t("common.reset"),
         )
         self._file_reset_btn.clicked.connect(self._on_reset_file_view)

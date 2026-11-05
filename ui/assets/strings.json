@@ -840,7 +840,9 @@
       "download_all_staged": "Download All ({staged}/{total} staged)",
       "staged_tip": "{staged} of {total} file(s) already staged — only missing files will be fetched after approval",
       "open_folder_nothing": "Nothing downloaded yet — download the dataset first.",
-      "could_not_open": "Could not open {path}:\n{exc}"
+      "could_not_open": "Could not open {path}:\n{exc}",
+      "reset_columns_a11y": "Reset file manifest columns",
+      "reset_columns_tip": "Reset columns, sort and widths to default"
     },
     "decision": {
       "option_approve": "Approve & Publish",
