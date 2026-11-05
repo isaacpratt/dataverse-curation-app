@@ -63,6 +63,7 @@ from ui.theme import (
 from ui.widgets import (
     AppButton,
     AppTable,
+    WorkflowRail,
     add_info_tip,
     flush_list_style,
     flush_table_style,
@@ -245,6 +246,14 @@ class DatasetDetailView(QWidget):
         self._review_submissions: list = []
         self._in_review: bool = False
         self._profile = DEFAULT_PROFILE
+        # Workflow-rail state (all cheap flags/counts; the rail never stats
+        # files or touches the network, see ui/workflow.py).
+        self._changes_loaded: bool = False
+        self._inventory_ok: bool = True
+        self._staged_n: int = 0
+        self._staged_total: int = 0
+        self._last_export_path: str | None = None
+        self._decision_committed: bool = False
         self._check_worker: CheckWorker | None = None
         self._dl_worker: DownloadWorker | None = None
         self._meta_worker: MetadataWorker | None = None
@@ -436,24 +445,11 @@ class DatasetDetailView(QWidget):
         top_lay.addWidget(self._ring)
         top_lay.setAlignment(self._ring, Qt.AlignVCenter)
 
-        # Review / Response switch (second page per dataset: the depositor draft).
-        tab_row = QHBoxLayout()
-        tab_row.setSpacing(8)
-        tab_row.setContentsMargins(0, 4, 0, 0)
-        self._tab_review = AppButton("Review", kind="secondary", size="sm")
-        self._tab_review.setStyleSheet(action_button_style(False))
-        self._tab_review.clicked.connect(self._show_review_page)
-        tab_row.addWidget(self._tab_review)
-        self._tab_response = AppButton("Response", kind="secondary", size="sm")
-        self._tab_response.setStyleSheet(action_button_style(False))
-        self._tab_response.setToolTip("Draft the review response for the dataset depositor")
-        self._tab_response.clicked.connect(self._show_response_page)
-        tab_row.addWidget(self._tab_response)
-        tab_row.addStretch(1)
-        self._response_hint = QLabel("")
-        self._response_hint.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;")
-        tab_row.addWidget(self._response_hint)
-        top_lay.addLayout(tab_row)
+        # Workflow step rail (replaces the old Review/Response tab row):
+        # six steps, each navigates only — no step ever runs an action.
+        self._rail = WorkflowRail()
+        self._rail.stepClicked.connect(self._on_workflow_step)
+        top_lay.addWidget(self._rail)
 
         # ---- Main column content (inside main_scroll canvas) ----
         # MAIN column: completeness → files → auto-checks → version diff
@@ -859,6 +855,12 @@ class DatasetDetailView(QWidget):
         self._response_summary = QLabel("Load metadata to build the draft.")
         self._response_summary.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {ON_SURFACE_VARIANT}; background: transparent; border: none;")
         lay.addWidget(self._response_summary)
+        # Moved off the old tab row: the response-specific nudge belongs on
+        # the Response page, not next to global navigation.
+        self._response_hint = QLabel("")
+        self._response_hint.setWordWrap(True)
+        self._response_hint.setStyleSheet(f"font-size: 11px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;")
+        lay.addWidget(self._response_hint)
 
         # Two columns: findings checklist (left) | editable draft (right).
         cols = QHBoxLayout()
@@ -938,18 +940,68 @@ class DatasetDetailView(QWidget):
         try:
             self._pages.setCurrentIndex(0)
             self._in_response = False
-            self._tab_review.setStyleSheet(action_button_style(True))
-            self._tab_response.setStyleSheet(action_button_style(False))
         except Exception:
             pass
+        self._refresh_workflow()
 
     def _show_response_page(self) -> None:
         try:
             self._pages.setCurrentIndex(1)
             self._in_response = True
-            self._tab_review.setStyleSheet(action_button_style(False))
-            self._tab_response.setStyleSheet(action_button_style(True))
             self._refresh_response()
+        except Exception:
+            pass
+        self._refresh_workflow()
+
+    def _on_workflow_step(self, key: str) -> None:
+        """Navigate the rail only — never run a download, check or export."""
+        try:
+            if key == "respond":
+                self._show_response_page()
+                return
+
+            # Review steps: return to the review page first, then scroll.
+            self._show_review_page()
+            if key == "metadata":
+                self._goto_section("_meta_card")
+            elif key == "changes":
+                self._goto_section("_version_card")
+            elif key == "download":
+                self._goto_section("_file_card")
+                if self._dl_btn is not None:
+                    self._dl_btn.setFocus()
+            elif key == "checks":
+                self._goto_section("_auto_card")
+                if self._check_btn is not None:
+                    self._check_btn.setFocus()
+            elif key == "export":
+                if self._report is None:
+                    self._set_status("Run checks first — then Export reports… becomes available.")
+                else:
+                    self._set_status("Use Export reports… in the header to save the JSON + Markdown.")
+                if self._history_btn is not None:
+                    self._history_btn.setFocus()
+        except Exception:
+            pass
+
+    def _refresh_workflow(self) -> None:
+        """Repaint the rail from flags/counts already in memory (no I/O)."""
+        try:
+            from ui.workflow import WorkflowInput, derive_workflow
+
+            state = WorkflowInput(
+                metadata_loaded=self._metadata is not None,
+                changes_loaded=bool(getattr(self, "_changes_loaded", False)),
+                inventory_ok=bool(getattr(self, "_inventory_ok", True)),
+                staged=int(getattr(self, "_staged_n", 0) or 0),
+                total_files=int(getattr(self, "_staged_total", 0) or 0),
+                report_ready=self._report is not None,
+                exported=bool(getattr(self, "_last_export_path", None)),
+                response_open=bool(getattr(self, "_in_response", False)),
+                decision_committed=bool(getattr(self, "_decision_committed", False))
+                or bool((self._curation or {}).get("label")),
+            )
+            self._rail.set_workflow(derive_workflow(state))
         except Exception:
             pass
 
@@ -2175,6 +2227,7 @@ class DatasetDetailView(QWidget):
             self._file_footer_left.setText("No files yet — load metadata to see the Dataverse file list.")
             self._file_footer_right.setText("")
         self._refresh_curation_preview()
+        self._refresh_workflow()
 
     def _populate_file_table_staged(self, files: list[Path]) -> None:
         import mimetypes
@@ -2278,14 +2331,20 @@ class DatasetDetailView(QWidget):
         stages show "Download All (k/N staged)". No inventory → plain
         "Download All".
         """
+        # Rail inputs: counts are captured here (the single place that
+        # already walks the staged folder) so _refresh_workflow never stats.
+        self._staged_n = 0
+        self._staged_total = 0
         try:
             btn = getattr(self, "_dl_btn", None)
             if btn is None:
+                self._refresh_workflow()
                 return
             rows = getattr(self, "_all_file_rows", []) or []
             if not rows:
                 btn.setText("Download All")
                 btn.setToolTip("Download the dataset bundle for local checks")
+                self._refresh_workflow()
                 return
             root = self._dl_mgr.files_dir(self._pid)
             staged_paths: set[str] = set()
@@ -2315,6 +2374,8 @@ class DatasetDetailView(QWidget):
                 if (path in staged_paths) or (Path(path).name in staged_names)
             )
             total = len(rows)
+            self._staged_n = n_staged
+            self._staged_total = total
             # Header grammar: text-only major action in every state; the
             # count in the label ("Downloaded (N)") is the status cue.
             if total and n_staged >= total:
@@ -2334,6 +2395,7 @@ class DatasetDetailView(QWidget):
                 btn.setToolTip("Download the dataset bundle for local checks")
         except Exception:
             pass
+        self._refresh_workflow()
 
     def _on_open_folder(self) -> None:
         """Open the staged download folder in the desktop file explorer."""
@@ -2557,6 +2619,7 @@ class DatasetDetailView(QWidget):
         self._metadata = metadata
         self._curation = curation if isinstance(curation, dict) else {}
         self._version_diff = version_diff if isinstance(version_diff, dict) else {}
+        self._changes_loaded = True
         extra = extra if isinstance(extra, dict) else {}
         guestbook = extra.get("guestbook")
         self._guestbook = guestbook if isinstance(guestbook, dict) else None
@@ -2576,6 +2639,7 @@ class DatasetDetailView(QWidget):
         self._refresh_curation_preview()
         self._refresh_dataset_log()
         inv_failed = bool(extra.get("inventory_failed", False))
+        self._inventory_ok = not inv_failed
         if not inv_failed:
             try:
                 from storage import write_size_entry
@@ -2628,6 +2692,7 @@ class DatasetDetailView(QWidget):
             self._all_file_rows = []
             self._file_footer_left.setText("This dataset contains no files.")
             self._file_footer_right.setText("")
+        self._refresh_workflow()
 
     def _on_profile_changed(self) -> None:
         key = self._profile_combo.currentData()
@@ -2930,6 +2995,10 @@ class DatasetDetailView(QWidget):
         if self._report is not None:
             msg += f"\n\nReport has {len(self._report.files)} file(s) with findings — use Export report… to save."
         self._log_action("decision", f"{decision}" + (f" — {notes[:200]}" if notes else ""), {"decision": decision, "notes": notes[:2000]})
+        # A recorded decision closes the last workflow step (the Dataverse
+        # push may still fail; that is surfaced by the dialog below).
+        self._decision_committed = True
+        self._refresh_workflow()
         pushed = False
         push_error = ""
         if from_labels:
@@ -3192,6 +3261,7 @@ class DatasetDetailView(QWidget):
             self._refresh_response()
         except Exception:
             pass
+        self._refresh_workflow()
 
     def _on_checks_error(self, msg: str) -> None:
         self._progress.setVisible(False)
@@ -3294,5 +3364,7 @@ class DatasetDetailView(QWidget):
             return
         # Success needs no modal — the status line + Dataset log record it.
         # Modals are reserved for failures (above).
+        self._last_export_path = str(json_path)
         self._log_action("exported", f"Reports saved to {md_path} + {json_path}", {"path": str(json_path), "markdown": str(md_path)})
         self._set_status(f"Reports saved: {md_path.name} + {json_path.name} (recorded in Dataset log)")
+        self._refresh_workflow()

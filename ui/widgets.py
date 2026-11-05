@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QToolButton,
     QToolTip,
@@ -34,21 +35,31 @@ from PySide6.QtWidgets import (
 )
 
 from ui.theme import (
+    AMBER_700,
     BACKGROUND,
+    MUTED_TEXT,
     ON_SECONDARY_CONTAINER,
     ON_SURFACE,
     ON_SURFACE_VARIANT,
     OUTLINE_VARIANT,
     PRIMARY,
+    PRIMARY_FIXED,
+    PRIMARY_FIXED_DIM,
+    SUCCESS_DARK,
     SURFACE_CONTAINER,
+    SURFACE_CONTAINER_HIGH,
     SURFACE_CONTAINER_LOW,
     SURFACE_CONTAINER_LOWEST,
+    action_button_style,
     enable_table_copy,
 )
+from ui.workflow import STEP_ORDER, Workflow
 
 __all__ = [
     "AppButton",
     "AppTable",
+    "PaneFooter",
+    "WorkflowRail",
     "flush_table_style",
     "flush_list_style",
     "make_card",
@@ -511,3 +522,164 @@ def make_combo(items=None, parent: QWidget | None = None, *, height: int = 36,
         else:
             combo.addItem(str(entry))
     return combo
+
+
+class PaneFooter(QFrame):
+    """Shared Save/Revert footer for stack pages.
+
+    One vocabulary for pages that edit durable configuration: Settings
+    (General + Extensions tabs) and Review configuration. The status label
+    carries the last save/revert message; the dirty chip is opt-in so each
+    page can show it only while it has unsaved edits.
+
+    Signals:
+        saveRequested — the page should persist its edits.
+        revertRequested — the page should discard and reload.
+    """
+
+    saveRequested = Signal()
+    revertRequested = Signal()
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        save_text: str = "Save",
+        revert_text: str = "Revert",
+        save_tip: str = "",
+        revert_tip: str = "",
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("PaneFooter")
+        self.setStyleSheet(
+            f"QFrame#PaneFooter {{ background: transparent; "
+            f"border-top: 1px solid {OUTLINE_VARIANT}; }}"
+        )
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 10, 0, 0)
+        layout.setSpacing(8)
+        self.status = QLabel("")
+        self.status.setWordWrap(True)
+        self.status.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        self.status.setStyleSheet(
+            f"font-size: 11px; color: {ON_SURFACE_VARIANT}; "
+            "background: transparent; border: none;"
+        )
+        layout.addWidget(self.status, 1)
+        self.dirty_chip = QLabel("● unsaved")
+        self.dirty_chip.setStyleSheet(
+            f"font-size: 11px; font-weight: 600; color: {AMBER_700}; "
+            "background: transparent; border: none;"
+        )
+        self.dirty_chip.setToolTip("Unsaved changes — Save or Revert before leaving.")
+        self.dirty_chip.hide()
+        layout.addWidget(self.dirty_chip)
+        self.revert_btn = AppButton(revert_text, kind="secondary", size="sm", tip=revert_tip)
+        self.revert_btn.setStyleSheet(action_button_style(False))
+        self.revert_btn.clicked.connect(self.revertRequested)
+        layout.addWidget(self.revert_btn)
+        self.save_btn = AppButton(save_text, kind="primary", size="sm", tip=save_tip)
+        self.save_btn.setStyleSheet(action_button_style(True))
+        self.save_btn.clicked.connect(self.saveRequested)
+        layout.addWidget(self.save_btn)
+
+    def set_status(self, text: str) -> None:
+        self.status.setText(text or "")
+
+    def set_dirty(self, dirty: bool) -> None:
+        self.dirty_chip.setVisible(bool(dirty))
+        self.revert_btn.setEnabled(bool(dirty))
+
+
+class WorkflowRail(QWidget):
+    """Compact six-step progress rail for a dataset.
+
+    Guidance, not a gate: every step is clickable in every state, and the
+    widget itself runs nothing (it only emits the clicked step's key). State
+    comes from the pure :func:`ui.workflow.derive_workflow`; the current
+    step also carries bold text and an accessible name so the meaning never
+    depends on colour alone.
+    """
+
+    stepClicked = Signal(str)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("WorkflowRail")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 4, 0, 0)
+        layout.setSpacing(4)
+        self.buttons: dict[str, QPushButton] = {}
+        self._indexes: dict[str, int] = {}
+        for i, key in enumerate(STEP_ORDER):
+            self._indexes[key] = i + 1
+            btn = QPushButton("")
+            btn.setObjectName("WorkflowStep")
+            btn.setFlat(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setMinimumWidth(0)
+            btn.clicked.connect(lambda _c, k=key: self.stepClicked.emit(k))
+            layout.addWidget(btn)
+            self.buttons[key] = btn
+            if i < len(STEP_ORDER) - 1:
+                connector = QLabel("\u203a")
+                connector.setStyleSheet(
+                    f"color: {OUTLINE_VARIANT}; font-size: 13px; "
+                    "background: transparent; border: none;"
+                )
+                layout.addWidget(connector)
+        layout.addStretch(1)
+        self.hint = QLabel("")
+        self.hint.setObjectName("WorkflowHint")
+        self.hint.setWordWrap(False)
+        self.hint.setMinimumWidth(0)
+        self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.hint.setStyleSheet(
+            f"font-size: 11px; color: {ON_SURFACE_VARIANT}; "
+            "background: transparent; border: none;"
+        )
+        layout.addWidget(self.hint)
+
+    @staticmethod
+    def _style_for(state: str) -> str:
+        hover = f"QPushButton#WorkflowStep:hover {{ background: {SURFACE_CONTAINER}; border-radius: 8px; }}"
+        if state == "done":
+            return (
+                f"QPushButton#WorkflowStep {{ color: {SUCCESS_DARK}; font-size: 12px; "
+                f"font-weight: 600; background: transparent; border: none; padding: 3px 6px; }} {hover}"
+            )
+        if state == "current":
+            return (
+                f"QPushButton#WorkflowStep {{ color: {PRIMARY}; font-size: 12px; "
+                f"font-weight: 700; background: {PRIMARY_FIXED}; "
+                f"border: 1px solid {PRIMARY_FIXED_DIM}; border-radius: 8px; "
+                f"padding: 2px 8px; }} "
+                f"QPushButton#WorkflowStep:hover {{ background: {SURFACE_CONTAINER_HIGH}; "
+                f"border: 1px solid {PRIMARY}; }}"
+            )
+        if state == "blocked":
+            return (
+                f"QPushButton#WorkflowStep {{ color: {MUTED_TEXT}; font-size: 12px; "
+                f"background: transparent; border: none; padding: 3px 6px; }} {hover}"
+            )
+        return (
+            f"QPushButton#WorkflowStep {{ color: {ON_SURFACE_VARIANT}; font-size: 12px; "
+            f"background: transparent; border: none; padding: 3px 6px; }} {hover}"
+        )
+
+    def set_workflow(self, workflow: Workflow) -> None:
+        """Paint each step and the next-step hint; never disables a step."""
+        for step in workflow.steps:
+            btn = self.buttons.get(step.key)
+            if btn is None:
+                continue
+            mark = "\u2713" if step.state == "done" else str(self._indexes.get(step.key, 0))
+            btn.setText(f"{mark}  {step.label}")
+            btn.setStyleSheet(self._style_for(step.state))
+            btn.setToolTip(step.hint)
+            btn.setAccessibleName(step.accessible)
+            btn.setAccessibleDescription(step.hint)
+        self.hint.setText(workflow.hint)
+        self.hint.setToolTip(workflow.hint)

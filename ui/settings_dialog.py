@@ -7,7 +7,8 @@ Persists to config.json via config.Config.
 
 Presented as a non-modal stack page (not a blocking dialog): Save persists
 and emits `saved`. Closed via the Settings nav toggle (no Close button by
-design); `discarded` is kept for compat but no longer emitted by this pane.
+design). Edits are tracked against a baseline snapshot; leaving with unsaved
+changes asks Save / Discard / Cancel instead of silently discarding them.
 """
 
 import importlib.metadata
@@ -33,7 +34,7 @@ from PySide6.QtWidgets import (
 
 from config import PRESETS, Config
 from dataverse_client import DataverseClient
-from ui.dialogs import show_critical, show_info, show_warning
+from ui.dialogs import confirm, confirm_save_discard_cancel, show_critical, show_info, show_warning
 from ui.theme import (
     BACKGROUND,
     ERROR,
@@ -53,7 +54,14 @@ from ui.theme import (
     enable_table_copy,
     selectable_labels,
 )
-from ui.widgets import AppButton, AppTable, flush_table_style, make_combo, make_line_edit
+from ui.widgets import (
+    AppButton,
+    AppTable,
+    PaneFooter,
+    flush_table_style,
+    make_combo,
+    make_line_edit,
+)
 
 # Compact face for buttons living inside table action cells: the standard
 # action_button_style padding (7px 14px) made "Reinstall"+"Uninstall" need
@@ -111,7 +119,9 @@ class SettingsPane(QWidget):
     """
 
     saved = Signal()
-    discarded = Signal()
+    # Emitted after any successful persist (explicit Save or save-on-leave).
+    # MainWindow refreshes the dashboard from this without closing the pane.
+    configurationChanged = Signal()
 
     # Format-check libraries (pip name, import name, description).
     # Heavy binary libs are excluded from the lite build; pure-Python format
@@ -138,6 +148,11 @@ class SettingsPane(QWidget):
         # and override app-level backgrounds (e.g. the extensions table).
         self.setObjectName("SettingsDialog")
         self.setStyleSheet(f"QWidget#SettingsDialog {{ background: {BACKGROUND}; }}")
+        # Baseline-based dirty tracking: capture the saved values after a
+        # reload, compare on every edit, and guard every exit.
+        self._loading = False
+        self._dirty = False
+        self._baseline: dict[str, str] = {}
 
         outer = QVBoxLayout()
         outer.setContentsMargins(24, 24, 24, 24)
@@ -194,13 +209,8 @@ class SettingsPane(QWidget):
         test_btn.clicked.connect(self._test_connection)
         self._test_btn = test_btn
         
-        # Save button moved under Test connection (standard secondary face
-        # like the other form buttons, not the old wide primary look).
-        save_btn = AppButton("Save", kind="secondary", size="sm")
-        save_btn.setStyleSheet(action_button_style(False))
-        save_btn.setToolTip("Save to config.json (Ctrl+S)")
-        save_btn.clicked.connect(self._on_save)
-        
+        # Save/Revert live in the shared PaneFooter below the tabs so both
+        # General and Extensions expose the same controls.
         conn_row = QHBoxLayout()
         conn_row.setContentsMargins(0, 0, 0, 0)
         conn_row.setSpacing(8)
@@ -212,15 +222,7 @@ class SettingsPane(QWidget):
         )
         self._conn_status.setStyleSheet(f"font-size: 12px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
         conn_row.addWidget(self._conn_status, 1)
-        
-        # Vertical layout for test + save stacked
-        conn_vbox = QVBoxLayout()
-        conn_vbox.setContentsMargins(0, 0, 0, 0)
-        conn_vbox.setSpacing(8)
-        conn_vbox.addLayout(conn_row)
-        conn_vbox.addWidget(save_btn, 0, Qt.AlignLeft)
-        
-        form.addRow("", conn_vbox)
+        form.addRow("", conn_row)
         # A stale verdict must not survive a URL edit.
         self.url_edit.textChanged.connect(lambda _t: self._conn_status.setText(""))
         self.url_edit.textChanged.connect(lambda _t: self._clear_user_info())
@@ -352,6 +354,24 @@ class SettingsPane(QWidget):
         card_lay.addWidget(tabs)
         outer.addWidget(tabs_card, 1)
 
+        # Shared Save/Revert footer — the same component Review configuration
+        # uses, so both pages speak one visual language.
+        self._footer = PaneFooter(
+            self,
+            save_tip="Save to config.json (Ctrl+S)",
+            revert_tip="Discard unsaved edits and reload the saved configuration",
+        )
+        self._footer.saveRequested.connect(self._on_save)
+        self._footer.revertRequested.connect(self._on_revert)
+        outer.addWidget(self._footer)
+        # Compatibility aliases for callers/tests that addressed the buttons.
+        self._save_btn = self._footer.save_btn
+        self._revert_btn = self._footer.revert_btn
+
+        for _edit in (self.url_edit, self.token_edit, self.subtree_edit, self.workspace_edit):
+            _edit.textChanged.connect(self._refresh_dirty)
+        self.preset_combo.currentTextChanged.connect(self._refresh_dirty)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(outer)
@@ -450,17 +470,81 @@ class SettingsPane(QWidget):
             pass
 
     def _load_from_config(self) -> None:
-        self.preset_combo.setCurrentText(self._config.preset_label())
-        self.url_edit.setText(self._config.dataverse.base_url)
-        self.token_edit.setText(self._config.dataverse.api_token)
-        collection = getattr(self._config.dataverse, "collection", "") or getattr(self._config.dataverse, "subtree", "")
-        self.subtree_edit.setText(collection)
-        self.workspace_edit.setText(str(self._config.app.workspace))
-        self._tool_paths = {
-            "tesseract": self._config.app.tesseract or "",
-            "exiftool": self._config.app.exiftool or "",
+        self._loading = True
+        try:
+            self.preset_combo.setCurrentText(self._config.preset_label())
+            self.url_edit.setText(self._config.dataverse.base_url)
+            self.token_edit.setText(self._config.dataverse.api_token)
+            collection = getattr(self._config.dataverse, "collection", "") or getattr(self._config.dataverse, "subtree", "")
+            self.subtree_edit.setText(collection)
+            self.workspace_edit.setText(str(self._config.app.workspace))
+            self._tool_paths = {
+                "tesseract": self._config.app.tesseract or "",
+                "exiftool": self._config.app.exiftool or "",
+            }
+            self._on_preset_changed(self.preset_combo.currentText())
+        finally:
+            self._loading = False
+        self._baseline = self._snapshot()
+        self._dirty = False
+        self._footer.set_dirty(False)
+        self._footer.set_status("")
+
+    def _snapshot(self) -> dict[str, str]:
+        """Return the persisted values in the form `persist()` writes them."""
+        return {
+            "url": self.url_edit.text().strip().rstrip("/"),
+            "token": self.token_edit.text().strip(),
+            "collection": self.subtree_edit.text().strip(),
+            "workspace": self.workspace_edit.text().strip(),
+            "tesseract": (self._tool_paths or {}).get("tesseract", "").strip(),
+            "exiftool": (self._tool_paths or {}).get("exiftool", "").strip(),
         }
-        self._on_preset_changed(self.preset_combo.currentText())
+
+    def _refresh_dirty(self) -> None:
+        if self._loading:
+            return
+        self._dirty = self._snapshot() != self._baseline
+        try:
+            self._footer.set_dirty(self._dirty)
+        except Exception:
+            pass
+
+    def has_unsaved_changes(self) -> bool:
+        return bool(self._dirty)
+
+    def confirm_leave(self, parent=None) -> bool:
+        """Ask Save/Discard/Cancel when leaving with unsaved edits.
+
+        Returns True when navigation may proceed (saved or discarded), False
+        when the curator chose Cancel or a save failed.
+        """
+        if not self._dirty:
+            return True
+        action = confirm_save_discard_cancel(
+            parent or self,
+            "Unsaved settings",
+            "You have unsaved settings changes. Save them before leaving?",
+        )
+        if action == "save":
+            return self.persist()
+        if action == "discard":
+            self._load_from_config()
+            return True
+        return False
+
+    def _on_revert(self) -> None:
+        if not self._dirty:
+            return
+        if not confirm(
+            self,
+            "Revert settings",
+            "Discard unsaved settings changes and reload the saved configuration?",
+            confirm_label="Revert",
+        ):
+            return
+        self._load_from_config()
+        self._footer.set_status("Reverted to saved settings.")
 
     def _on_preset_changed(self, label: str) -> None:
         preset_url = PRESETS.get(label, "")
@@ -714,6 +798,7 @@ class SettingsPane(QWidget):
                 self._tool_paths = {}
             self._tool_paths[key] = chosen
             self._refresh_extensions()
+            self._refresh_dirty()
 
     def _run_shell(self, func, status: str) -> None:
         """Run one blocking `func() -> (ok, title, message)` off the GUI thread."""
@@ -1063,11 +1148,12 @@ class SettingsPane(QWidget):
             # A good connection means the token is worth identifying.
             self._refresh_user_info()
 
-    def _on_save(self) -> None:
+    def persist(self) -> bool:
+        """Validate and write config.json; no navigation, no `saved` signal."""
         base = self.url_edit.text().strip().rstrip("/")
         if not base.startswith("http"):
             show_warning(self, "Settings", "Base URL must start with http:// or https://")
-            return
+            return False
         ws = Path(self.workspace_edit.text().strip() or str(Path.home() / "Documents" / "curation-workspace"))
         self._config.dataverse.base_url = base
         self._config.dataverse.api_token = self.token_edit.text().strip()
@@ -1085,5 +1171,14 @@ class SettingsPane(QWidget):
             self._config.save()
         except Exception as exc:
             show_critical(self, "Settings", f"Could not save config.json:\n{exc}")
-            return
-        self.saved.emit()
+            return False
+        self._baseline = self._snapshot()
+        self._dirty = False
+        self._footer.set_dirty(False)
+        self._footer.set_status("Saved to config.json.")
+        self.configurationChanged.emit()
+        return True
+
+    def _on_save(self) -> None:
+        if self.persist():
+            self.saved.emit()

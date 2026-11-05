@@ -593,7 +593,7 @@ class MainWindow(QMainWindow):
 
             self._settings = SettingsPane(self._config)
             self._settings.saved.connect(self._on_settings_saved)
-            self._settings.discarded.connect(lambda: self._show_pane(None))
+            self._settings.configurationChanged.connect(self._on_configuration_changed)
             # Scroll-wrapped: tall panes scroll in place, never grow the window.
             self._settings_page = self._wrap_pane_page(self._settings)
             self._stack.addWidget(self._settings_page)
@@ -722,10 +722,29 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _show_pane(self, name) -> None:
-        """Show one pane exclusively (settings/about) or switch to log page."""
+    def _can_leave_settings(self) -> bool:
+        """Guard every exit from a dirty Settings pane."""
+        if self._content_role() != "settings":
+            return True
+        pane = getattr(self, "_settings", None)
+        if pane is None:
+            return True
+        try:
+            return bool(pane.confirm_leave(self))
+        except Exception:
+            return True
+
+    def _show_pane(self, name) -> bool:
+        """Show one pane exclusively (settings/about) or switch to log page.
+
+        Returns False when a dirty Settings pane cancelled the switch.
+        """
         try:
             role = self._content_role()
+            if role == "settings" and name != "settings":
+                if not self._can_leave_settings():
+                    self._refresh_nav_state()
+                    return False
             if name in ("settings", "about"):
                 # Exclusive like before: opening a page switches stack.
                 if role not in ("settings", "about"):
@@ -754,6 +773,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         self._refresh_nav_state()
+        return True
 
     def _on_log_toggled(self, checked: bool) -> None:
         self._show_pane("log" if checked else None)
@@ -764,7 +784,18 @@ class MainWindow(QMainWindow):
                 self._ensure_settings().reload()
             except Exception:
                 pass
-        self._show_pane("settings" if checked else None)
+        if not self._show_pane("settings" if checked else None):
+            # Cancel kept the pane open; snap the toggle back without
+            # re-entering this handler.
+            try:
+                self._nav_settings.blockSignals(True)
+                self._nav_settings.setChecked(True)
+            finally:
+                try:
+                    self._nav_settings.blockSignals(False)
+                except Exception:
+                    pass
+                self._refresh_nav_state()
 
     def _on_about_toggled(self, checked: bool) -> None:
         self._show_pane("about" if checked else None)
@@ -779,14 +810,20 @@ class MainWindow(QMainWindow):
             pass
         self._show_pane("settings")
 
-    def _on_settings_saved(self) -> None:
-        self._show_pane(None)
+    def _on_configuration_changed(self) -> None:
         try:
             self._dashboard.reload()
         except Exception as exc:
             show_warning(self, "Dashboard", f"Could not refresh dashboard:\n{exc}")
 
+    def _on_settings_saved(self) -> None:
+        self._show_pane(None)
+
     def _open_dataset(self, persistent_id: str, title: str) -> None:
+        # A dirty Settings pane must be resolved before the stack switches.
+        if not self._can_leave_settings():
+            self._refresh_nav_state()
+            return
         # Imported here, not at module level: the detail view drags in the
         # whole network stack (requests, dataverse_client, download manager,
         # metadata rules). None of it is needed to show the dashboard.
@@ -921,6 +958,10 @@ class MainWindow(QMainWindow):
         self._chips_lay.addStretch()
 
     def closeEvent(self, event) -> None:
+        # Do not lose unsaved Settings edits on window close.
+        if not self._can_leave_settings():
+            event.ignore()
+            return
         # Never destroy a running QThread: stop the dashboard crawl and
         # adopted workers, requesting interruption and waiting boundedly.
         # Note: QThread.quit() is a no-op for overridden run() loops without
@@ -1015,6 +1056,9 @@ class MainWindow(QMainWindow):
         self._metadata_cache[pid] = (metadata, inventory)
 
     def _show_dashboard(self) -> None:
+        if not self._can_leave_settings():
+            self._refresh_nav_state()
+            return
         self._stack.setCurrentWidget(self._dashboard)
         self._pane_return = None
         self._style_nav_for_detail(False)
@@ -1481,6 +1525,9 @@ class MainWindow(QMainWindow):
 
     def _show_review_config(self) -> None:
         """Show the full-page Review configuration (replaces the old dialog)."""
+        if not self._can_leave_settings():
+            self._refresh_nav_state()
+            return
         try:
             if getattr(self, "_review_config", None) is None:
                 from ui.review_config import ReviewConfigView

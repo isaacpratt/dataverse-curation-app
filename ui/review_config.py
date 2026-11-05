@@ -41,11 +41,9 @@ from PySide6.QtWidgets import (
 from config import Config
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.theme import (
-    AMBER_700,
     BACKGROUND,
     ON_SECONDARY_CONTAINER,
     ON_SURFACE,
-    ON_SURFACE_VARIANT,
     SURFACE_CONTAINER,
     SURFACE_CONTAINER_HIGH,
     SURFACE_CONTAINER_LOW,
@@ -53,7 +51,7 @@ from ui.theme import (
     action_button_style,
     selectable_labels,
 )
-from ui.widgets import AppButton, make_card, make_combo, make_search_field
+from ui.widgets import AppButton, PaneFooter, make_card, make_combo, make_search_field
 
 _LEVELS = ["required", "optional", "unchecked"]
 
@@ -193,9 +191,21 @@ class ReviewConfigView(QWidget):
         split.setStretchFactor(1, 2)
         outer.addWidget(split, 1)
 
-        self._status = QLabel("")
-        self._status.setStyleSheet(f"font-size: 11px; color: {ON_SURFACE_VARIANT};")
-        outer.addWidget(self._status)
+        # Shared Save/Revert footer (same component as Settings): one
+        # vocabulary for pages that persist configuration.
+        self._footer = PaneFooter(
+            self,
+            save_tip="Save the rulesets to requirements_profiles.json",
+            revert_tip="Discard unsaved ruleset edits and reload the saved rules",
+        )
+        self._footer.saveRequested.connect(self._on_save)
+        self._footer.revertRequested.connect(self._on_revert)
+        outer.addWidget(self._footer)
+        # Compatibility aliases used by the status/dirty helpers.
+        self._status = self._footer.status
+        self._dirty_chip = self._footer.dirty_chip
+        self._save_btn = self._footer.save_btn
+        self._footer.set_dirty(False)
 
         selectable_labels(self)
         self._refresh_all()
@@ -253,12 +263,6 @@ class ReviewConfigView(QWidget):
         self._ruleset_combo = make_combo(min_width=260)
         self._ruleset_combo.currentIndexChanged.connect(self._on_ruleset_changed)
         row.addWidget(self._ruleset_combo, 1)
-        self._dirty_chip = QLabel("● unsaved")
-        self._dirty_chip.setStyleSheet(
-            f"font-size: 11px; font-weight: 600; color: {AMBER_700};"
-        )
-        self._dirty_chip.hide()
-        row.addWidget(self._dirty_chip)
         for text, slot in [("New…", self._on_new), ("Duplicate", self._on_duplicate), ("Delete", self._on_delete)]:
             b = AppButton(text, kind="secondary", size="sm")
             b.clicked.connect(slot)
@@ -275,13 +279,6 @@ class ReviewConfigView(QWidget):
         self._fields_btn = AppButton("Load fields from Dataverse", kind="secondary", size="sm")
         self._fields_btn.clicked.connect(self._on_load_fields)
         row2.addWidget(self._fields_btn)
-        self._save_btn = AppButton("Save", kind="primary", size="sm")
-        self._save_btn.setStyleSheet(action_button_style(True))
-        self._save_btn.clicked.connect(self._on_save)
-        row2.addWidget(self._save_btn)
-        revert = AppButton("Revert", kind="secondary", size="sm")
-        revert.clicked.connect(self._on_revert)
-        row2.addWidget(revert)
         body.addLayout(row2)
         return card
 
@@ -766,13 +763,11 @@ class ReviewConfigView(QWidget):
         if self._loading or self._dirty:
             return
         self._dirty = True
-        self._dirty_chip.show()
+        self._footer.set_dirty(True)
 
     def _clear_dirty(self) -> None:
-        if not self._dirty:
-            return
         self._dirty = False
-        self._dirty_chip.hide()
+        self._footer.set_dirty(False)
 
     def _on_field_selected(self) -> None:
         """Point the template editor at the selected field row."""

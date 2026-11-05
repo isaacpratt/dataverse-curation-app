@@ -194,3 +194,57 @@ def confirm(parent, title: str, text: str, *, confirm_label: str = "Delete") -> 
     yes_btn.setAutoDefault(True)
     no_btn.setAutoDefault(True)
     return dlg.exec() == QDialog.DialogCode.Accepted
+
+
+def confirm_save_discard_cancel(parent, title: str, text: str) -> str:
+    """Ask Save / Discard / Cancel for dirty settings and return the choice.
+
+    Returns "save", "discard", or "cancel".
+    """
+    from PySide6.QtWidgets import QDialogButtonBox, QHBoxLayout
+
+    from ui.icons import icon_label as _dlg_icon
+
+    dlg = QDialog(parent)
+    dlg.setWindowTitle(title)
+    dlg.setMinimumWidth(460)
+    layout = QVBoxLayout(dlg)
+    try:
+        header_row = QHBoxLayout()
+        header_row.setSpacing(8)
+        header_row.addWidget(_dlg_icon("triangle-alert", size=18, color=WARNING))
+        header = QLabel(f"<b>{title}</b>")
+        header.setTextFormat(Qt.RichText)
+        header_row.addWidget(header, 1)
+        layout.addLayout(header_row)
+    except Exception:
+        pass
+    label = QLabel(text)
+    label.setWordWrap(True)
+    label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+    layout.addWidget(label)
+
+    buttons = QDialogButtonBox()
+    # Order: Save (AcceptRole), Discard (DestructiveRole), Cancel (RejectRole)
+    save_btn = buttons.addButton("Save", QDialogButtonBox.ButtonRole.AcceptRole)
+    discard_btn = buttons.addButton("Discard", QDialogButtonBox.ButtonRole.DestructiveRole)
+    cancel_btn = buttons.addButton(QDialogButtonBox.Cancel)
+    cancel_btn.setDefault(True)  # Cancel is the safe default
+
+    result = {"action": "cancel"}
+
+    def _on_click(btn):
+        if btn is save_btn:
+            result["action"] = "save"
+            dlg.accept()
+        elif btn is discard_btn:
+            result["action"] = "discard"
+            dlg.accept()
+        else:
+            result["action"] = "cancel"
+            dlg.reject()
+
+    buttons.clicked.connect(_on_click)
+    layout.addWidget(buttons)
+    dlg.exec()
+    return result["action"]
