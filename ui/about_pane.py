@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.i18n import t
 from ui.theme import (
     BACKGROUND,
     ON_SECONDARY_CONTAINER,
@@ -42,12 +43,12 @@ def _platform_text() -> str:
     try:
         if _sys.platform == "win32":
             v = _sys.getwindowsversion()
-            return f"Windows {v.major}.{v.minor}.{v.build}"
+            return t("about.diag.windows", major=v.major, minor=v.minor, build=v.build)
         import platform as _platform
 
         return f"{_platform.system()} {_platform.release()}"
     except Exception:
-        return "unknown"
+        return t("common.unknown")
 
 
 def _diag_text() -> str:
@@ -58,23 +59,29 @@ def _diag_text() -> str:
         from PySide6 import __version__ as _qt_version
     except Exception:
         _qt_version = "unknown"
+    install = t("about.diag.frozen") if getattr(_sys, "frozen", False) else t("about.diag.source")
     lines = [
-        f"version: {_app_version()}",
-        f"python: {_sys.version.split()[0]}",
-        f"qt: {_qt_version}",
-        f"platform: {_platform_text()}",
-        f"install: {'frozen' if getattr(_sys, 'frozen', False) else 'source'}",
+        t("about.diag.version", value=_app_version()),
+        t("about.diag.python", value=_sys.version.split()[0]),
+        t("about.diag.qt", value=_qt_version),
+        t("about.diag.platform", value=_platform_text()),
+        t("about.diag.install", value=install),
     ]
     try:
         from config import Config
 
         cfg = Config.load(None)
-        lines.append(f"workspace: {cfg.app.workspace}")
-        lines.append(f"base url: {cfg.dataverse.base_url}")
+        lines.append(t("about.diag.workspace", value=cfg.app.workspace))
+        lines.append(t("about.diag.base_url", value=cfg.dataverse.base_url))
         token = (cfg.dataverse.api_token or "").strip()
-        lines.append(f"api token: {'set' if token else 'not set'}")
+        lines.append(
+            t(
+                "about.diag.api_token",
+                value=t("about.diag.set") if token else t("about.diag.not_set"),
+            )
+        )
     except Exception:
-        lines.append("config: unavailable")
+        lines.append(t("about.diag.config_unavailable"))
     return "\n".join(lines)
 
 
@@ -94,7 +101,7 @@ class AboutPane(QWidget):
         outer.setContentsMargins(24, 24, 24, 24)
         outer.setSpacing(16)
 
-        heading = QLabel("About")
+        heading = QLabel(t("about.heading"))
         heading.setStyleSheet(
             f"font-size: 22px; font-weight: 600; color: {ON_SURFACE}; "
             "border: none; background: transparent;"
@@ -110,7 +117,13 @@ class AboutPane(QWidget):
         body.setContentsMargins(20, 20, 20, 20)
         body.setSpacing(10)
 
-        title = QLabel(f"Dataverse Docent <span style='color:{ON_SECONDARY_CONTAINER}'>v{_app_version()}</span>")
+        title = QLabel(
+            t(
+                "about.title",
+                version=_app_version(),
+                muted=ON_SECONDARY_CONTAINER,
+            )
+        )
         title.setTextFormat(Qt.RichText)
         title.setStyleSheet(
             f"font-size: 16px; font-weight: 600; color: {ON_SURFACE}; "
@@ -145,26 +158,14 @@ class AboutPane(QWidget):
 
         left = QVBoxLayout()
         left.setSpacing(10)
-        blurb = QLabel(
-            "Desktop assistant for curating Dataverse datasets: discover drafts, "
-            "approve downloads, run format checks, verify metadata, "
-            "compare versions, and record decisions — all against the Dataverse "
-            "Native/Search API with an API token. No direct database access; "
-            "downloads, reports, and metadata caches live under your workspace."
-        )
+        blurb = QLabel(t("about.blurb"))
         blurb.setWordWrap(True)
         blurb.setStyleSheet(
             f"font-size: 13px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;"
         )
         left.addWidget(blurb)
 
-        bullets = QLabel(
-            "• Dashboard of datasets in review with status, label, and collection filters<br>"
-            "• Per-file format checks (20 engines) plus dataset-level findings<br>"
-            "• Metadata check profiles and published-vs-draft comparison<br>"
-            "• Per-dataset timeline: versions, curation labels, local actions<br>"
-            "• Headless mode: <span style='font-family:monospace'>python main.py --headless &lt;dir&gt;</span>"
-        )
+        bullets = QLabel(t("about.bullets"))
         bullets.setTextFormat(Qt.RichText)
         bullets.setWordWrap(True)
         bullets.setStyleSheet(
@@ -175,7 +176,7 @@ class AboutPane(QWidget):
 
         right = QVBoxLayout()
         right.setSpacing(8)
-        diag_head = QLabel("Diagnostics")
+        diag_head = QLabel(t("about.diagnostics"))
         diag_head.setStyleSheet(
             f"font-size: 11px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
             "letter-spacing: 0.5px; border: none; background: transparent;"
@@ -189,10 +190,8 @@ class AboutPane(QWidget):
             "background: transparent; font-family: 'JetBrains Mono', Consolas, monospace;"
         )
         right.addWidget(diag)
-        copy_btn = AppButton("Copy diagnostics", kind="secondary")
-        copy_btn.setToolTip(
-            "Version + environment facts for a support request (never the API token)"
-        )
+        copy_btn = AppButton(t("about.copy"), kind="secondary")
+        copy_btn.setToolTip(t("about.copy_tip"))
         copy_btn.clicked.connect(lambda: self._copy_diagnostics(copy_btn))
         right.addWidget(copy_btn)
         right.addStretch(1)
@@ -211,8 +210,8 @@ class AboutPane(QWidget):
 
         row = QHBoxLayout()
         row.setSpacing(8)
-        back_btn = AppButton("Close", kind="secondary")
-        back_btn.setAccessibleName("Close about")
+        back_btn = AppButton(t("about.close"), kind="secondary")
+        back_btn.setAccessibleName(t("about.close_a11y"))
         back_btn.clicked.connect(lambda: self.discarded.emit())
         try:
             from ui.icons import icon as _about_icon
@@ -228,11 +227,11 @@ class AboutPane(QWidget):
         """Copy the diagnostics block to the clipboard, with brief feedback."""
         try:
             QApplication.clipboard().setText(_diag_text())
-            btn.setText("Copied ✓")
+            btn.setText(t("about.copied"))
 
             def _restore() -> None:
                 try:
-                    btn.setText("Copy diagnostics")
+                    btn.setText(t("about.copy"))
                 except Exception:
                     pass
 

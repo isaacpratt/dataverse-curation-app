@@ -22,6 +22,12 @@ from applog import get_app_log
 
 _STREAM_CHUNK = 1 << 20
 
+# Canonical state token for "locked for review". This is a *data* contract
+# shared by the client, the engine and the dashboard cache — not interface
+# copy, so it is deliberately not translated. The GUI renders it through its
+# own display-state mapping (``dashboard.display_state.review``).
+STATE_IN_REVIEW = "In Review"
+
 # Network failures worth one retry cycle (timeouts included: a stalled
 # bundle stream otherwise restarts from zero with no second chance).
 _RETRYABLE_NETWORK = (
@@ -349,7 +355,7 @@ def search_item_state(item: dict[str, Any]) -> tuple:
         "draft" in s or "review" in s for s in lowered
     )
     if any("review" in s for s in lowered):
-        return "In Review", True
+        return STATE_IN_REVIEW, True
     if has_draft:
         return "DRAFT", True
     if vs:
