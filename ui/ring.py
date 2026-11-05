@@ -25,11 +25,11 @@ from PySide6.QtWidgets import QWidget
 
 from ui.progress import ease_step
 from ui.theme import (
-    ERROR,
-    ON_SURFACE,
-    OUTLINE_VARIANT,
-    PRIMARY,
-    SUCCESS,
+    ACCENT_PRIMARY,
+    BORDER_SUBTLE,
+    STATE_ERROR_GRAPHIC,
+    STATE_SUCCESS_GRAPHIC,
+    TEXT_PRIMARY,
 )
 
 __all__ = ["RingProgress", "ease_step"]
@@ -154,13 +154,13 @@ class RingProgress(QWidget):
             side = self._diameter - inset * 2
             rect = QRectF(inset, inset, side, side)
             width = max(2.0, self._diameter * 0.11)
-            pen = QPen(QColor(OUTLINE_VARIANT), width)
+            pen = QPen(QColor(BORDER_SUBTLE), width)
             pen.setCapStyle(Qt.RoundCap)
             painter.setPen(pen)
             painter.drawArc(rect, 0, 360 * 16)
 
             if self._error:
-                pen = QPen(QColor(ERROR), width)
+                pen = QPen(QColor(STATE_ERROR_GRAPHIC), width)
                 pen.setCapStyle(Qt.RoundCap)
                 painter.setPen(pen)
                 painter.drawArc(rect, 0, 360 * 16)
@@ -169,7 +169,7 @@ class RingProgress(QWidget):
                 return
 
             if self._complete:
-                pen = QPen(QColor(SUCCESS), width)
+                pen = QPen(QColor(STATE_SUCCESS_GRAPHIC), width)
                 pen.setCapStyle(Qt.RoundCap)
                 painter.setPen(pen)
                 painter.drawArc(rect, 0, 360 * 16)
@@ -179,7 +179,7 @@ class RingProgress(QWidget):
 
             if self._target is None or self._is_stalled():
                 # Indeterminate sweep (unknown total or stalled work).
-                pen = QPen(QColor(PRIMARY), width)
+                pen = QPen(QColor(ACCENT_PRIMARY), width)
                 pen.setCapStyle(Qt.RoundCap)
                 painter.setPen(pen)
                 start = int(self._sweep_deg * 16)
@@ -190,7 +190,7 @@ class RingProgress(QWidget):
                 return
 
             fraction = max(0.0, min(1.0, self._displayed))
-            pen = QPen(QColor(PRIMARY), width)
+            pen = QPen(QColor(ACCENT_PRIMARY), width)
             pen.setCapStyle(Qt.RoundCap)
             painter.setPen(pen)
             painter.drawArc(rect, 90 * 16, int(-360 * 16 * fraction))
@@ -209,7 +209,11 @@ class RingProgress(QWidget):
             font.setPointSizeF(max(6.0, self._diameter * 0.22))
             font.setBold(True)
             painter.setFont(font)
-            color = SUCCESS if text == "✓" else (ERROR if text == "!" else ON_SURFACE)
+            color = (
+                STATE_SUCCESS_GRAPHIC
+                if text == "✓"
+                else (STATE_ERROR_GRAPHIC if text == "!" else TEXT_PRIMARY)
+            )
             painter.setPen(QColor(color))
             painter.drawText(self.rect(), Qt.AlignCenter, text)
         except Exception:

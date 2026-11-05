@@ -36,48 +36,24 @@ from dataverse_client import DataverseClient
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.table_layout import TableLayout
 from ui.theme import (
-    BACKGROUND,
-    ERROR,
-    FONT_CAPTION,
-    FONT_SMALL,
-    MUTED_BG,
-    MUTED_BORDER,
-    MUTED_TEXT,
-    ON_SECONDARY_CONTAINER,
-    ON_SURFACE,
-    ON_SURFACE_VARIANT,
-    OUTLINE_VARIANT,
-    PRIMARY,
-    SECONDARY_CONTAINER,
-    SUCCESS_DARK,
-    SURFACE_CONTAINER_HIGH,
-    SURFACE_CONTAINER_LOWEST,
-    action_button_style,
+    ACCENT_PRIMARY,
+    STATE_ERROR_GRAPHIC,
+    TEXT_DANGER,
+    TEXT_ON_TINT,
     enable_table_copy,
+    page_background_qss,
     selectable_labels,
+    transparent_surface_qss,
 )
 from ui.widgets import (
-    AppButton,
     AppTable,
     flush_table_style,
+    make_action_button,
     make_combo,
     make_line_edit,
     make_page_heading,
 )
-
-# Compact face for buttons living inside table action cells: the standard
-# action_button_style padding (7px 14px) made "Reinstall"+"Uninstall" need
-# 294px against a 240px column, clipping both buttons. Same kit look, cell-
-# sized padding.
-_CELL_BTN_STYLE = (
-    f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; "
-    f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 6px; padding: 0 8px; "
-    f"font-weight: 600; font-size: {FONT_SMALL}px; }}"
-    f"QPushButton:hover {{ background: {SURFACE_CONTAINER_HIGH}; border: 1px solid {PRIMARY}; }}"
-    f"QPushButton:pressed {{ background: {SECONDARY_CONTAINER}; }}"
-    f"QPushButton:disabled {{ background: {MUTED_BG}; color: {MUTED_TEXT}; "
-    f"border: 1px solid {MUTED_BORDER}; }}"
-)
+from ui.workers import register_worker
 
 
 class _ShellWorker(QThread):
@@ -87,6 +63,7 @@ class _ShellWorker(QThread):
 
     def __init__(self, func, parent=None):
         super().__init__(parent)
+        register_worker(self)
         self._func = func
 
     def run(self) -> None:
@@ -104,6 +81,7 @@ class _SizeWorker(QThread):
 
     def __init__(self, func, parent=None):
         super().__init__(parent)
+        register_worker(self)
         self._func = func
 
     def run(self) -> None:
@@ -147,7 +125,7 @@ class SettingsPane(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds (e.g. the extensions table).
         self.setObjectName("SettingsDialog")
-        self.setStyleSheet(f"QWidget#SettingsDialog {{ background: {BACKGROUND}; }}")
+        self.setStyleSheet(page_background_qss("SettingsDialog"))
 
         outer = QVBoxLayout()
         outer.setContentsMargins(24, 24, 24, 24)
@@ -194,22 +172,19 @@ class SettingsPane(QWidget):
         ws_row.setContentsMargins(0, 0, 0, 0)
         ws_row.setSpacing(8)
         self.workspace_edit = make_line_edit()
-        browse_btn = AppButton("Browse…", kind="secondary", size="sm")
-        browse_btn.setStyleSheet(action_button_style(False))
+        browse_btn = make_action_button("Browse…", kind="secondary", size="sm")
         browse_btn.clicked.connect(self._browse_workspace)
         ws_row.addWidget(self.workspace_edit, 1)
         ws_row.addWidget(browse_btn, 0)
         form.addRow("Workspace", ws_row)
 
-        test_btn = AppButton("Test connection", kind="secondary", size="sm")
-        test_btn.setStyleSheet(action_button_style(False))
+        test_btn = make_action_button("Test connection", kind="secondary", size="sm")
         test_btn.clicked.connect(self._test_connection)
         self._test_btn = test_btn
         
         # Save button moved under Test connection (standard secondary face
         # like the other form buttons, not the old wide primary look).
-        save_btn = AppButton("Save", kind="secondary", size="sm")
-        save_btn.setStyleSheet(action_button_style(False))
+        save_btn = make_action_button("Save", kind="secondary", size="sm")
         save_btn.setToolTip("Save to config.json (Ctrl+S)")
         save_btn.clicked.connect(self._on_save)
         
@@ -222,7 +197,10 @@ class SettingsPane(QWidget):
         self._conn_status.setTextInteractionFlags(
             Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
         )
-        self._conn_status.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
+        # The verdict's colour changes at runtime, so the widget wears a
+        # token (SuccessSM / DangerSM / HintSM) rather than a painted
+        # style of its own.
+        self._conn_status.setObjectName("HintSM")
         conn_row.addWidget(self._conn_status, 1)
         
         # Vertical layout for test + save stacked
@@ -242,10 +220,10 @@ class SettingsPane(QWidget):
         # Signed-in user (identity from GET /api/users/:me, collection
         # role by matching that identifier in the alias assignments).
         user_heading = QLabel("Signed in user")
-        user_heading.setStyleSheet(
-            f"font-size: {FONT_SMALL}px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
-            "border: none; background: transparent; padding-top: 8px;"
-        )
+        user_heading.setObjectName("StateMD")
+        # The breathing room under the heading, as a margin rather than
+        # as padding painted into the label.
+        user_heading.setContentsMargins(0, 8, 0, 0)
         form.addRow(user_heading)
         self._user_identifier = self._make_user_value()
         form.addRow("Identifier", self._user_identifier)
@@ -259,7 +237,7 @@ class SettingsPane(QWidget):
         form.addRow("Collection role", self._user_role)
         self._user_status = QLabel("")
         self._user_status.setWordWrap(True)
-        self._user_status.setStyleSheet(f"font-size: {FONT_CAPTION}px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
+        self._user_status.setObjectName("HintSM")
         # Single-widget rows span both form columns — the hint must run the
         # full width instead of wrapping in the narrow value column
         # (2026-10-02 minor: the hint rendered as a cramped block).
@@ -298,8 +276,7 @@ class SettingsPane(QWidget):
         # centered at the same y) lets the cell fill the row; the row
         # separator still comes from the app rule's border-bottom.
         self.ext_table.setStyleSheet(
-            flush_table_style(last=False)
-            + "QTableWidget::item { padding: 0px 12px; }"
+            flush_table_style(last=False, item_padding="0px 12px")
         )
         # Remember the user's column widths/order across sessions. The
         # controller owns the persistence: it saves user gestures only.
@@ -324,17 +301,14 @@ class SettingsPane(QWidget):
         ext_btn_row = QHBoxLayout()
         self.ext_status = QLabel("")
         ext_btn_row.addWidget(self.ext_status, 1)
-        refresh_ext_btn = AppButton("Refresh", kind="secondary")
-        refresh_ext_btn.setStyleSheet(action_button_style(False))
+        refresh_ext_btn = make_action_button("Refresh", kind="secondary")
         refresh_ext_btn.setToolTip("Re-check installed versions and re-measure sizes")
         refresh_ext_btn.clicked.connect(self._refresh_sizes)
         ext_btn_row.addWidget(refresh_ext_btn)
-        install_all_btn = AppButton("Install all missing", kind="secondary")
-        install_all_btn.setStyleSheet(action_button_style(False))
+        install_all_btn = make_action_button("Install all missing", kind="secondary")
         install_all_btn.clicked.connect(self._install_all)
         ext_btn_row.addWidget(install_all_btn)
-        reset_cols_btn = AppButton("Reset columns", kind="secondary")
-        reset_cols_btn.setStyleSheet(action_button_style(False))
+        reset_cols_btn = make_action_button("Reset columns", kind="secondary")
         reset_cols_btn.setToolTip("Restore default column widths and order")
         reset_cols_btn.clicked.connect(self._on_reset_ext_view)
         ext_btn_row.addWidget(reset_cols_btn)
@@ -388,9 +362,17 @@ class SettingsPane(QWidget):
             return
         rows = list(self.EXTENSIONS)
 
+        # The scan is interruptible: the process may need to stop it
+        # (quit, a probe's exit), and walking every package takes
+        # seconds.
+        holder: list = []
+
         def _work() -> dict[str, str]:
             out: dict[str, str] = {}
+            worker = holder[0] if holder else None
             for pip_name, import_name, _desc in rows:
+                if worker is not None and worker.isInterruptionRequested():
+                    break
                 out[import_name or pip_name] = SettingsPane._package_size(pip_name, import_name)
             return out
 
@@ -402,6 +384,7 @@ class SettingsPane(QWidget):
                 pass
 
         worker = _SizeWorker(_work, self)
+        holder.append(worker)
         worker.done.connect(_done)
         worker.finished.connect(self._clear_size_worker)
         worker.finished.connect(worker.deleteLater)
@@ -607,16 +590,16 @@ class SettingsPane(QWidget):
                 installed, is_installed = "?", False
             inst_item = QTableWidgetItem(installed)
             if not is_installed and installed != "?":
-                inst_item.setForeground(QColor(ERROR))
+                inst_item.setForeground(QColor(TEXT_DANGER))
             elif is_installed:
-                inst_item.setForeground(QColor(PRIMARY))
+                inst_item.setForeground(QColor(ACCENT_PRIMARY))
             try:
                 if not is_installed and installed != "?":
-                    inst_item.setIcon(_ext_icon("x", color=ERROR))
+                    inst_item.setIcon(_ext_icon("x", color=STATE_ERROR_GRAPHIC))
                 elif is_installed:
-                    inst_item.setIcon(_ext_icon("check", color=PRIMARY))
+                    inst_item.setIcon(_ext_icon("check", color=ACCENT_PRIMARY))
                 else:
-                    inst_item.setIcon(_ext_icon("minus", color=ON_SECONDARY_CONTAINER))
+                    inst_item.setIcon(_ext_icon("minus", color=TEXT_ON_TINT))
             except Exception:
                 pass
             self.ext_table.setItem(row, 1, inst_item)
@@ -631,15 +614,15 @@ class SettingsPane(QWidget):
             # Action cell: padded container so buttons never clip ("mangled" text fix)
             cell = QWidget()
             cell.setObjectName("ExtActionCell")
-            cell.setStyleSheet("QWidget#ExtActionCell { background: transparent; border: none; }")
+            cell.setStyleSheet(transparent_surface_qss("ExtActionCell"))
             cell_lay = QHBoxLayout(cell)
             cell_lay.setContentsMargins(6, 3, 6, 3)
             cell_lay.setSpacing(6)
-            install_btn = AppButton("Reinstall" if is_installed else "Install", kind="secondary", size="sm")
-            install_btn.setStyleSheet(_CELL_BTN_STYLE)
+            install_btn = make_action_button(
+                "Reinstall" if is_installed else "Install", kind="cell", size="sm"
+            )
             install_btn.clicked.connect(lambda _checked, n=pip_name: self._install_package(n))
-            uninstall_btn = AppButton("Uninstall", kind="secondary", size="sm")
-            uninstall_btn.setStyleSheet(_CELL_BTN_STYLE)
+            uninstall_btn = make_action_button("Uninstall", kind="cell", size="sm")
             uninstall_btn.setEnabled(is_installed)
             uninstall_btn.clicked.connect(lambda _checked, n=pip_name: self._uninstall_package(n))
             if frozen:
@@ -662,11 +645,11 @@ class SettingsPane(QWidget):
             resolved = self._detect_tool(key, configured)
             self.ext_table.setItem(row, 0, QTableWidgetItem(label))
             status_item = QTableWidgetItem("installed" if resolved else "Not installed")
-            status_item.setForeground(QColor(PRIMARY if resolved else ERROR))
+            status_item.setForeground(QColor(ACCENT_PRIMARY if resolved else TEXT_DANGER))
             try:
                 status_item.setIcon(
-                    _ext_icon("check", color=PRIMARY) if resolved
-                    else _ext_icon("x", color=ERROR)
+                    _ext_icon("check", color=ACCENT_PRIMARY) if resolved
+                    else _ext_icon("x", color=STATE_ERROR_GRAPHIC)
                 )
             except Exception:
                 pass
@@ -687,12 +670,11 @@ class SettingsPane(QWidget):
             self.ext_table.setItem(row, 3, QTableWidgetItem(desc))
             tool_cell = QWidget()
             tool_cell.setObjectName("ToolActionCell")
-            tool_cell.setStyleSheet("QWidget#ToolActionCell { background: transparent; border: none; }")
+            tool_cell.setStyleSheet(transparent_surface_qss("ToolActionCell"))
             tool_lay = QHBoxLayout(tool_cell)
             tool_lay.setContentsMargins(6, 3, 6, 3)
             tool_lay.setSpacing(6)
-            browse_btn = AppButton("Browse…", kind="secondary", size="sm")
-            browse_btn.setStyleSheet(_CELL_BTN_STYLE)
+            browse_btn = make_action_button("Browse…", kind="cell", size="sm")
             browse_btn.setToolTip(f"Locate the {label} executable")
             browse_btn.clicked.connect(lambda _checked, k=key: self._browse_tool(k))
             tool_lay.addWidget(browse_btn)
@@ -812,7 +794,7 @@ class SettingsPane(QWidget):
         lbl.setTextInteractionFlags(
             Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
         )
-        lbl.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;")
+        lbl.setObjectName("BodySM")
         return lbl
 
     def _clear_collection_role(self) -> None:
@@ -871,10 +853,7 @@ class SettingsPane(QWidget):
                 lbl = getattr(self, attr, None)
                 if lbl is not None:
                     lbl.setText("Not checked yet")
-                    lbl.setStyleSheet(
-                        f"font-size: {FONT_SMALL}px; color: {ON_SURFACE_VARIANT}; "
-                        "border: none; background: transparent;"
-                    )
+                    lbl.setObjectName("BodySM")
             if getattr(self, "_user_status", None) is not None:
                 self._user_status.setText("")
         except Exception:
@@ -895,10 +874,7 @@ class SettingsPane(QWidget):
                 self._user_identifier.setText(empty)
                 self._user_display.setText(empty)
                 self._user_super.setText(empty)
-                self._user_super.setStyleSheet(
-                    f"font-size: {FONT_SMALL}px; "
-                    f"color: {ON_SURFACE_VARIANT}; border: none; background: transparent;"
-                )
+                self._user_super.setObjectName("BodySM")
                 self._user_affil.setText(empty)
                 self._user_status.setText(status)
                 return
@@ -917,11 +893,7 @@ class SettingsPane(QWidget):
             self._user_display.setText(display)
             is_super = bool(me.get("superuser"))
             self._user_super.setText("Yes" if is_super else "No")
-            self._user_super.setStyleSheet(
-                f"font-size: {FONT_SMALL}px; font-weight: 600; "
-                f"color: {SUCCESS_DARK if is_super else ON_SECONDARY_CONTAINER}; "
-                "border: none; background: transparent;"
-            )
+            self._user_super.setObjectName("SuccessSM" if is_super else "HintSM")
             self._user_affil.setText(str(me.get("affiliation") or "Not set"))
             self._user_status.setText(status)
         except Exception:
@@ -1009,10 +981,8 @@ class SettingsPane(QWidget):
         in-progress tone. No dialog — the result lives where the test ran.
         """
         try:
-            color = SUCCESS_DARK if ok is True else (ERROR if ok is False else ON_SECONDARY_CONTAINER)
-            self._conn_status.setStyleSheet(
-                f"font-size: {FONT_SMALL}px; color: {color}; border: none; background: transparent;"
-            )
+            token = "SuccessSM" if ok is True else ("DangerSM" if ok is False else "HintSM")
+            self._conn_status.setObjectName(token)
             self._conn_status.setText(text)
             self._conn_status.setToolTip(tip or text)
         except Exception:

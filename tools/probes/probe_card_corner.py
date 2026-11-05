@@ -16,7 +16,7 @@ from _common import Report, boot
 
 
 def card_of(widget):
-    """The nearest ancestor frame named Card (the table's card)."""
+    """Find the nearest ancestor frame named Card (the table's card)."""
     frame = widget.parentWidget()
     while frame is not None and frame.objectName() != "Card":
         frame = frame.parentWidget()

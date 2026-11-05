@@ -19,7 +19,6 @@ from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -27,11 +26,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLineEdit,
-    QListWidget,
     QListWidgetItem,
     QSplitter,
-    QTextEdit,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -40,22 +36,16 @@ from PySide6.QtWidgets import (
 from config import Config
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.table_layout import TableLayout
-from ui.theme import (
-    AMBER_700,
-    BACKGROUND,
-    FONT_CAPTION,
-    FONT_SMALL,
-    ON_SECONDARY_CONTAINER,
-    ON_SURFACE,
-    ON_SURFACE_VARIANT,
-    action_button_style,
-    selectable_labels,
-)
+from ui.theme import page_background_qss, selectable_labels
 from ui.widgets import (
-    AppButton,
     AppTreeWidget,
+    make_action_button,
     make_card,
+    make_checkbox,
     make_combo,
+    make_line_edit,
+    make_list,
+    make_multiline_input,
     make_page_heading,
     make_reset_columns_button,
     make_search_field,
@@ -74,17 +64,17 @@ class ContentRuleDialog(QDialog):
         rule = rule or {}
         lay = QVBoxLayout(self)
         form = QFormLayout()
-        self._label = QLineEdit(str(rule.get("label") or ""))
-        self._label.setPlaceholderText("e.g. README file")
+        self._label = make_line_edit("e.g. README file")
+        self._label.setText(str(rule.get("label") or ""))
         form.addRow("Label:", self._label)
         self._level = make_combo([("Required", "required"), ("Optional", "optional")], min_width=160)
         lvl = str(rule.get("level") or "required")
         self._level.setCurrentIndex(0 if lvl != "optional" else 1)
         form.addRow("Level:", self._level)
         scope = rule.get("scope") if isinstance(rule.get("scope"), list) else ["filenames"]
-        self._cb_files = QCheckBox("Filenames / inventory paths (no download needed)")
-        self._cb_meta = QCheckBox("Metadata values")
-        self._cb_content = QCheckBox("Text inside staged files (needs download)")
+        self._cb_files = make_checkbox("Filenames / inventory paths (no download needed)")
+        self._cb_meta = make_checkbox("Metadata values")
+        self._cb_content = make_checkbox("Text inside staged files (needs download)")
         self._cb_files.setChecked("filenames" in scope)
         self._cb_meta.setChecked("metadata" in scope)
         self._cb_content.setChecked("file-content" in scope)
@@ -104,17 +94,17 @@ class ContentRuleDialog(QDialog):
         idx = {"filename-glob": 0, "substring": 1, "regex": 2}.get(m, 0)
         self._match.setCurrentIndex(idx)
         form.addRow("Match:", self._match)
-        self._pattern = QLineEdit(str(rule.get("pattern") or ""))
-        self._pattern.setPlaceholderText("readme*  or  funding acknowledgement  or  \\bCC-BY\\b")
+        self._pattern = make_line_edit("readme*  or  funding acknowledgement  or  \\bCC-BY\\b")
+        self._pattern.setText(str(rule.get("pattern") or ""))
         form.addRow("Pattern:", self._pattern)
-        self._case = QCheckBox("Case sensitive")
-        self._case.setChecked(bool(rule.get("case_sensitive")))
+        self._case = make_checkbox(
+            "Case sensitive", checked=bool(rule.get("case_sensitive"))
+        )
         form.addRow("", self._case)
         lay.addLayout(form)
         lay.addWidget(QLabel("Response text when this rule fails:"))
-        self._template = QTextEdit()
+        self._template = make_multiline_input(fixed=False, min_height=120)
         self._template.setPlainText(str(rule.get("response_template") or ""))
-        self._template.setMinimumHeight(120)
         lay.addWidget(self._template, 1)
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self.accept)
@@ -184,7 +174,7 @@ class ReviewConfigView(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds below this view.
         self.setObjectName("ReviewConfigView")
-        self.setStyleSheet(f"QWidget#ReviewConfigView {{ background: {BACKGROUND}; }}")
+        self.setStyleSheet(page_background_qss("ReviewConfigView"))
 
         # Shared page-heading contract (HeadlineLG theme token) — same
         # title look as Settings, Log, and About.
@@ -201,7 +191,7 @@ class ReviewConfigView(QWidget):
         outer.addWidget(split, 1)
 
         self._status = QLabel("")
-        self._status.setStyleSheet(f"font-size: {FONT_CAPTION}px; color: {ON_SURFACE_VARIANT};")
+        self._status.setObjectName("CaptionSM")
         outer.addWidget(self._status)
 
         selectable_labels(self)
@@ -261,32 +251,34 @@ class ReviewConfigView(QWidget):
         self._ruleset_combo.currentIndexChanged.connect(self._on_ruleset_changed)
         row.addWidget(self._ruleset_combo, 1)
         self._dirty_chip = QLabel("● unsaved")
-        self._dirty_chip.setStyleSheet(
-            f"font-size: {FONT_CAPTION}px; font-weight: 600; color: {AMBER_700};"
-        )
+        # The unsaved marker is a caution: it wears the theme's warning
+        # token rather than painting its own amber.
+        self._dirty_chip.setObjectName("WarningSM")
         self._dirty_chip.hide()
         row.addWidget(self._dirty_chip)
         for text, slot in [("New…", self._on_new), ("Duplicate", self._on_duplicate), ("Delete", self._on_delete)]:
-            b = AppButton(text, kind="secondary", size="sm")
+            b = make_action_button(text, kind="secondary", size="sm")
             b.clicked.connect(slot)
             row.addWidget(b)
         body.addLayout(row)
         row2 = QHBoxLayout()
         row2.setSpacing(8)
         row2.addWidget(QLabel("Use for Dataverse(s):"))
-        self._dataverses_edit = QLineEdit()
-        self._dataverses_edit.setPlaceholderText("*  or  https://demo.borealisdata.ca, https://…")
+        self._dataverses_edit = make_line_edit(
+            "*  or  https://demo.borealisdata.ca, https://…"
+        )
         self._dataverses_edit.setToolTip("Comma-separated base URLs, or * for every Dataverse")
         self._dataverses_edit.editingFinished.connect(self._on_dataverses_edited)
         row2.addWidget(self._dataverses_edit, 1)
-        self._fields_btn = AppButton("Load fields from Dataverse", kind="secondary", size="sm")
+        self._fields_btn = make_action_button(
+            "Load fields from Dataverse", kind="secondary", size="sm"
+        )
         self._fields_btn.clicked.connect(self._on_load_fields)
         row2.addWidget(self._fields_btn)
-        self._save_btn = AppButton("Save", kind="primary", size="sm")
-        self._save_btn.setStyleSheet(action_button_style(True))
+        self._save_btn = make_action_button("Save", kind="primary", size="sm")
         self._save_btn.clicked.connect(self._on_save)
         row2.addWidget(self._save_btn)
-        revert = AppButton("Revert", kind="secondary", size="sm")
+        revert = make_action_button("Revert", kind="secondary", size="sm")
         revert.clicked.connect(self._on_revert)
         row2.addWidget(revert)
         body.addLayout(row2)
@@ -316,8 +308,7 @@ class ReviewConfigView(QWidget):
         )
         self._level_filter.currentIndexChanged.connect(lambda _i: self._refresh_field_table())
         header_lay.addWidget(self._level_filter)
-        self._blocks_btn = AppButton("Collapse all", kind="secondary", size="md")
-        self._blocks_btn.setStyleSheet(action_button_style(False))
+        self._blocks_btn = make_action_button("Collapse all", kind="secondary", size="md")
         self._blocks_btn.setToolTip("Expand or collapse every metadata block")
         self._blocks_btn.clicked.connect(self._on_toggle_blocks)
         header_lay.addWidget(self._blocks_btn)
@@ -328,7 +319,7 @@ class ReviewConfigView(QWidget):
         header_lay.addWidget(self._fields_reset_btn)
         hint = QLabel("Required / Optional / Not checked — per metadata field broadcast by the Dataverse, grouped by block.")
         hint.setWordWrap(True)
-        hint.setStyleSheet(f"font-size: {FONT_CAPTION}px; color: {ON_SECONDARY_CONTAINER};")
+        hint.setObjectName("CaptionSM")
         body.addWidget(hint)
         # Block-grouped tree (replaces the flat table): block parents with
         # native expand/collapse, one child row per field rule with its
@@ -365,13 +356,13 @@ class ReviewConfigView(QWidget):
         self._field_tree.itemSelectionChanged.connect(self._on_field_selected)
         body.addWidget(self._field_tree, 1)
         body.addWidget(QLabel("Text rules (e.g. README — search filenames, metadata, file contents):"))
-        self._content_list = QListWidget()
+        self._content_list = make_list()
         self._content_list.setMinimumHeight(110)
         self._content_list.itemSelectionChanged.connect(self._on_content_selected)
         body.addWidget(self._content_list)
         row = QHBoxLayout()
         for text, slot in [("Add rule…", self._on_content_add), ("Edit…", self._on_content_edit), ("Delete", self._on_content_delete)]:
-            b = AppButton(text, kind="secondary", size="sm")
+            b = make_action_button(text, kind="secondary", size="sm")
             b.clicked.connect(slot)
             row.addWidget(b)
         row.addStretch(1)
@@ -382,26 +373,27 @@ class ReviewConfigView(QWidget):
         card, body, _t, _h = make_card("Response text")
         self._sel_label = QLabel("Select a field or text rule to edit its response text.")
         self._sel_label.setWordWrap(True)
-        self._sel_label.setStyleSheet(f"font-size: {FONT_SMALL}px; font-weight: 600; color: {ON_SURFACE};")
+        self._sel_label.setObjectName("LabelStrongSM")
         body.addWidget(self._sel_label)
-        self._template_edit = QTextEdit()
-        self._template_edit.setPlaceholderText("Standard sentence inserted into the Response draft when this check fails…\nPlaceholders: {field} {value} {dataset_title} {persistent_id} {path} {message}")
-        self._template_edit.setMinimumHeight(130)
+        self._template_edit = make_multiline_input(
+            "Standard sentence inserted into the Response draft when this check fails…\n"
+            "Placeholders: {field} {value} {dataset_title} {persistent_id} {path} {message}",
+            fixed=False,
+            min_height=130,
+        )
         self._template_edit.textChanged.connect(self._on_template_edited)
         body.addWidget(self._template_edit)
         body.addWidget(QLabel("Draft header (opening paragraph):"))
-        self._header_edit = QTextEdit()
-        self._header_edit.setMinimumHeight(70)
+        self._header_edit = make_multiline_input(fixed=False, min_height=70)
         self._header_edit.textChanged.connect(self._on_header_footer_edited)
         body.addWidget(self._header_edit)
         body.addWidget(QLabel("Draft footer (closing paragraph):"))
-        self._footer_edit = QTextEdit()
-        self._footer_edit.setMinimumHeight(70)
+        self._footer_edit = make_multiline_input(fixed=False, min_height=70)
         self._footer_edit.textChanged.connect(self._on_header_footer_edited)
         body.addWidget(self._footer_edit, 1)
         note = QLabel("File-check findings (warnings/errors) use these templates too — edit per-check text under the ruleset JSON for now; the common cases are covered by the default “{check_id}: {message}” template.")
         note.setWordWrap(True)
-        note.setStyleSheet(f"font-size: {FONT_CAPTION}px; color: {ON_SECONDARY_CONTAINER};")
+        note.setObjectName("CaptionSM")
         body.addWidget(note)
         return card
 

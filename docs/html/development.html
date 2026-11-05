@@ -117,7 +117,21 @@ make smoke         # size report + headless --help check</code></pre>
 <tr><td>One heading contract</td><td><code>make_page_heading()</code> for a full-page title, <code>make_section_heading()</code> inside a page, <code>make_card_title()</code> on a card. All of them set an object name; none writes an inline stylesheet.</td></tr>
 <tr><td>One reset affordance</td><td><code>make_reset_columns_button(name)</code> &mdash; the same ghost button with the rotate-ccw icon everywhere.</td></tr>
 <tr><td>Colours come from the theme</td><td>No hex literal outside <code>ui/theme.py</code> (enforced by <code>ui/tests/test_theme_tokens.py</code>).</td></tr>
+<tr><td>Palette, then role, then component</td><td>Only <code>ui/theme.py</code> and <code>ui/widgets.py</code> may name a palette entry. A view names a <b>role</b> (<code>SURFACE_CARD</code>, <code>TEXT_DANGER</code>, <code>ACCENT_PRIMARY</code>) &mdash; what the colour is <i>for</i>. The kit builds the component. A theme swap is then a table edit, not a hunt through views.</td></tr>
+<tr><td>One contrast contract</td><td>The pairings the app paints live in <code>theme.CONTRAST_PAIRS</code> and <code>theme.BADGE_CONTRAST_PAIRS</code>, with the ratio each must clear (text 4.5:1, graphics 3:1, disabled 3:1). <code>ui/tests/test_contrast.py</code> reads that table, so a palette change that breaks legibility fails the build. Add a pairing there rather than leaving it implicit at a call site.</td></tr>
+<tr><td>One button system</td><td><code>make_action_button(text, kind=..., size=...)</code> for every action button. The app-level rule and the widget-level copy both come from <code>theme.button_qss()</code>, so they cannot drift. The kinds are <code>primary</code>, <code>secondary</code>, <code>ghost</code>, <code>chip</code>, <code>cell</code> (a table action cell), <code>link</code> (a left-aligned brand row that navigates) and <code>nav-active</code>/<code>nav</code>. Never call <code>action_button_style()</code> from a view, and never hand-write a <code>QPushButton</code> rule.</td></tr>
+<tr><td>Labels wear tokens</td><td>Set the object name (<code>HeadlineLG</code>, <code>BodyMD</code>, <code>CaptionSM</code>, <code>MonoSM</code>, <code>HintSM</code>, <code>AccentSM</code>, <code>SuccessSM</code>, <code>WarningSM</code>, <code>DangerSM</code>, <code>LabelStrongSM</code>) or use the kit's label builders; never paint a label's colour or size. A label whose text changes at runtime changes its object name and re-polishes.</td></tr>
+<tr><td>No inline stylesheets in a view</td><td>A view asks the theme for a rule (<code>page_background_qss()</code>, <code>transparent_surface_qss()</code>, <code>surface_frame_qss()</code>, <code>input_qss()</code>) or the kit for a component. A literal or an f-string in a view fails <code>ui/tests/test_theme_conformance.py</code>. The one escape is an explicit <code># theme-allow:</code> marker on the line, with a reason.</td></tr>
+<tr><td>Kit-only inputs</td><td><code>make_line_edit()</code>, <code>make_search_field()</code>, <code>make_multiline_input()</code>, <code>make_plain_text_view()</code>, <code>make_list()</code>, <code>make_checkbox()</code>, <code>make_progress_bar()</code>, <code>make_combo()</code>. A view never constructs a raw <code>QLineEdit</code>, <code>QTextEdit</code>, <code>QListWidget</code>, <code>QCheckBox</code>, <code>QProgressBar</code>, <code>QComboBox</code> or <code>QPushButton</code>.</td></tr>
+<tr><td>One badge vocabulary</td><td><code>make_badge(text, label=...)</code> &mdash; the label picks the role, so two badges of the same family never drift apart. Pass explicit role colours only when the badge is a known state (PASS / FAIL / SKIP).</td></tr>
 </table>
+
+<h2>Component gallery</h2>
+<p>The gallery (<code>ui/gallery.py</code>) shows every kit component on one page: the type scale, the role swatches, the button kinds and sizes, the badge roles, the standard inputs, the containers and the data components. It is the app's visual contract in executable form &mdash; when the theme changes, the gallery changes with it.</p>
+<pre><code>python main.py --gallery          # open the gallery
+python -m ui.gallery               # the same, standalone</code></pre>
+<p>The gallery is itself a view, so it obeys the same rules as every other one: it names roles, not palette entries, and it builds components, not raw widgets. It is also the first thing to look at when a component looks wrong, because it puts that component next to every other one instead of in the middle of a page.</p>
+<div class="callout ok"><b>Adding a component?</b> Add it to the kit, then add it to the gallery. <code>tools/probes/probe_gallery.py</code> checks that the gallery still builds, still shows a component of every kind, and that every button in it wears one of the theme's button object names &mdash; the gallery may not show a button the app cannot produce.</div>
 
 <h2>Qt pitfalls</h2>
 <p>The bugs this app had were mostly Qt behaviours working exactly as documented. These are the ones that bite.</p>
@@ -132,20 +146,39 @@ make smoke         # size report + headless --help check</code></pre>
 <tr><td><code>QHeaderView.lastVisibleSection()</code> does not exist in PySide6</td><td>Calling it raises <code>AttributeError</code>.</td><td>Walk the header: <code>logicalIndex(v)</code> over the visual range, then <code>isSectionHidden(logical)</code>.</td></tr>
 <tr><td>App-level QSS does not reach a label that has its own stylesheet</td><td>The label's own sheet wins for the properties it sets; the app's token rule still supplies the rest, but a label that sets <code>font-size</code> itself has left the type scale.</td><td>Set the object name to the token and leave the stylesheet empty &mdash; that is what <code>make_*</code> builders do.</td></tr>
 <tr><td>The offscreen platform has no fonts</td><td>Every glyph renders as tofu, so a text measurement says nothing.</td><td>Verify layout by geometry and pixels (section sizes, viewport widths, corner colours), never by the rendered text.</td></tr>
+<tr><td>A <code>QThread</code> destroyed while it is still running aborts the process</td><td>Qt prints <code>QThread: Destroyed while thread is still running</code> and calls <code>abort()</code>. A worker parented to a widget dies with that widget &mdash; so quitting the app while the extensions scan is walking the installed packages killed the process, and an offscreen probe that ended with a worker live died the same way.</td><td>Register every worker with <code>ui.workers.register_worker()</code> and check <code>isInterruptionRequested()</code> between steps. Two hooks stop them: <code>QApplication.aboutToQuit</code> (the app quitting) and an <code>atexit</code> hook (the process ending without a clean quit). The registry lives in <code>ui/workers.py</code>; a new worker class must register itself.</td></tr>
 </table>
 
 <h2>UI probes</h2>
 <p>The probes in <code>tools/probes/</code> are the pixel-and-geometry checks behind the table bugs. Each one runs offscreen against a throwaway workspace, prints a PASS/FAIL line per check and exits non-zero on a failure.</p>
-<pre><code>python tools/probes/probe_queue_columns.py    # the queue's columns fill the viewport, never clip
+<pre><code>python tools/probes/run_all.py                # every probe, one command (what CI runs)
+python tools/probes/probe_queue_columns.py    # the queue's columns fill the viewport, never clip
 python tools/probes/probe_manifest_columns.py  # the manifest fits, persists the user's widths, resets
 python tools/probes/probe_headings.py          # every full-page heading wears the same token
-python tools/probes/probe_card_corner.py       # a card's bottom-right corner stays connected</code></pre>
+python tools/probes/probe_card_corner.py       # a card's bottom-right corner stays connected
+python tools/probes/probe_buttons.py          # the app sheet and the scoped sheet agree, kind by kind
+python tools/probes/probe_gallery.py           # the gallery builds and shows every kit component</code></pre>
+<div class="callout"><b>CI runs the probes.</b> The workflow has a second job, <code>probes</code>, that installs the requirements and runs <code>python tools/probes/run_all.py</code> offscreen. The runner executes every <code>probe_*.py</code> and exits non-zero when any of them failed, so the pixel-and-geometry checks are part of the build rather than a habit.</div>
 <div class="callout ok"><b>The temp-workspace rule.</b> A probe must never write to the user's <code>workspace/table_layout.json</code>: a probe that saves there leaves the real app with a layout nobody chose. <code>tools/probes/_common.py:boot()</code> points <code>cfg.app.workspace</code> at a fresh temp directory and applies the theme; every probe goes through it. A new probe must do the same, and must stub out anything that would reach the network (the manifest probe replaces <code>_on_load_metadata</code>).</div>
-<p>The same contracts live in <code>ui/tests/</code> as pytest suites, so CI runs them: <code>test_table_layout.py</code> (the controller), <code>test_table_geometry.py</code> (the queue's geometry), <code>test_page_headings.py</code> (the heading contract), <code>test_type_scale.py</code> (the type scale). The probes stay useful for the things pytest cannot see &mdash; a pixel colour at a card's corner, a screenshot to eyeball.</p>
+<p>The same contracts live in <code>ui/tests/</code> as pytest suites, so CI runs them: <code>test_table_layout.py</code> (the controller), <code>test_table_geometry.py</code> (the queue's geometry), <code>test_page_headings.py</code> (the heading contract), <code>test_type_scale.py</code> (the type scale), <code>test_contrast.py</code> (the contrast contract) and <code>test_theme_conformance.py</code> (the layering guards). The probes stay useful for the things pytest cannot see &mdash; a pixel colour at a card's corner, a screenshot to eyeball.</p>
 <pre><code>python -m pytest ui/tests -q        # the UI contracts
 python -m pytest engine/tests -q    # the engine contracts
 python -m ruff check ui/           # lint</code></pre>
 <p><code>ui/tests/conftest.py</code> provides a session-scoped <code>qapp</code> and <code>win</code> (one offscreen application, one main window). The window is shared, so every test sets its own preconditions; a test that needs the dashboard on screen calls <code>win._show_dashboard()</code> first &mdash; the queue's fit is a no-op while the table is hidden.</p>
+
+<h2>Planned: dark mode</h2>
+<div class="callout"><b>Dark mode is not implemented.</b> It is the next planned step in the UI standardisation, recorded here so the ordering is explicit. Everything below is groundwork that is already in place; the work itself has not started.</div>
+<p>The reason it is now possible at all is the role layer. A dark theme is not a second set of colours scattered through the views &mdash; it is a second role table. The palette stays a palette (<code>PRIMARY</code> is still <code>#004ccd</code>); the roles decide what each palette entry is used for, and the role table decides which palette entry each role points at.</p>
+<p>What a dark theme needs, in order:</p>
+<ol>
+<li><b>A second role table.</b> The roles become a mapping rather than a flat set of aliases: <code>TEXT_PRIMARY</code> points at the light surface's ink in one theme and the dark surface's ink in the other. A theme switch is then a table swap, not a re-skin.</li>
+<li><b>A second contrast contract.</b> The floors do not change (text 4.5:1, graphics 3:1), but the pairs do: every role pair in <code>CONTRAST_PAIRS</code> is re-declared for the dark theme and checked by the same test. A dark palette that fails legibility fails the build exactly as a light one does.</li>
+<li><b>The app stylesheet, per theme.</b> <code>theme.global_qss()</code> becomes <code>global_qss(theme)</code>, and the kit's component chrome follows. The <code>QSS</code> that hardcodes a surface (the card faces, the scrollbar lanes, the table rows) is the part that has to be re-pointed at roles first.</li>
+<li><b>The painted assets.</b> The icons are tinted from a role, which already works; the app mark and the taskbar icon are the exception and need a dark variant.</li>
+<li><b>The gallery, showing both.</b> The gallery is where a theme is reviewed, so it should be able to show the light theme and the dark theme side by side. Every contrast decision becomes a glance instead of a judgement call.</li>
+</ol>
+<p>Two things are deliberately not planned yet: a theme <i>picker</i> in Settings (the role table makes it possible, but it is a UX decision, not a refactor), and automatic switching by the operating system (the same, plus a preference to persist).</p>
+<div class="callout ok"><b>What is already done.</b> The palette/role split, the contrast contract and its test, the one button system, the conformance guards, and the gallery. None of them needs redoing for dark mode &mdash; they are the work that makes it a table edit instead of a re-skin.</div>
 
 <h2>Conventions</h2>
 <ul>
@@ -154,11 +187,15 @@ python -m ruff check ui/           # lint</code></pre>
 <li>Selectable dialogs (<code>ui/dialogs.py:show_warning/show_critical/show_info</code>) for traceback-bearing errors; log every request via <code>applog.log_response</code>; the Log page's <code>QSyntaxHighlighter</code> paints ERROR red, WARNING yellow, IPs, SQL keywords, XML tags, Java backtraces.</li>
 <li>Parent every <code>QThread</code> to its view, chain <code>deleteLater</code>, adopt before discarding (<code>MainWindow._open_dataset</code>) — never destroy a live <code>QThread</code>.</li>
 <li>Theme: no hardcoded hex outside <code>theme.py</code> (enforced by <code>ui/tests/test_theme_tokens.py</code>).</li>
+<li>Layers: palette &rarr; role &rarr; component. Only <code>theme.py</code> and <code>widgets.py</code> may name a palette entry; a view names a role and builds components (enforced by <code>ui/tests/test_theme_conformance.py</code>).</li>
+<li>Legibility: every pairing the app paints is declared in <code>theme.CONTRAST_PAIRS</code> / <code>theme.BADGE_CONTRAST_PAIRS</code> and checked (enforced by <code>ui/tests/test_contrast.py</code>).</li>
+<li>Buttons: one system. <code>make_action_button()</code> in a view, <code>theme.button_qss()</code> as the single generator, never a hand-written <code>QPushButton</code> rule.</li>
+<li>Labels: tokens, not painted styles. The object name carries the token and the theme owns the rule; a label that changes at runtime changes its token.</li>
 <li>Type scale: no raw <code>font-size: Npx</code> outside <code>theme.py</code> (enforced by <code>ui/tests/test_type_scale.py</code>); a label wears a token.</li>
 <li>Tables: one controller per header (<code>ui/table_layout.py</code>); only user gestures are persisted; a programmatic fit runs inside <code>layout.suppressed()</code>.</li>
 </ul>
 
 </div></main>
-<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-11-04, verified against code.</div></footer>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-11-05, verified against code.</div></footer>
 </body>
 </html>

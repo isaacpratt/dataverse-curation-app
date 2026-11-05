@@ -58,8 +58,67 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td>Metadata completeness</td><td><code>metadata_check.py</code> + <code>review_rules.py</code></td><td>Rule-driven completeness from versioned rulesets (<code>mcmaster-default</code> derived from the McMaster Curation Log / Depositor Checklist — source PDFs retired 2026-10-07, rules live in code — and <code>minimal</code>), per-author ORCID + author count + license/terms handlers, README/text-search content rules, <code>requirements_profiles.json</code> v2, per-Dataverse assignment.</td></tr>
 <tr><td>Local state</td><td><code>storage.py</code> (+ <code>ui/dashboard.py</code> cache helpers)</td><td>SQLite <code>state.db</code> (datasets/files/check_results/curation_actions) + JSON caches: <code>dataset_sizes.json</code>, <code>curation_labels.json</code>, <code>dashboard_cache.json</code> (instant paint + change-only refresh), <code>table_layout.json</code> (<code>restore_table_state → bool</code> locks auto-fit when a saved view applied).</td></tr>
 <tr><td>App log</td><td><code>applog.py</code></td><td>In-memory ring buffer (<code>AppLog</code>, 2000 lines), <code>log_response(method, URL, status, ms, summary)</code> with token redaction, surfaced in the Log stack page.</td></tr>
-<tr><td>GUI</td><td><code>ui/</code> (17 modules)</td><td>Dashboard (12 columns, filters, cache-first paint + <code>diff_dashboard_datasets</code>, painted-row window), dataset detail (main + sticky sidebar, assessment pushes label via <code>set_curation_label</code>), settings / review-config / about / log stack pages, workers (<code>Crawl/Download/Check/Metadata/MetadataBlocks</code>), selectable dialogs, manifest tree (<code>checks_tree.py</code>), progress ring (<code>ring.py</code> + pure <code>progress.py</code>), shared kit (<code>widgets.py</code>: <code>AppTable</code>/<code>AppTree</code>) + the layout controller (<code>table_layout.py</code>) + theme tokens (<code>theme.py</code>, incl. visible <code>QHeaderView</code> dividers).</td></tr>
+<tr><td>GUI</td><td><code>ui/</code> (17 modules)</td><td>Dashboard (12 columns, filters, cache-first paint + <code>diff_dashboard_datasets</code>, painted-row window), dataset detail (main + sticky sidebar, assessment pushes label via <code>set_curation_label</code>), settings / review-config / about / log stack pages, workers (<code>Crawl/Download/Check/Metadata/MetadataBlocks</code>), selectable dialogs, manifest tree (<code>checks_tree.py</code>), progress ring (<code>ring.py</code> + pure <code>progress.py</code>), shared kit (<code>widgets.py</code>: <code>AppTable</code>/<code>AppTree</code>, the builders, the component gallery) + the layout controller (<code>table_layout.py</code>) + the theme (<code>theme.py</code>: palette, role layer, contrast contract, visible <code>QHeaderView</code> dividers) &mdash; see the UI layering contract below.</td></tr>
 </table>
+
+<h2>UI layering contract</h2>
+<p>Every pixel the app draws comes from one place, and there are exactly three layers. A view composes them; it never paints.</p>
+<div class="flow">
+<div class="step"><b><span class="n">1</span>Palette</b><code>ui/theme.py</code> &mdash; what a colour <i>is</i>: <code>PRIMARY</code>, <code>SURFACE_CONTAINER_LOW</code>, <code>ERROR</code>. Raw values, no meaning attached.</div>
+<div class="arrow">&rarr;</div>
+<div class="step"><b><span class="n">2</span>Role</b>What a colour is <i>for</i>: <code>ACCENT_PRIMARY</code>, <code>SURFACE_CARD</code>, <code>TEXT_DANGER</code>. Plain aliases over the palette, so a theme swap is a table edit.</div>
+<div class="arrow">&rarr;</div>
+<div class="step"><b><span class="n">3</span>Component</b>The kit (<code>ui/widgets.py</code>): <code>make_action_button()</code>, <code>make_badge()</code>, <code>make_list()</code>. What the user touches.</div>
+</div>
+<div class="callout">Only <code>ui/theme.py</code> and <code>ui/widgets.py</code> may name a palette entry. A view names a role (<code>SURFACE_CARD</code>), the kit builds the component, and the theme owns the rules. The rules are checked, not reviewed: <code>ui/tests/test_theme_conformance.py</code> fails the build when a view paints for itself, names a raw colour, builds a raw input widget, or builds a button sheet by hand.</div>
+
+<h3>The role layer</h3>
+<table>
+<tr><th>Group</th><th>Roles</th><th>What it is for</th></tr>
+<tr><td>Text</td><td><code>TEXT_PRIMARY</code>, <code>TEXT_MUTED</code>, <code>TEXT_SUBTLE</code>, <code>TEXT_ON_ACCENT</code>, <code>TEXT_ON_TINT</code>, <code>TEXT_ON_SECONDARY</code>, <code>TEXT_ON_ERROR</code>, <code>TEXT_DANGER</code>, <code>TEXT_SUCCESS</code>, <code>TEXT_WARNING</code>, <code>TEXT_AMBER</code>, <code>TEXT_DISABLED</code></td><td>Copy on a known surface. Each role names the surface it is meant to sit on, which is what makes the pairing checkable.</td></tr>
+<tr><td>Surface</td><td><code>SURFACE_PAGE</code>, <code>SURFACE_CARD</code>, <code>SURFACE_TINT</code>, <code>SURFACE_SUBTLE</code>, <code>SURFACE_ROW</code>, <code>SURFACE_HEADER</code>, <code>SURFACE_RAISED</code>, <code>SURFACE_ALT</code>, <code>SURFACE_DISABLED</code></td><td>The plane a component sits on: the page behind everything, a card, a header band, a disabled control's face.</td></tr>
+<tr><td>Border</td><td><code>BORDER_SUBTLE</code>, <code>BORDER_STRONG</code>, <code>BORDER_DISABLED</code></td><td>An edge that separates (subtle), an edge that carries meaning (strong), an edge of a control that cannot be used.</td></tr>
+<tr><td>Accent</td><td><code>ACCENT_PRIMARY</code>, <code>ACCENT_PRIMARY_HOVER</code>, <code>ACCENT_PRIMARY_PRESSED</code>, <code>ACCENT_PRIMARY_DISABLED</code>, <code>ACCENT_PRIMARY_DEEP</code>, <code>ACCENT_TINT</code>, <code>ACCENT_FOCUS_TINT</code>, <code>ACCENT_SECONDARY</code>, <code>ACCENT_TERTIARY</code></td><td>The brand fill and its states. A component asks for &ldquo;the accent&rdquo;, not for &ldquo;blue&rdquo;.</td></tr>
+<tr><td>State</td><td><code>STATE_ERROR_BG</code>, <code>STATE_ERROR_SURFACE</code>, <code>STATE_ERROR_BORDER</code>, <code>STATE_ERROR_TEXT</code>, <code>STATE_ERROR_GRAPHIC</code>, <code>STATE_SUCCESS_TEXT</code>, <code>STATE_SUCCESS_GRAPHIC</code>, <code>STATE_WARNING_TEXT</code>, <code>STATE_WARNING_GRAPHIC</code></td><td>How a failure, a pass and a caution look. Text and graphic roles are separate because their contrast floors differ.</td></tr>
+</table>
+
+<h3>The contrast contract</h3>
+<p>The pairing rules the app actually paints are data, not folklore: <code>theme.CONTRAST_PAIRS</code> and <code>theme.BADGE_CONTRAST_PAIRS</code> list every foreground/background pair with the ratio it must clear. <code>ui/tests/test_contrast.py</code> reads that table, so a palette change that breaks legibility fails the build instead of shipping.</p>
+<table>
+<tr><th>Kind</th><th>Floor</th><th>Why</th></tr>
+<tr><td>text</td><td>4.5:1</td><td>WCAG 2.1 AA for normal-size text.</td></tr>
+<tr><td>graphic</td><td>3:1</td><td>WCAG 2.1 AA for icons and other non-text marks.</td></tr>
+<tr><td>disabled</td><td>3:1</td><td>Disabled controls are exempt from WCAG 1.4.3. The app holds them to 3:1 anyway, so a control that cannot be used still reads as present.</td></tr>
+</table>
+<p>The contract caught three real defects. The disabled primary button painted white on a pale blue face (2.35:1 &mdash; unreadable); it now wears the primary text role on the muted fill (7.29:1). The muted text role was 2.54:1 on a card; it is now 3.70:1. The green badge fill was 3.30:1 against white and is now 5.02:1.</p>
+
+<h3>One button system</h3>
+<p><code>theme.button_qss(kind)</code> generates the app-level object-name rule; <code>theme.button_qss(kind, selector="QPushButton")</code> generates the widget-level copy. Both come from the same function, so they cannot drift &mdash; and they had: the app-level sheet had no disabled state at all while the inline copy had one that was unreadable. The kit's <code>make_action_button()</code> carries the scoped copy, because a widget-level stylesheet replaces the application sheet for that subtree and a button face inside a styled panel does not paint otherwise.</p>
+<pre><code>from ui.widgets import make_action_button
+
+save = make_action_button("Save", kind="primary", tip="Save the draft")</code></pre>
+<p><code>tools/probes/probe_buttons.py</code> checks the two sheets agree property by property, that the app sheet carries one rule per kind, and that the disabled primary label still clears 3:1.</p>
+<table>
+<tr><th>Kind</th><th>Face</th><th>Used for</th></tr>
+<tr><td><code>primary</code></td><td>brand fill, label on the fill</td><td>The one committing action on a surface.</td></tr>
+<tr><td><code>secondary</code></td><td>outline on the card</td><td>Every other action.</td></tr>
+<tr><td><code>ghost</code></td><td>no fill until hover</td><td>Low-emphasis actions beside a stronger one.</td></tr>
+<tr><td><code>chip</code></td><td>rounded, tinted</td><td>Filters and toggles.</td></tr>
+<tr><td><code>cell</code></td><td>compact outline (0 8px padding)</td><td>A table action cell. The standard action padding (7px 14px) made two buttons need 294px against a 240px column, clipping both; the cell face is the same system at cell width.</td></tr>
+<tr><td><code>link</code></td><td>left-aligned brand text</td><td>A row that navigates to a section of the page.</td></tr>
+<tr><td><code>nav-active</code> / <code>nav</code></td><td>bar item, filled when active</td><td>The navigation bar.</td></tr>
+</table>
+<p>A label wears a token rather than a painted style: the object name carries the token (<code>HeadlineLG</code>, <code>BodyMD</code>, <code>CaptionSM</code>, <code>MonoSM</code>, <code>HintSM</code>, <code>AccentSM</code>, <code>SuccessSM</code>, <code>WarningSM</code>, <code>DangerSM</code>, <code>LabelStrongSM</code>, <code>StateMD</code>, <code>LabelMD</code>), and the theme owns the rule for each. A widget whose text changes at runtime (a connection verdict, a status pill) changes its object name and re-polishes, so it lands on the token that matches its state.</p>
+
+<h3>The guards</h3>
+<table>
+<tr><th>Guard</th><th>Rule</th><th>Test</th></tr>
+<tr><td>No inline stylesheet in a view</td><td>A view asks the theme for a rule or the kit for a component. The one escape is an explicit <code># theme-allow:</code> marker on the line.</td><td><code>test_no_view_writes_its_own_stylesheet</code></td></tr>
+<tr><td>No raw palette name in a view</td><td>Only the theme and the kit name palette entries. The palette set is derived from the theme's own source, so a new palette entry is covered the moment it is written.</td><td><code>test_no_view_names_a_raw_palette_entry</code></td></tr>
+<tr><td>No raw input widget in a view</td><td>The standard text inputs, lists, check boxes, progress bars, combos and buttons come from the kit.</td><td><code>test_no_view_builds_a_raw_input_widget</code></td></tr>
+<tr><td>No button or badge sheet in a view</td><td><code>make_action_button()</code> and <code>make_badge()</code> own those faces.</td><td><code>test_no_view_builds_a_button_or_badge_sheet_itself</code></td></tr>
+</table>
+<p>They parse the source with <code>ast</code>, so they are cheap, exact and need no window. The gallery (<code>ui/gallery.py</code>) is a view too and obeys the same rules: it is the kit on one page, built only through the kit.</p>
 
 <h2>Table component contract</h2>
 <p>Every table and tree in the app is built from <code>ui/widgets.py</code> and persists its column layout through <code>ui/table_layout.py</code>. The rules below are enforced by <code>ui/tests/test_table_layout.py</code>, <code>ui/tests/test_table_geometry.py</code> and <code>ui/tests/test_type_scale.py</code>, and checked by the probes in <code>tools/probes/</code>.</p>

@@ -20,8 +20,13 @@ from PySide6.QtWidgets import (
 )
 
 from download_manager import DownloadQuote
-from ui.theme import ERROR, WARNING_DARK, action_button_style
-from ui.widgets import AppButton
+from ui.theme import TEXT_WARNING
+from ui.widgets import (
+    make_action_button,
+    make_combo,
+    make_line_edit,
+    make_multiline_input,
+)
 
 
 def _human_size(n: int) -> str:
@@ -72,17 +77,15 @@ class DownloadApprovalDialog(QDialog):
             warn_row = QHBoxLayout()
             warn_row.setSpacing(8)
             try:
-                warn_row.addWidget(_warn_icon("triangle-alert", size=16, color=WARNING_DARK))
+                warn_row.addWidget(_warn_icon("triangle-alert", size=16, color=TEXT_WARNING))
             except Exception:
                 pass
             warn = QLabel("Large dataset — download may take a while.")
-            warn.setStyleSheet(f"color: {WARNING_DARK}; border: none; background: transparent;")
+            warn.setObjectName("WarningSM")
             warn_row.addWidget(warn, 1)
             layout.addLayout(warn_row)
         self._error.setWordWrap(True)
-        self._error.setStyleSheet(
-            f"color: {ERROR}; border: none; background: transparent;"
-        )
+        self._error.setObjectName("DangerSM")
         self._error.setVisible(False)
         layout.addWidget(self._error)
         buttons = QHBoxLayout()
@@ -91,12 +94,10 @@ class DownloadApprovalDialog(QDialog):
         # Inline faces: app-level QSS demonstrably fails to paint button
         # backgrounds inside some QDialog subtrees, which leaves the white
         # primary text on a white dialog (invisible Download button).
-        cancel_btn = AppButton("Cancel", kind="secondary")
-        cancel_btn.setStyleSheet(action_button_style(False))
+        cancel_btn = make_action_button("Cancel", kind="secondary")
         cancel_btn.clicked.connect(self.reject)
         buttons.addWidget(cancel_btn)
-        download_btn = AppButton("Download", kind="primary")
-        download_btn.setStyleSheet(action_button_style(True))
+        download_btn = make_action_button("Download", kind="primary")
         download_btn.setDefault(True)
         download_btn.clicked.connect(self.accept)
         buttons.addWidget(download_btn)
@@ -165,8 +166,7 @@ class DownloadApprovalDialog(QDialog):
     ) -> None:
         caption = QLabel(f"{label}{' *' if required else ''}")
         form.addWidget(caption)
-        edit = QLineEdit()
-        edit.setPlaceholderText("From your Dataverse account")
+        edit = make_line_edit("From your Dataverse account")
         if prefill:
             edit.setText(prefill)
         caption.setBuddy(edit)
@@ -183,22 +183,21 @@ class DownloadApprovalDialog(QDialog):
         form.addWidget(caption)
         qtype = str(question.get("type") or "text").lower()
         if qtype == "options":
-            combo = QComboBox()
-            combo.addItem("— Select —", "")
+            options = [("— Select —", "")]
             for option in question.get("optionValues") or []:
                 if isinstance(option, dict):
                     value = str(option.get("value") or "")
                     if value:
-                        combo.addItem(value, value)
+                        options.append((value, value))
+            combo = make_combo(options)
             form.addWidget(combo)
             widget: QWidget = combo
         elif qtype == "textarea":
-            text = QPlainTextEdit()
-            text.setFixedHeight(70)
+            text = make_multiline_input(plain=True, height=70)
             form.addWidget(text)
             widget = text
         else:
-            edit = QLineEdit()
+            edit = make_line_edit()
             form.addWidget(edit)
             widget = edit
         caption.setBuddy(widget)

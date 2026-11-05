@@ -29,3 +29,26 @@ jobs:
         run: python -m compileall -q engine dataverse_client.py download_manager.py storage.py config.py main.py
       - name: Headless smoke
         run: python main.py --headless --help
+
+  probes:
+    # The checks pytest cannot see: a pixel at a card's corner, a column
+    # geometry after a drag, the two button sheets agreeing, the gallery
+    # showing every kit component. Each probe prints PASS/FAIL per check
+    # and exits non-zero when one fails.
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: UI probes
+        run: python tools/probes/run_all.py

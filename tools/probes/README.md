@@ -9,11 +9,18 @@ check fails, so it drops straight into CI or a pre-commit hook.
 ## Running them
 
 ```powershell
+python tools/probes/run_all.py                # every probe, one command (what CI runs)
 python tools/probes/probe_queue_columns.py    # the queue's columns fill the viewport, never clip
 python tools/probes/probe_manifest_columns.py  # the manifest fits, persists the user's widths, resets
 python tools/probes/probe_headings.py          # every full-page heading wears the same token
 python tools/probes/probe_card_corner.py       # a card's bottom-right corner stays connected
+python tools/probes/probe_buttons.py          # the app sheet and the scoped sheet agree, kind by kind
+python tools/probes/probe_gallery.py           # the gallery builds and shows every kit component
 ```
+
+`run_all.py` runs each `probe_*.py` in turn and exits non-zero when any
+of them failed, so CI calls one command. The CI workflow has a second
+job (`probes`) that does exactly that.
 
 Run them from the repository root. They need no arguments and no
 network.

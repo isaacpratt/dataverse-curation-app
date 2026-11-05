@@ -16,34 +16,32 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import (
     QHBoxLayout,
-    QLabel,
-    QPlainTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
 import applog
 from ui.theme import (
-    AMBER_700,
-    ERROR,
-    ERROR_CONTAINER,
-    FONT_MICRO,
-    FONT_SMALL,
-    LOG_IDENTIFIER_PALETTE,
-    ON_ERROR,
-    ON_ERROR_CONTAINER,
-    ON_SECONDARY_CONTAINER,
-    ON_SURFACE,
-    ON_SURFACE_VARIANT,
-    OUTLINE_VARIANT,
-    PRIMARY,
-    PRIMARY_DEEP,
-    SUCCESS_DARK,
-    SURFACE_CONTAINER_LOW,
-    TERTIARY,
-    action_button_style,
+    ACCENT_PRIMARY,
+    ACCENT_PRIMARY_DEEP,
+    ACCENT_TERTIARY,
+    STATE_ERROR_BG,
+    STATE_ERROR_GRAPHIC,
+    STATE_ERROR_TEXT,
+    TEXT_AMBER,
+    TEXT_MUTED,
+    TEXT_ON_ERROR,
+    TEXT_SUBTLE,
+    TEXT_SUCCESS,
+    log_identifier_color,
 )
-from ui.widgets import AppButton, make_page_heading, make_search_field
+from ui.widgets import (
+    make_action_button,
+    make_badge,
+    make_page_heading,
+    make_plain_text_view,
+    make_search_field,
+)
 
 
 class LogPage(QWidget):
@@ -70,24 +68,27 @@ class LogPage(QWidget):
         # itself; reachable without hovering).
         legend = QHBoxLayout()
         legend.setSpacing(4)
-        err_chip = QLabel("ERROR")
-        err_chip.setStyleSheet(
-            f"font-size: {FONT_MICRO}px; font-weight: 700; color: {ON_ERROR}; background: {ERROR};"
-            " border: none; border-radius: 4px; padding: 1px 6px;"
+        err_chip = make_badge(
+            "ERROR",
+            background=STATE_ERROR_GRAPHIC,
+            foreground=TEXT_ON_ERROR,
+            border=STATE_ERROR_GRAPHIC,
         )
         err_chip.setToolTip("Lines containing ERROR render on the brand error fill (bold)")
         legend.addWidget(err_chip)
-        warn_chip = QLabel("WARN")
-        warn_chip.setStyleSheet(
-            f"font-size: {FONT_MICRO}px; font-weight: 700; color: {ON_ERROR_CONTAINER}; background: {ERROR_CONTAINER};"
-            " border: none; border-radius: 4px; padding: 1px 6px;"
+        warn_chip = make_badge(
+            "WARN",
+            background=STATE_ERROR_BG,
+            foreground=STATE_ERROR_TEXT,
+            border=STATE_ERROR_BG,
         )
         warn_chip.setToolTip("Lines containing WARN/WARNING render on the warm fill (bold)")
         legend.addWidget(warn_chip)
-        plain_chip = QLabel("INFO · DEBUG plain")
-        plain_chip.setStyleSheet(
-            f"font-size: {FONT_MICRO}px; color: {ON_SURFACE_VARIANT}; background: transparent;"
-            " border: none; padding: 1px 0;"
+        plain_chip = make_badge(
+            "INFO · DEBUG plain",
+            background="transparent",
+            foreground=TEXT_MUTED,
+            border="transparent",
         )
         plain_chip.setToolTip("Everything else stays unstyled; identifiers and details keep their accents")
         legend.addWidget(plain_chip)
@@ -101,39 +102,30 @@ class LogPage(QWidget):
         header.addWidget(self._search)
         # Live toggle — standard secondary button, same face/height as the
         # Clear log + Refresh buttons beside it (was a bespoke 28px/10px box).
-        self._live_btn = AppButton("Live", kind="secondary")
+        self._live_btn = make_action_button("Live", kind="secondary")
         self._live_btn.setCheckable(True)
         self._live_btn.setChecked(True)
-        self._live_btn.setStyleSheet(action_button_style(False))
         self._live_btn.setToolTip("Follow new log lines as they arrive (click to pause)")
         self._live_btn.toggled.connect(self._on_live_toggled)
         self._style_live_btn()
         header.addWidget(self._live_btn)
-        clear_btn = AppButton("Clear log", kind="secondary")
-        clear_btn.setStyleSheet(action_button_style(False))
+        clear_btn = make_action_button("Clear log", kind="secondary")
         clear_btn.setToolTip("Clear the log buffer")
         clear_btn.setAccessibleName("Clear log buffer")
         clear_btn.clicked.connect(self._clear)
         header.addWidget(clear_btn)
-        refresh_btn = AppButton("Refresh", kind="secondary")
-        refresh_btn.setStyleSheet(action_button_style(False))
+        refresh_btn = make_action_button("Refresh", kind="secondary")
         refresh_btn.setToolTip("Refresh log now")
         refresh_btn.setAccessibleName("Refresh log now")
         refresh_btn.clicked.connect(self._refresh)
         header.addWidget(refresh_btn)
         layout.addLayout(header)
 
-        self._view = QPlainTextEdit()
-        self._view.setReadOnly(True)
-        font = QFont("Consolas")
-        font.setStyleHint(QFont.Monospace)
-        self._view.setFont(font)
-        self._view.setPlaceholderText(
+        # The log body: the kit's read-only plain-text view (mono face, the
+        # standard input chrome) - the highlighter paints the tokens.
+        self._view = make_plain_text_view(
             "Nothing logged yet — run checks, download files, or refresh the "
             "dashboard and every Dataverse request will appear here."
-        )
-        self._view.setStyleSheet(
-            f"QPlainTextEdit {{ background: {SURFACE_CONTAINER_LOW}; color: {ON_SURFACE}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 6px 8px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: {FONT_SMALL}px; }}"
         )
         self._highlighter = LogHighlighter(self._view.document())
         layout.addWidget(self._view, 1)
@@ -173,8 +165,8 @@ class LogPage(QWidget):
         self._live_btn.setText("Live" if live else "Paused")
         try:
             self._live_btn.setIcon(
-                _live_icon("circle-dot", color=PRIMARY_DEEP)
-                if live else _live_icon("circle", color=ON_SECONDARY_CONTAINER)
+                _live_icon("circle-dot", color=ACCENT_PRIMARY_DEEP)
+                if live else _live_icon("circle", color=TEXT_SUBTLE)
             )
         except Exception:
             pass
@@ -245,34 +237,34 @@ class LogHighlighter(QSyntaxHighlighter):
 
         # Whole-line ERROR (uses brand error colour for foreground, light bg for legibility)
         self.error_format = QTextCharFormat()
-        self.error_format.setForeground(QColor(ON_ERROR))
-        self.error_format.setBackground(QColor(ERROR))
+        self.error_format.setForeground(QColor(TEXT_ON_ERROR))
+        self.error_format.setBackground(QColor(STATE_ERROR_GRAPHIC))
         self.error_format.setFontWeight(QFont.Bold)
 
         # WARN: dark text on the brand's warm-error-container
         self.warn_format = QTextCharFormat()
-        self.warn_format.setForeground(QColor(ON_ERROR_CONTAINER))
-        self.warn_format.setBackground(QColor(ERROR_CONTAINER))
+        self.warn_format.setForeground(QColor(STATE_ERROR_TEXT))
+        self.warn_format.setBackground(QColor(STATE_ERROR_BG))
         self.warn_format.setFontWeight(QFont.Bold)
 
         # Detail colours — derived from brand accent steps (primary/tertiary family)
         self.ip_format = QTextCharFormat()
-        self.ip_format.setForeground(QColor(PRIMARY))
+        self.ip_format.setForeground(QColor(ACCENT_PRIMARY))
         self.ip_format.setFontWeight(QFont.Bold)
 
         self.sql_format = QTextCharFormat()
-        self.sql_format.setForeground(QColor(TERTIARY))
+        self.sql_format.setForeground(QColor(ACCENT_TERTIARY))
         self.sql_format.setFontWeight(QFont.Bold)
 
         self.xml_format = QTextCharFormat()
-        self.xml_format.setForeground(QColor(ON_SURFACE_VARIANT))
+        self.xml_format.setForeground(QColor(TEXT_MUTED))
         self.xml_format.setFontItalic(True)
 
         self.java_format = QTextCharFormat()
-        self.java_format.setForeground(QColor(AMBER_700))  # amber-700 — distinct from brand
+        self.java_format.setForeground(QColor(TEXT_AMBER))  # amber-700 — distinct from brand
 
         self.string_format = QTextCharFormat()
-        self.string_format.setForeground(QColor(SUCCESS_DARK))  # green-700 — "string" feel
+        self.string_format.setForeground(QColor(TEXT_SUCCESS))  # green-700 — "string" feel
 
         # SQL keywords (case-insensitive)
         self._sql_keywords = {
@@ -285,7 +277,6 @@ class LogHighlighter(QSyntaxHighlighter):
 
         # Cache for random identifier colours (deterministic per identifier)
         self._identifier_formats: dict[str, QTextCharFormat] = {}
-        self._palette = list(LOG_IDENTIFIER_PALETTE)
 
         import re
 
@@ -299,7 +290,7 @@ class LogHighlighter(QSyntaxHighlighter):
         if ident in self._identifier_formats:
             return self._identifier_formats[ident]
         h = int.from_bytes(hashlib.md5(ident.encode("utf-8")).digest()[:4], "big")
-        color = self._palette[h % len(self._palette)]
+        color = log_identifier_color(h)
         fmt = QTextCharFormat()
         fmt.setForeground(QColor(color))
         self._identifier_formats[ident] = fmt

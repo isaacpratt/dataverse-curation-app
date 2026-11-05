@@ -19,14 +19,20 @@ import textwrap
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QPlainTextEdit,
+    QProgressBar,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
+    QTextEdit,
     QToolButton,
     QToolTip,
     QTreeView,
@@ -36,21 +42,32 @@ from PySide6.QtWidgets import (
 )
 
 from ui.theme import (
-    BACKGROUND,
+    ACCENT_PRIMARY,
+    BORDER_SUBTLE,
+    BUTTON_OBJECTS,
     FONT_BODY,
+    FONT_CAPTION,
     FONT_SMALL,
-    ON_SECONDARY_CONTAINER,
-    ON_SURFACE,
-    ON_SURFACE_VARIANT,
-    OUTLINE_VARIANT,
-    PRIMARY,
-    SURFACE_CONTAINER,
-    SURFACE_CONTAINER_HIGH,
-    SURFACE_CONTAINER_LOW,
-    SURFACE_CONTAINER_LOWEST,
+    MONO_FAMILY,
+    RADIUS_LG,
+    SURFACE_CARD,
+    SURFACE_PAGE,
+    SURFACE_RAISED,
+    SURFACE_SUBTLE,
+    SURFACE_TINT,
+    TEXT_DANGER,
+    TEXT_DISABLED,
+    TEXT_MUTED,
+    TEXT_ON_TINT,
+    TEXT_PRIMARY,
+    badge_qss,
+    button_qss,
     enable_table_copy,
     header_section_qss,
+    input_qss,
+    label_badge_style,
     scrollbar_lane_qss,
+    transparent_surface_qss,
 )
 
 __all__ = [
@@ -63,7 +80,15 @@ __all__ = [
     "tree_style",
     "make_card",
     "add_info_tip",
+    "make_action_button",
+    "make_badge",
+    "make_checkbox",
+    "make_list",
+    "make_multiline_input",
     "make_page_heading",
+    "make_split_chip",
+    "make_plain_text_view",
+    "make_progress_bar",
     "make_section_heading",
     "make_body_label",
     "make_caption_label",
@@ -81,20 +106,15 @@ __all__ = [
 # Button heights (px) by size token.
 BUTTON_HEIGHTS = {"sm": 28, "md": 36, "lg": 40}
 
-_BUTTON_OBJECTS = {
-    "primary": "PrimaryButton",
-    "secondary": "SecondaryButton",
-    "ghost": "GhostButton",
-    "chip": "FilterChip",
-    "nav-active": "NavActive",
-    "nav": "NavItem",
-}
+# The kinds and the object name each paints under live in the theme,
+# next to the rules that style them.
+_BUTTON_OBJECTS = BUTTON_OBJECTS
 
 
 class AppButton(QPushButton):
     """Standard button.
 
-    kind: primary | secondary | ghost | chip | nav-active | nav.
+    kind: primary | secondary | ghost | chip | cell | link | nav-active | nav.
     size: sm (28) | md (36) | lg (40) | None (natural height, e.g. nav bar).
     """
 
@@ -343,7 +363,12 @@ class AppTable(QTableWidget):
             self.columns_fitted.emit()
 
 
-def flush_table_style(last: bool = True) -> str:
+def flush_table_style(
+    last: bool = True,
+    *,
+    header_background: str | None = None,
+    item_padding: str | None = None,
+) -> str:
     """Edge-to-edge QTableWidget face for tables flush inside cards/panes.
 
     Qt never clips children to a parent's border-radius, so a flush table
@@ -362,24 +387,33 @@ def flush_table_style(last: bool = True) -> str:
     """
     bottom = "8px" if last else "0px"
     return (
-        "QTableWidget { background: " + SURFACE_CONTAINER_LOWEST + "; border: none; "
+        "QTableWidget { background: " + SURFACE_CARD + "; border: none; "
         "border-top-left-radius: 0px; border-top-right-radius: 0px; "
         "border-bottom-left-radius: " + bottom + "; "
         "border-bottom-right-radius: " + bottom + "; } "
         + header_section_qss(flush=True)
         + scrollbar_lane_qss("QTableWidget")
+        + (f" QHeaderView {{ background: {header_background}; }}" if header_background else "")
+        + (f" QTableWidget::item {{ padding: {item_padding}; }}" if item_padding else "")
     )
+
+
+_FRAMED_LIST_STYLE = (
+    f"QListWidget {{ background: {SURFACE_CARD}; "
+    f"border: 1px solid {SURFACE_RAISED}; border-radius: {RADIUS_LG}; "
+    f"font-size: {FONT_SMALL}px; color: {TEXT_MUTED}; }}"
+)
 
 
 def flush_list_style(last: bool = True) -> str:
     """Edge-to-edge QListWidget face, same corner contract as flush tables."""
     bottom = "8px" if last else "0px"
     return (
-        f"QListWidget {{ background: {SURFACE_CONTAINER_LOWEST}; border: none; "
+        f"QListWidget {{ background: {SURFACE_CARD}; border: none; "
         "border-top-left-radius: 0px; border-top-right-radius: 0px; "
         "border-bottom-left-radius: " + bottom + "; "
         "border-bottom-right-radius: " + bottom + "; "
-        f"font-size: {FONT_SMALL}px; color: {ON_SURFACE_VARIANT}; }}"
+        f"font-size: {FONT_SMALL}px; color: {TEXT_MUTED}; }}"
         + scrollbar_lane_qss("QListWidget")
     )
 
@@ -400,7 +434,7 @@ def tree_style(*, flush: bool = True, row_height: int | None = 30) -> str:
     frame = (
         "border: none;"
         if flush
-        else f"border: 1px solid {SURFACE_CONTAINER_HIGH}; border-radius: 8px;"
+        else f"border: 1px solid {SURFACE_RAISED}; border-radius: 8px;"
     )
     item = (
         f"QTreeView::item {{ height: {row_height}px; border: none; }} "
@@ -414,12 +448,12 @@ def tree_style(*, flush: bool = True, row_height: int | None = 30) -> str:
     except Exception:
         branch = ""
     return (
-        f"QTreeView {{ background: {SURFACE_CONTAINER_LOWEST}; {frame} "
-        f"font-size: {FONT_SMALL}px; color: {ON_SURFACE}; }} "
+        f"QTreeView {{ background: {SURFACE_CARD}; {frame} "
+        f"font-size: {FONT_SMALL}px; color: {TEXT_PRIMARY}; }} "
         + item
-        + f"QTreeView::item:hover {{ background: {SURFACE_CONTAINER_LOW}; }} "
-        f"QTreeView::item:selected {{ background: {SURFACE_CONTAINER}; "
-        f"color: {ON_SURFACE}; }} "
+        + f"QTreeView::item:hover {{ background: {SURFACE_SUBTLE}; }} "
+        f"QTreeView::item:selected {{ background: {SURFACE_TINT}; "
+        f"color: {TEXT_PRIMARY}; }} "
         + header_section_qss(flush=flush)
         + scrollbar_lane_qss("QTreeView")
         + branch
@@ -553,6 +587,279 @@ class AppTreeWidget(QTreeWidget):
         self.user_layout_changed.emit()
 
 
+def make_action_button(
+    text: str,
+    *,
+    kind: str = "secondary",
+    size: str | None = "md",
+    tip: str = "",
+    parent: QWidget | None = None,
+) -> AppButton:
+    """Build an action button carrying the scoped button sheet.
+
+    A widget-level stylesheet replaces the application sheet for that
+    subtree, so a button inside a styled panel does not paint its face
+    from the app-level rules. The scoped sheet comes from the same
+    generator as the app-level rules (``theme.button_qss``), so the two
+    cannot drift - and a view never writes button CSS itself.
+    """
+    btn = AppButton(text, kind=kind, size=size, parent=parent, tip=tip)
+    btn.setStyleSheet(button_qss(kind, selector="QPushButton"))
+    return btn
+
+
+def make_multiline_input(
+    placeholder: str = "",
+    *,
+    height: int = 120,
+    font_size: int = FONT_SMALL,
+    read_only: bool = False,
+    mono: bool = False,
+    plain: bool = False,
+    fixed: bool = True,
+    min_height: int | None = None,
+    parent: QWidget | None = None,
+) -> QTextEdit | QPlainTextEdit:
+    """Build the standard multi-line text input.
+
+    The sheet repeats the app-level input rules (a widget-level sheet
+    replaces them for that widget), from the theme's mixin.
+
+    ``plain`` builds a QPlainTextEdit (the lighter widget, for a form
+    field); ``fixed`` gives the field a fixed height, ``min_height`` only
+    a floor (for a dialog that grows with its content).
+    """
+    selector = "QPlainTextEdit" if plain else "QTextEdit"
+    field = QPlainTextEdit(parent) if plain else QTextEdit(parent)
+    field.setPlaceholderText(placeholder)
+    if min_height is not None:
+        field.setMinimumHeight(min_height)
+    elif fixed:
+        field.setFixedHeight(height)
+    field.setReadOnly(read_only)
+    field.setStyleSheet(
+        input_qss(
+            selector,
+            font_size=font_size,
+            family=MONO_FAMILY if mono else None,
+        )
+    )
+    return field
+
+
+def make_plain_text_view(
+    placeholder: str = "",
+    *,
+    font_size: int = FONT_SMALL,
+    parent: QWidget | None = None,
+) -> QPlainTextEdit:
+    """Build the standard read-only plain-text view (the log page)."""
+    view = QPlainTextEdit(parent)
+    view.setPlaceholderText(placeholder)
+    view.setReadOnly(True)
+    view.setStyleSheet(
+        input_qss("QPlainTextEdit", font_size=font_size, family=MONO_FAMILY)
+    )
+    return view
+
+
+def make_list(
+    *,
+    flush: bool = False,
+    last: bool = True,
+    parent: QWidget | None = None,
+) -> QListWidget:
+    """Build the standard list (findings checklist, dataset timeline).
+
+    flush=True paints the list edge to edge inside a card. ``last`` says
+    whether the list is the last thing in that card, so the list paints
+    the card's bottom corners.
+    """
+    lst = QListWidget(parent)
+    lst.setStyleSheet(flush_list_style(last=last) if flush else _FRAMED_LIST_STYLE)
+    return lst
+
+
+def make_checkbox(
+    text: str,
+    *,
+    checked: bool = False,
+    parent: QWidget | None = None,
+) -> QCheckBox:
+    """Build the standard check box (a response checklist item)."""
+    box = QCheckBox(text, parent)
+    box.setChecked(checked)
+    box.setStyleSheet(
+        f"QCheckBox {{ color: {TEXT_PRIMARY}; font-size: {FONT_BODY}px; spacing: 8px; }} "
+        f"QCheckBox::indicator {{ width: 16px; height: 16px; "
+        f"border: 1px solid {BORDER_SUBTLE}; border-radius: {RADIUS_LG}; "
+        f"background: {SURFACE_CARD}; }} "
+        f"QCheckBox::indicator:checked {{ background: {ACCENT_PRIMARY}; "
+        f"border: 1px solid {ACCENT_PRIMARY}; }} "
+        f"QCheckBox:disabled {{ color: {TEXT_DISABLED}; }}"
+    )
+    return box
+
+
+def make_progress_bar(
+    *,
+    height: int = 6,
+    parent: QWidget | None = None,
+) -> QProgressBar:
+    """Build the standard progress bar (a thin fill, no text)."""
+    bar = QProgressBar(parent)
+    bar.setTextVisible(False)
+    bar.setFixedHeight(height)
+    bar.setStyleSheet(
+        f"QProgressBar {{ background: {SURFACE_SUBTLE}; "
+        f"border: 1px solid {BORDER_SUBTLE}; border-radius: {RADIUS_LG}; }} "
+        f"QProgressBar::chunk {{ background: {ACCENT_PRIMARY}; "
+        f"border-radius: {RADIUS_LG}; }}"
+    )
+    return bar
+
+
+def set_badge_label(
+    badge: QLabel,
+    text: str,
+    *,
+    label: str = "",
+    background: str | None = None,
+    foreground: str | None = None,
+    border: str | None = None,
+    mono: bool = False,
+) -> QLabel:
+    """Re-dress a live badge: new text, new face, same kit rule.
+
+    A badge whose words change (a status pill that flips from
+    "Loading" to "In Review") has to change its colours with them. The
+    kit owns that, so a view never reaches into the theme for the
+    badge's colours - and the badge cannot end up wearing a different
+    face from the one the kit built.
+    """
+    badge.setText(text)
+    if background and foreground:
+        badge.setStyleSheet(
+            badge_qss(background, foreground, border or BORDER_SUBTLE)
+        )
+    else:
+        badge.setStyleSheet(label_badge_style(label or text))
+    if mono:
+        badge.setStyleSheet(
+            badge.styleSheet() + f" QLabel {{ font-family: {MONO_FAMILY}; }}"
+        )
+    return badge
+
+
+def make_badge(
+    text: str,
+    *,
+    label: str = "",
+    background: str | None = None,
+    foreground: str | None = None,
+    border: str | None = None,
+    mono: bool = False,
+    parent: QWidget | None = None,
+) -> QLabel:
+    """Build a status badge wearing the role colours of its label.
+
+    The label drives the colour (a curation label picks a role), so two
+    badges of the same family never drift apart. A caller that already
+    knows its role (a check result: PASS / FAIL / SKIP) may pass the
+    three role colours explicitly.
+    """
+    return set_badge_label(
+        QLabel("", parent),
+        text,
+        label=label,
+        background=background,
+        foreground=foreground,
+        border=border,
+        mono=mono,
+    )
+
+
+def make_split_chip(
+    label: str,
+    *,
+    active: bool = False,
+    tip: str = "",
+    on_open=None,
+    on_close=None,
+    parent: QWidget | None = None,
+) -> QFrame:
+    """Build the dataset chip: a label half joined to a close half.
+
+    The chip is two halves of one control - the label opens the dataset,
+    the x closes it - so they share a border, a radius and a height.
+    """
+    chip = QFrame(parent)
+    chip.setObjectName("DatasetChip")
+    chip.setStyleSheet(transparent_surface_qss("DatasetChip"))
+    lay = QHBoxLayout(chip)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.setSpacing(0)
+
+    open_btn = QPushButton(label)
+    open_btn.setCursor(Qt.PointingHandCursor)
+    open_btn.setToolTip(tip or label)
+    open_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+    open_btn.setFixedHeight(28)
+    open_btn.setMaximumWidth(220)
+    open_btn.setMinimumWidth(60)
+    open_btn.setStyleSheet(_split_chip_qss(active, "left"))
+    if on_open is not None:
+        open_btn.clicked.connect(on_open)
+    lay.addWidget(open_btn)
+
+    close_btn = QPushButton()
+    close_btn.setCursor(Qt.PointingHandCursor)
+    close_btn.setToolTip(f"Close {label}")
+    close_btn.setAccessibleName(f"Close {label}")
+    close_btn.setFixedSize(28, 28)
+    try:
+        from ui.icons import icon as _chip_icon
+
+        close_btn.setIcon(
+            _chip_icon("x", color=TEXT_PRIMARY if active else TEXT_ON_TINT)
+        )
+        close_btn.setIconSize(QSize(12, 12))
+    except Exception:
+        close_btn.setText("x")
+    close_btn.setStyleSheet(_split_chip_qss(active, "right"))
+    if on_close is not None:
+        close_btn.clicked.connect(on_close)
+    lay.addWidget(close_btn)
+    return chip
+
+
+def _split_chip_qss(active: bool, part: str) -> str:
+    """Build the face of one half of the dataset chip."""
+    if active:
+        bg, fg, border = SURFACE_TINT, TEXT_PRIMARY, ACCENT_PRIMARY
+    else:
+        bg, fg, border = SURFACE_CARD, TEXT_PRIMARY, BORDER_SUBTLE
+    if part == "left":
+        edges = "border-top-left-radius: 8px; border-bottom-left-radius: 8px;"
+    else:
+        edges = (
+            "border-left: none; border-top-right-radius: 8px; "
+            "border-bottom-right-radius: 8px;"
+        )
+        fg = TEXT_PRIMARY if active else TEXT_ON_TINT
+    hover = (
+        f"QPushButton:hover {{ color: {TEXT_DANGER}; "
+        f"border-color: {TEXT_DANGER}; }}"
+        if part == "right"
+        else f"QPushButton:hover {{ border-color: {ACCENT_PRIMARY}; }}"
+    )
+    return (
+        f"QPushButton {{ background: {bg}; color: {fg}; border: 1px solid {border}; "
+        f"{edges} font-size: {FONT_CAPTION}px; font-weight: 700; text-align: left; }}"
+        + hover
+    )
+
+
 def make_page_heading(title: str, subtitle: str = "") -> tuple:
     """Build the standard full-page heading (title + optional subtitle).
 
@@ -673,8 +980,8 @@ def make_card(title: str, parent: QWidget | None = None) -> tuple:
     card = QFrame(parent)
     card.setObjectName("Card")
     card.setStyleSheet(
-        f"QFrame#Card {{ background: {SURFACE_CONTAINER_LOWEST}; "
-        f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; }}"
+        f"QFrame#Card {{ background: {SURFACE_CARD}; "
+        f"border: 1px solid {BORDER_SUBTLE}; border-radius: 8px; }}"
     )
     outer = QVBoxLayout(card)
     outer.setContentsMargins(0, 0, 0, 0)
@@ -684,7 +991,7 @@ def make_card(title: str, parent: QWidget | None = None) -> tuple:
     # below this bar — inline scope beats app-level rules subtree-wide.
     top.setObjectName("CardTopBar")
     top.setStyleSheet(
-        f"QFrame#CardTopBar {{ background: {BACKGROUND}; border-bottom: 1px solid {SURFACE_CONTAINER_LOW}; "
+        f"QFrame#CardTopBar {{ background: {SURFACE_PAGE}; border-bottom: 1px solid {SURFACE_SUBTLE}; "
         "border-top-left-radius: 8px; border-top-right-radius: 8px; }"
     )
     top_lay = QHBoxLayout(top)
@@ -701,7 +1008,7 @@ def make_card(title: str, parent: QWidget | None = None) -> tuple:
     wrap = QWidget()
     wrap.setLayout(body)
     wrap.setObjectName("CardBodyWrap")
-    wrap.setStyleSheet("QWidget#CardBodyWrap { background: transparent; border: none; }")
+    wrap.setStyleSheet(transparent_surface_qss("CardBodyWrap"))
     outer.addWidget(wrap)
     return card, body, title_lbl, top_lay
 
@@ -729,7 +1036,7 @@ def add_info_tip(header_layout, *paragraphs: str, name: str = "") -> QToolButton
     btn = QToolButton()
     btn.setObjectName("InfoTip")
     try:
-        btn.setIcon(_icon("info", color=ON_SECONDARY_CONTAINER, size=14))
+        btn.setIcon(_icon("info", color=TEXT_ON_TINT, size=14))
     except Exception:
         btn.setText("i")
     btn.setIconSize(QSize(14, 14))
@@ -742,7 +1049,7 @@ def add_info_tip(header_layout, *paragraphs: str, name: str = "") -> QToolButton
     btn.setStyleSheet(
         "QToolButton#InfoTip { background: transparent; border: none; "
         "border-radius: 12px; padding: 0; }"
-        f"QToolButton#InfoTip:hover {{ background: {SURFACE_CONTAINER}; }}"
+        f"QToolButton#InfoTip:hover {{ background: {SURFACE_TINT}; }}"
     )
     btn.clicked.connect(
         lambda: QToolTip.showText(btn.mapToGlobal(btn.rect().bottomLeft()), tip, btn)
@@ -761,10 +1068,10 @@ def make_search_field(placeholder: str, parent: QWidget | None = None, *, height
     field.setMinimumWidth(min_width)
     field.setClearButtonEnabled(True)
     field.setStyleSheet(
-        f"QLineEdit#SearchField {{ background: {SURFACE_CONTAINER_LOWEST}; "
-        f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; "
+        f"QLineEdit#SearchField {{ background: {SURFACE_CARD}; "
+        f"border: 1px solid {BORDER_SUBTLE}; border-radius: 8px; "
         f"padding-left: 12px; font-size: {FONT_BODY}px; }}"
-        f"QLineEdit#SearchField:focus {{ border: 1px solid {PRIMARY}; }}"
+        f"QLineEdit#SearchField:focus {{ border: 1px solid {ACCENT_PRIMARY}; }}"
     )
     return field
 
@@ -779,10 +1086,10 @@ def make_line_edit(placeholder: str = "", parent: QWidget | None = None, *,
     if password:
         field.setEchoMode(QLineEdit.Password)
     field.setStyleSheet(
-        f"QLineEdit#SearchField {{ background: {SURFACE_CONTAINER_LOWEST}; "
-        f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; "
+        f"QLineEdit#SearchField {{ background: {SURFACE_CARD}; "
+        f"border: 1px solid {BORDER_SUBTLE}; border-radius: 8px; "
         f"padding-left: 12px; font-size: {FONT_BODY}px; }}"
-        f"QLineEdit#SearchField:focus {{ border: 1px solid {PRIMARY}; }}"
+        f"QLineEdit#SearchField:focus {{ border: 1px solid {ACCENT_PRIMARY}; }}"
     )
     return field
 

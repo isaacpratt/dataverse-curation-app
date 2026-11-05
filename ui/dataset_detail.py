@@ -13,15 +13,14 @@ from typing import Any
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
-    QProgressBar,
     QScrollArea,
     QSizePolicy,
     QTableWidgetItem,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -35,48 +34,59 @@ from ui.download_dialog import DownloadApprovalDialog
 from ui.ring import RingProgress
 from ui.table_layout import TableLayout
 from ui.theme import (
-    AMBER_700,
-    BACKGROUND,
-    ERROR,
-    ERROR_CONTAINER,
-    ERROR_OUTLINE,
-    ERROR_SURFACE,
+    ACCENT_PRIMARY,
+    BORDER_SUBTLE,
     FONT_BODY,
     FONT_CAPTION,
-    FONT_MICRO,
     FONT_SMALL,
-    ON_ERROR_CONTAINER,
-    ON_PRIMARY,
-    ON_SECONDARY_CONTAINER,
-    ON_SURFACE,
-    ON_SURFACE_VARIANT,
-    OUTLINE_VARIANT,
-    PRIMARY,
-    SUCCESS,
-    SUCCESS_DARK,
-    SURFACE_CONTAINER,
-    SURFACE_CONTAINER_HIGH,
-    SURFACE_CONTAINER_LOW,
-    SURFACE_CONTAINER_LOWEST,
-    SURFACE_VARIANT,
-    WARNING,
-    action_button_style,
+    STATE_ERROR_BG,
+    STATE_ERROR_BORDER,
+    STATE_ERROR_GRAPHIC,
+    STATE_ERROR_SURFACE,
+    STATE_ERROR_TEXT,
+    STATE_SUCCESS_GRAPHIC,
+    STATE_WARNING_GRAPHIC,
+    SURFACE_ALT,
+    SURFACE_CARD,
+    SURFACE_PAGE,
+    SURFACE_SUBTLE,
+    SURFACE_TINT,
+    TEXT_AMBER,
+    TEXT_DANGER,
+    TEXT_MUTED,
+    TEXT_ON_ACCENT,
+    TEXT_SUBTLE,
+    TEXT_SUCCESS,
+    band_qss,
+    button_qss,
     enable_list_copy,
-    label_badge_style,
+    page_background_qss,
     selectable_labels,
+    status_strip_qss,
+    surface_frame_qss,
+    transparent_surface_qss,
 )
 from ui.widgets import (
-    AppButton,
     AppTable,
     AppTree,
     add_info_tip,
     flush_list_style,
     flush_table_style,
+    make_action_button,
+    make_badge,
+    make_body_label,
+    make_caption_label,
     make_card,
     make_combo,
+    make_field_label,
+    make_list,
+    make_multiline_input,
     make_page_heading,
+    make_progress_bar,
     make_reset_columns_button,
     make_search_field,
+    make_small_body_label,
+    set_badge_label,
 )
 from ui.workers import CheckWorker, DownloadWorker, MetadataWorker
 
@@ -274,7 +284,20 @@ class DatasetDetailView(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds (tables, lists, scrollbars).
         self.setObjectName("DetailView")
-        self.setStyleSheet(f"QWidget#DetailView {{ background: {BACKGROUND}; }}")
+        # One page-background rule for the view and every page surface it
+        # hosts (top bar, stacked pages, canvases); the scroll areas that
+        # carry them come with the rule.
+        self.setStyleSheet(
+            page_background_qss(
+                "DetailView",
+                "DetailTopBar",
+                "DetailPages",
+                "DetailReviewPage",
+                "DetailResponsePage",
+                "DetailResponseInner",
+                "Canvas",
+            )
+        )
         self.setAutoFillBackground(False)
 
         root = QVBoxLayout(self)
@@ -284,7 +307,6 @@ class DatasetDetailView(QWidget):
         # ---- Fixed page header (title, actions, status) ----
         top = QWidget()
         top.setObjectName("DetailTopBar")
-        top.setStyleSheet(f"QWidget#DetailTopBar {{ background: {BACKGROUND}; border: none; }}")
         top_lay = QVBoxLayout(top)
         top_lay.setContentsMargins(24, 24, 24, 12)
         top_lay.setSpacing(8)
@@ -295,11 +317,9 @@ class DatasetDetailView(QWidget):
 
         self._pages = _QStackedWidget()
         self._pages.setObjectName("DetailPages")
-        self._pages.setStyleSheet(f"QWidget#DetailPages {{ background: {BACKGROUND}; border: none; }}")
         root.addWidget(self._pages, 1)
         review_page = QWidget()
         review_page.setObjectName("DetailReviewPage")
-        review_page.setStyleSheet(f"QWidget#DetailReviewPage {{ background: {BACKGROUND}; border: none; }}")
 
         # ---- Content row: scrolling main column + sticky sidebar ----
         content_row = QHBoxLayout(review_page)
@@ -310,7 +330,6 @@ class DatasetDetailView(QWidget):
         main_scroll = QScrollArea()
         main_scroll.setWidgetResizable(True)
         main_scroll.setFrameShape(QFrame.NoFrame)
-        main_scroll.setStyleSheet(f"QScrollArea {{ background: {BACKGROUND}; border: none; }} QWidget#Canvas {{ background: {BACKGROUND}; }}")
         self._scroll = main_scroll
         canvas = QWidget()
         canvas.setObjectName("Canvas")
@@ -330,7 +349,6 @@ class DatasetDetailView(QWidget):
         side_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         side_scroll.setMinimumWidth(280)
         side_scroll.setMaximumWidth(400)
-        side_scroll.setStyleSheet(f"QScrollArea {{ background: {BACKGROUND}; border: none; }}")
         content_row.addWidget(side_scroll, 2)
 
         # ---- Page header (ID badge + status, title, depositor, actions) ----
@@ -342,17 +360,19 @@ class DatasetDetailView(QWidget):
         badge_row.setSpacing(8)
         badge_row.setContentsMargins(0, 0, 0, 0)
         # Full persistent ID, never truncated (DOIs run well past 18 chars).
-        self._id_badge = QLabel(self._pid)
-        self._id_badge.setToolTip(self._pid)
-        self._id_badge.setStyleSheet(
-            f"QLabel {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE_VARIANT}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 3px 8px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: {FONT_SMALL}px; }}"
+        self._id_badge = make_badge(
+            self._pid,
+            background=SURFACE_TINT,
+            foreground=TEXT_MUTED,
+            border=BORDER_SUBTLE,
+            mono=True,
         )
+        self._id_badge.setToolTip(self._pid)
         badge_row.addWidget(self._id_badge)
-        self._status_pill = QLabel("Loading…")
+        self._status_pill = make_badge("Loading…", label="loading")
         self._status_pill.setObjectName("PillInReview")
-        self._status_pill.setStyleSheet(label_badge_style("loading"))
         badge_row.addWidget(self._status_pill)
-        self._curation_pill = QLabel("")
+        self._curation_pill = make_badge("", label="draft")
         self._curation_pill.setObjectName("PillDraft")
         self._curation_pill.setVisible(False)
         self._curation_pill.setToolTip("Curation label assigned in Dataverse")
@@ -367,9 +387,9 @@ class DatasetDetailView(QWidget):
 
         # Clickable Dataverse link sits next to the title
         self._header_link = QLabel()
+        self._header_link.setObjectName("BodySM")
         self._header_link.setTextFormat(Qt.RichText)
         self._header_link.setOpenExternalLinks(True)
-        self._header_link.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {ON_SURFACE_VARIANT}; border: none; background: transparent;")
         title_row = QHBoxLayout()
         title_row.setSpacing(12)
         title_row.setContentsMargins(0, 0, 0, 0)
@@ -377,8 +397,7 @@ class DatasetDetailView(QWidget):
         title_row.addWidget(self._header_link, 0, Qt.AlignBottom)
         header_left.addLayout(title_row)
 
-        self._depositor_lbl = QLabel("Loading metadata…")
-        self._depositor_lbl.setStyleSheet(f"font-size: {FONT_BODY}px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
+        self._depositor_lbl = make_body_label("Loading metadata…", wrap=False)
         header_left.addWidget(self._depositor_lbl)
         # Called last: needs _depositor_lbl/_title_lbl/_header_link to exist,
         # and cached metadata makes `meta` truthy immediately.
@@ -392,35 +411,30 @@ class DatasetDetailView(QWidget):
         actions_col.setAlignment(Qt.AlignTop)
         actions_row = QHBoxLayout()
         actions_row.setSpacing(8)
-        self._dl_btn = AppButton("Download All", kind="secondary", size="md")
+        self._dl_btn = make_action_button("Download All", kind="secondary", size="md")
         # Inline button style: app-level QSS fails to paint button faces inside
         # some main-window subtrees, so critical actions carry their own CSS.
-        self._dl_btn.setStyleSheet(action_button_style(False))
         self._dl_btn.clicked.connect(self._on_download)
         actions_row.addWidget(self._dl_btn)
         # Mid-download Cancel — hidden until a worker starts, so the action
         # row keeps its idle layout (critique P3: no silent 15-min wait).
-        self._dl_cancel_btn = AppButton("Cancel", kind="secondary", size="md")
-        self._dl_cancel_btn.setStyleSheet(action_button_style(False))
+        self._dl_cancel_btn = make_action_button("Cancel", kind="secondary", size="md")
         self._dl_cancel_btn.setToolTip("Stop the download — files already staged stay on disk")
         self._dl_cancel_btn.setAccessibleName("Cancel download")
         self._dl_cancel_btn.clicked.connect(self._on_download_cancel_click)
         self._dl_cancel_btn.setVisible(False)
         actions_row.addWidget(self._dl_cancel_btn)
-        self._history_btn = AppButton("Export reports…", kind="secondary", size="md")
-        self._history_btn.setStyleSheet(action_button_style(False))
+        self._history_btn = make_action_button("Export reports…", kind="secondary", size="md")
         self._history_btn.setToolTip("Save the DatasetReport JSON + Markdown (runs after checks complete)")
         self._history_btn.clicked.connect(self._on_export)
         actions_row.addWidget(self._history_btn)
-        self._load_meta_btn = AppButton("Load metadata", kind="secondary", size="md")
-        self._load_meta_btn.setStyleSheet(action_button_style(False))
+        self._load_meta_btn = make_action_button("Load metadata", kind="secondary", size="md")
         self._load_meta_btn.setToolTip("Fetch the dataset's file list and all metadata fields from the Dataverse (no download)")
         self._load_meta_btn.clicked.connect(self._on_load_metadata)
         actions_row.addWidget(self._load_meta_btn)
         actions_col.addLayout(actions_row)
         # Run checks as primary (always enabled; warns when nothing is staged)
-        self._check_btn = AppButton("Run checks", kind="primary", size="lg")
-        self._check_btn.setStyleSheet(action_button_style(True))
+        self._check_btn = make_action_button("Run checks", kind="primary", size="lg")
         self._check_btn.setToolTip("Download the dataset first — checks run on the staged files")
         self._check_btn.clicked.connect(self._on_run_checks)
         actions_col.addWidget(self._check_btn)
@@ -429,13 +443,14 @@ class DatasetDetailView(QWidget):
 
         # Status + progress (subtle)
         self._status = QLabel("")
-        self._status.setStyleSheet(f"font-size: {FONT_CAPTION}px; color: {ON_SURFACE_VARIANT}; background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 6px 10px;")
+        self._status.setStyleSheet(
+            status_strip_qss(SURFACE_CARD, BORDER_SUBTLE, TEXT_MUTED)
+        )
         self._status.setWordWrap(True)
         self._status.setVisible(False)
         top_lay.addWidget(self._status)
-        self._progress = QProgressBar()
+        self._progress = make_progress_bar(height=6)
         self._progress.setVisible(False)
-        self._progress.setFixedHeight(6)
         top_lay.addWidget(self._progress)
         # Circular ring for download/check progress (W-12): a determinate
         # arc beside the linear bar, since the bar is indeterminate for
@@ -449,18 +464,15 @@ class DatasetDetailView(QWidget):
         tab_row = QHBoxLayout()
         tab_row.setSpacing(8)
         tab_row.setContentsMargins(0, 4, 0, 0)
-        self._tab_review = AppButton("Review", kind="secondary", size="sm")
-        self._tab_review.setStyleSheet(action_button_style(False))
+        self._tab_review = make_action_button("Review", kind="secondary", size="sm")
         self._tab_review.clicked.connect(self._show_review_page)
         tab_row.addWidget(self._tab_review)
-        self._tab_response = AppButton("Response", kind="secondary", size="sm")
-        self._tab_response.setStyleSheet(action_button_style(False))
+        self._tab_response = make_action_button("Response", kind="secondary", size="sm")
         self._tab_response.setToolTip("Draft the review response for the dataset depositor")
         self._tab_response.clicked.connect(self._show_response_page)
         tab_row.addWidget(self._tab_response)
         tab_row.addStretch(1)
-        self._response_hint = QLabel("")
-        self._response_hint.setStyleSheet(f"font-size: {FONT_CAPTION}px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;")
+        self._response_hint = make_caption_label("", wrap=False)
         tab_row.addWidget(self._response_hint)
         top_lay.addLayout(tab_row)
 
@@ -483,7 +495,7 @@ class DatasetDetailView(QWidget):
         main_wrap.addWidget(self._version_card)
 
         # Raw metadata expandable (minimal)
-        self._raw_btn = AppButton("Show all metadata fields", kind="ghost", size=None)
+        self._raw_btn = make_action_button("Show all metadata fields", kind="ghost", size=None)
         self._raw_btn.clicked.connect(self._toggle_raw)
         try:
             from ui.icons import icon as _rw_icon
@@ -492,17 +504,19 @@ class DatasetDetailView(QWidget):
         except Exception:
             pass
         main_wrap.addWidget(self._raw_btn)
-        self._raw_view = QTextEdit()
+        self._raw_view = make_multiline_input(
+            read_only=True,
+            mono=True,
+            min_height=180,
+            font_size=FONT_CAPTION,
+        )
         self._raw_view.setVisible(False)
-        self._raw_view.setReadOnly(True)
-        self._raw_view.setMinimumHeight(180)
-        self._raw_view.setStyleSheet(f"QTextEdit {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: {FONT_CAPTION}px; }}")
         main_wrap.addWidget(self._raw_view)
 
         main_container = QWidget()
         main_container.setLayout(main_wrap)
         main_container.setObjectName("DetailMainContainer")
-        main_container.setStyleSheet("QWidget#DetailMainContainer { background: transparent; }")
+        main_container.setStyleSheet(transparent_surface_qss("DetailMainContainer"))
         canvas_lay.addWidget(main_container)
 
         # SIDEBAR (right, sticky): navigation → dataset log
@@ -522,7 +536,7 @@ class DatasetDetailView(QWidget):
         side_container = QWidget()
         side_container.setLayout(side_wrap)
         side_container.setObjectName("DetailSideContainer")
-        side_container.setStyleSheet("QWidget#DetailSideContainer { background: transparent; }")
+        side_container.setStyleSheet(transparent_surface_qss("DetailSideContainer"))
         side_scroll.setWidget(side_container)
 
         # Response page (second page per dataset) + register both pages.
@@ -629,17 +643,16 @@ class DatasetDetailView(QWidget):
         )
         # Named pre-run state, never "—" (2026-10-02 P2); refreshed to
         # "N check(s) will run"/counts/"No file checks" as data lands.
-        self._auto_summary = QLabel("Not run yet")
-        self._auto_summary.setStyleSheet(f"font-size: {FONT_CAPTION}px; font-weight: 600; color: {ON_SURFACE_VARIANT}; background: transparent; border: none;")
+        self._auto_summary = make_field_label("Not run yet")
         header_lay.addWidget(self._auto_summary)
         # Body: scroll of checks (factory body reused directly)
         self._auto_body = _body_host
         self._auto_body.setContentsMargins(16, 12, 16, 12)
         self._auto_body.setSpacing(8)
         # Placeholder
-        self._auto_placeholder = QLabel("No file list yet — load metadata to see which checks will run.")
-        self._auto_placeholder.setWordWrap(True)
-        self._auto_placeholder.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {ON_SECONDARY_CONTAINER}; border: none; background: transparent;")
+        self._auto_placeholder = make_small_body_label(
+            "No file list yet — load metadata to see which checks will run."
+        )
         self._auto_body.addWidget(self._auto_placeholder)
         return card
 
@@ -660,11 +673,8 @@ class DatasetDetailView(QWidget):
         # x/xx summary lives in the header, right next to the title (the
         # old in-body summary line was removed).
         self._meta_summary = QLabel("Not loaded yet")
+        self._meta_summary.setObjectName("StateMD")
         self._meta_summary.setTextFormat(Qt.RichText)
-        self._meta_summary.setStyleSheet(
-            f"font-size: {FONT_SMALL}px; font-weight: 600; color: {ON_SURFACE_VARIANT}; "
-            "background: transparent; border: none;"
-        )
         self._meta_summary.setToolTip("Load metadata from Dataverse to evaluate completeness")
         header_lay.insertWidget(2, self._meta_summary)
         # Complete/incomplete filter for the checklist table.
@@ -685,16 +695,9 @@ class DatasetDetailView(QWidget):
         self._profile_combo.setCurrentIndex(idx)
         self._profile_combo.currentIndexChanged.connect(self._on_profile_changed)
         header_lay.addWidget(self._profile_combo)
-        self._meta_reset_btn = AppButton("", kind="ghost", size="sm")
-        self._meta_reset_btn.setFixedSize(28, 28)
-        self._meta_reset_btn.setAccessibleName("Reset metadata table columns")
-        try:
-            from ui.icons import icon as _reset_icon
-
-            self._meta_reset_btn.setIcon(_reset_icon("rotate-ccw"))
-        except Exception:
-            self._meta_reset_btn.setText("Reset")
-        self._meta_reset_btn.setToolTip("Reset columns, sort and widths to default")
+        self._meta_reset_btn = make_reset_columns_button(
+            "metadata table", tip="Reset columns, sort and widths to default"
+        )
         self._meta_reset_btn.clicked.connect(self._on_reset_meta_view)
         header_lay.addWidget(self._meta_reset_btn)
         # Every check with its status — visible table
@@ -765,17 +768,16 @@ class DatasetDetailView(QWidget):
         body.setContentsMargins(16, 16, 16, 16)
         body.setSpacing(12)
         # Internal Notes
-        lbl = QLabel("Internal Notes (Markdown supported)")
-        lbl.setStyleSheet(f"font-size: {FONT_CAPTION}px; font-weight: 600; color: {ON_SURFACE_VARIANT}; letter-spacing: 0.5px; background: transparent; border: none;")
+        lbl = make_field_label("Internal Notes (Markdown supported)")
         body.addWidget(lbl)
-        self._notes_edit = QTextEdit()
-        self._notes_edit.setPlaceholderText("Enter findings, issues, or specific instructions for the author...")
-        self._notes_edit.setFixedHeight(110)
-        self._notes_edit.setStyleSheet(f"QTextEdit {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; font-size: {FONT_SMALL}px; }} QTextEdit:focus {{ border: 1px solid {PRIMARY}; }}")
+        self._notes_edit = make_multiline_input(
+            "Enter findings, issues, or specific instructions for the author...",
+            height=110,
+            font_size=FONT_SMALL,
+        )
         body.addWidget(self._notes_edit)
         # Decision State
-        lbl2 = QLabel("Decision State")
-        lbl2.setStyleSheet(f"font-size: {FONT_CAPTION}px; font-weight: 600; color: {ON_SURFACE_VARIANT}; letter-spacing: 0.5px; background: transparent; border: none;")
+        lbl2 = make_field_label("Decision State")
         body.addWidget(lbl2)
         self._decision_combo = make_combo(
             tip="Curation labels from this Dataverse instance "
@@ -787,18 +789,12 @@ class DatasetDetailView(QWidget):
         # actually do BEFORE the commit, and Commit stays disabled while the
         # combo sits on the non-answer placeholder (2026-10-02 P3 — the
         # widest decision point had neither).
-        self._decision_help = QLabel("")
-        self._decision_help.setWordWrap(True)
-        self._decision_help.setStyleSheet(
-            f"font-size: {FONT_CAPTION}px; color: {ON_SECONDARY_CONTAINER}; "
-            "background: transparent; border: none;"
-        )
+        self._decision_help = make_caption_label("")
         body.addWidget(self._decision_help)
         # Commit button row
         row = QHBoxLayout()
         row.addStretch()
-        commit = AppButton("Commit Decision", kind="primary", size="md")
-        commit.setStyleSheet(action_button_style(True))
+        commit = make_action_button("Commit Decision", kind="primary", size="md")
         commit.clicked.connect(self._on_commit)
         self._commit_btn = commit
         row.addWidget(commit)
@@ -822,14 +818,9 @@ class DatasetDetailView(QWidget):
             ("Auto-Checks", "_auto_card"),
             ("Version log", "_version_card"),
         ]:
-            btn = AppButton(label, kind="ghost", size=None)
-            btn.setStyleSheet(
-                f"QPushButton {{ text-align: left; padding: 7px 8px; font-size: {FONT_SMALL}px; "
-                f"color: {PRIMARY}; background: transparent; border: none; border-radius: 8px; }}"
-                f"QPushButton:hover {{ background: {SURFACE_CONTAINER}; }}"
-            )
+            btn = make_action_button(label, kind="link", size=None)
             try:
-                btn.setIcon(_nav_icon("arrow-right", color=PRIMARY))
+                btn.setIcon(_nav_icon("arrow-right", color=ACCENT_PRIMARY))
             except Exception:
                 pass
             btn.clicked.connect(lambda _c, a=attr: self._goto_section(a))
@@ -839,37 +830,30 @@ class DatasetDetailView(QWidget):
 
     # ---- Response page (second page per dataset) ---------------------------
     def _build_response_page(self) -> QWidget:
-        from PySide6.QtWidgets import QListWidget, QListWidgetItem  # noqa: F401
-
         # Scroll-wrapped so the page's own minimum stays small: the stacked
         # layout takes the max of all page minimums, and the editors below
         # (240 + 280 px) used to force the main window taller on first open.
         outer = QWidget()
         outer.setObjectName("DetailResponsePage")
-        outer.setStyleSheet(f"QWidget#DetailResponsePage {{ background: {BACKGROUND}; border: none; }}")
         outer_lay = QVBoxLayout(outer)
         outer_lay.setContentsMargins(0, 0, 0, 0)
         outer_lay.setSpacing(0)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet(f"QScrollArea {{ background: {BACKGROUND}; border: none; }}")
         outer_lay.addWidget(scroll)
         page = QWidget()
         page.setObjectName("DetailResponseInner")
-        page.setStyleSheet(f"QWidget#DetailResponseInner {{ background: {BACKGROUND}; border: none; }}")
         scroll.setWidget(page)
         lay = QVBoxLayout(page)
         lay.setContentsMargins(24, 12, 24, 24)
         lay.setSpacing(12)
 
-        intro = QLabel("Response — draft the message for the dataset depositor. The checklist on the left is pulled from the active ruleset (incomplete checks) plus failed file checks; uncheck items to drop them, then edit the draft on the right freely and copy or export it.")
-        intro.setWordWrap(True)
-        intro.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;")
+        intro = make_small_body_label("Response — draft the message for the dataset depositor. The checklist on the left is pulled from the active ruleset (incomplete checks) plus failed file checks; uncheck items to drop them, then edit the draft on the right freely and copy or export it.")
         lay.addWidget(intro)
 
         self._response_summary = QLabel("Load metadata to build the draft.")
-        self._response_summary.setStyleSheet(f"font-size: {FONT_SMALL}px; font-weight: 600; color: {ON_SURFACE_VARIANT}; background: transparent; border: none;")
+        self._response_summary.setObjectName("StateMD")
         lay.addWidget(self._response_summary)
 
         # Two columns: findings checklist (left) | editable draft (right).
@@ -883,12 +867,8 @@ class DatasetDetailView(QWidget):
             "response draft. Uncheck an item to drop it from the draft.",
             name="Findings included in the draft",
         )
-        self._response_list = QListWidget()
+        self._response_list = make_list()
         self._response_list.setMinimumHeight(240)
-        self._response_list.setStyleSheet(
-            f"QListWidget {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {SURFACE_CONTAINER_HIGH}; border-radius: 8px; "
-            f"font-size: {FONT_SMALL}px; color: {ON_SURFACE_VARIANT}; }}"
-        )
         self._response_list.itemChanged.connect(self._on_response_item_changed)
         findings_body.addWidget(self._response_list, 1)
         cols.addWidget(findings_card, 1)
@@ -900,38 +880,30 @@ class DatasetDetailView(QWidget):
             "findings (discarding edits); Export saves it as Markdown.",
             name="Draft",
         )
-        self._response_edit = QTextEdit()
-        self._response_edit.setPlaceholderText("The draft appears here once metadata is loaded…")
-        self._response_edit.setMinimumHeight(280)
-        self._response_edit.setStyleSheet(f"QTextEdit {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; font-size: {FONT_BODY}px; }} QTextEdit:focus {{ border: 1px solid {PRIMARY}; }}")
+        self._response_edit = make_multiline_input(
+            "The draft appears here once metadata is loaded…",
+            min_height=280,
+            font_size=FONT_BODY,
+        )
         self._response_edit.textChanged.connect(self._on_response_text_edited)
         draft_body.addWidget(self._response_edit, 1)
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
         # One primary, the rest ghost — equal-weight secondaries read as
         # three peers with no obvious next step (2026-10-02 minor).
-        ghost_sm = (
-            f"QPushButton {{ background: transparent; border: none; color: {ON_SURFACE}; "
-            f"border-radius: 8px; font-size: {FONT_SMALL}px; }}"
-            f"QPushButton:hover {{ background: {SURFACE_CONTAINER}; }}"
-        )
-        regen = AppButton("Regenerate", kind="ghost", size="sm")
-        regen.setStyleSheet(ghost_sm)
+        regen = make_action_button("Regenerate", kind="ghost", size="sm")
         regen.setToolTip("Rebuild the draft from the current findings (discards manual edits)")
         regen.clicked.connect(lambda: self._refresh_response(force=True))
         btn_row.addWidget(regen)
-        copy_btn = AppButton("Copy", kind="ghost", size="sm")
-        copy_btn.setStyleSheet(ghost_sm)
+        copy_btn = make_action_button("Copy", kind="ghost", size="sm")
         copy_btn.clicked.connect(self._on_response_copy)
         btn_row.addWidget(copy_btn)
-        export_btn = AppButton("Export…", kind="primary", size="sm")
-        export_btn.setStyleSheet(action_button_style(True))
+        export_btn = make_action_button("Export…", kind="primary", size="sm")
         export_btn.setToolTip("Save the draft as Markdown (logged in the Dataset log)")
         export_btn.clicked.connect(self._on_response_export)
         btn_row.addWidget(export_btn)
         btn_row.addStretch(1)
-        self._response_dirty_lbl = QLabel("")
-        self._response_dirty_lbl.setStyleSheet(f"font-size: {FONT_CAPTION}px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;")
+        self._response_dirty_lbl = make_caption_label("", wrap=False)
         btn_row.addWidget(self._response_dirty_lbl)
         draft_body.addLayout(btn_row)
         cols.addWidget(draft_card, 2)
@@ -950,8 +922,8 @@ class DatasetDetailView(QWidget):
         try:
             self._pages.setCurrentIndex(0)
             self._in_response = False
-            self._tab_review.setStyleSheet(action_button_style(True))
-            self._tab_response.setStyleSheet(action_button_style(False))
+            self._tab_review.setStyleSheet(button_qss("primary", selector="QPushButton"))
+            self._tab_response.setStyleSheet(button_qss("secondary", selector="QPushButton"))
         except Exception:
             pass
 
@@ -959,8 +931,8 @@ class DatasetDetailView(QWidget):
         try:
             self._pages.setCurrentIndex(1)
             self._in_response = True
-            self._tab_review.setStyleSheet(action_button_style(False))
-            self._tab_response.setStyleSheet(action_button_style(True))
+            self._tab_review.setStyleSheet(button_qss("secondary", selector="QPushButton"))
+            self._tab_response.setStyleSheet(button_qss("primary", selector="QPushButton"))
             self._refresh_response()
         except Exception:
             pass
@@ -1093,9 +1065,9 @@ class DatasetDetailView(QWidget):
                 label = f"[{kind}{f' — {tag}' if tag else ''}] {s.get('label','')}"
                 item = QListWidgetItem(label)
                 if level == "error":
-                    item.setForeground(QColor(ERROR))
+                    item.setForeground(QColor(TEXT_DANGER))
                 elif level == "warning":
-                    item.setForeground(QColor(AMBER_700))
+                    item.setForeground(QColor(TEXT_AMBER))
                 item.setData(Qt.UserRole, str(s.get("id") or label))
                 item.setToolTip(str(s.get("message") or "")[:400])
                 item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
@@ -1340,8 +1312,6 @@ class DatasetDetailView(QWidget):
             pass
 
     def _build_dataset_log_card(self) -> QFrame:
-        from PySide6.QtWidgets import QListWidget
-
         card, body, _title, _header = make_card("Dataset log")
         add_info_tip(
             _header,
@@ -1350,19 +1320,15 @@ class DatasetDetailView(QWidget):
             "and local curation actions.",
             name="Dataset log",
         )
-        self._dataset_log = QListWidget()
+        self._dataset_log = make_list()
         # Tall timeline: minimum keeps it readable on short screens, the
         # higher maximum + Expanding policy lets it claim the sidebar's
         # free space (the card carries stretch 1 in the sidebar layout).
         self._dataset_log.setMinimumHeight(320)
         self._dataset_log.setMaximumHeight(650)
-        self._dataset_log.setSizeAdjustPolicy(QListWidget.AdjustToContentsOnFirstShow)
+        self._dataset_log.setSizeAdjustPolicy(QAbstractItemView.AdjustToContentsOnFirstShow)
         self._dataset_log.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self._dataset_log.setWordWrap(True)
-        self._dataset_log.setStyleSheet(
-            f"QListWidget {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {SURFACE_CONTAINER_HIGH}; border-radius: 8px; "
-            f"font-size: {FONT_CAPTION}px; color: {ON_SURFACE_VARIANT}; }}"
-        )
         self._dataset_log.setToolTip(
             "Timeline for this dataset (newest first): creation, versions, "
             "record dates, review submissions, curation labels, embargoes, "
@@ -1580,19 +1546,11 @@ class DatasetDetailView(QWidget):
         _body_host.setContentsMargins(0, 0, 0, 0)
         _body_host.setSpacing(0)
         # Named not-loaded state, never "—" (2026-10-02 P2).
-        self._version_summary = QLabel("Not loaded yet")
-        self._version_summary.setStyleSheet(f"font-size: {FONT_CAPTION}px; font-weight: 600; color: {ON_SURFACE_VARIANT}; background: transparent; border: none;")
+        self._version_summary = make_field_label("Not loaded yet")
         header_lay.addWidget(self._version_summary)
-        self._version_reset_btn = AppButton("", kind="ghost", size="sm")
-        self._version_reset_btn.setFixedSize(28, 28)
-        self._version_reset_btn.setAccessibleName("Reset version log columns")
-        try:
-            from ui.icons import icon as _reset_icon2
-
-            self._version_reset_btn.setIcon(_reset_icon2("rotate-ccw"))
-        except Exception:
-            self._version_reset_btn.setText("Reset")
-        self._version_reset_btn.setToolTip("Reset columns, sort and widths to default")
+        self._version_reset_btn = make_reset_columns_button(
+            "version log", tip="Reset columns, sort and widths to default"
+        )
         self._version_reset_btn.clicked.connect(self._on_reset_version_view)
         header_lay.addWidget(self._version_reset_btn)
         self._version_body = _body_host
@@ -1602,9 +1560,7 @@ class DatasetDetailView(QWidget):
         wrap = QWidget()
         lay = QVBoxLayout(wrap)
         lay.setContentsMargins(16, 12, 16, 12)
-        ph = QLabel(text)
-        ph.setWordWrap(True)
-        ph.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;")
+        ph = make_small_body_label(text)
         lay.addWidget(ph)
         self._version_body.addWidget(wrap)
 
@@ -1615,7 +1571,7 @@ class DatasetDetailView(QWidget):
 
     def _populate_version_diff(self) -> None:
         """Render the version list plus the published→draft diff."""
-        from PySide6.QtWidgets import QListWidget, QListWidgetItem
+        from PySide6.QtWidgets import QListWidgetItem
 
         while self._version_body.count():
             item = self._version_body.takeAt(0)
@@ -1646,16 +1602,16 @@ class DatasetDetailView(QWidget):
             state = (v.get("state", "") or "").upper()
             ct, rt = v.get("create_time", ""), v.get("release_time", "")
             if state == "DRAFT":
-                return f"Draft — created {ct[:10] or 'date unknown'} (current)", PRIMARY
+                return f"Draft — created {ct[:10] or 'date unknown'} (current)", ACCENT_PRIMARY
             if state == "DEACCESSIONED":
-                return f"v{num} — deaccessioned {(rt or ct)[:10] or 'date unknown'}", ERROR
+                return f"v{num} — deaccessioned {(rt or ct)[:10] or 'date unknown'}", TEXT_DANGER
             if rt:
-                return f"v{num} — published {rt[:10]}", SUCCESS_DARK
-            return f"v{num} — created {ct[:10] or 'date unknown'}", ON_SECONDARY_CONTAINER
+                return f"v{num} — published {rt[:10]}", TEXT_SUCCESS
+            return f"v{num} — created {ct[:10] or 'date unknown'}", TEXT_SUBTLE
 
         # Version list first (current + all previous)
         if versions:
-            vlist = QListWidget()
+            vlist = make_list(flush=True, last=True)
             vlist.setMaximumHeight(min(150, 30 + 26 * len(versions)))
             enable_list_copy(vlist)
             for v in versions:
@@ -1674,8 +1630,8 @@ class DatasetDetailView(QWidget):
             # Metadata loaded but no version history came back: first version.
             initial = QListWidgetItem("Initial draft — no previous versions")
             initial.setToolTip("This looks like the dataset's first version")
-            initial.setForeground(QColor(PRIMARY))
-            vlist = QListWidget()
+            initial.setForeground(QColor(ACCENT_PRIMARY))
+            vlist = make_list(flush=True, last=True)
             vlist.setMaximumHeight(56)
             vlist.addItem(initial)
             self._version_body.addWidget(vlist)
@@ -1714,7 +1670,7 @@ class DatasetDetailView(QWidget):
                 o_item.setToolTip(old_v or "—")
                 n_item = QTableWidgetItem(self._short(new_v))
                 n_item.setToolTip(new_v or "—")
-                n_item.setForeground(QColor(PRIMARY))
+                n_item.setForeground(QColor(ACCENT_PRIMARY))
                 table.setItem(r, 0, f_item)
                 table.setItem(r, 1, o_item)
                 table.setItem(r, 2, n_item)
@@ -1723,8 +1679,6 @@ class DatasetDetailView(QWidget):
             self._version_body.addWidget(table)
             flush_widgets.append((table, "table"))
         # File changes
-        from PySide6.QtWidgets import QListWidget, QListWidgetItem
-
         def _fname(f: dict) -> str:
             path, name = (f.get("path") or "").strip(), (f.get("name") or "").strip()
             if path and name:
@@ -1733,32 +1687,32 @@ class DatasetDetailView(QWidget):
 
         from ui.icons import icon as _ver_icon
 
-        entries: list[tuple[str, str, str]] = []
+        entries: list[tuple[str, str, str, str]] = []
         for f in diff.get("files_added") or []:
-            entries.append((f"{_fname(f)} — added", SUCCESS_DARK, "plus"))
+            entries.append((f"{_fname(f)} — added", TEXT_SUCCESS, STATE_SUCCESS_GRAPHIC, "plus"))
         for f in diff.get("files_removed") or []:
-            entries.append((f"{_fname(f)} — removed", ERROR, "minus"))
+            entries.append((f"{_fname(f)} — removed", TEXT_DANGER, STATE_ERROR_GRAPHIC, "minus"))
         for pair in diff.get("files_replaced") or []:
             old_f, new_f = pair.get("old") or {}, pair.get("new") or {}
             entries.append(
                 (f"{_fname(old_f)} → {_fname(new_f)} — replaced",
-                 AMBER_700, "arrow-right-left")
+                 TEXT_AMBER, STATE_WARNING_GRAPHIC, "arrow-right-left")
             )
         for fc in diff.get("file_changes") or []:
             for ch in fc.get("changes") or []:
                 entries.append(
                     (f"{fc.get('file', '')}: {ch.get('field', '')} changed",
-                     PRIMARY, "pencil")
+                     ACCENT_PRIMARY, ACCENT_PRIMARY, "pencil")
                 )
         if entries:
-            flist = QListWidget()
+            flist = make_list(flush=True, last=True)
             flist.setMaximumHeight(min(140, 28 + 24 * len(entries)))
-            for text, color, icon_name in entries:
+            for text, color, icon_color, icon_name in entries:
                 item = QListWidgetItem(text)
                 item.setToolTip(text)
                 item.setForeground(QColor(color))
                 try:
-                    item.setIcon(_ver_icon(icon_name, color=color))
+                    item.setIcon(_ver_icon(icon_name, color=icon_color))
                 except Exception:
                     pass
                 flist.addItem(item)
@@ -1778,14 +1732,12 @@ class DatasetDetailView(QWidget):
         )
         _body_unused.setContentsMargins(0, 0, 0, 0)
         _body_unused.setSpacing(0)
-        self._open_folder_btn = AppButton("Open folder", kind="secondary", size="md")
-        self._open_folder_btn.setStyleSheet(action_button_style(False))
+        self._open_folder_btn = make_action_button("Open folder", kind="secondary", size="md")
         self._open_folder_btn.setToolTip("Open the staged download folder in the file explorer")
         self._open_folder_btn.clicked.connect(self._on_open_folder)
         header_lay.addWidget(self._open_folder_btn)
         # Expand/Collapse all toggle for the folder > file > check tree.
-        self._expand_btn = AppButton("Expand all", kind="secondary", size="md")
-        self._expand_btn.setStyleSheet(action_button_style(False))
+        self._expand_btn = make_action_button("Expand all", kind="secondary", size="md")
         self._expand_btn.setToolTip("Expand or collapse every folder and file in the manifest")
         self._expand_btn.clicked.connect(self._on_toggle_expand_all)
         header_lay.addWidget(self._expand_btn)
@@ -1833,15 +1785,13 @@ class DatasetDetailView(QWidget):
 
         # Footer: showing X of Y + total size
         footer = QFrame()
-        footer.setStyleSheet(f"QFrame {{ background: {BACKGROUND}; border-top: 1px solid {SURFACE_CONTAINER_LOW}; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }}")
+        footer.setStyleSheet(band_qss(SURFACE_PAGE, SURFACE_SUBTLE, edge="top"))
         fl = QHBoxLayout(footer)
         fl.setContentsMargins(16, 10, 16, 10)
-        self._file_footer_left = QLabel("No files yet")
-        self._file_footer_left.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {ON_SURFACE_VARIANT}; background: transparent; border: none;")
+        self._file_footer_left = make_small_body_label("No files yet", wrap=False)
         fl.addWidget(self._file_footer_left)
         fl.addStretch()
-        self._file_footer_right = QLabel("")
-        self._file_footer_right.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {ON_SURFACE_VARIANT}; background: transparent; border: none;")
+        self._file_footer_right = make_small_body_label("", wrap=False)
         fl.addWidget(self._file_footer_right)
         lay.addWidget(footer)
 
@@ -1855,6 +1805,16 @@ class DatasetDetailView(QWidget):
         self._status.setText(msg)
         self._status.setVisible(bool(msg))
 
+    @staticmethod
+    def _dress_pill(pill: QLabel, text: str, label: str) -> None:
+        """Re-dress a status pill in the badge face its label wears.
+
+        The kit builds the badge; when the words change, the face comes
+        from the kit too - so the pill cannot end up wearing a
+        different face from the one it started with.
+        """
+        set_badge_label(pill, text, label=label)
+
     def _update_header_link(self, metadata: dict | None = None) -> None:
         # Defensive: runs mid-__init__ before all header widgets exist, and
         # again on every metadata load (cached metadata makes `meta` truthy
@@ -1865,12 +1825,11 @@ class DatasetDetailView(QWidget):
             latest = meta.get("latestVersion") or {}
             version_state = (latest.get("versionState") or "").upper()
         # Badge (words match the dashboard status column; color is per
-        # label via label_badge_style, DOI-badge chrome)
+        # label via the kit's badge face, DOI-badge chrome)
         _pill_name, pill_text = _pill_state(version_state, getattr(self, "_in_review", False))
         status_pill = getattr(self, "_status_pill", None)
         if status_pill is not None:
-            status_pill.setText(pill_text.upper())
-            status_pill.setStyleSheet(label_badge_style(pill_text))
+            self._dress_pill(status_pill, pill_text.upper(), pill_text)
         # Contact/date
         if meta and isinstance(meta, dict):
             latest = meta.get("latestVersion") or {}
@@ -1908,7 +1867,7 @@ class DatasetDetailView(QWidget):
         url = f"{self._config.dataverse.base_url}/dataset.xhtml?persistentId={self._pid}" + ("&version=DRAFT" if version_state == "DRAFT" else "")
         header_link = getattr(self, "_header_link", None)
         if header_link is not None:
-            header_link.setText(f"<a href='{url}' style='color:{PRIMARY}; text-decoration:none;'>Open in Dataverse{' — DRAFT' if version_state=='DRAFT' else ''} ↗</a>")
+            header_link.setText(f"<a href='{url}' style='color:{ACCENT_PRIMARY}; text-decoration:none;'>Open in Dataverse{' — DRAFT' if version_state=='DRAFT' else ''} ↗</a>")
         title_lbl = getattr(self, "_title_lbl", None)
         if title_lbl is not None:
             title_lbl.setText(self._title)
@@ -1927,9 +1886,8 @@ class DatasetDetailView(QWidget):
             label = ""
         try:
             if label:
-                self._curation_pill.setText(label.upper())
+                self._dress_pill(self._curation_pill, label.upper(), label)
                 self._curation_pill.setToolTip(tip)
-                self._curation_pill.setStyleSheet(label_badge_style(label))
                 self._curation_pill.setVisible(True)
             else:
                 self._curation_pill.setVisible(False)
@@ -1962,14 +1920,12 @@ class DatasetDetailView(QWidget):
                     w.deleteLater()
             if not files:
                 if self._inventory is not None and len(self._inventory) == 0 and self._metadata is not None:
-                    ph = QLabel("This dataset contains no files in Dataverse — file checks do not apply. Metadata checks above still apply.")
+                    ph = make_small_body_label("This dataset contains no files in Dataverse — file checks do not apply. Metadata checks above still apply.")
                     # A measured zero, not a placeholder — name it (2026-10-02 P2).
                     self._auto_summary.setText("No file checks")
                 else:
-                    ph = QLabel("No file list yet — load metadata to see which checks will run.")
+                    ph = make_small_body_label("No file list yet — load metadata to see which checks will run.")
                     self._auto_summary.setText("Not run yet")
-                ph.setWordWrap(True)
-                ph.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;")
                 self._auto_body.addWidget(ph)
                 return
             # Count will_run
@@ -2027,16 +1983,14 @@ class DatasetDetailView(QWidget):
                     and not any(f.checks for f in self._report.files)
                 ):
                     ok = QLabel("All checks passed — no findings.")
-                    ok.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {PRIMARY}; background: transparent; border: none;")
+                    ok.setObjectName("AccentSM")
                     self._auto_body.addWidget(ok)
             else:
                 # Only checks that will actually run for this dataset's
                 # files (checks with no matching files are not listed).
                 self._auto_summary.setText(f"{will} check(s) will run")
                 if not will:
-                    ph = QLabel("No automated checks match the files in this dataset.")
-                    ph.setWordWrap(True)
-                    ph.setStyleSheet(f"font-size: {FONT_SMALL}px; color: {ON_SECONDARY_CONTAINER}; background: transparent; border: none;")
+                    ph = make_small_body_label("No automated checks match the files in this dataset.")
                     self._auto_body.addWidget(ph)
                 for p in planned:
                     if not p.get("will_run"):
@@ -2082,38 +2036,38 @@ class DatasetDetailView(QWidget):
             or "not executed" in desc.lower()
             or "Missing" in (badge or desc)
         ):
-            frame.setStyleSheet(f"QFrame {{ background: {SURFACE_CONTAINER_LOW}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; }}")
-            icon_name, icon_color = "circle-dashed", ON_SURFACE_VARIANT
+            frame.setStyleSheet(surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE))
+            icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = "SKIPPED" if "SKIP" in (badge or "").upper() or "skipped" in desc.lower() else (badge or "WARN")
-            badge_bg = SURFACE_VARIANT
-            badge_fg = ON_SURFACE_VARIANT
+            badge_bg = SURFACE_ALT
+            badge_fg = TEXT_MUTED
         elif not passed and level in ("error", "warning"):
-            frame.setStyleSheet(f"QFrame {{ background: {ERROR_CONTAINER}; border: 1px solid {ERROR_OUTLINE}; border-radius: 8px; }}")
+            frame.setStyleSheet(surface_frame_qss(STATE_ERROR_BG, STATE_ERROR_BORDER))
             icon_name, icon_color = (
-                ("octagon-x", ERROR) if level == "error"
-                else ("octagon-alert", WARNING)
+                ("octagon-x", STATE_ERROR_GRAPHIC) if level == "error"
+                else ("octagon-alert", STATE_WARNING_GRAPHIC)
             )
             badge_text = badge or "FAIL"
-            badge_bg = ERROR_CONTAINER
-            badge_fg = ON_ERROR_CONTAINER
+            badge_bg = STATE_ERROR_BG
+            badge_fg = STATE_ERROR_TEXT
         elif passed and level == "warning" and "Missing" in (badge or desc):
-            frame.setStyleSheet(f"QFrame {{ background: {ERROR_SURFACE}; border: 1px solid {ERROR_OUTLINE}; border-radius: 8px; }}")
-            icon_name, icon_color = "octagon-alert", WARNING
+            frame.setStyleSheet(surface_frame_qss(STATE_ERROR_SURFACE, STATE_ERROR_BORDER))
+            icon_name, icon_color = "octagon-alert", STATE_WARNING_GRAPHIC
             badge_text = badge or "WARN"
-            badge_bg = ERROR_CONTAINER
-            badge_fg = ON_ERROR_CONTAINER
+            badge_bg = STATE_ERROR_BG
+            badge_fg = STATE_ERROR_TEXT
         elif passed:
-            frame.setStyleSheet(f"QFrame {{ background: {SURFACE_CONTAINER}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; }}")
-            icon_name, icon_color = "check", PRIMARY
+            frame.setStyleSheet(surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE))
+            icon_name, icon_color = "check", ACCENT_PRIMARY
             badge_text = badge or "PASS"
-            badge_bg = PRIMARY
-            badge_fg = ON_PRIMARY
+            badge_bg = ACCENT_PRIMARY
+            badge_fg = TEXT_ON_ACCENT
         else:
-            frame.setStyleSheet(f"QFrame {{ background: {SURFACE_CONTAINER}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; }}")
-            icon_name, icon_color = "minus", ON_SURFACE_VARIANT
+            frame.setStyleSheet(surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE))
+            icon_name, icon_color = "minus", TEXT_MUTED
             badge_text = badge or "—"
-            badge_bg = SURFACE_VARIANT
-            badge_fg = ON_SURFACE_VARIANT
+            badge_bg = SURFACE_ALT
+            badge_fg = TEXT_MUTED
         lay = QHBoxLayout(frame)
         lay.setContentsMargins(10, 8, 10, 8)
         lay.setSpacing(8)
@@ -2121,18 +2075,20 @@ class DatasetDetailView(QWidget):
         txt = QVBoxLayout()
         txt.setSpacing(1)
         cid = QLabel(check_id)
-        cid.setStyleSheet(f"font-size: {FONT_CAPTION}px; font-weight: 600; color: {ON_SURFACE}; background: transparent; border: none;")
+        cid.setObjectName("LabelStrongSM")
         txt.addWidget(cid)
-        d = QLabel(desc)
-        d.setWordWrap(True)
-        d.setStyleSheet(f"font-size: {FONT_CAPTION}px; color: {ON_SURFACE_VARIANT}; background: transparent; border: none;")
+        d = make_caption_label(desc)
         txt.addWidget(d)
         lay.addLayout(txt, 1)
-        badge_lbl = QLabel(badge_text)
+        badge_lbl = make_badge(
+            badge_text,
+            background=badge_bg,
+            foreground=badge_fg,
+            border=BORDER_SUBTLE,
+        )
         badge_lbl.setAlignment(Qt.AlignCenter)
         badge_lbl.setFixedHeight(20)
         badge_lbl.setMinimumWidth(56)
-        badge_lbl.setStyleSheet(f"QLabel {{ background: {badge_bg}; color: {badge_fg}; border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; font-size: {FONT_MICRO}px; font-weight: 700; padding: 0 6px; }}")
         lay.addWidget(badge_lbl)
         return frame
 
@@ -2710,7 +2666,7 @@ class DatasetDetailView(QWidget):
             ]
         complete = sum(1 for r in results if r["status"] == "complete")
         total = len(results)
-        color = SUCCESS_DARK if complete == total else AMBER_700 if complete > total / 2 else ERROR
+        color = TEXT_SUCCESS if complete == total else TEXT_AMBER if complete > total / 2 else TEXT_DANGER
         # Header carries just the count (profile name is already visible in
         # the header combo; the old in-body summary line was removed).
         self._meta_summary.setText(
@@ -2754,12 +2710,12 @@ class DatasetDetailView(QWidget):
                 )
                 status_item = QTableWidgetItem("Complete" if ok else "Incomplete")
                 status_item.setToolTip(r["requirement"])
-                status_item.setForeground(QColor(SUCCESS_DARK if ok else ERROR))
+                status_item.setForeground(QColor(TEXT_SUCCESS if ok else TEXT_DANGER))
                 status_item.setData(Qt.UserRole, bool(ok))
                 try:
                     status_item.setIcon(
-                        _icon("check", color=SUCCESS)
-                        if ok else _icon("x", color=ERROR)
+                        _icon("check", color=STATE_SUCCESS_GRAPHIC)
+                        if ok else _icon("x", color=STATE_ERROR_GRAPHIC)
                     )
                 except Exception:
                     pass

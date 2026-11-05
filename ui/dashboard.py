@@ -27,19 +27,23 @@ from config import Config
 from ui.ring import RingProgress
 from ui.table_layout import TableLayout
 from ui.theme import (
-    BACKGROUND,
-    ERROR,
-    OUTLINE_VARIANT,
-    PRIMARY,
-    SURFACE_CONTAINER,
-    SURFACE_CONTAINER_LOWEST,
-    TERTIARY,
+    ACCENT_PRIMARY,
+    ACCENT_TERTIARY,
+    BORDER_SUBTLE,
+    STATE_ERROR_GRAPHIC,
+    SURFACE_CARD,
+    SURFACE_HEADER,
+    SURFACE_TINT,
+    band_qss,
+    page_background_qss,
     selectable_labels,
+    surface_frame_qss,
+    transparent_surface_qss,
 )
 from ui.widgets import (
-    AppButton,
     AppTable,
     flush_table_style,
+    make_action_button,
     make_caption_label,
     make_card_title,
     make_combo,
@@ -561,7 +565,7 @@ class DashboardView(QWidget):
         # Scoped to self: a bare `background` rule acts subtree-wide and
         # would override app-level backgrounds (e.g. the queue table face).
         self.setObjectName("DashboardView")
-        self.setStyleSheet(f"QWidget#DashboardView {{ background: {BACKGROUND}; }}")
+        self.setStyleSheet(page_background_qss("DashboardView"))
 
         # ---- Metrics cards (values always from real data; 0 when empty) ----
         self._metrics_row = QHBoxLayout()
@@ -588,8 +592,7 @@ class DashboardView(QWidget):
         queue_card = QFrame()
         queue_card.setObjectName("Card")
         queue_card.setStyleSheet(
-            f"QFrame#Card {{ background: {SURFACE_CONTAINER_LOWEST}; "
-            f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; }}"
+            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card")
         )
         queue_layout = QVBoxLayout(queue_card)
         queue_layout.setContentsMargins(0, 0, 0, 0)
@@ -598,8 +601,7 @@ class DashboardView(QWidget):
         header = QFrame()
         header.setObjectName("QueueHeaderBar")
         header.setStyleSheet(
-            f"QFrame#QueueHeaderBar {{ background: {SURFACE_CONTAINER}; border-bottom: 1px solid {OUTLINE_VARIANT}; "
-            "border-top-left-radius: 8px; border-top-right-radius: 8px; }}"
+            band_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#QueueHeaderBar")
         )
         header.setFixedHeight(64)
         hdr_layout = QHBoxLayout(header)
@@ -611,7 +613,7 @@ class DashboardView(QWidget):
 
         search_wrap = QWidget()
         search_wrap.setObjectName("QueueSearchWrap")
-        search_wrap.setStyleSheet("QWidget#QueueSearchWrap { background: transparent; }")
+        search_wrap.setStyleSheet(transparent_surface_qss("QueueSearchWrap"))
         search_layout = QHBoxLayout(search_wrap)
         search_layout.setContentsMargins(0, 0, 0, 0)
         search_layout.setSpacing(0)
@@ -650,11 +652,11 @@ class DashboardView(QWidget):
         self._collection_filter.currentTextChanged.connect(self._apply_filter)
         hdr_layout.addWidget(self._collection_filter)
 
-        self._columns_btn = AppButton("Columns…", kind="chip")
+        self._columns_btn = make_action_button("Columns…", kind="chip")
         self._columns_btn.clicked.connect(self._show_columns_menu)
         hdr_layout.addWidget(self._columns_btn)
 
-        refresh = AppButton("Refresh", kind="secondary")
+        refresh = make_action_button("Refresh", kind="secondary")
         refresh.clicked.connect(self.reload)
         self._refresh_btn = refresh
         hdr_layout.addWidget(refresh)
@@ -718,7 +720,7 @@ class DashboardView(QWidget):
         # datasets arrive.
         queue_stack = QWidget()
         queue_stack.setObjectName("QueueStack")
-        queue_stack.setStyleSheet("QWidget#QueueStack { background: transparent; }")
+        queue_stack.setStyleSheet(transparent_surface_qss("QueueStack"))
         stack_lay = QGridLayout(queue_stack)
         stack_lay.setContentsMargins(0, 0, 0, 0)
         stack_lay.setSpacing(0)
@@ -738,8 +740,7 @@ class DashboardView(QWidget):
         pill = QFrame()
         pill.setObjectName("StatusPill")
         pill.setStyleSheet(
-            f"QFrame#StatusPill {{ background: {SURFACE_CONTAINER_LOWEST}; "
-            f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; }}"
+            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#StatusPill")
         )
         pill_lay = QHBoxLayout(pill)
         pill_lay.setContentsMargins(14, 6, 14, 6)
@@ -792,7 +793,7 @@ class DashboardView(QWidget):
                 mark.setToolTip("Dataverse Docent")
         except Exception:
             pass
-        mark.setStyleSheet("border: none; background: transparent;")
+        mark.setStyleSheet(transparent_surface_qss("DocentMark"))
         foot.addWidget(mark, 0, Qt.AlignVCenter)
 
         outer.addLayout(foot)
@@ -1139,14 +1140,18 @@ class DashboardView(QWidget):
         card = QFrame()
         card.setObjectName("EmptyStateCard")
         card.setStyleSheet(
-            f"QFrame#EmptyStateCard {{ background: {SURFACE_CONTAINER_LOWEST}; "
-            f"border: 1px dashed {OUTLINE_VARIANT}; border-radius: 8px; }}"
+            surface_frame_qss(
+                SURFACE_CARD,
+                BORDER_SUBTLE,
+                selector="QFrame#EmptyStateCard",
+                border_style="dashed",
+            )
         )
         inner = QVBoxLayout(card)
         inner.setContentsMargins(32, 32, 32, 28)
         inner.setSpacing(8)
 
-        icon = _empty_icon("database", size=28, color=PRIMARY)
+        icon = _empty_icon("database", size=28, color=ACCENT_PRIMARY)
         head_wrap = QHBoxLayout()
         head_wrap.setSpacing(10)
         head_wrap.addWidget(icon, 0, Qt.AlignVCenter)
@@ -1163,7 +1168,7 @@ class DashboardView(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
         btn_row.addStretch(1)
-        settings_btn = AppButton("Open Settings", kind="primary", size="md")
+        settings_btn = make_action_button("Open Settings", kind="primary", size="md")
         settings_btn.clicked.connect(self.settingsRequested)
         btn_row.addWidget(settings_btn)
         inner.addLayout(btn_row)
@@ -1219,10 +1224,13 @@ class DashboardView(QWidget):
         card = QFrame()
         card.setObjectName("MetricCard")
         card.setProperty("accent", accent)
-        border_color = {"tertiary": TERTIARY, "primary": PRIMARY, "error": ERROR}[accent]
+        border_color = {
+            "tertiary": ACCENT_TERTIARY,
+            "primary": ACCENT_PRIMARY,
+            "error": STATE_ERROR_GRAPHIC,
+        }[accent]
         card.setStyleSheet(
-            f"QFrame#MetricCard {{ background: {SURFACE_CONTAINER_LOWEST}; border: 1px solid {OUTLINE_VARIANT}; "
-            "border-radius: 8px; }}"
+            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#MetricCard")
         )
         card.setMinimumHeight(52)
         card.setToolTip(sub)
@@ -1269,8 +1277,7 @@ class DashboardView(QWidget):
         # QHeaderView background fills the slack right of the last section
         # (the vertical scrollbar's lane) so no page colour shows through.
         self._queue_header.setStyleSheet(
-            flush_table_style()
-            + f"QHeaderView {{ background: {SURFACE_CONTAINER}; }}"
+            flush_table_style(header_background=SURFACE_HEADER)
         )
         self._sync_header_from_table()
         self._queue_header.sectionResized.connect(self._on_display_header_resized)

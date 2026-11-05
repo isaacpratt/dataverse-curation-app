@@ -35,8 +35,11 @@ dataverse-curation-app/
 │   ├── runner.py         # run_report / list_planned_checks
 │   └── tests/            # pytest suite (200 tests; see CI)
 ├── ui/                   # PySide6 views (main window, dashboard, detail, settings/about panes, log page, workers, dialogs, theme, widgets incl. AppTable content-fit, progress ring)
+│   ├── theme.py          # palette -> semantic roles -> contrast contract -> one button system
+│   ├── widgets.py        # the component kit (every view builds its controls through it)
+│   ├── gallery.py        # the component gallery: every kit component on one page
 │   └── table_layout.py   # one layout controller per table header (persists user gestures only)
-├── tools/probes/         # offscreen UI probes (queue columns, manifest columns, page headings, card corner)
+├── tools/probes/         # offscreen UI probes (queue columns, manifest columns, page headings, card corner, buttons, gallery)
 ├── dataverse_client.py   # Native/Search API client (total-driven paginated search + pooled inventory enrichment, versions/compare/timestamps/notifications/curation labels)
 ├── download_manager.py   # approval-gated downloads, originals, skip-if-staged, verify (ok/problems/warnings)
 ├── metadata_check.py     # citation-block completeness (McMaster / Minimal profiles)
@@ -55,6 +58,7 @@ pip install -r requirements.txt
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
 pytest                        # 302 tests (run pytest --collect-only -q for current count)
 python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
+python main.py --gallery      # the component gallery: every kit component on one page
 # headless against a staged directory (--dataverse/--config are GUI-only):
 python main.py --headless <staged_dir> --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE
 ```
@@ -73,12 +77,12 @@ Outputs: `dist/curation-app-lite/curation-app-lite.exe` (onedir folder, fast lau
 
 ## Documentation
 
-- `docs/html/architecture.html` — components, threading, storage, the table component contract, packaging
+- `docs/html/architecture.html` — components, threading, storage, the UI layering contract (palette → role → component), the table component contract, packaging
 - `docs/html/engine-port.html` — R-to-Python port matrix and go/no-go criteria
 - `docs/html/checks-reference.html` — what each auto-check examines, PASS semantics, issue taxonomy
 - `docs/html/dataverse-integration.html` — Native/Search API endpoints, auth, discovery + download flow
 - `docs/html/report-contract.html` — the JSON report format shared by engine and GUI
-- `docs/html/development.html` — setup, testing, adding checks, UI conventions, Qt pitfalls, probes, packaging
+- `docs/html/development.html` — setup, testing, adding checks, UI conventions, the component gallery, Qt pitfalls, probes, the planned dark-mode step, packaging
 - `docs/html/user-guide.html` — how a curator uses the app (dashboard, detail, metadata, log)
 - `docs/html/proposals.html` — proposed but not yet implemented changes (queued UX work, deferred checks, open decisions)
 

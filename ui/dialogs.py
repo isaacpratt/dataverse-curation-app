@@ -1,14 +1,19 @@
 """Selectable message dialogs — replacement for QMessageBox with copyable text."""
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QTextEdit, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
 
-from ui.theme import ERROR, PRIMARY, WARNING
+from ui.theme import (
+    ACCENT_PRIMARY,
+    STATE_ERROR_GRAPHIC,
+    STATE_WARNING_GRAPHIC,
+)
+from ui.widgets import make_multiline_input
 
 _ICON_COLORS = {
-    "triangle-alert": WARNING,
-    "octagon-x": ERROR,
-    "info": PRIMARY,
+    "triangle-alert": STATE_WARNING_GRAPHIC,
+    "octagon-x": STATE_ERROR_GRAPHIC,
+    "info": ACCENT_PRIMARY,
 }
 
 # Plain-language rewrites for the failures workers actually raise. Matched
@@ -115,17 +120,15 @@ def _show(
         label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         layout.addWidget(label)
     else:
-        edit = QTextEdit()
-        edit.setReadOnly(True)
+        edit = make_multiline_input(read_only=True, fixed=False)
         edit.setPlainText(text)
         edit.setMinimumHeight(120 if details else 160)
         layout.addWidget(edit, 1)
     if details:
-        det = QTextEdit()
-        det.setReadOnly(True)
+        det = make_multiline_input(
+            "Technical details", read_only=True, fixed=False, min_height=120
+        )
         det.setPlainText(details)
-        det.setMinimumHeight(120)
-        det.setPlaceholderText("Technical details")
         layout.addWidget(det, 1)
 
     state = {"retry": False}
@@ -173,7 +176,7 @@ def confirm(parent, title: str, text: str, *, confirm_label: str = "Delete") -> 
     try:
         header_row = QHBoxLayout()
         header_row.setSpacing(8)
-        header_row.addWidget(_dlg_icon("triangle-alert", size=18, color=WARNING))
+        header_row.addWidget(_dlg_icon("triangle-alert", size=18, color=STATE_WARNING_GRAPHIC))
         header = QLabel(f"<b>{title}</b>")
         header.setTextFormat(Qt.RichText)
         header_row.addWidget(header, 1)

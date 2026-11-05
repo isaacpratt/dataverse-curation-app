@@ -304,7 +304,7 @@ rather than half-applied.
 
 
 def table_layout_entry_valid(entry: Any, column_count: int) -> bool:
-    """Is a saved layout entry applicable to a header with this many columns?
+    """Check whether a saved layout entry fits a header with this many columns.
 
     A layout saved for a different table shape (an older build with more
     or fewer columns) must not be applied: the widths would land on the

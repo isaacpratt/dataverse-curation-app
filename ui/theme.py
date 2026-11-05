@@ -56,7 +56,7 @@ PRIMARY_DISABLED = "#8aa9e8"
 ERROR_OUTLINE = "#ffb4ab"         # light-red borders (pill / fail rows)
 ERROR_SURFACE = "#fff0ef"         # fail-row face
 MUTED_BG = "#f4f5f7"              # disabled cell-button face
-MUTED_TEXT = "#9aa3b5"
+MUTED_TEXT = "#7d8598"       # disabled text: 3.7:1 on a card (was 2.5)
 MUTED_BORDER = "#dfe3ea"
 PILL_BLUE_TEXT = "#1a2e4a"        # in-review pill text
 PILL_BLUE_BORDER = "#b9c7df"
@@ -80,6 +80,120 @@ LOG_IDENTIFIER_PALETTE = (
     "#92400e",  # amber-800
     "#1e40af",  # blue-800
 )
+
+# --- Semantic roles: what a colour is FOR -------------------------------
+# The palette above says what a colour IS. The roles below say what it is
+# FOR, so a component names an intent ("muted text", "card surface")
+# instead of a hex value. Two things follow:
+#
+# * a palette change is an edit in one table, not a hunt through views;
+# * the pairing rules below (the contrast contract) become data, so a
+#   test can check them instead of a reviewer eyeballing them.
+#
+# Roles are plain aliases: a role resolves to a palette entry today and
+# would resolve to a different one in a second theme.
+
+# --- Text roles ---
+TEXT_PRIMARY = ON_SURFACE              # body copy, headings, values
+TEXT_MUTED = ON_SURFACE_VARIANT        # captions, hints, timestamps, metadata
+TEXT_SUBTLE = ON_SECONDARY_CONTAINER   # de-emphasised hints, field help
+TEXT_ON_ACCENT = ON_PRIMARY            # text on the brand fill
+TEXT_ON_TINT = ON_SECONDARY_CONTAINER  # text on a tinted surface
+TEXT_ON_SECONDARY = ON_SECONDARY_FIXED # text on the secondary fill (nav)
+TEXT_ON_ERROR = ON_ERROR               # text on the error fill
+TEXT_DANGER = ERROR                    # error copy
+TEXT_SUCCESS = SUCCESS_DARK            # success copy (5.0:1 on a card)
+TEXT_WARNING = WARNING_DARK            # warning copy (5.0:1 on a card)
+TEXT_AMBER = AMBER_700                 # amber copy (log tokens, caution notes)
+TEXT_DISABLED = MUTED_TEXT             # disabled control text (3.7:1 on a card)
+
+# --- Surface roles ---
+SURFACE_PAGE = BACKGROUND              # the page behind everything
+SURFACE_CARD = SURFACE_CONTAINER_LOWEST  # cards, tables, sheets
+SURFACE_TINT = SURFACE_CONTAINER       # a tinted panel (header band, hover)
+SURFACE_SUBTLE = SURFACE_CONTAINER_LOW  # quiet rows, inset panels
+SURFACE_ROW = SURFACE_CONTAINER_LOW    # alternating / separated rows
+SURFACE_HEADER = SURFACE_CONTAINER     # table and tree header bands
+SURFACE_RAISED = SURFACE_CONTAINER_HIGH  # a raised panel (hover, metric card)
+SURFACE_ALT = SURFACE_VARIANT          # an alternate surface (divider band)
+SURFACE_DISABLED = MUTED_BG            # a disabled control's face
+
+# --- Border roles ---
+BORDER_SUBTLE = OUTLINE_VARIANT        # card and section edges
+BORDER_STRONG = OUTLINE                # dividers that carry meaning
+BORDER_DISABLED = MUTED_BORDER         # a disabled control's edge
+
+# --- Accent roles ---
+ACCENT_PRIMARY = PRIMARY
+ACCENT_PRIMARY_HOVER = ON_PRIMARY_FIXED_VARIANT
+ACCENT_PRIMARY_PRESSED = PRIMARY_PRESSED
+ACCENT_PRIMARY_DISABLED = PRIMARY_DISABLED
+ACCENT_TINT = PRIMARY_FIXED            # selected row / pressed fill
+ACCENT_FOCUS_TINT = PRIMARY_FIXED_DIM  # the focus ring's fill
+ACCENT_PRIMARY_DEEP = PRIMARY_DEEP     # the deepest brand blue (a live badge)
+ACCENT_SECONDARY = SECONDARY_CONTAINER # the secondary fill (nav, selection)
+ACCENT_TERTIARY = TERTIARY             # the tertiary accent
+
+# --- State roles ---
+STATE_ERROR_BG = ERROR_CONTAINER
+STATE_ERROR_SURFACE = ERROR_SURFACE
+STATE_ERROR_BORDER = ERROR_OUTLINE
+STATE_ERROR_TEXT = ON_ERROR_CONTAINER
+STATE_ERROR_GRAPHIC = ERROR            # an error icon or mark (6.5:1 on a card)
+STATE_SUCCESS_TEXT = SUCCESS_DARK
+STATE_SUCCESS_GRAPHIC = SUCCESS        # a success icon or mark (3.3:1 on a card)
+STATE_WARNING_TEXT = WARNING_DARK
+STATE_WARNING_GRAPHIC = WARNING        # a warning icon or mark (3.2:1 on a card)
+
+# --- Badge roles (a status label's fill, text and border) ---
+BADGE_NEUTRAL_BG = "#e4e7f2"
+BADGE_NEUTRAL_TEXT = "#424656"
+BADGE_NEUTRAL_BORDER = "#c3c6d8"
+BADGE_BLUE_BG = "#d5e3fc"
+BADGE_BLUE_TEXT = "#1a2e4a"
+BADGE_BLUE_BORDER = "#b9c7df"
+BADGE_GREEN_BG = "#15803d"      # SUCCESS_DARK: white on it clears 5:1
+BADGE_GREEN_TEXT = "#ffffff"
+BADGE_GREEN_BORDER = "#15803d"
+BADGE_RED_BG = "#ba1a1a"
+BADGE_RED_TEXT = "#ffffff"
+BADGE_RED_BORDER = "#ba1a1a"
+BADGE_RED_SOFT_BG = "#ffdad6"
+BADGE_RED_SOFT_TEXT = "#93000a"
+BADGE_RED_SOFT_BORDER = "#ffb4ab"
+BADGE_GREY_BG = "#515f74"
+BADGE_GREY_TEXT = "#ffffff"
+BADGE_GREY_BORDER = "#515f74"
+BADGE_GREEN_SOFT_BG = "#dff5e1"
+BADGE_GREEN_SOFT_TEXT = "#14532d"
+BADGE_GREEN_SOFT_BORDER = "#a7e3b5"
+BADGE_INDIGO_BG = "#e2e8ff"
+BADGE_INDIGO_TEXT = "#3730a3"
+BADGE_INDIGO_BORDER = "#c7d2fe"
+BADGE_ORANGE_BG = "#ffedd5"
+BADGE_ORANGE_TEXT = "#9a3412"
+BADGE_ORANGE_BORDER = "#fdba74"
+BADGE_VIOLET_BG = "#e7e4ff"
+BADGE_VIOLET_TEXT = "#4142cf"
+BADGE_VIOLET_BORDER = "#c0c1ff"
+BADGE_AMBER_BG = "#fef3c7"
+BADGE_AMBER_TEXT = "#92400e"
+BADGE_AMBER_BORDER = "#fcd34d"
+BADGE_TEAL_BG = "#d7f3f0"
+BADGE_TEAL_TEXT = "#0f766e"
+BADGE_TEAL_BORDER = "#99e4dc"
+BADGE_PINK_BG = "#fce7f3"
+BADGE_PINK_TEXT = "#9d174d"
+BADGE_PINK_BORDER = "#f9a8d4"
+BADGE_LIME_BG = "#ecfccb"
+BADGE_LIME_TEXT = "#3f6212"
+BADGE_LIME_BORDER = "#bef264"
+BADGE_SKY_BG = "#e0f2fe"
+BADGE_SKY_TEXT = "#0c4a6e"
+BADGE_SKY_BORDER = "#bae6fd"
+BADGE_SAND_BG = "#f5efe6"
+BADGE_SAND_TEXT = "#713f12"
+BADGE_SAND_BORDER = "#e7d5b7"
 
 # --- Typography (Qt QSS uses px) ---
 FONT_FAMILY = "Inter, 'Segoe UI', sans-serif"
@@ -119,6 +233,99 @@ FONT_CAPTION = 11
 
 # --- Shadows (simulated via border) ---
 CARD_BORDER = f"1px solid {OUTLINE_VARIANT}"
+
+# --- Contrast contract ---------------------------------------------------
+# Every colour pairing the app actually paints, with the ratio it must
+# clear. `ui/tests/test_contrast.py` reads this table, so a palette
+# change that breaks legibility fails the build instead of shipping.
+#
+# kind:
+#   "text"    normal-size text (WCAG AA: 4.5:1)
+#   "graphic" icons and other non-text marks (3:1)
+#   "disabled" disabled controls are exempt from WCAG 1.4.3; the app
+#             still holds them to 3:1 so they stay readable.
+CONTRAST_PAIRS: tuple[tuple[str, str, str, str, float], ...] = (
+    # label, foreground, background, kind, minimum ratio
+    ("body text on a card", TEXT_PRIMARY, SURFACE_CARD, "text", 4.5),
+    ("body text on the page", TEXT_PRIMARY, SURFACE_PAGE, "text", 4.5),
+    ("muted text on a card", TEXT_MUTED, SURFACE_CARD, "text", 4.5),
+    ("muted text on the page", TEXT_MUTED, SURFACE_PAGE, "text", 4.5),
+    ("muted text on a tinted panel", TEXT_MUTED, SURFACE_TINT, "text", 4.5),
+    ("subtle hint text on a card", TEXT_SUBTLE, SURFACE_CARD, "text", 4.5),
+    ("text on the brand fill", TEXT_ON_ACCENT, ACCENT_PRIMARY, "text", 4.5),
+    ("text on a tint", TEXT_ON_TINT, SURFACE_TINT, "text", 4.5),
+    ("error text on a card", TEXT_DANGER, SURFACE_CARD, "text", 4.5),
+    ("error text on the error surface", STATE_ERROR_TEXT, STATE_ERROR_SURFACE, "text", 4.5),
+    ("success text on a card", TEXT_SUCCESS, SURFACE_CARD, "text", 4.5),
+    ("warning text on a card", TEXT_WARNING, SURFACE_CARD, "text", 4.5),
+    ("brand text on a card", ACCENT_PRIMARY, SURFACE_CARD, "text", 4.5),
+    ("brand text on the page", ACCENT_PRIMARY, SURFACE_PAGE, "text", 4.5),
+    ("muted text on a raised panel", TEXT_MUTED, SURFACE_RAISED, "text", 4.5),
+    ("subtle hint text on the page", TEXT_SUBTLE, SURFACE_PAGE, "text", 4.5),
+    ("subtle hint text on a card", TEXT_SUBTLE, SURFACE_CARD, "text", 4.5),
+    ("subtle hint text on a raised panel", TEXT_SUBTLE, SURFACE_RAISED, "text", 4.5),
+    ("text on the secondary fill", TEXT_ON_SECONDARY, ACCENT_SECONDARY, "text", 4.5),
+    ("text on the error fill", TEXT_ON_ERROR, STATE_ERROR_GRAPHIC, "text", 4.5),
+    ("amber text on a card", TEXT_AMBER, SURFACE_CARD, "text", 4.5),
+    ("disabled text on a card", TEXT_DISABLED, SURFACE_CARD, "disabled", 3.0),
+    ("disabled text on the page", TEXT_DISABLED, SURFACE_PAGE, "disabled", 3.0),
+    ("disabled primary label", TEXT_PRIMARY, ACCENT_PRIMARY_DISABLED, "disabled", 3.0),
+    ("success icon on a card", STATE_SUCCESS_GRAPHIC, SURFACE_CARD, "graphic", 3.0),
+    ("warning icon on a card", STATE_WARNING_GRAPHIC, SURFACE_CARD, "graphic", 3.0),
+    ("error icon on a card", STATE_ERROR_GRAPHIC, SURFACE_CARD, "graphic", 3.0),
+    ("brand icon on a card", ACCENT_PRIMARY, SURFACE_CARD, "graphic", 3.0),
+    ("tertiary icon on a card", ACCENT_TERTIARY, SURFACE_CARD, "graphic", 3.0),
+)
+
+
+def _relative_luminance(hex_color: str) -> float:
+    """WCAG 2.1 relative luminance of a #rrggbb colour."""
+    h = hex_color.lstrip("#")
+    channels = []
+    for i in (0, 2, 4):
+        c = int(h[i : i + 2], 16) / 255
+        channels.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    r, g, b = channels
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def log_identifier_color(seed: int) -> str:
+    """Pick a deterministic identifier colour for the log's syntax highlighting.
+
+    The identifier palette is a raw palette: it stays inside the theme,
+    and a view asks for a colour by seed rather than naming a hue.
+    """
+    return LOG_IDENTIFIER_PALETTE[seed % len(LOG_IDENTIFIER_PALETTE)]
+
+
+def contrast_ratio(foreground: str, background: str) -> float:
+    """WCAG 2.1 contrast ratio between two #rrggbb colours (1.0 - 21.0)."""
+    la = _relative_luminance(foreground)
+    lb = _relative_luminance(background)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+# The badge roles are part of the contract too: a status label is text on
+# a fill, and it has to be readable.
+BADGE_CONTRAST_PAIRS: tuple[tuple[str, str, str], ...] = (
+    ("neutral badge", BADGE_NEUTRAL_TEXT, BADGE_NEUTRAL_BG),
+    ("blue badge", BADGE_BLUE_TEXT, BADGE_BLUE_BG),
+    ("green badge", BADGE_GREEN_TEXT, BADGE_GREEN_BG),
+    ("red badge", BADGE_RED_TEXT, BADGE_RED_BG),
+    ("soft red badge", BADGE_RED_SOFT_TEXT, BADGE_RED_SOFT_BG),
+    ("grey badge", BADGE_GREY_TEXT, BADGE_GREY_BG),
+    ("soft green badge", BADGE_GREEN_SOFT_TEXT, BADGE_GREEN_SOFT_BG),
+    ("indigo badge", BADGE_INDIGO_TEXT, BADGE_INDIGO_BG),
+    ("orange badge", BADGE_ORANGE_TEXT, BADGE_ORANGE_BG),
+    ("violet badge", BADGE_VIOLET_TEXT, BADGE_VIOLET_BG),
+    ("amber badge", BADGE_AMBER_TEXT, BADGE_AMBER_BG),
+    ("teal badge", BADGE_TEAL_TEXT, BADGE_TEAL_BG),
+    ("pink badge", BADGE_PINK_TEXT, BADGE_PINK_BG),
+    ("lime badge", BADGE_LIME_TEXT, BADGE_LIME_BG),
+    ("sky badge", BADGE_SKY_TEXT, BADGE_SKY_BG),
+    ("sand badge", BADGE_SAND_TEXT, BADGE_SAND_BG),
+)
 
 
 def asset_path(name: str) -> str:
@@ -229,6 +436,296 @@ def scrollbar_lane_qss(scope: str = "") -> str:
     )
 
 
+# The button kinds and the object name each one paints under. The kit
+# (ui/widgets.py) reads the same map, so a button's identity and its
+# rules come from one place.
+BUTTON_OBJECTS = {
+    "primary": "PrimaryButton",
+    "secondary": "SecondaryButton",
+    "ghost": "GhostButton",
+    "chip": "FilterChip",
+    "cell": "CellButton",
+    "link": "LinkButton",
+    "nav-active": "NavActive",
+    "nav": "NavItem",
+}
+
+
+def button_qss(
+    kind: str = "secondary",
+    *,
+    selector: str | None = None,
+    scope: str = "",
+) -> str:
+    """Build the QSS for one button kind.
+
+    The app sheet and the local sheets come from here, so the two cannot
+    drift.
+
+    ``selector=None`` (the default) gives the app-level object-name rule
+    (``QPushButton#PrimaryButton``). Pass ``selector="QPushButton"`` for a
+    widget-level sheet: Qt replaces the application sheet for a subtree,
+    so a button inside a styled panel needs its own copy - and that copy
+    must be the same rules, not a second hand-written version.
+
+    ``scope`` prefixes the selector (``scope="#TopNav"`` gives
+    ``#TopNav QPushButton#NavItem``).
+    """
+    prefix = f"{scope} " if scope else ""
+    if selector:
+        sel = f"{prefix}{selector}"
+    else:
+        sel = f"{prefix}QPushButton#{BUTTON_OBJECTS.get(kind, 'SecondaryButton')}"
+
+    if kind == "primary":
+        return (
+            f"{sel} {{ background: {PRIMARY}; color: {ON_PRIMARY}; border: none; "
+            f"border-radius: {RADIUS_LG}; padding: 8px 16px; font-weight: 600; "
+            f"font-size: {FONT_SMALL}px; }} "
+            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_CONTAINER}; }} '
+            f"{sel}:hover {{ background: {ON_PRIMARY_FIXED_VARIANT}; }} "
+            f"{sel}:pressed {{ background: {PRIMARY_PRESSED}; }} "
+            # Disabled: a muted blue face with the dark text colour. White
+            # on the old face was 2.35:1 - the label was unreadable.
+            f"{sel}:disabled {{ background: {PRIMARY_DISABLED}; color: {TEXT_PRIMARY}; }}"
+        )
+    if kind == "secondary":
+        return (
+            f"{sel} {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; "
+            f"border: 1px solid {OUTLINE_VARIANT}; border-radius: {RADIUS_LG}; "
+            f"padding: 7px 14px; font-weight: 600; font-size: {FONT_SMALL}px; }} "
+            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; }} '
+            f"{sel}:hover {{ background: {SURFACE_CONTAINER_HIGH}; "
+            f"border: 1px solid {PRIMARY}; }} "
+            f"{sel}:pressed {{ background: {SECONDARY_CONTAINER}; }} "
+            f"{sel}:disabled {{ background: {SURFACE_CONTAINER_LOW}; "
+            f"color: {MUTED_TEXT}; }}"
+        )
+    if kind == "ghost":
+        return (
+            f"{sel} {{ background: transparent; color: {TEXT_PRIMARY}; "
+            f"border: none; border-radius: {RADIUS_LG}; padding: 6px 10px; "
+            f"font-size: {FONT_SMALL}px; font-weight: 500; }} "
+            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
+            f"color: {ON_SURFACE}; }} "
+            f"{sel}:hover {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; }} "
+            f"{sel}:disabled {{ color: {MUTED_TEXT}; }}"
+        )
+    if kind == "chip":
+        return (
+            f"{sel} {{ background: {SURFACE_CONTAINER_LOWEST}; "
+            f"border: 1px solid {OUTLINE_VARIANT}; border-radius: {RADIUS_LG}; "
+            f"padding: 6px 10px; font-size: {FONT_SMALL}px; font-weight: 600; "
+            f"color: {ON_SURFACE_VARIANT}; }} "
+            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
+            f"color: {ON_SURFACE}; }} "
+            f"{sel}:hover {{ background: {SURFACE_CONTAINER_HIGH}; "
+            f"border: 1px solid {PRIMARY}; }}"
+        )
+    if kind == "cell":
+        # The compact face for a table action cell: the standard action
+        # padding (7px 14px) made "Reinstall"+"Uninstall" need 294px
+        # against a 240px column, clipping both buttons. Same button
+        # system, cell-sized padding.
+        return (
+            f"{sel} {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; "
+            f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 6px; "
+            f"padding: 0 8px; font-weight: 600; font-size: {FONT_SMALL}px; }} "
+            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; }} '
+            f"{sel}:hover {{ background: {SURFACE_CONTAINER_HIGH}; "
+            f"border: 1px solid {PRIMARY}; }} "
+            f"{sel}:pressed {{ background: {SECONDARY_CONTAINER}; }} "
+            f"{sel}:disabled {{ background: {MUTED_BG}; color: {MUTED_TEXT}; "
+            f"border: 1px solid {MUTED_BORDER}; }}"
+        )
+    if kind == "link":
+        # A left-aligned brand row that navigates to a section. The
+        # kit's button kinds could not express it: it is a text link
+        # that happens to be a button.
+        return (
+            f"{sel} {{ text-align: left; padding: 7px 8px; "
+            f"font-size: {FONT_SMALL}px; color: {PRIMARY}; "
+            f"background: transparent; border: none; border-radius: {RADIUS_LG}; }} "
+            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
+            f"color: {ON_SURFACE}; }} "
+            f"{sel}:hover {{ background: {SURFACE_CONTAINER}; }} "
+            f"{sel}:disabled {{ color: {MUTED_TEXT}; }}"
+        )
+    if kind == "nav-active":
+        return (
+            f"{sel} {{ background: {SECONDARY_CONTAINER}; color: {ON_SECONDARY_FIXED}; "
+            f"border: none; border-radius: {RADIUS_LG}; padding: 6px 12px; "
+            f"font-weight: 600; font-size: {FONT_SMALL}px; }} "
+            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
+            f"color: {ON_SURFACE}; }}"
+        )
+    # nav
+    return (
+        f"{sel} {{ background: transparent; color: {ON_SURFACE_VARIANT}; "
+        f"border: none; border-radius: {RADIUS_LG}; padding: 6px 12px; "
+        f"font-weight: 500; font-size: {FONT_SMALL}px; }} "
+        f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
+        f"color: {ON_SURFACE}; }} "
+        f"{sel}:hover {{ background: {SURFACE_CONTAINER_HIGH}; color: {ON_SURFACE}; }}"
+    )
+
+
+def page_background_qss(*names: str) -> str:
+    """Build the page background rule for a view root.
+
+    Every view sits on the page colour. A view sets it on its own root
+    object name, so a widget-level sheet cannot leak the page colour
+    into a nested card. The scroll areas come with it: a scroll area
+    paints its own viewport, and without the rule the area shows the
+    parent's colour around a white canvas.
+    """
+    parts = []
+    if names:
+        selectors = ", ".join(f"QWidget#{name}" for name in names)
+        parts.append(f"{selectors} {{ background: {BACKGROUND}; border: none; }}")
+    parts.append(f"QScrollArea {{ background: {BACKGROUND}; border: none; }}")
+    return " ".join(parts)
+
+
+def transparent_qss(selector: str = "QWidget") -> str:
+    """Build the transparent rule for one selector.
+
+    A bare label that carries a pixmap (an icon) must not paint a face
+    of its own, or it shows as a chip inside the row it sits in.
+    """
+    return f"{selector} {{ background: transparent; border: none; }}"
+
+
+def transparent_surface_qss(*names: str) -> str:
+    """Build the transparent rule for a wrapper that must not paint.
+
+    A wrapper inside a card inherits the card's background when it does
+    not paint one of its own, which shows as a seam.
+    """
+    if not names:
+        return ""
+    selectors = ", ".join(f"QWidget#{name}" for name in names)
+    return f"{selectors} {{ background: transparent; border: none; }}"
+
+
+def surface_frame_qss(
+    background: str,
+    border: str,
+    *,
+    radius: str = RADIUS_LG,
+    selector: str = "QFrame",
+    border_style: str = "solid",
+) -> str:
+    """Build a plain surface frame (a card face, a check row).
+
+    The radius is the app-wide RADIUS_LG unless a caller has a reason
+    to pass another one. ``border_style`` is "solid" everywhere except
+    the empty-state card, whose dashed edge is the cue that there is
+    nothing here yet.
+    """
+    return (
+        f"{selector} {{ background: {background}; "
+        f"border: 1px {border_style} {border}; border-radius: {radius}; }}"
+    )
+
+
+def band_qss(
+    background: str,
+    border: str,
+    *,
+    radius: str = RADIUS_LG,
+    selector: str = "QFrame",
+    edge: str = "bottom",
+) -> str:
+    """Build a tinted band with one edge (a card's header bar or footer).
+
+    ``edge="bottom"`` is a header bar: it sits flush on the card's top
+    edge, so it keeps the top corners and carries its border along the
+    bottom. ``edge="top"`` is a flush footer: it keeps the bottom
+    corners and carries its border along the top.
+    """
+    if edge == "top":
+        return (
+            f"{selector} {{ background: {background}; "
+            f"border-top: 1px solid {border}; "
+            f"border-bottom-left-radius: {radius}; "
+            f"border-bottom-right-radius: {radius}; }}"
+        )
+    return (
+        f"{selector} {{ background: {background}; "
+        f"border-bottom: 1px solid {border}; "
+        f"border-top-left-radius: {radius}; border-top-right-radius: {radius}; }}"
+    )
+
+
+def status_strip_qss(
+    background: str,
+    border: str,
+    text_color: str,
+    *,
+    font_size: int = FONT_CAPTION,
+    padding: str = "6px 10px",
+    selector: str = "QLabel",
+) -> str:
+    """Build a one-line status strip: a message on a card face.
+
+    The strip carries its own face (background, edge, padding) and its
+    own text colour, because a widget-level sheet replaces the app
+    sheet for that widget - the label's type token would not reach it.
+    """
+    return (
+        f"{selector} {{ background: {background}; color: {text_color}; "
+        f"border: 1px solid {border}; border-radius: {RADIUS_LG}; "
+        f"padding: {padding}; font-size: {font_size}px; }}"
+    )
+
+
+def input_qss(
+    selector: str,
+    *,
+    font_size: int = FONT_SMALL,
+    family: str | None = None,
+) -> str:
+    """Build the standard text input sheet for one selector.
+
+    A widget that carries its own stylesheet loses the application-level
+    input rules, so the sheet repeats them - from here, so the app-level
+    sheet and the local sheet cannot drift.
+
+    ``family`` overrides the font stack (a raw payload view uses the
+    mono stack).
+    """
+    stack = f"font-family: {family}; " if family else ""
+    return (
+        f"{selector} {{ background: {SURFACE_CONTAINER_LOWEST}; "
+        f"border: 1px solid {OUTLINE_VARIANT}; border-radius: {RADIUS_LG}; "
+        f"padding: 7px 10px; font-size: {font_size}px; {stack}"
+        f"selection-background-color: {PRIMARY_FIXED}; }} "
+        f"{selector}:focus {{ border: 1px solid {PRIMARY}; }}"
+    )
+
+
+def badge_qss(
+    background: str,
+    foreground: str,
+    border: str,
+    *,
+    font_size: int = FONT_MICRO,
+    padding: str = "0 6px",
+) -> str:
+    """Build a badge face from role colours.
+
+    A badge is text on a fill: the fill, the text and the edge are three
+    roles, and the badge's contract (a rounded, bordered, bold label)
+    is the same everywhere.
+    """
+    return (
+        f"QLabel {{ background: {background}; color: {foreground}; "
+        f"border: 1px solid {border}; border-radius: {RADIUS_LG}; "
+        f"font-size: {font_size}px; font-weight: 700; padding: {padding}; }}"
+    )
+
+
 def global_qss() -> str:
     return f"""
 /* ===== Base ===== */
@@ -245,24 +742,8 @@ QMainWindow, QStackedWidget, QScrollArea {{
     background: {SURFACE_CONTAINER_LOWEST};
     border-bottom: 1px solid {OUTLINE_VARIANT};
 }}
-#TopNav QPushButton#NavActive {{
-    background: {SECONDARY_CONTAINER};
-    color: {ON_SECONDARY_FIXED};
-    border: none;
-    border-radius: 8px;
-    padding: 6px 12px;
-    font-weight: 600;
-    font-size: 12px;
-}}
-#TopNav QPushButton#NavItem {{
-    background: transparent;
-    color: {ON_SURFACE_VARIANT};
-    border: none;
-    border-radius: 8px;
-    padding: 6px 12px;
-    font-weight: 500;
-    font-size: 12px;
-}}
+{button_qss("nav-active", scope="#TopNav")}
+{button_qss("nav", scope="#TopNav")}
 /* Keyboard focus tint (focus-visible) — a colour change, never an outline.
    Sits before :hover/:checked so hover feedback wins when both apply. */
 #TopNav QPushButton#NavActive[focusVisible="true"],
@@ -305,58 +786,13 @@ QMainWindow, QStackedWidget, QScrollArea {{
     border-bottom: 1px solid {SURFACE_CONTAINER_LOW};
 }}
 
-/* ===== Buttons: 8px rounded rectangles (unified radius), clear hover highlight ===== */
-QPushButton#PrimaryButton {{
-    background: {PRIMARY};
-    color: {ON_PRIMARY};
-    border: none;
-    border-radius: {RADIUS_LG};
-    padding: 8px 16px;
-    font-weight: 600;
-    font-size: 12px;
-}}
-QPushButton#PrimaryButton[focusVisible="true"] {{ background: {PRIMARY_CONTAINER}; }}
-QPushButton#PrimaryButton:hover {{ background: {ON_PRIMARY_FIXED_VARIANT}; }}
-QPushButton#PrimaryButton:pressed {{ background: {PRIMARY_PRESSED}; }}
-/* Disabled primary stays readable (muted blue, white text) so the action
-   still reads as present-but-unavailable instead of vanishing. */
-QPushButton#PrimaryButton:disabled {{ background: {PRIMARY_DISABLED}; color: {ON_PRIMARY}; }}
-
-QPushButton#SecondaryButton {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    color: {ON_SURFACE};
-    border: 1px solid {OUTLINE_VARIANT};
-    border-radius: {RADIUS_LG};
-    padding: 7px 14px;
-    font-weight: 600;
-    font-size: 12px;
-}}
-QPushButton#SecondaryButton[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; }}
-QPushButton#SecondaryButton:hover {{ background: {SURFACE_CONTAINER_HIGH}; border: 1px solid {PRIMARY}; }}
-QPushButton#SecondaryButton:pressed {{ background: {SECONDARY_CONTAINER}; }}
-
-QPushButton#GhostButton {{
-    background: transparent;
-    color: {ON_SURFACE_VARIANT};
-    border: none;
-    border-radius: {RADIUS_LG};
-    padding: 6px 10px;
-}}
-QPushButton#GhostButton[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; color: {ON_SURFACE}; }}
-QPushButton#GhostButton:hover {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; }}
-
-/* Column chooser / filter chip */
-QPushButton#FilterChip {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    border: 1px solid {OUTLINE_VARIANT};
-    border-radius: {RADIUS_LG};
-    padding: 6px 10px;
-    font-size: 12px;
-    font-weight: 600;
-    color: {ON_SURFACE_VARIANT};
-}}
-QPushButton#FilterChip[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; color: {ON_SURFACE}; }}
-QPushButton#FilterChip:hover {{ background: {SURFACE_CONTAINER_HIGH}; border: 1px solid {PRIMARY}; }}
+/* ===== Buttons: one system, generated by theme.button_qss() ===== */
+{button_qss("primary")}
+{button_qss("secondary")}
+{button_qss("ghost")}
+{button_qss("chip")}
+{button_qss("cell")}
+{button_qss("link")}
 
 /* ===== Inputs ===== */
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox {{
@@ -511,9 +947,42 @@ QLabel#CaptionSM {{
     font-size: {FONT_CAPTION}px;
     color: {ON_SURFACE_VARIANT};
 }}
+/* A field or section label on the primary text colour (11px, semibold,
+   tracked) - "Decision State", "Internal Notes". */
+QLabel#LabelStrongSM {{
+    font-size: {FONT_CAPTION}px;
+    font-weight: 600;
+    color: {ON_SURFACE};
+    letter-spacing: 0.5px;
+}}
+/* Brand-coloured text: a link-like line of copy. */
+QLabel#AccentSM {{
+    font-size: {FONT_SMALL}px;
+    color: {PRIMARY};
+}}
+/* Success-coloured text: a result line ("All checks passed"). */
+QLabel#SuccessSM {{
+    font-size: {FONT_SMALL}px;
+    color: {SUCCESS_DARK};
+}}
+/* Warning-coloured text: a caution line ("Large dataset"). */
+QLabel#WarningSM {{
+    font-size: {FONT_SMALL}px;
+    color: {WARNING_DARK};
+}}
+/* Danger-coloured text: a validation error line. */
+QLabel#DangerSM {{
+    font-size: {FONT_SMALL}px;
+    color: {ERROR};
+}}
 QLabel#BodySM {{
     font-size: {FONT_SMALL}px;
     color: {ON_SURFACE_VARIANT};
+}}
+/* A de-emphasised hint: the explanatory sentence under a field. */
+QLabel#HintSM {{
+    font-size: {FONT_SMALL}px;
+    color: {ON_SECONDARY_CONTAINER};
 }}
 QLabel#StateMD {{
     font-size: {FONT_SMALL}px;
@@ -727,62 +1196,76 @@ def apply_theme(app) -> None:
 
 
 def action_button_style(primary: bool = False) -> str:
-    """Self-contained rounded-rectangle styling for critical action buttons.
+    """Build the scoped (widget-level) button sheet for a critical action.
 
-    Inline styles always win and always paint (unlike app-level rules,
-    which demonstrably fail to render QPushButton faces inside some
-    main-window subtrees). Includes hover/pressed/disabled states.
+    A widget-level stylesheet replaces the application sheet for that
+    subtree, and a button face inside a styled panel does not paint
+    otherwise - so critical actions carry their own copy. That copy comes
+    from ``button_qss()``, the same generator the app-level rules use,
+    so the two cannot drift.
+
+    Views do not call this: they build the button with the kit's
+    ``make_action_button()``.
     """
-    if primary:
-        return (
-            f"QPushButton {{ background: {PRIMARY}; color: {ON_PRIMARY}; border: none; "
-            "border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 12px; }"
-            f"QPushButton[focusVisible=\"true\"] {{ background: {PRIMARY_CONTAINER}; }}"
-            f"QPushButton:hover {{ background: {ON_PRIMARY_FIXED_VARIANT}; }}"
-            f"QPushButton:pressed {{ background: {PRIMARY_PRESSED}; }}"
-            f"QPushButton:disabled {{ background: {PRIMARY_DISABLED}; color: {ON_PRIMARY}; }}"
-        )
-    return (
-        f"QPushButton {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; "
-        f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 8px; padding: 7px 14px; "
-        "font-weight: 600; font-size: 12px; }"
-        f"QPushButton[focusVisible=\"true\"] {{ background: {PRIMARY_FIXED_DIM}; }}"
-        f"QPushButton:hover {{ background: {SURFACE_CONTAINER_HIGH}; border: 1px solid {PRIMARY}; }}"
-        f"QPushButton:pressed {{ background: {SECONDARY_CONTAINER}; }}"
-        f"QPushButton:disabled {{ background: {SURFACE_CONTAINER_LOW}; color: {ON_SECONDARY_CONTAINER}; }}"
+    return button_qss(
+        "primary" if primary else "secondary", selector="QPushButton"
     )
 
 
-# Per-label badge colors (background, text, border): every distinct status /
-# curation label gets its own color so dataset-page badges scan at a glance.
-# Order matters — substring match on the lowered label, specific phrases
-# first ("hold for internal review" must beat bare "review").
-_LABEL_BADGE_KNOWN: list[tuple[str, tuple[str, str, str]]] = [
-    ("deaccessioned", ("#515F74", "#FFFFFF", "#515F74")),
-    ("reject", ("#BA1A1A", "#FFFFFF", "#BA1A1A")),
-    ("revisions", ("#FFDAD6", "#93000A", "#FFB4AB")),
-    ("needs review", ("#FFEDD5", "#9A3412", "#FDBA74")),
-    ("hold", ("#E7E4FF", "#4142CF", "#C0C1FF")),
-    ("author contacted", ("#FEF3C7", "#92400E", "#FCD34D")),
-    ("contact author", ("#FEF3C7", "#92400E", "#FCD34D")),
-    ("approve", ("#16A34A", "#FFFFFF", "#16A34A")),
-    ("ready", ("#D7F3F0", "#0F766E", "#99E4DC")),
-    ("publish", ("#DFF5E1", "#14532D", "#A7E3B5")),
-    ("released", ("#DFF5E1", "#14532D", "#A7E3B5")),
-    ("review", ("#D5E3FC", "#1A2E4A", "#B9C7DF")),
-    ("draft", ("#E4E7F2", "#424656", "#C3C6D8")),
+
+# The badge roles: (background, text, border) per role. Every distinct
+# status / curation label gets its own role so dataset-page badges scan
+# at a glance, and every role is in the contrast contract (the test
+# checks each role's text against its fill).
+_BADGE_ROLES: dict[str, tuple[str, str, str]] = {
+    "neutral": (BADGE_NEUTRAL_BG, BADGE_NEUTRAL_TEXT, BADGE_NEUTRAL_BORDER),
+    "grey": (BADGE_GREY_BG, BADGE_GREY_TEXT, BADGE_GREY_BORDER),
+    "blue": (BADGE_BLUE_BG, BADGE_BLUE_TEXT, BADGE_BLUE_BORDER),
+    "indigo": (BADGE_INDIGO_BG, BADGE_INDIGO_TEXT, BADGE_INDIGO_BORDER),
+    "green": (BADGE_GREEN_BG, BADGE_GREEN_TEXT, BADGE_GREEN_BORDER),
+    "green-soft": (BADGE_GREEN_SOFT_BG, BADGE_GREEN_SOFT_TEXT, BADGE_GREEN_SOFT_BORDER),
+    "red": (BADGE_RED_BG, BADGE_RED_TEXT, BADGE_RED_BORDER),
+    "red-soft": (BADGE_RED_SOFT_BG, BADGE_RED_SOFT_TEXT, BADGE_RED_SOFT_BORDER),
+    "orange": (BADGE_ORANGE_BG, BADGE_ORANGE_TEXT, BADGE_ORANGE_BORDER),
+    "violet": (BADGE_VIOLET_BG, BADGE_VIOLET_TEXT, BADGE_VIOLET_BORDER),
+    "amber": (BADGE_AMBER_BG, BADGE_AMBER_TEXT, BADGE_AMBER_BORDER),
+    "teal": (BADGE_TEAL_BG, BADGE_TEAL_TEXT, BADGE_TEAL_BORDER),
+    "pink": (BADGE_PINK_BG, BADGE_PINK_TEXT, BADGE_PINK_BORDER),
+    "lime": (BADGE_LIME_BG, BADGE_LIME_TEXT, BADGE_LIME_BORDER),
+    "sky": (BADGE_SKY_BG, BADGE_SKY_TEXT, BADGE_SKY_BORDER),
+    "sand": (BADGE_SAND_BG, BADGE_SAND_TEXT, BADGE_SAND_BORDER),
+}
+
+# Which role a curation label wears. Order matters: substring match on
+# the lowered label, specific phrases first ("hold for internal review"
+# must beat bare "review").
+_LABEL_BADGE_ROLES: list[tuple[str, str]] = [
+    ("deaccessioned", "grey"),
+    ("reject", "red"),
+    ("revisions", "red-soft"),
+    ("needs review", "orange"),
+    ("hold", "violet"),
+    ("author contacted", "amber"),
+    ("contact author", "amber"),
+    ("approve", "green"),
+    ("ready", "teal"),
+    ("publish", "green-soft"),
+    ("released", "green-soft"),
+    ("review", "blue"),
+    ("draft", "neutral"),
 ]
 
-# Fallback for custom instance labels: deterministic (md5, not hash() which
-# is salted per process) light bg / dark text pairs.
-_LABEL_BADGE_FALLBACK: list[tuple[str, str, str]] = [
-    ("#D7F3F0", "#0F766E", "#99E4DC"),
-    ("#E2E8FF", "#3730A3", "#C7D2FE"),
-    ("#FCE7F3", "#9D174D", "#F9A8D4"),
-    ("#ECFCCB", "#3F6212", "#BEF264"),
-    ("#E0F2FE", "#0C4A6E", "#BAE6FD"),
-    ("#F5EFE6", "#713F12", "#E7D5B7"),
-]
+# Fallback roles for custom instance labels: deterministic (md5, not
+# hash() which is salted per process), so the same label always wears
+# the same role.
+_LABEL_BADGE_FALLBACK_ROLES: tuple[str, ...] = (
+    "teal",
+    "indigo",
+    "pink",
+    "lime",
+    "sky",
+    "sand",
+)
 
 
 def label_badge_colors(label: str) -> tuple[str, str, str]:
@@ -791,28 +1274,33 @@ def label_badge_colors(label: str) -> tuple[str, str, str]:
         lowered = (label or "").strip().lower()
     except Exception:
         lowered = ""
-    for phrase, colors in _LABEL_BADGE_KNOWN:
+    for phrase, role in _LABEL_BADGE_ROLES:
         if phrase and phrase in lowered:
-            return colors
+            return _BADGE_ROLES[role]
     try:
         import hashlib
 
         digest = hashlib.md5(lowered.encode("utf-8")).digest()
-        return _LABEL_BADGE_FALLBACK[digest[0] % len(_LABEL_BADGE_FALLBACK)]
+        role = _LABEL_BADGE_FALLBACK_ROLES[
+            digest[0] % len(_LABEL_BADGE_FALLBACK_ROLES)
+        ]
+        return _BADGE_ROLES[role]
     except Exception:
-        return _LABEL_BADGE_FALLBACK[0]
+        return _BADGE_ROLES["teal"]
 
 
 def label_badge_style(label: str) -> str:
     """Build an inline badge face with DOI-badge chrome (bordered 8px box).
 
-    Uses the label's own colors. Inline so it always paints (see
-    action_button_style).
+    Uses the label's own role colours. Inline so it always paints (see
+    action_button_style). Views do not call this: the kit's
+    ``make_badge()`` does.
     """
     bg, fg, border = label_badge_colors(label)
     return (
         f"QLabel {{ background: {bg}; color: {fg}; border: 1px solid {border}; "
-        "border-radius: 8px; padding: 3px 8px; font-size: 12px; font-weight: 700; }}"
+        f"border-radius: {RADIUS_LG}; padding: 3px 8px; font-size: {FONT_SMALL}px; "
+        "font-weight: 700; }}"
     )
 
 
