@@ -80,7 +80,7 @@ def _string_constants(path: Path) -> list[tuple[int, str]]:
 
 
 def _key_like(value: str, namespaces: set[str]) -> bool:
-    """True for a string that is meant to be a catalogue key.
+    """Return True for a string that is meant to be a catalogue key.
 
     A dotted lower-case name whose first segment is a catalogue namespace —
     the shape every key has (``dashboard.filters.all``).  Matching on the
@@ -434,7 +434,7 @@ def test_lookup_renders_without_raw_braces():
         if value is None:
             continue
         # Integers satisfy both plain and numeric (``{n:,}``) format specs.
-        dummies = {name: 0 for name in supplied}
+        dummies = dict.fromkeys(supplied, 0)
         try:
             expected = value.format(**dummies)
         except (KeyError, IndexError, ValueError) as exc:
@@ -596,7 +596,7 @@ def test_no_inline_interface_copy_in_fstrings():
 
 
 def test_cli_help_text_is_catalogue_backed():
-    """argparse copy in main.py must come from the catalogue."""
+    """Check that argparse copy in main.py comes from the catalogue."""
     entry = _UI_DIR.parent / "main.py"
     if not entry.is_file():
         return
