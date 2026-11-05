@@ -304,11 +304,19 @@ class _CaptionButton(QPushButton):
         self._apply_icon()
 
     def set_glyph(self, kind: str) -> None:
-        """Swap the glyph (maximize <-> restore) and its tooltip."""
+        """Swap the glyph (maximize <-> restore) and its labels.
+
+        The accessible name follows the action, not the button: a screen
+        reader must hear "Restore window" once the window is maximized, not
+        "Maximize window" on a button that restores it.
+        """
         if kind == self._kind:
             return
         self._kind = kind
         self.setToolTip(t(_CAPTION_KEYS.get(kind, _CAPTION_KEYS["close"])))
+        self.setAccessibleName(
+            t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"]))
+        )
         self._apply_icon()
 
     def _apply_icon(self) -> None:
