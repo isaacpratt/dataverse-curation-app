@@ -49,8 +49,10 @@ TOKEN_SIZES = {
     "BodySM": FONT_SMALL,
     "StateMD": FONT_SMALL,
     "LabelMD": FONT_CAPTION,
+    "LabelStrongSM": FONT_CAPTION,
     "CaptionSM": FONT_CAPTION,
     "MonoSM": FONT_SMALL,
+    "ValueSM": FONT_SMALL,
 }
 
 
@@ -84,7 +86,7 @@ def test_the_kit_builders_use_the_tokens(qapp):
         widgets.make_body_label: ("BodyMD",),
         widgets.make_small_body_label: ("BodySM",),
         widgets.make_caption_label: ("CaptionSM",),
-        widgets.make_field_label: ("LabelMD",),
+        widgets.make_field_label: ("LabelStrongSM",),
         widgets.make_metric_value: ("DisplayLG",),
     }
     for builder, (token,) in builders.items():

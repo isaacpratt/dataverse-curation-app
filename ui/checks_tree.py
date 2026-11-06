@@ -170,9 +170,9 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
     inventory: optional raw inventory list (adds restricted/embargo/ingest notes).
     """
     model = QStandardItemModel()
-    # Header titles in caps, like every other table in the app. The caps
-    # live in the model (not in the style sheet) so Qt measures the text
-    # it paints and a narrow column elides instead of clipping.
+    # Titles stay in sentence case, like every other table in the app.
+    # Casing lives in the model (not the style sheet) so Qt measures the
+    # text it paints and a narrow column elides instead of clipping.
     model.setHorizontalHeaderLabels([str(c) for c in COLUMNS])
     hs = human_size or _human_size
     by_path = {}

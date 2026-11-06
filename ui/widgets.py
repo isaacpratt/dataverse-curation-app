@@ -1038,13 +1038,15 @@ def make_caption_label(text: str = "", *, wrap: bool = True) -> QLabel:
 
 
 def make_field_label(text: str = "", *, wrap: bool = True) -> QLabel:
-    """Field / metric label (``LabelMD`` token: 11px, semibold, tracked).
+    """Field / metric label (``LabelStrongSM`` token: 11px, semibold,
+    primary text colour).
 
-    The label above or beside a value: an uppercase metric name, a
-    section label inside a card.
+    The label above or beside a value: a metric name, a field name, a
+    section label inside a card. Strong, never muted: the label is
+    what the user reads to find the value next to it.
     """
     lbl = QLabel(text)
-    lbl.setObjectName("LabelMD")
+    lbl.setObjectName("LabelStrongSM")
     lbl.setWordWrap(wrap)
     return lbl
 

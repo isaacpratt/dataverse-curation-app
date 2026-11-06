@@ -1108,6 +1108,14 @@ QLabel#BodySM {{
     font-size: {FONT_SMALL}px;
     color: {ON_SURFACE_VARIANT};
 }}
+/* A loaded value (a signed-in user's checked identity): the same size
+   as BodySM but on the primary text colour, so it reads as the data it
+   is — an unfetched "Not checked yet" keeps BodySM (muted), a checked
+   value wears ValueSM. */
+QLabel#ValueSM {{
+    font-size: {FONT_SMALL}px;
+    color: {ON_SURFACE};
+}}
 /* A de-emphasised hint: the explanatory sentence under a field. */
 QLabel#HintSM {{
     font-size: {FONT_SMALL}px;

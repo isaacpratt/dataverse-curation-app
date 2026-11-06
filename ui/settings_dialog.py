@@ -58,8 +58,8 @@ from ui.widgets import (
     PaneFooter,
     flush_table_style,
     make_action_button,
-    make_body_label,
     make_combo,
+    make_field_label,
     make_line_edit,
     make_page_heading,
 )
@@ -177,23 +177,23 @@ class SettingsPane(QWidget):
         form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         form.setFormAlignment(Qt.AlignTop)
 
-        # Field labels wear the same BodyMD type token as the field text
-        # (13px), so a label and the value beside it read as one row.
+        # Field labels wear the LabelStrongSM token: small and semibold on
+        # the primary text colour, so each label scans before its field.
         self.preset_combo = make_combo(list(PRESETS), min_width=200)
-        form.addRow(make_body_label(t("settings.fields.preset")), self.preset_combo)
+        form.addRow(make_field_label(t("settings.fields.preset")), self.preset_combo)
 
         self.url_edit = make_line_edit(t("settings.fields.url_placeholder"))
-        form.addRow(make_body_label(t("settings.fields.url")), self.url_edit)
+        form.addRow(make_field_label(t("settings.fields.url")), self.url_edit)
 
         self.token_edit = make_line_edit(
             t("settings.fields.token_placeholder"), password=True
         )
-        form.addRow(make_body_label(t("settings.fields.token")), self.token_edit)
+        form.addRow(make_field_label(t("settings.fields.token")), self.token_edit)
 
         self.subtree_edit = make_line_edit(
             t("settings.fields.collection_placeholder")
         )
-        form.addRow(make_body_label(t("settings.fields.collection")), self.subtree_edit)
+        form.addRow(make_field_label(t("settings.fields.collection")), self.subtree_edit)
 
         ws_row = QHBoxLayout()
         ws_row.setContentsMargins(0, 0, 0, 0)
@@ -203,7 +203,7 @@ class SettingsPane(QWidget):
         browse_btn.clicked.connect(self._browse_workspace)
         ws_row.addWidget(self.workspace_edit, 1)
         ws_row.addWidget(browse_btn, 0)
-        form.addRow(make_body_label(t("settings.fields.workspace")), ws_row)
+        form.addRow(make_field_label(t("settings.fields.workspace")), ws_row)
 
         test_btn = make_action_button(
             t("settings.fields.test_connection"), kind="secondary", size="sm"
@@ -243,15 +243,15 @@ class SettingsPane(QWidget):
         user_heading.setContentsMargins(0, 8, 0, 0)
         form.addRow(user_heading)
         self._user_identifier = self._make_user_value()
-        form.addRow(make_body_label(t("settings.user.identifier")), self._user_identifier)
+        form.addRow(make_field_label(t("settings.user.identifier")), self._user_identifier)
         self._user_display = self._make_user_value()
-        form.addRow(make_body_label(t("settings.user.display")), self._user_display)
+        form.addRow(make_field_label(t("settings.user.display")), self._user_display)
         self._user_super = self._make_user_value()
-        form.addRow(make_body_label(t("settings.user.superuser")), self._user_super)
+        form.addRow(make_field_label(t("settings.user.superuser")), self._user_super)
         self._user_affil = self._make_user_value()
-        form.addRow(make_body_label(t("settings.user.affiliation")), self._user_affil)
+        form.addRow(make_field_label(t("settings.user.affiliation")), self._user_affil)
         self._user_role = self._make_user_value()
-        form.addRow(make_body_label(t("settings.user.collection_role")), self._user_role)
+        form.addRow(make_field_label(t("settings.user.collection_role")), self._user_role)
         self._user_status = QLabel("")
         self._user_status.setWordWrap(True)
         self._user_status.setObjectName("HintSM")
@@ -1017,6 +1017,7 @@ class SettingsPane(QWidget):
         """
         try:
             if roles is None:
+                self._user_role.setObjectName("BodySM")
                 if not checked:
                     self._user_role.setText(t("settings.user.not_checked"))
                     tip = t("settings.user.tip_enter_credentials")
@@ -1027,6 +1028,7 @@ class SettingsPane(QWidget):
                     self._user_role.setText(t("settings.user.not_checked"))
                     tip = t("settings.user.tip_enter_alias")
             elif not roles:
+                self._user_role.setObjectName("BodySM")
                 self._user_role.setText(
                     t("settings.user.no_direct_role")
                     if (alias or "").strip()
@@ -1038,6 +1040,7 @@ class SettingsPane(QWidget):
                     else t("settings.user.tip_enter_alias")
                 )
             else:
+                self._user_role.setObjectName("ValueSM")
                 self._user_role.setText(", ".join(str(r) for r in roles))
                 tip = t(
                     "settings.user.tip_roles_alias",
@@ -1081,15 +1084,19 @@ class SettingsPane(QWidget):
                     else t("settings.user.not_checked")
                 )
                 self._user_identifier.setText(empty)
+                self._user_identifier.setObjectName("BodySM")
                 self._user_display.setText(empty)
+                self._user_display.setObjectName("BodySM")
                 self._user_super.setText(empty)
                 self._user_super.setObjectName("BodySM")
                 self._user_affil.setText(empty)
+                self._user_affil.setObjectName("BodySM")
                 self._user_status.setText(status)
                 return
             self._user_identifier.setText(
                 str(me.get("identifier") or t("settings.user.not_set"))
             )
+            self._user_identifier.setObjectName("ValueSM")
             display = str(
                 me.get("displayName")
                 or " ".join(
@@ -1102,6 +1109,7 @@ class SettingsPane(QWidget):
                 or t("settings.user.not_set")
             )
             self._user_display.setText(display)
+            self._user_display.setObjectName("ValueSM")
             is_super = bool(me.get("superuser"))
             self._user_super.setText(
                 t("settings.user.yes") if is_super else t("settings.user.no")
@@ -1110,6 +1118,7 @@ class SettingsPane(QWidget):
             self._user_affil.setText(
                 str(me.get("affiliation") or t("settings.user.not_set"))
             )
+            self._user_affil.setObjectName("ValueSM")
             self._user_status.setText(status)
         except Exception:
             pass
