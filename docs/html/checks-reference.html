@@ -22,7 +22,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 </style>
 </head>
 <body>
-<header class="hero"><div class="wrap"><h1>Auto-checks reference</h1><p>What the engine verifies when you press <b>Run checks</b>, what each badge means, and what each of the 21 checks can find. Checks are ports of the R inspectors in <code>CUR_Res_CurationTools</code> — see <a href="engine-port.html" style="color:#7dd3fc">Engine port</a> for the port matrix.</p></div></header>
+<header class="hero"><div class="wrap"><h1>Auto-checks reference</h1><p>What the engine verifies when you press <b>Run checks</b>, what each badge means, and what each of the 22 checks can find. Checks are ports of the R inspectors in <code>CUR_Res_CurationTools</code> — see <a href="engine-port.html" style="color:#7dd3fc">Engine port</a> for the port matrix.</p></div></header>
 <nav class="top"><div class="wrap">
 <a href="index.html">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html" aria-current="page">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a><a href="proposals.html">Proposals</a>
 </div></nav>
@@ -65,7 +65,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td><span class="pill p-err">error</span></td><td>Data integrity problem</td><td>0-byte file; unparseable CSV/JSON/XML/notebook; corrupt zip/tar; unreadable SPSS/Stata/SAS; missing GeoPackage geometry; truncated image; checksum mismatch</td></tr>
 </table>
 
-<h2>Per-format checks (21 modules)</h2>
+<h2>Per-format checks (22 modules)</h2>
 <table>
 <tr><th>Module</th><th>Check IDs</th><th>Examines</th><th>Notable findings</th></tr>
 <tr><td><code>csv_check</code></td><td><code>format.csv.*</code></td><td>Encoding, delimiter sniff, ragged/missing/duplicate rows, PII (piigex + CA) on 1k-row sample; full parse capped 50k rows (<code>truncated:true</code> when sampled)</td><td>Ragged / duplicates / PII (warning)</td></tr>

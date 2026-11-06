@@ -60,13 +60,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-_Add your build and test commands here_
-
-```bash
-# Example:
-# npm install
-# npm test
-```
+See `AGENTS.md` Quick start (`pytest` 454 tests, `python main.py`, `python main.py --gallery`); full workflow via `bd prime`.
 
 ## Architecture Overview
 

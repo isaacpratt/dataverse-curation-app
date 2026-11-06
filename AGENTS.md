@@ -8,11 +8,11 @@ Design decisions: native PySide6 desktop app (single process), API-token authent
 dataverse-curation-app/
 ├── docs/html/            # documentation (source of truth): architecture, engine port, checks, dataverse, report contract, dev, user guide
 ├── engine/               # Python check engine (ports of the R inspectors)
-│   ├── checks/           # one module per format (21), plus base.py/_util.py
+│   ├── checks/           # one module per format (22), plus base.py/_util.py
 │   ├── report.py         # DatasetReport JSON contract
 │   ├── dispatcher.py     # extension -> check mapping
 │   ├── runner.py         # run_report / list_planned_checks
-│   └── tests/            # pytest suite (205 tests; see CI)
+│   └── tests/            # pytest suite (212 tests; see CI)
 ├── ui/                   # PySide6 views (main window, dashboard, detail, settings/about panes, log page, workers, dialogs, theme, widgets incl. AppTable content-fit, progress ring)
 │   ├── theme.py          # palette -> semantic roles -> contrast contract -> one button system
 │   ├── widgets.py        # the component kit (every view builds its controls through it)
@@ -35,7 +35,7 @@ python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
-pytest                        # 340 tests (run pytest --collect-only -q for current count)
+pytest                        # 454 tests (212 engine + 242 UI; run pytest --collect-only -q for current count)
 python -m pip install -e ".[dev]"   # dev extras: needed only for `make typecheck` (mypy)
 python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
 python main.py --gallery      # the component gallery: every kit component on one page
@@ -64,7 +64,7 @@ Outputs: `dist/curation-app-lite/curation-app-lite.exe` (onedir folder, fast lau
 - `docs/html/report-contract.html` — the JSON report format shared by engine and GUI
 - `docs/html/development.html` — setup, testing, adding checks, UI conventions, the component gallery, Qt pitfalls, probes, the planned dark-mode step, packaging
 - `docs/html/user-guide.html` — how a curator uses the app (dashboard, detail, metadata, log)
-- `docs/html/proposals.html` — proposed but not yet implemented changes (queued UX work, deferred checks, open decisions)
+- `docs/html/proposals.html` — pointer stub; plan lives in beads (`bd ready` / `bd list`)
 
 This project uses **bd** (beads) for issue tracking and project plan. Run `bd prime` for full workflow context.
 
@@ -247,7 +247,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Bead creation
 
-Use `.beads/templates/bead-creation.md` for every new bead. Before creating: `bd list` + `bd search` for dedup, confirm the item is still open (closed items are in `docs/html/proposals.html` — never re-create them), set type/priority, and order children with `bd dep add` so `bv` shows the work order. Descriptions are self-contained markdown: Outcome → Context (with file/section anchors) → Hooks → Tests (unit + e2e/probe, with what passing looks like). One bead, one outcome — split sequencing into separate beads. After creating, `bd show <id>` and fix anything that needs context you had to remember.
+Use `.beads/templates/bead-creation.md` for every new bead. Before creating: `bd list` + `bd search` for dedup, confirm the item is still open (closed items are in beads, not `docs/html/proposals.html` — never re-create them), set type/priority, and order children with `bd dep add` so `bv` shows the work order. Descriptions are self-contained markdown: Outcome → Context (with file/section anchors) → Hooks → Tests (unit + e2e/probe, with what passing looks like). One bead, one outcome — split sequencing into separate beads. After creating, `bd show <id>` and fix anything that needs context you had to remember.
 
 ## License
 

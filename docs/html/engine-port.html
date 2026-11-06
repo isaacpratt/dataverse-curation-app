@@ -22,7 +22,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 </style>
 </head>
 <body>
-<header class="hero"><div class="wrap"><h1>Engine port: R → Python</h1><p>Self-contained re-implementation of the <code>CUR_Res_CurationTools</code> inspectors — no R runtime ships with the app.</p><div class="badges"><span class="badge ok">Phase 1 complete</span><span class="badge ok">21 modules ported</span><span class="badge ok">340 tests</span><span class="badge warn">MATLAB .mat deferred</span></div></div></header>
+<header class="hero"><div class="wrap"><h1>Engine port: R → Python</h1><p>Self-contained re-implementation of the <code>CUR_Res_CurationTools</code> inspectors — no R runtime ships with the app.</p><div class="badges"><span class="badge ok">Phase 1 complete</span><span class="badge ok">22 modules ported</span><span class="badge ok">454 tests</span><span class="badge warn">MATLAB .mat deferred</span></div></div></header>
 <nav class="top"><div class="wrap">
 <a href="index.html">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html" aria-current="page">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a><a href="proposals.html">Proposals</a>
 </div></nav>
@@ -32,7 +32,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <p>Bundling portable R was evaluated and rejected as a last resort: base R is ~100 MB and the required packages (tidyverse, haven, exiftoolr, …) push a portable install to ~400 MB. The Python engine ships at ~70 MB (lite zip, ~158 MB unpacked) with identical pass/fail semantics — verified by parity tests, not by inspection.</p>
 
 <h2>Status</h2>
-<div class="callout ok"><b>Phase 1 complete: 21 check modules ported and verified; 340 tests passing.</b> Run <code>pytest --collect-only -q</code> for the live count (205 engine + 135 UI). MATLAB <code>.mat</code> (<code>Scripts/Inspect_mat_Script.R → scipy.io</code>) stays <b>deferred</b> to keep <code>scipy</code> optional — <code>mat_check.py</code> does not exist; <code>.mat</code> files surface via <code>inventory.unchecked_types</code>. If added, it would be lazy-imported like the other heavy libs.</div>
+<div class="callout ok"><b>Phase 1 complete: 22 check modules ported and verified; 454 tests passing.</b> Run <code>pytest --collect-only -q</code> for the live count (212 engine + 242 UI). MATLAB <code>.mat</code> (<code>Scripts/Inspect_mat_Script.R → scipy.io</code>) stays <b>deferred</b> to keep <code>scipy</code> optional — <code>mat_check.py</code> does not exist; <code>.mat</code> files surface via <code>inventory.unchecked_types</code>. If added, it would be lazy-imported like the other heavy libs.</div>
 
 <h2>Notable divergences from the R scripts</h2>
 <table>
@@ -76,7 +76,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td><code>validate_schema.R</code></td><td>—</td><td>stdlib</td><td>—</td><td><span class="pill p-mut">skipped</span></td></tr>
 <tr><td><code>Inspect_mat_Script.R</code></td><td>— (via <code>inventory.unchecked_types</code>)</td><td><code>scipy.io</code> (deferred)</td><td><code>data/Inspect_mat/</code></td><td><span class="pill p-warn">deferred</span></td></tr>
 </table>
-<p>Plus <code>secret_check.py</code> (<code>format.secrets</code>, hush-scan over code/text/config) — an app-level addition with no single R counterpart. Runner: <code>engine/runner.py:run_report</code> aggregates into <code>DatasetReport</code>; <code>list_planned_checks</code> powers the Auto-Checks tab.</p>
+<p>Plus <code>secret_check.py</code> (<code>format.secrets</code>, hush-scan over code/text/config) and <code>access_check.py</code> (<code>inventory.restricted_files</code> / <code>inventory.embargoed_files</code>) — app-level additions with no single R counterpart. Runner: <code>engine/runner.py:run_report</code> aggregates into <code>DatasetReport</code>; <code>list_planned_checks</code> powers the Auto-Checks tab.</p>
 
 <h2>Go / no-go criteria (spike — met)</h2>
 <div class="callout ok">Prototyped the three hardest formats first (<code>sas7bdat</code>, <code>gpkg</code>, <code>nc</code>/<code>hdf5</code>). <b>Go</b> when (1) every R check has a Python equivalent with the same pass/fail semantics, (2) both engines yield the same findings on the same <code>data/</code> samples, (3) runtime on the largest sample stays within 2× of R. Single-format failure degrades to documented “not executed” instead of blocking; portable R fallback only if multiple formats fail — not needed.</div>
@@ -85,6 +85,6 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <p>The R book stays the authoritative reference; the Python engine is the runtime. Parity tests (<code>pytest -q</code>, CI <code>.github/workflows/ci.yml</code>) are the contract keeping them in sync and must run in CI as the R scripts evolve.</p>
 
 </div></main>
-<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-11-04, verified against code.</div></footer>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-11-06, verified against code.</div></footer>
 </body>
 </html>

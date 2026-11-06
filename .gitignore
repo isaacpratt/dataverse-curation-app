@@ -44,4 +44,5 @@ queue_card.png
 .dolt/
 .beads-credential-key
 .beads/proxieddb/
+.beads/seed.ps1
 *.gate.lock*
