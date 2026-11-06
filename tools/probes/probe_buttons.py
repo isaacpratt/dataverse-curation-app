@@ -86,9 +86,20 @@ def main() -> int:
             )
 
     # The app sheet must not carry a second, hand-written copy of a
-    # button rule: one generator, one rule per kind.
+    # button rule: one generator, one rule per kind. Scoped variants
+    # (e.g. a button seen through a container that themes its children,
+    # or a QDialogButtonBox) are allowed — they come from the same
+    # generator, and the comparison loop above proves they agree.
+    # Count only the unscoped app-level rule (selector alone, not part
+    # of a descendant selector).
+    rules = blocks(app_sheet)
     for object_name in set(BUTTON_OBJECTS.values()):
-        count = app_sheet.count(f"QPushButton#{object_name} ")
+        expected = f"QPushButton#{object_name}"
+        count = sum(
+            1
+            for selector, _props in rules
+            if selector == expected and ":" not in selector
+        )
         report.check(
             count <= 1,
             f"{object_name}: one app-level rule",

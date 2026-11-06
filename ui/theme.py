@@ -887,14 +887,7 @@ QDialogButtonBox QPushButton:focus {{
     outline: 2px solid {ACCENT_FOCUS_RING};
     outline-offset: 2px;
 }}
-QDialogButtonBox QPushButton#PrimaryButton {{
-    background: {PRIMARY};
-    color: {ON_PRIMARY};
-    border: none;
-}}
-QDialogButtonBox QPushButton#PrimaryButton:hover {{
-    background: {ON_PRIMARY_FIXED_VARIANT};
-}}
+{button_qss("primary", scope="QDialogButtonBox")}
 
 /* ===== Inputs ===== */
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox {{
