@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QMenu,
     QTableWidgetItem,
@@ -44,6 +43,7 @@ from ui.theme import (
 from ui.widgets import (
     AppTable,
     ElidedLabel,
+    SortArrowHeaderView,
     flush_table_style,
     make_action_button,
     make_caption_label,
@@ -1360,7 +1360,10 @@ class DashboardView(QWidget):
         mirrored between the two -- the native header does this for free.
         """
         self._table.horizontalHeader().setVisible(False)
-        self._queue_header = QHeaderView(Qt.Horizontal)
+        # The mirror matches the table header's paint, including the
+        # self-drawn sort arrow (the style's native indicator floats in
+        # the seam above the header on this Qt build).
+        self._queue_header = SortArrowHeaderView(Qt.Horizontal)
         self._queue_header.setModel(self._table.model())
         self._queue_header.setSectionsMovable(True)
         self._queue_header.setSectionsClickable(True)

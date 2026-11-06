@@ -54,6 +54,7 @@ from ui.theme import (
     FONT_MICRO,
     FONT_SMALL,
     MONO_FAMILY,
+    ON_SURFACE_VARIANT,
     PRIMARY_FIXED,
     RADIUS_LG,
     SURFACE_CARD,
@@ -76,6 +77,7 @@ from ui.theme import (
     input_qss,
     label_badge_style,
     scrollbar_lane_qss,
+    transparent_qss,
     transparent_surface_qss,
     workflow_step_qss,
 )
@@ -86,6 +88,7 @@ __all__ = [
     "AppTable",
     "AppTree",
     "AppTreeWidget",
+    "SortArrowHeaderView",
     "PaneFooter",
     "WorkflowRail",
     "flush_table_style",
@@ -207,6 +210,115 @@ class _HeaderTooltipFilter(QObject):
         return super().eventFilter(obj, event)
 
 
+class SortArrowHeaderView(QHeaderView):
+    """QHeaderView that draws its own sort arrow, inside the section.
+
+    The style's native CE_HeaderSortIndicator paints at the wrong place
+    under this app's header QSS on this Qt build — instead of sitting
+    beside the label it floats at the top-centre of the section, a stray
+    glyph in the seam above the header. No
+    ``QHeaderView::section::sort-indicator`` rule can position it
+    (QSS image paints centred over the text, the vector arrow floats),
+    and no painter can be opened for the extra glyph (paintEvent already
+    runs with one active, so a nested QPainter on the widget silently
+    fails). The arrow therefore rides on a child label positioned over
+    the section, refreshed on every paint — a paint is exactly when
+    section positions may have changed.
+
+    All Qt state semantics stay stock: views set/read
+    sortIndicatorSection/order/shown exactly as before (the dashboard's
+    toggle logic, the saved-sort restore and the mirror header keep
+    working). The native indicator is suppressed only for the paint
+    pass; the flag visible to callers stays as they set it, and the
+    label is the arrow.
+    """
+
+    _ARROW_PX = 14
+    _ARROW_MARGIN = 8
+
+    def __init__(self, orientation: Qt.Orientation, parent: QWidget | None = None) -> None:
+        super().__init__(orientation, parent)
+        self._arrow = QLabel(self)
+        self._arrow.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self._arrow.setFocusPolicy(Qt.NoFocus)
+        self._arrow.setMouseTracking(False)
+        self._arrow.setStyleSheet(transparent_qss("QLabel"))
+        self._arrow.hide()
+        self._painting = False
+        # setSortIndicator / setSortIndicatorShown update the
+        # view's viewport, not the header — without this, the label
+        # would lag one paint behind the sorted order.
+        self.sortIndicatorChanged.connect(self._on_sort_indicator_changed)
+
+    def _on_sort_indicator_changed(self, *_args) -> None:
+        if not self._painting:
+            self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+        section = self.sortIndicatorSection()
+        active = (
+            self.orientation() == Qt.Horizontal
+            and self.isSortIndicatorShown()
+            and 0 <= section < self.count()
+            and not self.isSectionHidden(section)
+        )
+        if active:
+            # Suppress the native arrow for this one paint, then
+            # restore the flag. Updates stay disabled across the
+            # toggle so the two setter calls cannot post repaint
+            # requests; the label below is synced onto the paint
+            # that just happened.
+            self._painting = True
+            self.setUpdatesEnabled(False)
+            try:
+                self.setSortIndicatorShown(False)
+                super().paintEvent(event)
+                self.setSortIndicatorShown(True)
+            finally:
+                self.setUpdatesEnabled(True)
+                self._painting = False
+            self._sync_arrow()
+            return
+        super().paintEvent(event)
+        self._arrow.hide()
+
+    def _sync_arrow(self) -> None:
+        section = self.sortIndicatorSection()
+        if (
+            self.orientation() != Qt.Horizontal
+            or not self.isSortIndicatorShown()
+            or not (0 <= section < self.count())
+            or self.isSectionHidden(section)
+        ):
+            self._arrow.hide()
+            return
+        try:
+            from ui.icons import icon
+
+            name = (
+                "chevron-down" if self.sortIndicatorOrder() == Qt.DescendingOrder else "chevron-up"
+            )
+            pixmap = icon(
+                name, color=ON_SURFACE_VARIANT, size=self._ARROW_PX
+            ).pixmap(QSize(self._ARROW_PX, self._ARROW_PX))
+            if pixmap.isNull():
+                self._arrow.hide()
+                return
+            x = (
+                self.sectionViewportPosition(section)
+                + self.sectionSize(section)
+                - self._ARROW_MARGIN
+                - self._ARROW_PX
+            )
+            y = (self.height() - self._ARROW_PX) // 2
+            self._arrow.setPixmap(pixmap)
+            self._arrow.resize(self._ARROW_PX, self._ARROW_PX)
+            self._arrow.move(x, y)
+            self._arrow.show()
+        except Exception:
+            self._arrow.hide()
+
+
 class AppTable(QTableWidget):
     """Build a standard table (sortable columns, row selection, no grid).
 
@@ -248,6 +360,10 @@ class AppTable(QTableWidget):
         widths: dict | None = None,
     ) -> None:
         super().__init__(0, len(headers), parent)
+        # The kit header draws the sort arrow itself (see
+        # SortArrowHeaderView): the style's native indicator floats in
+        # the seam above the header on this Qt build.
+        self.setHorizontalHeader(SortArrowHeaderView(Qt.Horizontal, self))
         self.setHorizontalHeaderLabels(list(headers))
         hdr = self.horizontalHeader()
         hdr.setStretchLastSection(stretch_last)
@@ -544,6 +660,7 @@ class AppTree(QTreeView):
         flush: bool = True,
     ) -> None:
         super().__init__(parent)
+        self.setHeader(SortArrowHeaderView(Qt.Horizontal, self))
         self.setHeaderHidden(False)
         self.setUniformRowHeights(False)
         self.setExpandsOnDoubleClick(True)
@@ -635,6 +752,7 @@ class AppTreeWidget(QTreeWidget):
         flush: bool = False,
     ) -> None:
         super().__init__(parent)
+        self.setHeader(SortArrowHeaderView(Qt.Horizontal, self))
         self.setUniformRowHeights(False)
         self.setExpandsOnDoubleClick(True)
         self.setAnimated(True)
@@ -1038,12 +1156,12 @@ def make_caption_label(text: str = "", *, wrap: bool = True) -> QLabel:
 
 
 def make_field_label(text: str = "", *, wrap: bool = True) -> QLabel:
-    """Field / metric label (``LabelStrongSM`` token: 11px, semibold,
-    primary text colour).
+    """Field / metric label using the LabelStrongSM token.
 
-    The label above or beside a value: a metric name, a field name, a
-    section label inside a card. Strong, never muted: the label is
-    what the user reads to find the value next to it.
+    11px semibold primary text colour. The label above or beside a
+    value: a metric name, a field name, a section label inside a card.
+    Strong, never muted: the label is what the user reads to find the
+    value next to it.
     """
     lbl = QLabel(text)
     lbl.setObjectName("LabelStrongSM")

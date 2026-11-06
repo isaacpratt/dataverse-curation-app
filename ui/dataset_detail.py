@@ -887,7 +887,7 @@ class DatasetDetailView(QWidget):
 
     @staticmethod
     def _meta_is_compound(value) -> bool:
-        """True when a dict has real subfields (not just a wrapped ``value``)."""
+        """Return True when a dict has real subfields (not just a wrapped ``value``)."""
         if not isinstance(value, dict):
             return False
         keys = [k for k in value.keys() if k != "typeName"]
