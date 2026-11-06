@@ -4,13 +4,8 @@ Desktop curation assistant for Alliance Dataverse instances. It pulls datasets s
 
 ## Status
 
-- Phase 0 — scaffold complete
-- Phase 1 - R-to-Python engine port: **21 check modules ported, 340 tests passing** (`docs/html/engine-port.html`; MATLAB `.mat` deferred to keep `scipy` optional; run `pytest --collect-only -q` for the current count)
-- Phase 2 — report runner complete: `python main.py --headless <dir>` produces the `DatasetReport` JSON end-to-end (`engine/runner.py:run_report`)
-- Phase 3 — Dataverse client + download manager complete: total-driven paginated Search discovery (draft-aware, `per_page=1000`) with in-process pooled inventory enrichment, per-dataset `IN_REVIEW` lock confirmation, approval-gated zip download with streaming, original-format fetch for tabular ingests, skip-if-staged, checksum verification with `.tab` warnings (not errors), zip-slip guard; live-verified against `https://demo.borealisdata.ca`
-- Phase 4 — PySide6 GUI complete: dashboard (12 sortable/column-togglable columns with pill delegates, status/label/collection filters, content-width auto-fit with visible resize handles and reset-to-defaults), dataset detail (main column: completeness/manifest/auto-checks/version-log cards; sticky sidebar: sections nav, dataset timeline, assessment that pushes curation labels), settings/about stack panes, Log stack page with severity legend + Live toggle, selectable text + table copy everywhere
-- Phase 5 — packaging complete: PyInstaller lite build (onedir folder, all 21 checks lazy-import optional libs) beside a full onedir build whose heavy libs the lite exe picks up; `Makefile` targets `build` / `rebuild-lite` / `build-full`
-- **All planned phases complete** (340 tests: 205 engine + 135 UI). Remaining work is queued but does not block the app - the live plan is `docs/html/proposals.html`: measuring the painting-window/enrichment-cap constants and an installer. The live authenticated pass is deferred until later; testing continues against the demo Borealis instance (`demo.borealisdata.ca`), a real Dataverse deployment but not the production environment.
+The live plan is `docs/html/proposals.html`
+Issues live in Beads - details in 'AGENTS.md'
 
 ## Context
 
