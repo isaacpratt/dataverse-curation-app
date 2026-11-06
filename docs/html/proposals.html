@@ -21,79 +21,19 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 </style>
 </head>
 <body>
-<header class="hero"><div class="wrap"><h1>Proposals</h1><p>The remaining plan, by bucket — queued UX work, deferred checks, packaging milestones and open decisions — followed by the record of what has shipped. The full change history lives in the <a href="architecture.html">architecture</a> decision log.</p></div></header>
+<header class="hero"><div class="wrap"><h1>Proposals</h1><p>Tasks and plan now live in <b>beads</b>. This page is a pointer; the queue itself is tracked there.</p></div></header>
 <nav class="top"><div class="wrap">
 <a href="index.html">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a><a href="proposals.html" aria-current="page">Proposals</a>
 </div></nav>
 <main><div class="wrap">
 
-<div class="callout"><b>How this page works:</b> the remaining plan leads; a landed item moves down to the shipped record at the bottom, and its lasting detail goes to <a href="architecture.html">Architecture</a>'s decision log. Last triaged: 2026-11-04.</div>
+<div class="callout"><b>Tasks and plan live in <b>beads</b> now.</b> This page used to list the remaining plan here; those items are now beads and are no longer duplicated on this page. The full change history lives in the <a href="architecture.html">architecture</a> decision log.</div>
 
-<div class="callout warn"><b>Suggested order (nothing here blocks the app):</b>
-<ol>
-<li><b>Live authenticated pass</b> — <b>deferred until later</b>; it is not a release blocker. Testing continues against the <b>demo Borealis instance</b> (<code>demo.borealisdata.ca</code>), which is a real Dataverse deployment — just not the production environment. Discovery and enrichment are verified there for a guest; drafts and curation labels still need a token, so authenticated behavior stays unproven until that pass runs.</li>
-<li><b>Measure the two new constants</b> — painting window (2,000 rows) and enrichment cap (200 rows) are safe defaults, not measured optima.</li>
-<li><b>Installer</b> — packaging milestone; portable onedir builds already work.</li>
-</ol>
-</div>
+<p>Find the next unblocked work with <code>bd ready</code>, browse the full queue with <code>bd list</code>, or open one item with <code>bd show &lt;id&gt;</code>. The previous buckets (queued UX work, deferred checks, packaging milestones, open decisions) are all tracked as beads — if this page and beads ever disagree, beads win.</p>
 
-<h2 id="queued">Queued UX work</h2>
-<p>Carried over from the UX critique re-runs; the P0s of the 2026-10-02 and 2026-10-06 batches are already fixed, these remain.</p>
-<table>
-<tr><th>Proposal</th><th>What it would do</th><th>Where</th><th>Priority</th></tr>
-<tr><td>Remaining P2s (2026-10-06 critique re-run)</td><td>The P2 items recorded during the dual-agent critique re-run (P0s 1→0, score 28→26/40) — recorded in the critique notes, not yet scheduled.</td><td>various</td><td><span class="pill p-warn">P2</span></td></tr>
-<tr><td>Step-4 quick wins</td><td>Small Auto-Checks (workflow step 4) improvements flagged during the workflow critique — cheap wins queued for a spare batch.</td><td><code>ui/dataset_detail.py</code></td><td><span class="pill p-mut">—</span></td></tr>
-<tr><td>Busy-indicator naming</td><td>Standardize the busy/progress indicator naming and appearance across views (spinners, indeterminate bars, status labels) — one vocabulary, one component. Partly addressed by the progress ring (<code>ui/ring.py</code>); the remaining views still use bare <code>QProgressBar</code>.</td><td><code>ui/</code></td><td><span class="pill p-mut">P3</span></td></tr>
-<tr><td>MetricCard stylesheet warning</td><td>Optional polish: silence the remaining <code>MetricCard</code> stylesheet warning (cosmetic console noise, no user impact).</td><td>metric cards</td><td><span class="pill p-mut">optional</span></td></tr>
-</table>
-
-<h2 id="verification">Verification</h2>
-<table>
-<tr><th>Item</th><th>Why it matters</th><th>Where</th><th>Priority</th></tr>
-<tr><td>Step-6 live authenticated pass</td><td>Exercise the export/report path with a <b>real API token</b> — <b>deferred until later</b>, not a release blocker. All verification so far is tokenless against the <b>demo Borealis instance</b> (<code>demo.borealisdata.ca</code>), a real Dataverse deployment but not the production environment (401/404 noise on protected calls is expected), so authenticated behavior is unproven end-to-end. The 2026-10-29 live pass confirmed discovery and enrichment for a guest, but drafts and curation labels still need a token.</td><td>verification</td><td><span class="pill p-mut">later</span></td></tr>
-</table>
-
-<h2 id="checks">Deferred engine checks</h2>
-<table>
-<tr><th>Check</th><th>Why it is deferred</th><th>Behavior today</th></tr>
-<tr><td><code>mat_check.py</code> (MATLAB <code>.mat</code>)</td><td>Keeps <code>scipy</code> out of the lite build (size); <code>Scripts/Inspect_mat_Script.R → scipy.io</code></td><td><code>.mat</code> files surface once per dataset as <code>inventory.unchecked_types</code> (warning) — manual review required. If added it would lazy-import like the other heavy libs.</td></tr>
-<tr><td>OCR parity (<code>Inspect_OCR_Script.R</code>)</td><td>Would run tesseract on scanned PDFs; today <code>pdf_check</code> OCR mode is a stub</td><td>Degrades to “not executed” (reported as an optional-tool warning); without tesseract installed the same notice appears.</td></tr>
-<tr><td><code>frdr_filename_check.R</code>, <code>validate_schema.R</code></td><td>Skipped by design — filename/junk coverage already lives in <code>extensions_check</code>; schema validation has no curation use case yet</td><td>Not ported; revisit only if curators ask for them.</td></tr>
-</table>
-
-<h2 id="packaging">Packaging milestones</h2>
-<ul>
-<li><b>Installer (Inno Setup / WiX)</b> — the app ships as portable onedir folders today (<code>dist/curation-app-lite/</code>, <code>dist/curation-app-full/</code>). An installer (Start-menu entry, upgrade path, file associations) is the documented next milestone; nothing is blocked on it.</li>
-</ul>
-
-<h2 id="decisions">Open decisions</h2>
-<div class="callout warn"><b>Needs a call before work starts:</b>
-<ul>
-<li><b>Delete <code>ui/assets/32x32.png</code>?</b> — superseded by <code>16x16.png</code> (dashboard/taskbar) and <code>docent-mark.ico</code> (exe); no code references it anymore. Trivial cleanup once confirmed.</li>
-<li><b>25k-row paint benchmark</b> — the painting window (2,000 rows) is a safe default, not a measured optimum. Benchmark <code>_apply_filter()</code> + sort + keystroke at 25k synthetic rows and raise the cap if the real cost is acceptable. The windowing code makes this a one-line change.</li>
-<li><b>Enrichment cap tuning</b> — 200 rows per refresh is a starting point, not a measured optimum. It trades dashboard completeness against N version fetches per refresh; raise it if curators want sizes on every row, lower it for very large collections.</li>
-<li><b>Auth-fallback policy for enrichment</b> — a dataset whose every version is refused is currently skipped silently (the row stays thin). A curator might rather see “size unavailable” than a blank cell.</li>
-</ul>
-</div>
-
-<h2 id="shipped">Shipped record</h2>
-<p>Kept here for traceability; each item is in the app today and its lasting detail is in the <a href="architecture.html">decision log</a>.</p>
-<table>
-<tr><th>Item</th><th>Outcome</th><th>Where</th></tr>
-<tr><td>W-01 bulk inventory enrichment</td><td>Pooled per-dataset version fetches add real byte totals, true depositor and authoritative state to the thin search rows (drafts first, capped at 200, sums only).</td><td><code>dataverse_client.py:enrich_datasets_with_inventory</code></td></tr>
-<tr><td>W-02/W-03 progressive paint</td><td>Rows appear as they are enriched; the Size column fills in progressively; a “pending” tooltip marks rows beyond the cap.</td><td><code>ui/workers.py</code>, <code>ui/dashboard.py</code></td></tr>
-<tr><td>W-06 dvmeta removal</td><td>The crawler dependency is gone (its 0.2.0 restructure had already broken the CLI contract, making the branch dead code).</td><td><code>requirements.txt</code>, <code>pyproject.toml</code></td></tr>
-<tr><td>W-08 live verification</td><td>Borealis demo: 2,097 datasets over 3 pages (the old 1,000 cap hid 52% of the repository); enrichment verified on published datasets.</td><td>verification</td></tr>
-<tr><td>W-09 progress ring</td><td>Circular ring beside the status line: catch-up easing, stall backoff, error tint, phased fractions (discovery → enrichment → locks → labels).</td><td><code>ui/ring.py</code>, <code>ui/progress.py</code></td></tr>
-<tr><td>W-10 total-driven discovery</td><td>Paging follows the server's <code>total_count</code> at <code>per_page=1000</code>; a short/empty page is the ground truth; collected vs. total is reconciled and gaps logged.</td><td><code>dataverse_client.py:list_draft_datasets</code></td></tr>
-<tr><td>W-11 painting window</td><td>The table paints the first 2,000 matching rows and says how many are hidden — filtering and sorting still cover the full set.</td><td><code>ui/dashboard.py</code></td></tr>
-<tr><td>W-12 ring reuse</td><td>Download (bytes/total) and check (files done/total) now drive the same ring on the dataset page.</td><td><code>ui/workers.py</code>, <code>ui/dataset_detail.py</code></td></tr>
-<tr><td>Settings unsaved-changes guard</td><td>The Settings pane tracks edits against a baseline snapshot and shows the shared <code>● unsaved</code> chip; leaving through any exit (nav toggle, dashboard, dataset, log, Review configuration, window close) asks <b>Save / Discard / Cancel</b> instead of silently dropping edits. Save/Revert live in one reusable <code>PaneFooter</code>, used by Settings and Review configuration.</td><td><code>ui/settings_dialog.py</code>, <code>ui/dialogs.py</code>, <code>ui/widgets.py</code>, <code>ui/main_window.py</code></td></tr>
-<tr><td>Detail workflow step rail</td><td>A persistent six-step rail (Metadata → Changes → Download → Checks → Export → Respond) in the dataset-detail header, replacing the Review/Response tab row. Each step shows its state (done / current / available / blocked) plus a next-step hint; steps navigate only — Download and Export just focus their header buttons. Derivation lives in the Qt-free <code>ui/workflow.py</code>.</td><td><code>ui/dataset_detail.py</code>, <code>ui/workflow.py</code>, <code>ui/widgets.py</code></td></tr>
-<tr><td>Startup: progressive shell</td><td>Settings/About/Requirements/Log build on first navigation; the cached dashboard paints and the first crawl starts after the first frame. The window is cloaked until that frame paints (no blank/title-bar flash); warm onedir launches reach first paint in ~1 s, with an opt-in <code>DOCENT_STARTUP_LOG</code> probe for the full launch split.</td><td><code>main.py</code>, <code>startup_probe.py</code>, <code>ui/main_window.py</code>, <code>ui/dashboard.py</code></td></tr>
-</table>
+<p>What has already shipped stays recorded in the <a href="architecture.html">decision log</a>.</p>
 
 </div></main>
-<footer><div class="wrap"><a href="index.html">← Overview</a> · Created 2026-10-07 · Last triaged 2026-11-04 · remaining plan, then shipped record.</div></footer>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Tasks and plan: beads (<code>bd ready</code> / <code>bd list</code> / <code>bd show &lt;id&gt;</code>).</div></footer>
 </body>
 </html>

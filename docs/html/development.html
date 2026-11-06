@@ -188,8 +188,8 @@ python -m pytest engine/tests -q    # the engine contracts
 python -m ruff check ui/           # lint</code></pre>
 <p><code>ui/tests/conftest.py</code> provides a session-scoped <code>qapp</code> and <code>win</code> (one offscreen application, one main window). The window is shared, so every test sets its own preconditions; a test that needs the dashboard on screen calls <code>win._show_dashboard()</code> first &mdash; the queue's fit is a no-op while the table is hidden.</p>
 
-<h2>Planned: dark mode</h2>
-<div class="callout"><b>Dark mode is not implemented.</b> It is the next planned step in the UI standardisation, recorded here so the ordering is explicit. Everything below is groundwork that is already in place; the work itself has not started.</div>
+<h2>Planned: dark mode (beads epic: <code>dv-4jm</code>)</h2>
+<div class="callout"><b>Dark mode is not implemented.</b> It is tracked as beads epic <code>dv-4jm</code> (children <code>dv-zds</code> → <code>dv-m2q</code> → <code>dv-m8m</code> → <code>dv-q7t</code> → <code>dv-ceb</code>). Open the epic with <code>bd show dv-4jm</code>; it is the next planned step in the UI standardisation, recorded here so the ordering is explicit. Everything below is groundwork that is already in place; the work itself has not started.</div>
 <p>The reason it is now possible at all is the role layer. A dark theme is not a second set of colours scattered through the views &mdash; it is a second role table. The palette stays a palette (<code>PRIMARY</code> is still <code>#004ccd</code>); the roles decide what each palette entry is used for, and the role table decides which palette entry each role points at.</p>
 <p>What a dark theme needs, in order:</p>
 <ol>
