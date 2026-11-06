@@ -109,12 +109,12 @@
   },
   "log": {
     "title": "Dataverse Communication Log",
-    "err_tip": "Lines containing ERROR render on the brand error fill (bold)",
-    "warn_tip": "Lines containing WARN/WARNING render on the warm fill (bold)",
+    "err_tip": "ERROR lines and failing responses (4xx/5xx) render in red text",
+    "warn_tip": "WARN/WARNING lines render in amber text",
     "err_chip": "ERROR",
     "warn_chip": "WARN",
     "plain_chip": "INFO · DEBUG plain",
-    "plain_tip": "Everything else stays unstyled; identifiers and details keep their accents",
+    "plain_tip": "Everything else keeps the default text colour; base URLs, API paths, methods, status codes and DOIs keep their accents",
     "search": "Search log…",
     "live": "Live",
     "paused": "Paused",
@@ -423,6 +423,9 @@
       "install_frozen_status": "Install not available in frozen build.",
       "uninstall_frozen": "Pip uninstall is not available in the frozen portable. Manage packages from source:\n  pip uninstall {package}",
       "uninstall_frozen_status": "Uninstall not available in frozen build.",
+      "uninstall_confirm_title": "Uninstall {package}?",
+      "uninstall_confirm_body": "The package is removed from this Python environment. Checks that need it stop working until you install it again.",
+      "uninstall_confirm_yes": "Uninstall",
       "bulk_frozen": "Bulk install not available in frozen portable. Install from source:\n  pip install {packages}",
       "all_installed": "All optional packages are already installed.",
       "installing_status": "Installing {package}… (UI stays responsive)",
@@ -624,6 +627,9 @@
       "run_checks": "Run checks",
       "run_checks_tip": "Download the dataset first — checks run on the staged files",
       "run_checks_tip_staged": "Run the automated curation checks on the staged files",
+      "cancel_checks": "Cancel checks",
+      "cancel_checks_tip": "Stop the running checks — the report is not written",
+      "cancel_checks_a11y": "Cancel the running checks",
       "response_tab": "Response",
       "show_raw_metadata": "Show all metadata fields",
       "hide_raw_metadata": "Hide raw metadata",
@@ -632,6 +638,12 @@
       "open_link": "Open in Dataverse ↗",
       "open_link_draft": "Open in Dataverse — DRAFT ↗",
       "curation_label_set_by": "{label}\nSet {when} by {who}"
+    },
+    "sidebar": {
+      "collapse_tip": "Hide the sidebar — the main column gets the whole width",
+      "collapse_a11y": "Hide the sidebar",
+      "show_action": "Show sidebar",
+      "sections_tip": "Jump to a section of this dataset"
     },
     "workflow": {
       "run_checks_first": "Run checks first — then Export reports… becomes available.",
@@ -670,6 +682,8 @@
       "cancelling": "Cancelling — stopping after the current chunk…",
       "download_cancelled": "Download cancelled — files already staged were kept.",
       "running_checks": "Running automated curation checks…",
+      "checks_cancelled": "Checks cancelled — no report was written.",
+      "checks_failed": "Checks failed — {reason} Nothing was written; fix the problem and run them again.",
       "checks_complete": "Checks complete — {findings} finding(s) ({errors} errors, {warnings} warnings, {skipped} skipped) across {files} files.",
       "report_auto_saved": "Report auto-saved to {name}",
       "report_auto_save_failed": "Could not auto-save the report (see log).",
@@ -687,7 +701,7 @@
       "not_run": "Not run yet",
       "no_file_list": "No file list yet — load metadata to see which checks will run.",
       "no_file_checks": "No file checks",
-      "no_files_in_dataverse": "This dataset contains no files in Dataverse — file checks do not apply. Metadata checks above still apply.",
+      "no_files_in_dataverse": "This dataset contains no files in Dataverse",
       "summary_counts": "{passed} passed · {warnings} warn · {errors} errors · {skipped} skipped",
       "file_result_format": "{path} — {message}",
       "all_passed": "All checks passed — no findings.",
@@ -871,7 +885,10 @@
       "recorded_in_log": "\nRecorded in Dataset log below.",
       "recorded_in_log_para": "\n\n(Recorded in Dataset log below.)",
       "label_set_and_logged": "\n\n(Label set in Dataverse + recorded in Dataset log.)",
-      "committed": "Assessment committed"
+      "committed": "Assessment committed",
+      "confirm_remote_title": "Write to Dataverse?",
+      "confirm_remote_body": "Committing \"{decision}\" also sets the Dataverse curation label of {pid} to the same value. The dataset changes on the server, for everyone.",
+      "confirm_remote_yes": "Write to Dataverse"
     },
     "download": {
       "title": "Download",

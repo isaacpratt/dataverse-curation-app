@@ -43,14 +43,14 @@ from ui.theme import (
 )
 from ui.widgets import (
     AppTable,
+    ElidedLabel,
     flush_table_style,
     make_action_button,
     make_caption_label,
     make_card_title,
     make_combo,
-    make_field_label,
+    make_elided_label,
     make_search_field,
-    make_section_heading,
     make_small_body_label,
 )
 from ui.workers import CrawlWorker
@@ -69,6 +69,23 @@ class _BarLabel(QLabel):
         """Set the label text and notify watchers via :attr:`changed`."""
         super().setText(text)
         self.changed.emit(text)
+
+
+class _ElidedBarLabel(ElidedLabel):
+    """Elided label that notifies on setText.
+
+    The crawl message can be a long sentence; it must not widen the
+    status pill past the window, and it must not push the scope (which
+    names the collection the curator is looking at) out of view.
+    """
+
+    changed = Signal(str)
+
+    def setText(self, text: str) -> None:
+        """Set the label text and notify watchers via :attr:`changed`."""
+        super().setText(text)
+        self.changed.emit(text)
+
 
 # Full column model. `key` maps to dataset dict + enriched local dates.
 # `default_visible=False` columns start hidden but can be enabled via Columns…
@@ -627,24 +644,55 @@ class DashboardView(QWidget):
         header.setStyleSheet(
             band_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#QueueHeaderBar")
         )
-        header.setFixedHeight(64)
-        hdr_layout = QHBoxLayout(header)
+        # Two rows, not one fixed-height band. The old single row needed
+        # 1529px (heading, search box, three filter combos, Columns and
+        # Refresh), so at 960px the right-hand filters were simply off
+        # screen. The heading row carries the title and the two right-hand
+        # actions; the filter row carries the search box and the filters.
+        hdr_layout = QVBoxLayout(header)
         hdr_layout.setContentsMargins(16, 12, 16, 12)
-        hdr_layout.setSpacing(12)
+        hdr_layout.setSpacing(10)
 
-        hdr_title = make_section_heading(t("dashboard.queue.title"))
-        hdr_layout.addWidget(hdr_title)
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(12)
+        hdr_title = make_elided_label(
+            t("dashboard.queue.title"), object_name="HeadlineMD"
+        )
+        title_row.addWidget(hdr_title, 1)
+
+        self._columns_btn = make_action_button(
+            t("dashboard.queue.columns"), kind="chip"
+        )
+        self._columns_btn.clicked.connect(self._show_columns_menu)
+        title_row.addWidget(self._columns_btn)
+
+        refresh = make_action_button(t("common.refresh"), kind="secondary")
+        refresh.clicked.connect(self.reload)
+        self._refresh_btn = refresh
+        title_row.addWidget(refresh)
+        hdr_layout.addLayout(title_row)
+
+        filter_row = QHBoxLayout()
+        filter_row.setContentsMargins(0, 0, 0, 0)
+        filter_row.setSpacing(8)
 
         search_wrap = QWidget()
         search_wrap.setObjectName("QueueSearchWrap")
         search_wrap.setStyleSheet(transparent_surface_qss("QueueSearchWrap"))
         search_layout = QHBoxLayout(search_wrap)
         search_layout.setContentsMargins(0, 0, 0, 0)
-        search_layout.setSpacing(0)
-        self._filter_edit = make_search_field(t("dashboard.queue.search"))
+        search_layout.setSpacing(8)
+        # Visible label for the search field (accessible name + label text)
+        self._search_lbl = QLabel(t("dashboard.queue.search"))
+        self._search_lbl.setObjectName("LabelMD")
+        search_layout.addWidget(self._search_lbl)
+        self._filter_edit = make_search_field(
+            t("dashboard.queue.search"), min_width=140
+        )
         self._filter_edit.textChanged.connect(lambda _t: self._filter_timer.start())
         search_layout.addWidget(self._filter_edit, 1)
-        hdr_layout.addWidget(search_wrap, 1)
+        filter_row.addWidget(search_wrap, 1)
 
         self._state_filter = make_combo(
             [
@@ -654,40 +702,30 @@ class DashboardView(QWidget):
                 (t("dashboard.filters.in_review"), "IN REVIEW"),
                 (t("dashboard.filters.deaccessioned"), "DEACCESSIONED"),
             ],
-            min_width=130,
+            min_width=110,
         )
         self._state_filter.currentTextChanged.connect(self._apply_filter)
-        hdr_layout.addWidget(self._state_filter)
+        filter_row.addWidget(self._state_filter)
 
         self._label_filter = make_combo(
             [
                 (t("dashboard.filters.label_all"), ""),
                 (t("dashboard.filters.label_none"), _NO_LABEL_SENTINEL),
             ],
-            min_width=150,
+            min_width=130,
             tip=t("dashboard.filters.label_tip"),
         )
         self._label_filter.currentTextChanged.connect(self._apply_filter)
-        hdr_layout.addWidget(self._label_filter)
+        filter_row.addWidget(self._label_filter)
 
         self._collection_filter = make_combo(
             [(t("dashboard.filters.collection_all"), "")],
-            min_width=150,
+            min_width=130,
             tip=t("dashboard.filters.collection_tip"),
         )
         self._collection_filter.currentTextChanged.connect(self._apply_filter)
-        hdr_layout.addWidget(self._collection_filter)
-
-        self._columns_btn = make_action_button(
-            t("dashboard.queue.columns"), kind="chip"
-        )
-        self._columns_btn.clicked.connect(self._show_columns_menu)
-        hdr_layout.addWidget(self._columns_btn)
-
-        refresh = make_action_button(t("common.refresh"), kind="secondary")
-        refresh.clicked.connect(self.reload)
-        self._refresh_btn = refresh
-        hdr_layout.addWidget(refresh)
+        filter_row.addWidget(self._collection_filter)
+        hdr_layout.addLayout(filter_row)
 
         queue_layout.addWidget(header)
 
@@ -722,6 +760,13 @@ class DashboardView(QWidget):
             self._table.viewport().installEventFilter(self)
         except Exception:
             pass
+        # Native header: keyboard focus + sort on Space/Return
+        native_hdr = self._table.horizontalHeader()
+        native_hdr.setFocusPolicy(Qt.StrongFocus)
+        native_hdr.setSectionsClickable(True)
+        # Ensure the sort indicator is shown at startup
+        native_hdr.setSortIndicatorShown(True)
+        self._table.setSortingEnabled(True)
         # Column bar. By default the table's own header is the column bar:
         # the header the user drags is the header that is painted, and Qt
         # already starts the vertical scrollbar below the header row. The
@@ -781,11 +826,11 @@ class DashboardView(QWidget):
         self._status_sep.hide()
         pill_lay.addWidget(self._status_sep)
         pill_lay.setAlignment(self._status_sep, Qt.AlignVCenter)
-        self._progress = _BarLabel("")
+        self._progress = _ElidedBarLabel("")
         self._progress.setObjectName("CaptionSM")
         # Circular progress ring, alongside the status text (the text
         # stays the accessible source of truth; the ring shows pace).
-        self._ring = RingProgress(diameter=18)
+        self._ring = RingProgress(diameter=28)
         self._ring.hide()
         pill_lay.addWidget(self._ring)
         pill_lay.setAlignment(self._ring, Qt.AlignVCenter)
@@ -795,8 +840,13 @@ class DashboardView(QWidget):
         def _sync_sep() -> None:
             # The dot joins scope and message only when both sides exist;
             # the tooltip carries the full message when it clips.
-            msg = self._progress.text()
+            # fullText(), not text(): the message is elided, so its
+            # visible text can be empty on a zero-width label.
+            msg = self._progress.fullText()
             self._status_sep.setVisible(bool(self._status_lbl.text()) and bool(msg))
+            # An empty message takes no room: the scope then owns the
+            # pill instead of sharing it with a blank half.
+            self._progress.setVisible(bool(msg))
             self._progress.setToolTip(msg or "")
 
         self._status_lbl.changed.connect(_sync_sep)
@@ -1286,8 +1336,13 @@ class DashboardView(QWidget):
         lay.addWidget(
             _metric_icon(icon_map.get(accent, "circle"), size=18, color=border_color), 0
         )
-        lbl = make_field_label(
-            t("dashboard.metrics.card_label", label=label.upper(), sub=sub)
+        # The caption is the widest thing in the card ("PENDING · Datasets
+        # waiting for a decision"), so it elides instead of pushing the
+        # three cards past the window. The card tooltip keeps the full
+        # caption.
+        lbl = make_elided_label(
+            t("dashboard.metrics.card_label", label=label.upper(), sub=sub),
+            object_name="LabelMD",
         )
         lay.addWidget(lbl, 1)
         v = QLabel("0")
@@ -1562,6 +1617,21 @@ class DashboardView(QWidget):
         # the resulting order and widths back onto the display header.
         self._fit_queue_columns()
         self._schedule_header_sync()
+        self._save_queue_layout()
+
+    def _sort_by_column(self, logical: int) -> None:
+        """Sort the table by a column (toggle on repeat), like a header click."""
+        table_hdr = self._table.horizontalHeader()
+        if table_hdr.sortIndicatorSection() == logical and table_hdr.isSortIndicatorShown():
+            order = Qt.DescendingOrder if table_hdr.sortIndicatorOrder() == Qt.AscendingOrder else Qt.AscendingOrder
+        else:
+            order = Qt.AscendingOrder
+        self._table.sortItems(logical, order)
+        table_hdr.setSortIndicator(logical, order)
+        table_hdr.setSortIndicatorShown(True)
+        if self._queue_header is not None:
+            self._queue_header.setSortIndicator(logical, order)
+            self._queue_header.setSortIndicatorShown(True)
         self._save_queue_layout()
 
     def _on_header_clicked(self, logical: int) -> None:  # split-header mode
@@ -2269,6 +2339,15 @@ class DashboardView(QWidget):
             if key == Qt.Key.Key_Escape:
                 if self._filter_edit.text():
                     self._filter_edit.clear()
+                    return True
+        # Header keyboard sort: Space/Return toggles sort on focused section
+        hdr = self._table.horizontalHeader()
+        if obj is hdr and event.type() == QEvent.Type.KeyPress:
+            key = event.key()
+            if key in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                logical = hdr.currentIndex()
+                if logical >= 0:
+                    self._sort_by_column(logical)
                     return True
         return super().eventFilter(obj, event)
 

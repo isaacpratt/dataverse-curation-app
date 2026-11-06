@@ -299,7 +299,10 @@ class _CaptionButton(QPushButton):
         super().__init__("", parent)
         self._kind = kind
         self._hovered = False
-        self.setFixedSize(46, 32)
+        # Windows caption buttons run the full height of the title bar;
+        # TopNav is 48px, so the hover fill meets both edges (no floating
+        # 32px chip in the middle of the bar).
+        self.setFixedSize(46, 48)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip(t(_CAPTION_KEYS.get(kind, _CAPTION_KEYS["close"])))
         self.setAccessibleName(
@@ -498,7 +501,7 @@ class MainWindow(QMainWindow):
         self._chips_wrap.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._chips_lay = QHBoxLayout(self._chips_wrap)
         self._chips_lay.setContentsMargins(4, 0, 8, 0)
-        self._chips_lay.setSpacing(6)
+        self._chips_lay.setSpacing(8)
         nav_lay.addWidget(self._chips_wrap, 1)
 
         # ---- Unified window controls (replace the native title bar) ----

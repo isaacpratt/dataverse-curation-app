@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -37,10 +38,11 @@ from config import Config
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.i18n import t
 from ui.table_layout import TableLayout
-from ui.theme import page_background_qss, selectable_labels
+from ui.theme import BORDER_SUBTLE, page_background_qss, selectable_labels
 from ui.widgets import (
     AppTreeWidget,
     PaneFooter,
+    add_info_tip,
     make_action_button,
     make_card,
     make_checkbox,
@@ -209,6 +211,15 @@ class ReviewConfigView(QWidget):
         split.addWidget(self._build_templates_card())
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 2)
+        # A 16px gap between the Checks card and the Response text card,
+        # matching the page's own spacing (the default 1px handle made the
+        # two cards look welded together).
+        split.setHandleWidth(16)
+        # theme-allow: splitter handle styling is unique to this view
+        split.setStyleSheet(
+            "QSplitter::handle { background: transparent; } "
+            "QSplitter::handle:horizontal { width: 16px; }"
+        )
         outer.addWidget(split, 1)
 
         # Shared Save/Revert footer (same component as Settings): one
@@ -311,6 +322,12 @@ class ReviewConfigView(QWidget):
 
     def _build_rules_card(self) -> QWidget:
         card, body, _t, header_lay = make_card(t("review.card_checks"))
+        # The checks help lives in the header's (i) tooltip, the same
+        # pattern the dataset page uses — not a permanent paragraph that
+        # pushed the tree down.
+        add_info_tip(
+            header_lay, t("review.checks_hint"), name=t("review.card_checks")
+        )
         # Filters live in the card header (file-manifest pattern): text
         # search + required-status dropdown + expand/collapse toggle.
         self._field_filter = make_search_field(
@@ -353,15 +370,16 @@ class ReviewConfigView(QWidget):
         )
         self._fields_reset_btn.clicked.connect(self._on_reset_field_view)
         header_lay.addWidget(self._fields_reset_btn)
-        hint = QLabel(t("review.checks_hint"))
-        hint.setWordWrap(True)
-        hint.setObjectName("CaptionSM")
-        body.addWidget(hint)
+        # Body margins go to zero so the tree bleeds edge-to-edge like
+        # every other flush table in the app; the text-rules section
+        # below carries its own inset.
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
         # Block-grouped tree (replaces the flat table): block parents with
         # native expand/collapse, one child row per field rule with its
         # level combo. Sorting stays OFF on purpose — children are cell
         # *widgets*, which Qt does not move when rows sort.
-        self._field_tree = AppTreeWidget(row_height=None, flush=False)
+        self._field_tree = AppTreeWidget(row_height=40, flush=True)
         self._field_tree.setColumnCount(2)
         self._field_tree.setHeaderLabels(
             [t("review.column_field"), t("review.column_check")]
@@ -370,9 +388,9 @@ class ReviewConfigView(QWidget):
         self._field_tree.setExpandsOnDoubleClick(True)
         self._field_tree.setAnimated(True)
         self._field_tree.setIndentation(18)
-        self._field_tree.setMinimumHeight(260)
-        # The standard tree chrome comes with the widget (framed: this
-        # tree lives inside a card body).
+        self._field_tree.setMinimumHeight(160)
+        # The standard tree chrome comes with the widget (flush: the tree
+        # sits edge-to-edge inside the card, header meeting the top bar).
         _fld_header = self._field_tree.header()
         _fld_header.setStretchLastSection(False)
         _fld_header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -392,12 +410,33 @@ class ReviewConfigView(QWidget):
             pass
         self._floor_check_column()
         self._field_tree.itemSelectionChanged.connect(self._on_field_selected)
+        # The Collapse/Expand button follows manual expand/collapse too:
+        # without these, collapsing one block left the button reading
+        # "Collapse all" and clicking it expanded everything.
+        self._field_tree.itemExpanded.connect(lambda _i: self._update_blocks_btn())
+        self._field_tree.itemCollapsed.connect(lambda _i: self._update_blocks_btn())
         body.addWidget(self._field_tree, 1)
-        body.addWidget(QLabel(t("review.text_rules_label")))
+
+        # Text rules: their own section under a divider, inset like a card
+        # body, so an expanded metadata block can never run behind them.
+        divider = QFrame()
+        divider.setObjectName("ReviewSectionDivider")
+        divider.setFixedHeight(1)
+        # theme-allow: simple divider colour is a one-off
+        divider.setStyleSheet(f"background: {BORDER_SUBTLE};")
+        body.addWidget(divider)
+
+        rules_section = QWidget()
+        rules_lay = QVBoxLayout(rules_section)
+        rules_lay.setContentsMargins(16, 12, 16, 12)
+        rules_lay.setSpacing(8)
+        rules_head = QLabel(t("review.text_rules_label"))
+        rules_head.setObjectName("HeadlineMD")
+        rules_lay.addWidget(rules_head)
         self._content_list = make_list()
-        self._content_list.setMinimumHeight(110)
+        self._content_list.setMinimumHeight(96)
         self._content_list.itemSelectionChanged.connect(self._on_content_selected)
-        body.addWidget(self._content_list)
+        rules_lay.addWidget(self._content_list, 1)
         row = QHBoxLayout()
         for text, slot in [
             (t("review.add_rule"), self._on_content_add),
@@ -408,7 +447,8 @@ class ReviewConfigView(QWidget):
             b.clicked.connect(slot)
             row.addWidget(b)
         row.addStretch(1)
-        body.addLayout(row)
+        rules_lay.addLayout(row)
+        body.addWidget(rules_section, 1)
         return card
 
     def _build_templates_card(self) -> QWidget:

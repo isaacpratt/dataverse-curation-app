@@ -11,6 +11,12 @@ from ui.theme import (
 )
 from ui.widgets import make_multiline_input
 
+# The kit's button roles, used for the buttons a QDialogButtonBox builds.
+# The box paints its own buttons, so without a role they fall back to the
+# platform face (no border, no focus ring, a different type size).
+_PRIMARY_BUTTON = "PrimaryButton"
+_SECONDARY_BUTTON = "SecondaryButton"
+
 _ICON_COLORS = {
     "triangle-alert": STATE_WARNING_GRAPHIC,
     "octagon-x": STATE_ERROR_GRAPHIC,
@@ -128,8 +134,13 @@ def _show(
 
     state = {"retry": False}
     buttons = QDialogButtonBox(QDialogButtonBox.Ok)
+    ok_btn = buttons.button(QDialogButtonBox.Ok)
+    if ok_btn is not None:
+        ok_btn.setObjectName(_PRIMARY_BUTTON)
     if retry is not None:
-        buttons.addButton(QDialogButtonBox.Retry)
+        retry_btn = buttons.addButton(QDialogButtonBox.Retry)
+        if retry_btn is not None:
+            retry_btn.setObjectName(_SECONDARY_BUTTON)
     buttons.accepted.connect(dlg.accept)
     if retry is not None:
         retry_btn = buttons.button(QDialogButtonBox.Retry)
@@ -187,11 +198,16 @@ def confirm(parent, title: str, text: str, *, confirm_label: str = "") -> bool:
     buttons = QDialogButtonBox()
     no_btn = buttons.addButton(QDialogButtonBox.No)
     yes_btn = buttons.addButton(confirm_label, QDialogButtonBox.ButtonRole.AcceptRole)
+    # The kit's roles: the affirmative action wears the brand fill, the
+    # safe answer wears the neutral face.
+    no_btn.setObjectName(_SECONDARY_BUTTON)
+    yes_btn.setObjectName(_PRIMARY_BUTTON)
+    # No is the default: the safe answer is one keystroke away.
     no_btn.setDefault(True)
     buttons.accepted.connect(dlg.accept)
     buttons.rejected.connect(dlg.reject)
     layout.addWidget(buttons)
-    yes_btn.setAutoDefault(True)
+    yes_btn.setAutoDefault(False)
     no_btn.setAutoDefault(True)
     return dlg.exec() == QDialog.DialogCode.Accepted
 
@@ -231,6 +247,9 @@ def confirm_save_discard_cancel(parent, title: str, text: str) -> str:
         t("common.discard"), QDialogButtonBox.ButtonRole.DestructiveRole
     )
     cancel_btn = buttons.addButton(t("common.cancel"), QDialogButtonBox.RejectRole)
+    save_btn.setObjectName(_PRIMARY_BUTTON)
+    discard_btn.setObjectName(_SECONDARY_BUTTON)
+    cancel_btn.setObjectName(_SECONDARY_BUTTON)
     cancel_btn.setDefault(True)  # Cancel is the safe default
 
     result = {"action": "cancel"}

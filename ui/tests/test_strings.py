@@ -283,6 +283,9 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         "; text-decoration:none;'>": "rich-text link markup",
         "not executed": "needle matched against an engine check description",
     },
+    "ui/log_panel.py": {
+        "(?:→|->|=>)\\s*(\\d{3})\\b": "regex for HTTP status codes after arrows",
+    },
     "ui/dialogs.py": {
         "max retries exceeded": "needle matched against raw exception text",
         "failed to establish a new connection": "needle matched against raw exception text",
@@ -334,6 +337,12 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         'error icon on a card': "the contrast contract names the pair it checks",
         'brand icon on a card': "the contrast contract names the pair it checks",
         'tertiary icon on a card': "the contrast contract names the pair it checks",
+        'control edge on a card': "the contrast contract names the pair it checks",
+        'control edge on the page': "the contrast contract names the pair it checks",
+        'focus ring on a card': "the contrast contract names the pair it checks",
+        'blocked step text on a card': "the contrast contract names the pair it checks",
+        'blocked step text on the page': "the contrast contract names the pair it checks",
+        'placeholder text on a field': "the contrast contract names the pair it checks",
         'neutral badge': "the contrast contract names the pair it checks",
         'blue badge': "the contrast contract names the pair it checks",
         'green badge': "the contrast contract names the pair it checks",

@@ -1,16 +1,18 @@
 """Live curation log strip — lives directly under the top nav bar.
 
-Uses QPlainTextEdit with a custom QSyntaxHighlighter that colours:
-- ERROR lines red, WARNING/WARN lines yellow
-- IP addresses, SQL keywords, XML tags, Java backtrace file:line, quoted strings
-- Random consistent colours for identifiers (INAV-style)
+Uses QPlainTextEdit with a custom QSyntaxHighlighter modelled on lnav: it
+colours *text*, never a background. A line's severity tints its text (red
+for ERROR / failing HTTP responses, amber for warnings) and individual
+tokens get their own colour on top:
 
-Colour palette pulled from ui.theme tokens so the log follows the same brand
-palette as the rest of the app while staying deliberately distinct (high
-contrast, dark-on-light backgrounds for ERROR/WARN rows).
+- timestamps muted, request methods amber
+- the repository base URL brand blue, the API path/query indigo
+- DOIs green, status codes by class (red 4xx/5xx, amber 3xx, green 2xx)
+- quoted JSON keys muted and values in the line's severity colour
+
+Manifest colours are pulled from ui.theme tokens so the log follows the
+same brand palette as the rest of the app.
 """
-
-import hashlib
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
@@ -26,15 +28,13 @@ from ui.theme import (
     ACCENT_PRIMARY,
     ACCENT_PRIMARY_DEEP,
     ACCENT_TERTIARY,
-    STATE_ERROR_BG,
     STATE_ERROR_GRAPHIC,
-    STATE_ERROR_TEXT,
+    STATE_WARNING_GRAPHIC,
     TEXT_AMBER,
+    TEXT_DANGER,
     TEXT_MUTED,
-    TEXT_ON_ERROR,
     TEXT_SUBTLE,
     TEXT_SUCCESS,
-    log_identifier_color,
 )
 from ui.widgets import (
     make_action_button,
@@ -64,24 +64,23 @@ class LogPage(QWidget):
 
         header = QHBoxLayout()
         header.setSpacing(8)
-        # Severity legend: chips reuse the highlighter's exact fills, so the
-        # key shows what a line actually looks like (colour never explains
-        # itself; reachable without hovering).
+        # Severity legend: text-only chips, matching the lnav-style log
+        # where colour lives in the words, never in a background block.
         legend = QHBoxLayout()
         legend.setSpacing(4)
         err_chip = make_badge(
             t("log.err_chip"),
-            background=STATE_ERROR_GRAPHIC,
-            foreground=TEXT_ON_ERROR,
-            border=STATE_ERROR_GRAPHIC,
+            background="transparent",
+            foreground=TEXT_DANGER,
+            border="transparent",
         )
         err_chip.setToolTip(t("log.err_tip"))
         legend.addWidget(err_chip)
         warn_chip = make_badge(
             t("log.warn_chip"),
-            background=STATE_ERROR_BG,
-            foreground=STATE_ERROR_TEXT,
-            border=STATE_ERROR_BG,
+            background="transparent",
+            foreground=STATE_WARNING_GRAPHIC,
+            border="transparent",
         )
         warn_chip.setToolTip(t("log.warn_tip"))
         legend.addWidget(warn_chip)
@@ -233,111 +232,139 @@ class LogPage(QWidget):
 
 
 class LogHighlighter(QSyntaxHighlighter):
-    """INAV-style highlighter for the curation log (themed to brand)."""
+    """lnav-style highlighter for the curation log (themed to brand).
+
+    Severity colours the *text*, never a background band, and only the
+    matched tokens get a colour — punctuation keeps the line's colour, so
+    a failing response no longer draws boxes around colons, commas or
+    escaped backslashes.
+    """
+
+    # Status codes after an arrow ("→ 403:") tint the number by class.
+    _STATUS_RE = r"(?:→|->|=>)\s*(\d{3})\b"
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # Whole-line ERROR (uses brand error colour for foreground, light bg for legibility)
-        self.error_format = QTextCharFormat()
-        self.error_format.setForeground(QColor(TEXT_ON_ERROR))
-        self.error_format.setBackground(QColor(STATE_ERROR_GRAPHIC))
-        self.error_format.setFontWeight(QFont.Bold)
+        def _format(color: str, *, bold: bool = False) -> QTextCharFormat:
+            fmt = QTextCharFormat()
+            fmt.setForeground(QColor(color))
+            if bold:
+                fmt.setFontWeight(QFont.Bold)
+            return fmt
 
-        # WARN: dark text on the brand's warm-error-container
-        self.warn_format = QTextCharFormat()
-        self.warn_format.setForeground(QColor(STATE_ERROR_TEXT))
-        self.warn_format.setBackground(QColor(STATE_ERROR_BG))
-        self.warn_format.setFontWeight(QFont.Bold)
+        # Line severity: plain coloured text for the body, bold for the
+        # severity word itself.
+        self.line_error_format = _format(STATE_ERROR_GRAPHIC)
+        self.line_warn_format = _format(STATE_WARNING_GRAPHIC)
+        self.error_format = _format(STATE_ERROR_GRAPHIC, bold=True)
+        self.warn_format = _format(STATE_WARNING_GRAPHIC, bold=True)
+        self.info_format = _format(ACCENT_PRIMARY, bold=True)
 
-        # Detail colours — derived from brand accent steps (primary/tertiary family)
-        self.ip_format = QTextCharFormat()
-        self.ip_format.setForeground(QColor(ACCENT_PRIMARY))
-        self.ip_format.setFontWeight(QFont.Bold)
-
-        self.sql_format = QTextCharFormat()
-        self.sql_format.setForeground(QColor(ACCENT_TERTIARY))
-        self.sql_format.setFontWeight(QFont.Bold)
-
-        self.xml_format = QTextCharFormat()
-        self.xml_format.setForeground(QColor(TEXT_MUTED))
-        self.xml_format.setFontItalic(True)
-
-        self.java_format = QTextCharFormat()
-        self.java_format.setForeground(QColor(TEXT_AMBER))  # amber-700 — distinct from brand
-
-        self.string_format = QTextCharFormat()
-        self.string_format.setForeground(QColor(TEXT_SUCCESS))  # green-700 — "string" feel
-
-        # SQL keywords (case-insensitive)
-        self._sql_keywords = {
-            "SELECT", "INSERT", "UPDATE", "DELETE", "FROM", "WHERE",
-            "GROUP", "BY", "ORDER", "HAVING", "JOIN", "INNER", "LEFT", "RIGHT",
-            "OUTER", "UNION", "CREATE", "ALTER", "DROP", "TRUNCATE",
-            "AND", "OR", "NOT", "IN", "LIKE", "BETWEEN", "IS", "NULL",
-            "AS", "ON", "LIMIT", "OFFSET", "VALUES", "SET", "TABLE", "INDEX",
-        }
-
-        # Cache for random identifier colours (deterministic per identifier)
-        self._identifier_formats: dict[str, QTextCharFormat] = {}
+        # Token colours.
+        self.timestamp_format = _format(TEXT_SUBTLE)
+        self.method_format = _format(TEXT_AMBER, bold=True)
+        self.url_base_format = _format(ACCENT_PRIMARY, bold=True)
+        self.url_path_format = _format(ACCENT_TERTIARY)
+        self.doi_format = _format(TEXT_SUCCESS, bold=True)
+        self.key_format = _format(TEXT_MUTED)
+        self.value_format = _format(TEXT_SUCCESS)
+        self.error_code_format = _format(STATE_ERROR_GRAPHIC, bold=True)
+        self.warn_code_format = _format(STATE_WARNING_GRAPHIC, bold=True)
+        self.ok_code_format = _format(TEXT_SUCCESS, bold=True)
 
         import re
 
-        self._re_ip = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b|\b(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\b")
-        self._re_xml = re.compile(r"<[^>]+>")
-        self._re_java = re.compile(r"\(.*\.java:\d+\)|\bat\s+[\w.$]+\(.*\.java:\d+\)")
-        self._re_string = re.compile(r'"([^"\\]|\\.)*"|\'([^\'\\]|\\.)*\'')
-        self._re_word = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*\b")
+        self._regex = re
+        self._re_time = re.compile(
+            r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?"
+        )
+        self._re_level = re.compile(
+            r"\b(CRITICAL|ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE)\b"
+        )
+        self._re_method = re.compile(
+            r"\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b(?=\s+\S)"
+        )
+        self._re_url_base = re.compile(r"\bhttps?://[^\s/\"'<>]+")
+        self._re_status = re.compile(self._STATUS_RE)
+        self._re_doi = re.compile(
+            r"\bdoi:\s*10\.\d{4,9}/[^\s\"'<>,;)\]}]+", re.IGNORECASE
+        )
+        self._re_string = re.compile(r'"(?:[^"\\]|\\.)*"')
 
-    def _format_for_identifier(self, ident: str) -> QTextCharFormat:
-        if ident in self._identifier_formats:
-            return self._identifier_formats[ident]
-        h = int.from_bytes(hashlib.md5(ident.encode("utf-8")).digest()[:4], "big")
-        color = log_identifier_color(h)
-        fmt = QTextCharFormat()
-        fmt.setForeground(QColor(color))
-        self._identifier_formats[ident] = fmt
-        return fmt
+    def _severity(self, text: str) -> str | None:
+        """Return "error", "warning" or None for a whole line."""
+        if self._regex.search(r"\b(ERROR|CRITICAL)\b", text, self._regex.IGNORECASE):
+            return "error"
+        status = self._re_status.search(text)
+        if status and int(status.group(1)) >= 400:
+            return "error"
+        if self._regex.search(r"\bWARN(?:ING)?\b", text, self._regex.IGNORECASE):
+            return "warning"
+        return None
+
+    def _apply(self, match, fmt: QTextCharFormat) -> None:
+        length = match.end() - match.start()
+        if length > 0:
+            self.setFormat(match.start(), length, fmt)
 
     def highlightBlock(self, text: str) -> None:  # type: ignore[override]
-        upper = text.upper()
+        severity = self._severity(text)
+        if severity == "error":
+            self.setFormat(0, len(text), self.line_error_format)
+        elif severity == "warning":
+            self.setFormat(0, len(text), self.line_warn_format)
 
-        if "ERROR" in upper:
-            self.setFormat(0, len(text), self.error_format)
-        elif "WARN" in upper:
-            self.setFormat(0, len(text), self.warn_format)
+        stamp = self._re_time.match(text)
+        if stamp:
+            self._apply(stamp, self.timestamp_format)
 
-        for m in self._re_ip.finditer(text):
-            self.setFormat(m.start(), m.end() - m.start(), self.ip_format)
+        for m in self._re_level.finditer(text):
+            word = m.group(1).upper()
+            if word in ("ERROR", "CRITICAL"):
+                self._apply(m, self.error_format)
+            elif word.startswith("WARN"):
+                self._apply(m, self.warn_format)
+            else:
+                self._apply(m, self.info_format)
 
-        for m in self._re_xml.finditer(text):
-            self.setFormat(m.start(), m.end() - m.start(), self.xml_format)
+        for m in self._re_method.finditer(text):
+            self._apply(m, self.method_format)
 
-        for m in self._re_java.finditer(text):
-            self.setFormat(m.start(), m.end() - m.start(), self.java_format)
+        # Base URL and the API path/query that follows it are two tones.
+        url_spans: list[tuple[int, int]] = []
+        for m in self._re_url_base.finditer(text):
+            self._apply(m, self.url_base_format)
+            stop = m.end()
+            path = self._regex.match(r"/[^\s\"'<>]*", text[stop:])
+            if path:
+                stop += path.end()
+                self.setFormat(m.end(), stop - m.end(), self.url_path_format)
+            url_spans.append((m.start(), stop))
 
-        string_spans = []
+        for m in self._re_status.finditer(text):
+            code = int(m.group(1))
+            fmt = (
+                self.error_code_format
+                if code >= 400
+                else (self.warn_code_format if code >= 300 else self.ok_code_format)
+            )
+            start = m.start(1)
+            self.setFormat(start, m.end(1) - start, fmt)
+
+        for m in self._re_doi.finditer(text):
+            self._apply(m, self.doi_format)
+
         for m in self._re_string.finditer(text):
-            self.setFormat(m.start(), m.end() - m.start(), self.string_format)
-            string_spans.append((m.start(), m.end()))
-
-        for m in self._re_word.finditer(text):
-            word = m.group(0)
-            if word.upper() in self._sql_keywords:
-                inside_string = any(s <= m.start() < e for s, e in string_spans)
-                if not inside_string:
-                    self.setFormat(m.start(), m.end() - m.start(), self.sql_format)
-
-        for m in self._re_word.finditer(text):
-            word = m.group(0)
-            if word.upper() in self._sql_keywords:
+            if any(s <= m.start() < e for s, e in url_spans):
                 continue
-            if len(word) < 3:
-                continue
-            inside_string = any(s <= m.start() < e for s, e in string_spans)
-            if inside_string:
-                continue
-            if word.upper() in {"ERROR", "WARN", "WARNING", "INFO", "DEBUG", "GET", "POST"}:
-                continue
-            self.setFormat(m.start(), m.end() - m.start(), self._format_for_identifier(word))
+            # A string followed by a colon is a JSON key, not a value.
+            if text[m.end():m.end() + 2].lstrip().startswith(":"):
+                self._apply(m, self.key_format)
+            elif severity == "error":
+                self._apply(m, self.line_error_format)
+            elif severity == "warning":
+                self._apply(m, self.line_warn_format)
+            else:
+                self._apply(m, self.value_format)
 

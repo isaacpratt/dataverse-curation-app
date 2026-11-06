@@ -154,7 +154,7 @@ class RingProgress(QWidget):
             inset = 3.0
             side = self._diameter - inset * 2
             rect = QRectF(inset, inset, side, side)
-            width = max(2.0, self._diameter * 0.11)
+            width = max(2.0, self._diameter * 0.10)
             pen = QPen(QColor(BORDER_SUBTLE), width)
             pen.setCapStyle(Qt.RoundCap)
             painter.setPen(pen)
@@ -200,6 +200,28 @@ class RingProgress(QWidget):
         except Exception:
             pass
 
+    def _inner_rect(self) -> QRectF:
+        """Clear area inside the arc — the only room the label may use."""
+        inset = 3.0
+        stroke = max(2.0, self._diameter * 0.10)
+        pad = inset + stroke / 2.0 + 0.5
+        side = max(0.0, self._diameter - pad * 2.0)
+        return QRectF(pad, pad, side, side)
+
+    def _label_pixel_size(self, text: str) -> int:
+        """Largest bold pixel size whose digits fit the clear inner circle.
+
+        The old fixed point size drew two- and three-digit percentages
+        across the arc at the small sizes the app uses, so the ring
+        itself hid the number it was supposed to annotate.
+        """
+        inner = self._inner_rect().width()
+        if inner <= 0:
+            return 6
+        digits = max(1, len(text))
+        fit = inner / (0.62 * digits + 0.35)
+        return max(6, int(min(self._diameter * 0.36, fit)))
+
     def _paint_label(self, painter: QPainter, text: str) -> None:
         if not text:
             return
@@ -207,7 +229,7 @@ class RingProgress(QWidget):
             from PySide6.QtGui import QFont
 
             font = QFont(self.font())
-            font.setPointSizeF(max(6.0, self._diameter * 0.22))
+            font.setPixelSize(self._label_pixel_size(text))
             font.setBold(True)
             painter.setFont(font)
             color = (
@@ -216,7 +238,7 @@ class RingProgress(QWidget):
                 else (STATE_ERROR_GRAPHIC if text == "!" else TEXT_PRIMARY)
             )
             painter.setPen(QColor(color))
-            painter.drawText(self.rect(), Qt.AlignCenter, text)
+            painter.drawText(self._inner_rect(), Qt.AlignCenter, text)
         except Exception:
             pass
 

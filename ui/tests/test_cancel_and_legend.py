@@ -110,8 +110,8 @@ def test_worker_cancel_before_start_never_touches_network(qapp, tmp_path):
     assert hits == ["cancelled"], f"expected cancelled only, got {hits}"
 
 
-def test_log_legend_chips_match_highlighter_fills(win, qapp):
-    from ui.theme import ERROR, ERROR_CONTAINER, ON_ERROR, ON_ERROR_CONTAINER
+def test_log_legend_chips_match_highlighter_colours(win, qapp):
+    from ui.theme import STATE_ERROR_GRAPHIC, STATE_WARNING_GRAPHIC
 
     win._on_log_toggled(True)
     try:
@@ -121,10 +121,11 @@ def test_log_legend_chips_match_highlighter_fills(win, qapp):
         chips = {lbl.text(): lbl for lbl in page.findChildren(QLabel)}
         assert "ERROR" in chips and "WARN" in chips, "severity legend missing"
         err_css, warn_css = chips["ERROR"].styleSheet(), chips["WARN"].styleSheet()
-        assert ERROR in err_css and ON_ERROR in err_css, "ERROR chip ≠ highlighter fill"
-        assert ERROR_CONTAINER in warn_css and ON_ERROR_CONTAINER in warn_css, (
-            "WARN chip ≠ highlighter fill"
-        )
+        # lnav-style: severity is the text colour, never a filled block.
+        assert "background: transparent" in err_css, "ERROR chip must be text-only"
+        assert STATE_ERROR_GRAPHIC in err_css, "ERROR chip ≠ highlighter colour"
+        assert "background: transparent" in warn_css, "WARN chip must be text-only"
+        assert STATE_WARNING_GRAPHIC in warn_css, "WARN chip ≠ highlighter colour"
         assert chips["INFO · DEBUG plain"].toolTip(), "plain chip needs a tooltip"
         # Inline in the header: chips sit left of the search box, not a footer.
         assert chips["ERROR"].x() < page._search.x()

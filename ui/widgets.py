@@ -17,7 +17,8 @@ Intentional one-offs (NOT kit violations):
 
 import textwrap
 
-from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -43,24 +44,31 @@ from PySide6.QtWidgets import (
 
 from ui.i18n import t
 from ui.theme import (
+    ACCENT_FOCUS_RING,
     ACCENT_PRIMARY,
+    BORDER_CONTROL,
     BORDER_SUBTLE,
     BUTTON_OBJECTS,
     FONT_BODY,
     FONT_CAPTION,
+    FONT_MICRO,
     FONT_SMALL,
     MONO_FAMILY,
+    PRIMARY_FIXED,
     RADIUS_LG,
     SURFACE_CARD,
     SURFACE_PAGE,
     SURFACE_RAISED,
     SURFACE_SUBTLE,
     SURFACE_TINT,
+    TEXT_BLOCKED,
     TEXT_DANGER,
     TEXT_DISABLED,
     TEXT_MUTED,
     TEXT_ON_TINT,
+    TEXT_PLACEHOLDER,
     TEXT_PRIMARY,
+    TEXT_SUCCESS,
     badge_qss,
     button_qss,
     enable_table_copy,
@@ -101,6 +109,8 @@ __all__ = [
     "make_small_body_label",
     "make_card_title",
     "make_metric_value",
+    "make_elided_label",
+    "ElidedLabel",
     "make_reset_columns_button",
     "make_search_field",
     "make_line_edit",
@@ -109,7 +119,10 @@ __all__ = [
 ]
 
 # Button heights (px) by size token.
-BUTTON_HEIGHTS = {"sm": 28, "md": 36, "lg": 40}
+# "sm" is 32px, not 28: WCAG 2.5.8 asks for a 24px target, but the
+# platform's own menus and toolbars land on 32, and a 28px chip is easy
+# to miss with a mouse or a stylus. Every button in the app clears 32.
+BUTTON_HEIGHTS = {"sm": 32, "md": 36, "lg": 40}
 
 # The kinds and the object name each paints under live in the theme,
 # next to the rules that style them.
@@ -120,7 +133,7 @@ class AppButton(QPushButton):
     """Standard button.
 
     kind: primary | secondary | ghost | chip | cell | link | nav-active | nav.
-    size: sm (28) | md (36) | lg (40) | None (natural height, e.g. nav bar).
+    size: sm (32) | md (36) | lg (40) | None (natural height, e.g. nav bar).
     """
 
     def __init__(
@@ -171,6 +184,29 @@ def _section_is_user_resizable(header, logical: int) -> bool:
     return True
 
 
+class _HeaderTooltipFilter(QObject):
+    """Give a header section its full column title back on hover.
+
+    A narrow column elides its title ("SUBMITTING AUTH…"), so the mouse
+    has to carry the name the section cannot show.
+    """
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802 (Qt naming)
+        if event.type() == QEvent.ToolTip:
+            header = obj
+            try:
+                index = header.logicalIndexAt(event.pos())
+                label = header.model().headerData(
+                    index, Qt.Horizontal, Qt.DisplayRole
+                )
+            except Exception:
+                return False
+            if index >= 0 and label:
+                QToolTip.showText(event.globalPos(), str(label), header)
+                return True
+        return super().eventFilter(obj, event)
+
+
 class AppTable(QTableWidget):
     """Build a standard table (sortable columns, row selection, no grid).
 
@@ -188,6 +224,19 @@ class AppTable(QTableWidget):
     columns_fitted = Signal()
     user_layout_changed = Signal()
 
+    def setHorizontalHeaderLabels(self, labels) -> None:  # noqa: N802 (Qt naming)
+        """Set the column titles in sentence case, as painted.
+
+        Headers read as the catalogue writes them ("Dataset Title",
+        "Persistent ID"), never force-uppercased. Qt's style sheets cannot
+        apply ``text-transform`` safely: it is applied when the label is
+        painted but not when it is measured, so a narrow section elided
+        against the smaller mixed-case metrics and the paint overflowed
+        the section. Keeping the stored label identical to the painted
+        label keeps measurement and paint in step.
+        """
+        super().setHorizontalHeaderLabels([str(label) for label in labels])
+
     def __init__(
         self,
         headers: list,
@@ -204,6 +253,13 @@ class AppTable(QTableWidget):
         hdr.setStretchLastSection(stretch_last)
         hdr.setSectionsMovable(True)
         hdr.setSectionsClickable(True)
+        # A narrow section elides its label instead of clipping it: a
+        # centred label clipped on both sides loses its first letter
+        # ("SUBMITTING AUTHOR" read as "UBMITTING AUTHOR").
+        hdr.setTextElideMode(Qt.ElideRight)
+        # Hovering an elided column gives the full title back.
+        self._header_tip = _HeaderTooltipFilter(hdr)
+        hdr.installEventFilter(self._header_tip)
         for i in range(len(headers)):
             width = (widths or {}).get(i, 120)
             self.setColumnWidth(i, width)
@@ -474,7 +530,8 @@ class AppTree(QTreeView):
 
     A view (not a QTreeWidget): the trees in the app are model-driven
     (the file manifest builds its own model with header data), so the
-    column titles come from the model.
+    column titles come from the model. Models store titles in sentence
+    case exactly as painted, so Qt measures the text it draws.
     """
 
     user_layout_changed = Signal()
@@ -499,6 +556,11 @@ class AppTree(QTreeView):
         hdr = self.header()
         hdr.setSectionsMovable(True)
         hdr.setSectionsClickable(True)
+        # A narrow section elides its label instead of clipping it.
+        hdr.setTextElideMode(Qt.ElideRight)
+        # Hovering an elided column gives the full title back.
+        self._header_tip = _HeaderTooltipFilter(hdr)
+        hdr.installEventFilter(self._header_tip)
         hdr.sectionResized.connect(self._on_user_section_resized)
         hdr.sectionMoved.connect(self._on_user_section_moved)
 
@@ -557,6 +619,14 @@ class AppTreeWidget(QTreeWidget):
 
     user_layout_changed = Signal()
 
+    def setHeaderLabels(self, labels) -> None:  # noqa: N802 (Qt naming)
+        """Set the column titles in sentence case, as painted.
+
+        Same rule as AppTable: the stored label is the painted label, so
+        Qt measures exactly what it draws and a narrow section elides.
+        """
+        super().setHeaderLabels([str(label) for label in labels])
+
     def __init__(
         self,
         parent: QWidget | None = None,
@@ -576,6 +646,11 @@ class AppTreeWidget(QTreeWidget):
         hdr = self.header()
         hdr.setSectionsMovable(True)
         hdr.setSectionsClickable(True)
+        # A narrow section elides its label instead of clipping it.
+        hdr.setTextElideMode(Qt.ElideRight)
+        # Hovering an elided column gives the full title back.
+        self._header_tip = _HeaderTooltipFilter(hdr)
+        hdr.installEventFilter(self._header_tip)
         hdr.sectionResized.connect(self._on_user_section_resized)
         hdr.sectionMoved.connect(self._on_user_section_moved)
 
@@ -696,8 +771,10 @@ def make_checkbox(
     box.setChecked(checked)
     box.setStyleSheet(
         f"QCheckBox {{ color: {TEXT_PRIMARY}; font-size: {FONT_BODY}px; spacing: 8px; }} "
+        # The indicator's edge is a control boundary: 3:1, like every
+        # other control in the app.
         f"QCheckBox::indicator {{ width: 16px; height: 16px; "
-        f"border: 1px solid {BORDER_SUBTLE}; border-radius: {RADIUS_LG}; "
+        f"border: 1px solid {BORDER_CONTROL}; border-radius: {RADIUS_LG}; "
         f"background: {SURFACE_CARD}; }} "
         f"QCheckBox::indicator:checked {{ background: {ACCENT_PRIMARY}; "
         f"border: 1px solid {ACCENT_PRIMARY}; }} "
@@ -733,6 +810,8 @@ def set_badge_label(
     foreground: str | None = None,
     border: str | None = None,
     mono: bool = False,
+    font_size: int = FONT_MICRO,
+    padding: str = "0 6px",
 ) -> QLabel:
     """Re-dress a live badge: new text, new face, same kit rule.
 
@@ -745,7 +824,13 @@ def set_badge_label(
     badge.setText(text)
     if background and foreground:
         badge.setStyleSheet(
-            badge_qss(background, foreground, border or BORDER_SUBTLE)
+            badge_qss(
+                background,
+                foreground,
+                border or BORDER_SUBTLE,
+                font_size=font_size,
+                padding=padding,
+            )
         )
     else:
         badge.setStyleSheet(label_badge_style(label or text))
@@ -764,6 +849,8 @@ def make_badge(
     foreground: str | None = None,
     border: str | None = None,
     mono: bool = False,
+    font_size: int = FONT_MICRO,
+    padding: str = "0 6px",
     parent: QWidget | None = None,
 ) -> QLabel:
     """Build a status badge wearing the role colours of its label.
@@ -781,7 +868,40 @@ def make_badge(
         foreground=foreground,
         border=border,
         mono=mono,
+        font_size=font_size,
+        padding=padding,
     )
+
+
+class _ElidedChipButton(QPushButton):
+    """Chip label half that elides its title instead of clipping it.
+
+    A dataset title runs well past the chip's max width. QPushButton
+    clips the text mid-glyph and the last letters collide with the close
+    half; eliding keeps a readable title with an ellipsis and the full
+    title stays in the tooltip.
+    """
+
+    # Horizontal text inset from _split_chip_qss (12px each side + frame).
+    _TEXT_INSET = 28
+
+    def __init__(self, text: str, parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self._full_text = text
+        self._shown_text = text
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+        super().resizeEvent(event)
+        self._apply_elide()
+
+    def _apply_elide(self) -> None:
+        width = max(0, self.width() - self._TEXT_INSET)
+        shown = self.fontMetrics().elidedText(
+            self._full_text, Qt.ElideRight, width
+        )
+        if shown != self._shown_text:
+            self._shown_text = shown
+            self.setText(shown)
 
 
 def make_split_chip(
@@ -806,13 +926,13 @@ def make_split_chip(
     lay.setContentsMargins(0, 0, 0, 0)
     lay.setSpacing(0)
 
-    open_btn = QPushButton(label)
+    open_btn = _ElidedChipButton(label)
     open_btn.setCursor(Qt.PointingHandCursor)
     open_btn.setToolTip(tip or label)
     open_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-    open_btn.setFixedHeight(28)
-    open_btn.setMaximumWidth(220)
-    open_btn.setMinimumWidth(60)
+    open_btn.setFixedHeight(32)
+    open_btn.setMaximumWidth(240)
+    open_btn.setMinimumWidth(72)
     open_btn.setStyleSheet(_split_chip_qss(active, "left"))
     if on_open is not None:
         open_btn.clicked.connect(on_open)
@@ -820,9 +940,9 @@ def make_split_chip(
 
     close_btn = QPushButton()
     close_btn.setCursor(Qt.PointingHandCursor)
-    close_btn.setToolTip(close_tip or f"Close {label}")
-    close_btn.setAccessibleName(close_tip or f"Close {label}")
-    close_btn.setFixedSize(28, 28)
+    close_btn.setToolTip(close_tip or t("main.chip_close", label=label))
+    close_btn.setAccessibleName(close_tip or t("main.chip_close", label=label))
+    close_btn.setFixedSize(32, 32)
     try:
         from ui.icons import icon as _chip_icon
 
@@ -847,12 +967,14 @@ def _split_chip_qss(active: bool, part: str) -> str:
         bg, fg, border = SURFACE_CARD, TEXT_PRIMARY, BORDER_SUBTLE
     if part == "left":
         edges = "border-top-left-radius: 8px; border-bottom-left-radius: 8px;"
+        padding = "padding: 0 12px;"
     else:
         edges = (
             "border-left: none; border-top-right-radius: 8px; "
             "border-bottom-right-radius: 8px;"
         )
         fg = TEXT_PRIMARY if active else TEXT_ON_TINT
+        padding = "padding: 0;"
     hover = (
         f"QPushButton:hover {{ color: {TEXT_DANGER}; "
         f"border-color: {TEXT_DANGER}; }}"
@@ -861,7 +983,8 @@ def _split_chip_qss(active: bool, part: str) -> str:
     )
     return (
         f"QPushButton {{ background: {bg}; color: {fg}; border: 1px solid {border}; "
-        f"{edges} font-size: {FONT_CAPTION}px; font-weight: 700; text-align: left; }}"
+        f"{edges} {padding} font-size: {FONT_CAPTION}px; font-weight: 700; "
+        f"text-align: left; }}"
         + hover
     )
 
@@ -952,6 +1075,77 @@ def make_metric_value(text: str = "") -> QLabel:
     return lbl
 
 
+class ElidedLabel(QLabel):
+    """Label that elides its text instead of widening the layout.
+
+    A long title (a dataset name, a metric caption) must never push the
+    page wider than the window: the label keeps a minimum width of zero,
+    elides the tail to whatever room it is given, and keeps the full
+    text in its tooltip so nothing is lost.
+    """
+
+    def __init__(
+        self,
+        text: str = "",
+        parent: QWidget | None = None,
+        *,
+        mode: "Qt.ElideMode" = Qt.ElideRight,
+        object_name: str = "",
+    ) -> None:
+        super().__init__(parent)
+        self._full_text = ""
+        self._shown = ""
+        self._mode = mode
+        # Ignored: the widget may be squeezed; the layout must not reserve
+        # the width of the full string.
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.setMinimumWidth(0)
+        if object_name:
+            # Set before the first setText: the elide width is measured
+            # with the themed font, not the default one.
+            self.setObjectName(object_name)
+        if text:
+            self.setText(text)
+
+    def fullText(self) -> str:
+        """Return the un-elided text (the tooltip carries it as well)."""
+        return self._full_text
+
+    def setText(self, text: str) -> None:  # noqa: N802 (Qt naming)
+        self._full_text = text or ""
+        self.setToolTip(self._full_text)
+        self._apply_elide()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+        super().resizeEvent(event)
+        self._apply_elide()
+
+    def _apply_elide(self) -> None:
+        shown = self.fontMetrics().elidedText(
+            self._full_text, self._mode, max(0, self.width())
+        )
+        if shown == self._shown:
+            return
+        self._shown = shown
+        super().setText(shown)
+
+
+def make_elided_label(
+    text: str = "",
+    *,
+    mode: "Qt.ElideMode" = Qt.ElideRight,
+    object_name: str = "",
+    parent: QWidget | None = None,
+) -> ElidedLabel:
+    """Build a label that elides its tail rather than widening its container.
+
+    ``object_name`` names the theme token the label wears (for example
+    ``"HeadlineMD"``), so an eliding label looks exactly like the static
+    one it replaces.
+    """
+    return ElidedLabel(text, parent, mode=mode, object_name=object_name)
+
+
 def make_reset_columns_button(
     name: str,
     *,
@@ -963,11 +1157,11 @@ def make_reset_columns_button(
     """Ghost icon button that resets a table's columns to their defaults.
 
     The same affordance everywhere (file manifest, metadata fields,
-    extensions): a 28px ghost button with the rotate-ccw icon, an
+    extensions): a 32px ghost button with the rotate-ccw icon, an
     accessible name and a tooltip.
     """
     btn = AppButton("", kind="ghost", size="sm", parent=parent)
-    btn.setFixedSize(28, 28)
+    btn.setFixedSize(32, 32)
     btn.setAccessibleName(accessible_name or f"Reset {name} columns")
     try:
         from ui.icons import icon as _icon
@@ -1048,7 +1242,9 @@ def add_info_tip(header_layout, *paragraphs: str, name: str = "") -> QToolButton
     except Exception:
         btn.setText("i")
     btn.setIconSize(QSize(14, 14))
-    btn.setFixedSize(24, 24)
+    # 32px: the help dot is a target like any other, and 24px was below
+    # the app's own hit-target floor.
+    btn.setFixedSize(32, 32)
     btn.setAutoRaise(True)
     btn.setCursor(Qt.WhatsThisCursor)
     btn.setToolTip(tip)
@@ -1058,7 +1254,7 @@ def add_info_tip(header_layout, *paragraphs: str, name: str = "") -> QToolButton
     btn.setAccessibleDescription(tip)
     btn.setStyleSheet(
         "QToolButton#InfoTip { background: transparent; border: none; "
-        "border-radius: 12px; padding: 0; }"
+        "border-radius: 16px; padding: 0; }"
         f"QToolButton#InfoTip:hover {{ background: {SURFACE_TINT}; }}"
     )
     btn.clicked.connect(
@@ -1078,10 +1274,15 @@ def make_search_field(placeholder: str, parent: QWidget | None = None, *, height
     field.setMinimumWidth(min_width)
     field.setClearButtonEnabled(True)
     field.setStyleSheet(
+        # The field's own sheet replaces the app-level input rules, so it
+        # repeats them: the control edge (3:1, not the decorative card
+        # edge) and the placeholder colour (4.5:1).
         f"QLineEdit#SearchField {{ background: {SURFACE_CARD}; "
-        f"border: 1px solid {BORDER_SUBTLE}; border-radius: 8px; "
-        f"padding-left: 12px; font-size: {FONT_BODY}px; }}"
-        f"QLineEdit#SearchField:focus {{ border: 1px solid {ACCENT_PRIMARY}; }}"
+        f"border: 1px solid {BORDER_CONTROL}; border-radius: 8px; "
+        f"padding-left: 12px; font-size: {FONT_BODY}px; "
+        f"selection-background-color: {PRIMARY_FIXED}; }} "
+        f"QLineEdit#SearchField:focus {{ border: 1px solid {ACCENT_FOCUS_RING}; }} "
+        f"QLineEdit#SearchField::placeholder-text {{ color: {TEXT_PLACEHOLDER}; }}"
     )
     return field
 
@@ -1097,9 +1298,11 @@ def make_line_edit(placeholder: str = "", parent: QWidget | None = None, *,
         field.setEchoMode(QLineEdit.Password)
     field.setStyleSheet(
         f"QLineEdit#SearchField {{ background: {SURFACE_CARD}; "
-        f"border: 1px solid {BORDER_SUBTLE}; border-radius: 8px; "
-        f"padding-left: 12px; font-size: {FONT_BODY}px; }}"
-        f"QLineEdit#SearchField:focus {{ border: 1px solid {ACCENT_PRIMARY}; }}"
+        f"border: 1px solid {BORDER_CONTROL}; border-radius: 8px; "
+        f"padding-left: 12px; font-size: {FONT_BODY}px; "
+        f"selection-background-color: {PRIMARY_FIXED}; }} "
+        f"QLineEdit#SearchField:focus {{ border: 1px solid {ACCENT_FOCUS_RING}; }} "
+        f"QLineEdit#SearchField::placeholder-text {{ color: {TEXT_PLACEHOLDER}; }}"
     )
     return field
 
@@ -1284,8 +1487,26 @@ class WorkflowRail(QWidget):
             btn = self.buttons.get(step.key)
             if btn is None:
                 continue
-            mark = "\u2713" if step.state == "done" else str(self._indexes.get(step.key, 0))
-            btn.setText(f"{mark}  {step.label}")
+            number = str(self._indexes.get(step.key, 0))
+            done = step.state == "done"
+            # Done steps lead with the app's Lucide check, not a text
+            # glyph; the number stays for every other state.
+            btn.setText(f"{'  ' if done else number + '  '}{step.label}")
+            btn.setIconSize(QSize(14, 14))
+            # A blocked step wears a lock: the state is carried by a mark
+            # as well as by colour, so it survives a greyscale print and
+            # a colour-blind reader.
+            try:
+                from ui.icons import icon as _mark_icon
+
+                if done:
+                    btn.setIcon(_mark_icon("check", color=TEXT_SUCCESS, size=14))
+                elif step.state == "blocked":
+                    btn.setIcon(_mark_icon("lock", color=TEXT_BLOCKED, size=12))
+                else:
+                    btn.setIcon(QIcon())
+            except Exception:
+                btn.setIcon(QIcon())
             btn.setStyleSheet(self._style_for(step.state))
             btn.setToolTip(step.hint)
             btn.setAccessibleName(step.accessible)

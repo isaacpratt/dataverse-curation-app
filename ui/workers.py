@@ -39,7 +39,11 @@ _LIVE_WORKERS: set = set()
 def register_worker(worker: QThread) -> None:
     """Track a QThread so the process can stop it before teardown."""
     _LIVE_WORKERS.add(worker)
-    worker.finished.connect(lambda w=worker: _LIVE_WORKERS.discard(w))
+    # Absorb the signal's payload: several workers emit `finished` with an
+    # argument (dict, list, DatasetReport...). Without *args Qt would bind
+    # that payload to `w` and `discard()` would raise TypeError
+    # ("unhashable type: 'dict' / 'DatasetReport'").
+    worker.finished.connect(lambda *_, w=worker: _LIVE_WORKERS.discard(w))
     # The app quitting is the clean path: stop the workers there, before
     # the application object (and the widgets holding the threads) dies.
     try:
@@ -629,6 +633,9 @@ class CheckWorker(QThread):
     finished = Signal(object)
     error = Signal(str)
     progress = Signal(str)
+    # Emitted when the curator cancels a running check pass. The UI
+    # resets through _on_checks_cancelled: no report, no dialog.
+    cancelled = Signal()
     # Overall check fraction (0..1) for a progress ring.
     progressFraction = Signal(float)
 
@@ -642,6 +649,19 @@ class CheckWorker(QThread):
         self._label = label
         self._inventory = inventory
         self._metadata = metadata
+        self._cancel_requested = False
+
+    def cancel(self) -> None:
+        """Stop the run at the next check boundary.
+
+        Sets a Python-side flag (works before the thread starts) *and*
+        the QThread interruption flag (works mid-run).
+        """
+        self._cancel_requested = True
+        self.requestInterruption()
+
+    def _stop_requested(self) -> bool:
+        return self._cancel_requested or self.isInterruptionRequested()
 
     def run(self) -> None:
         import os
@@ -670,11 +690,12 @@ class CheckWorker(QThread):
                 progress_callback=_cb,
                 progress_fraction=_frac,
                 max_workers=workers,
-                is_cancelled=self.isInterruptionRequested,
+                is_cancelled=self._stop_requested,
                 inventory=self._inventory,
                 metadata=self._metadata,
             )
-            if self.isInterruptionRequested():
+            if self._stop_requested():
+                self.cancelled.emit()
                 return
             try:
                 self.progressFraction.emit(1.0)
@@ -682,7 +703,8 @@ class CheckWorker(QThread):
                 pass
             self.finished.emit(report)
         except Exception as exc:
-            if self.isInterruptionRequested():
+            if self._stop_requested():
+                self.cancelled.emit()
                 return
             self.error.emit(f"{exc}\n\n{traceback.format_exc()}")
 

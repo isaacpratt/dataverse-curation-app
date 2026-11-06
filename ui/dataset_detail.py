@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QScrollArea,
     QSizePolicy,
     QTableWidgetItem,
@@ -29,7 +30,7 @@ from config import Config
 from dataverse_client import DataverseClient
 from download_manager import DownloadManager
 from metadata_check import DEFAULT_PROFILE, PROFILES
-from ui.dialogs import describe_error, show_critical, show_info, show_warning
+from ui.dialogs import confirm, describe_error, show_critical, show_info, show_warning
 from ui.download_dialog import DownloadApprovalDialog
 from ui.i18n import t
 from ui.ring import RingProgress
@@ -57,6 +58,7 @@ from ui.theme import (
     TEXT_DANGER,
     TEXT_MUTED,
     TEXT_ON_ACCENT,
+    TEXT_PRIMARY,
     TEXT_SUBTLE,
     TEXT_SUCCESS,
     band_qss,
@@ -80,6 +82,7 @@ from ui.widgets import (
     make_caption_label,
     make_card,
     make_combo,
+    make_elided_label,
     make_field_label,
     make_list,
     make_multiline_input,
@@ -91,6 +94,15 @@ from ui.widgets import (
     set_badge_label,
 )
 from ui.workers import CheckWorker, DownloadWorker, MetadataWorker
+
+# The sections the sidebar (and the folded sidebar's menu) can jump to.
+# The catalogue key is literal here so the string guard sees it.
+_SECTION_LINKS: tuple[tuple[str, str], ...] = (
+    ("detail.sections.metadata_check", "_meta_card"),
+    ("detail.sections.file_manifest", "_file_card"),
+    ("detail.sections.auto_checks", "_auto_card"),
+    ("detail.sections.version_log", "_version_card"),
+)
 
 
 def _human_size(n: int) -> str:
@@ -374,6 +386,11 @@ class DatasetDetailView(QWidget):
         side_scroll.setMinimumWidth(280)
         side_scroll.setMaximumWidth(400)
         content_row.addWidget(side_scroll, 2)
+        self._side_scroll = side_scroll
+        # None = the width decides (the sidebar folds away below
+        # _SIDEBAR_COLLAPSE_BELOW); True/False = the user decided.
+        self._sidebar_user_collapsed: bool | None = None
+        self._sidebar_collapsed = False
 
         # ---- Page header (ID badge + status, title, depositor, actions) ----
         header_row = QHBoxLayout()
@@ -384,12 +401,15 @@ class DatasetDetailView(QWidget):
         badge_row.setSpacing(8)
         badge_row.setContentsMargins(0, 0, 0, 0)
         # Full persistent ID, never truncated (DOIs run well past 18 chars).
+        # Same sans face and badge metrics as the status pills beside it —
+        # the old mono face made the ID read like code instead of a chip.
         self._id_badge = make_badge(
             self._pid,
             background=SURFACE_TINT,
             foreground=TEXT_MUTED,
             border=BORDER_SUBTLE,
-            mono=True,
+            font_size=FONT_CAPTION,
+            padding="2px 8px",
         )
         self._id_badge.setToolTip(self._pid)
         badge_row.addWidget(self._id_badge)
@@ -456,19 +476,46 @@ class DatasetDetailView(QWidget):
         self._load_meta_btn.setToolTip(t("detail.header.load_metadata_tip"))
         self._load_meta_btn.clicked.connect(self._on_load_metadata)
         actions_row.addWidget(self._load_meta_btn)
+        # Sections menu: the sidebar's navigation, reachable even when
+        # the sidebar itself is folded away on a narrow window.
+        self._sections_btn = make_action_button(
+            t("detail.sections.title"), kind="chip"
+        )
+        self._sections_btn.setToolTip(t("detail.sidebar.sections_tip"))
+        self._sections_menu = QMenu(self._sections_btn)
+        self._sections_btn.setMenu(self._sections_menu)
+        self._sections_menu.aboutToShow.connect(self._fill_sections_menu)
+        self._sections_btn.setVisible(False)
+        actions_row.addWidget(self._sections_btn)
         actions_col.addLayout(actions_row)
         # Run checks as primary (always enabled; warns when nothing is staged)
         self._check_btn = make_action_button(t("detail.header.run_checks"), kind="primary", size="lg")
         self._check_btn.setToolTip(t("detail.header.run_checks_tip"))
         self._check_btn.clicked.connect(self._on_run_checks)
         actions_col.addWidget(self._check_btn)
+        # Cancel checks - hidden until a run starts, so the idle header
+        # keeps its layout. A check pass over a large dataset can run for
+        # minutes; without a way out the only option is to wait.
+        self._checks_cancel_btn = make_action_button(
+            t("detail.header.cancel_checks"), kind="secondary", size="md"
+        )
+        self._checks_cancel_btn.setToolTip(t("detail.header.cancel_checks_tip"))
+        self._checks_cancel_btn.setAccessibleName(t("detail.header.cancel_checks_a11y"))
+        self._checks_cancel_btn.clicked.connect(self._on_cancel_checks_click)
+        self._checks_cancel_btn.setVisible(False)
+        actions_col.addWidget(self._checks_cancel_btn)
         header_row.addLayout(actions_col, 0)
         top_lay.addLayout(header_row)
 
-        # Status + progress (subtle)
+        # Status + progress (subtle). The strip carries body-size text
+        # (13px): it is the page's only running commentary - "Checks
+        # complete - 3 findings across 42 files" - and at caption size it
+        # was the smallest, least readable line in the app.
         self._status = QLabel("")
         self._status.setStyleSheet(
-            status_strip_qss(SURFACE_CARD, BORDER_SUBTLE, TEXT_MUTED)
+            status_strip_qss(
+                SURFACE_CARD, BORDER_SUBTLE, TEXT_MUTED, font_size=FONT_BODY
+            )
         )
         self._status.setWordWrap(True)
         self._status.setVisible(False)
@@ -479,7 +526,7 @@ class DatasetDetailView(QWidget):
         # Circular ring for download/check progress (W-12): a determinate
         # arc beside the linear bar, since the bar is indeterminate for
         # streamed bundles.
-        self._ring = RingProgress(diameter=18)
+        self._ring = RingProgress(diameter=28)
         self._ring.hide()
         top_lay.addWidget(self._ring)
         top_lay.setAlignment(self._ring, Qt.AlignVCenter)
@@ -495,6 +542,7 @@ class DatasetDetailView(QWidget):
         main_wrap = QVBoxLayout()
         main_wrap.setSpacing(20)
         main_wrap.setContentsMargins(0, 0, 0, 0)
+        self._main_wrap = main_wrap
 
         self._meta_card = self._build_metadata_card()
         main_wrap.addWidget(self._meta_card)
@@ -538,6 +586,7 @@ class DatasetDetailView(QWidget):
         side_wrap = QVBoxLayout()
         side_wrap.setSpacing(20)
         side_wrap.setContentsMargins(12, 12, 24, 24)
+        self._side_wrap = side_wrap
 
         self._nav_card = self._build_nav_card()
         side_wrap.addWidget(self._nav_card)
@@ -692,6 +741,16 @@ class DatasetDetailView(QWidget):
         self._meta_summary.setTextFormat(Qt.RichText)
         self._meta_summary.setToolTip(t("detail.metadata_check.not_loaded_tip"))
         header_lay.insertWidget(2, self._meta_summary)
+        # The two menus and the reset button live on their own row under
+        # the title bar, like the File Manifest's filter row. In the title
+        # row the card needed 791px - wider than the column it sits in -
+        # so the page scrolled sideways at the app's own minimum width.
+        meta_tools = QWidget()
+        meta_tools.setObjectName("MetadataCheckTools")
+        meta_tools.setStyleSheet(transparent_surface_qss("MetadataCheckTools"))
+        meta_tools_lay = QHBoxLayout(meta_tools)
+        meta_tools_lay.setContentsMargins(16, 8, 16, 8)
+        meta_tools_lay.setSpacing(8)
         # Complete/incomplete filter for the checklist table.
         self._meta_filter = make_combo(
             [
@@ -703,7 +762,7 @@ class DatasetDetailView(QWidget):
             tip=t("detail.metadata_check.filter_tip"),
         )
         self._meta_filter.currentIndexChanged.connect(lambda _i: self._apply_meta_filter())
-        header_lay.addWidget(self._meta_filter)
+        meta_tools_lay.addWidget(self._meta_filter)
         # Standard 36px field like every other combo (a shorter button here
         # made this menu's rows read differently-sized vs the rest).
         self._profile_combo = make_combo(
@@ -713,7 +772,7 @@ class DatasetDetailView(QWidget):
         idx = list(PROFILES.keys()).index(DEFAULT_PROFILE) if DEFAULT_PROFILE in PROFILES else 0
         self._profile_combo.setCurrentIndex(idx)
         self._profile_combo.currentIndexChanged.connect(self._on_profile_changed)
-        header_lay.addWidget(self._profile_combo)
+        meta_tools_lay.addWidget(self._profile_combo)
         self._meta_reset_btn = make_reset_columns_button(
             "",
             tip=t("detail.metadata_check.reset_columns_tip"),
@@ -721,59 +780,315 @@ class DatasetDetailView(QWidget):
             fallback_text=t("common.reset"),
         )
         self._meta_reset_btn.clicked.connect(self._on_reset_meta_view)
-        header_lay.addWidget(self._meta_reset_btn)
-        # Every check with its status — visible table
-        # (Field | Block | Value | Status). Requirement text lives in the
-        # Field cell's tooltip. Value is Interactive so its right edge
-        # (the Value↔Status boundary) can be drag-resized — Stretch mode
-        # makes that handle dead. Status stretches last and absorbs slack.
-        self._meta_check_table = AppTable(
-            ["Check", "Block", "Value", "Status"],
-            widths={0: 150, 1: 180, 2: 220, 3: 110},
-            row_height=28,
-        )
+        meta_tools_lay.addWidget(self._meta_reset_btn)
+        meta_tools_lay.addStretch()
+        body.addWidget(meta_tools)
+        # Every check with its status — an expandable tree
+        # (Check | Block | Value | Status). Requirement text lives in the
+        # Check cell's tooltip. A repeatable field expands into one child
+        # per entry (Author 1, Author 2, …) and one grandchild per
+        # subfield (Name, Affiliation, Identifier, …), so a compound value
+        # is readable instead of being flattened into one line.
+        from PySide6.QtGui import QStandardItemModel as _QStandardItemModel
         from PySide6.QtWidgets import QHeaderView as _QHV
 
-        _meta_hdr = self._meta_check_table.horizontalHeader()
-        _meta_hdr.setStretchLastSection(True)
-        for _i in range(self._meta_check_table.columnCount()):
-            _meta_hdr.setSectionResizeMode(_i, _QHV.Interactive)
-        self._meta_check_table.setStyleSheet(flush_table_style())
-        self._track_table_widths("dataset_meta", self._meta_check_table.horizontalHeader())
+        self._meta_check_tree = AppTree(row_height=30, flush=True)
+        self._meta_model = _QStandardItemModel(0, 4, self)
+        self._meta_model.setHorizontalHeaderLabels(
+            ["Check", "Block", "Value", "Status"]
+        )
+        self._meta_check_tree.setModel(self._meta_model)
+        _meta_hdr = self._meta_check_tree.header()
+        # Value absorbs the slack and elides long text; Status only needs
+        # its word + icon. Stretching the last section instead let a long
+        # value push Status off the (scrollbar-less) card.
+        _meta_hdr.setStretchLastSection(False)
+        _meta_hdr.setSectionResizeMode(0, _QHV.Interactive)
+        _meta_hdr.setSectionResizeMode(1, _QHV.Interactive)
+        _meta_hdr.setSectionResizeMode(2, _QHV.Stretch)
+        _meta_hdr.setSectionResizeMode(3, _QHV.ResizeToContents)
+        self._meta_check_tree.setColumnWidth(0, 170)
+        self._meta_check_tree.setColumnWidth(1, 120)
+        self._meta_check_tree.expanded.connect(self._on_meta_tree_expansion_changed)
+        self._meta_check_tree.collapsed.connect(self._on_meta_tree_expansion_changed)
+        self._track_table_widths("dataset_meta", _meta_hdr)
         # No internal scrollbars: the card always fits every row; the page
-        # canvas scrolls instead. Height is fitted in _apply_meta_filter.
-        self._meta_check_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._meta_check_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        body.addWidget(self._meta_check_table)
+        # canvas scrolls instead. Height is fitted in _fit_meta_tree_height.
+        self._meta_check_tree.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._meta_check_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._meta_check_tree.setFixedHeight(80)
+        body.addWidget(self._meta_check_tree)
         return card
 
     def _apply_meta_filter(self) -> None:
-        """Apply the Complete/Incomplete header filter and refit the card.
+        """Apply the Complete/Incomplete filter by rebuilding the tree.
 
-        Hidden rows never leave blank space: the card height follows the
-        visible row count (same fit formula as before filtering).
+        The tree is small and model-driven, so rebuilding is simpler and
+        safer than hiding rows: a hidden parent would keep its children
+        orphaned in the model. The card then refits its height.
         """
-        table = self._meta_check_table
+        if not hasattr(self, "_meta_check_tree"):
+            return
         try:
             mode = self._meta_filter.currentData() or "all"
         except Exception:
             mode = "all"
-        for row in range(table.rowCount()):
-            item = table.item(row, 3)
-            try:
-                ok = bool(item.data(Qt.UserRole)) if item is not None else False
-            except Exception:
-                ok = False
-            table.setRowHidden(
-                row, (mode == "complete" and not ok) or (mode == "incomplete" and ok)
-            )
+        results = list(getattr(self, "_meta_results", []))
+        if mode == "complete":
+            results = [r for r in results if r.get("status") == "complete"]
+        elif mode == "incomplete":
+            results = [r for r in results if r.get("status") != "complete"]
+        self._build_meta_tree(results)
+
+    # -- metadata check tree -------------------------------------------------
+    # Acronyms that survive the generic camel-case split ("ID number", not
+    # "Id number"). Field labels come from the schema keys themselves, so a
+    # new compound field needs no hand-maintained label table.
+    _META_ACRONYMS = {"id", "url", "uri", "doi", "orcid", "api", "html", "pdf"}
+    # Dataverse prefixes that read as noise once the entry is nested.
+    _META_KEY_OVERRIDES = {
+        "dsDescription": "Description",
+        "dsDescriptionValue": "Description",
+        "dsDescriptionDate": "Date",
+        "keywordValue": "Keyword",
+    }
+
+    def _pretty_meta_key(self, key: str) -> str:
+        """Human label for a metadata key (``authorAffiliation`` → Affiliation)."""
+        raw = str(key or "").strip()
+        if not raw:
+            return ""
+        mapped = self._META_KEY_OVERRIDES.get(raw)
+        if mapped:
+            return mapped
+        import re as _re
+
+        words = _re.sub(
+            r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", raw
+        ).split()
+        cleaned = [
+            w.upper() if w.lower() in self._META_ACRONYMS else w.lower() for w in words
+        ]
+        text = " ".join(cleaned).strip()
+        return text[:1].upper() + text[1:] if text else raw
+
+    @staticmethod
+    def _meta_display(value) -> str:
+        """Compact display text for any metadata value (never raises)."""
         try:
-            visible = sum(
-                1 for row in range(table.rowCount()) if not table.isRowHidden(row)
+            from metadata_check import _display_value as _dv
+
+            return _dv(value, max_len=1000)
+        except Exception:
+            try:
+                return str(value)
+            except Exception:
+                return t("common.em_dash")
+
+    @staticmethod
+    def _meta_is_compound(value) -> bool:
+        """True when a dict has real subfields (not just a wrapped ``value``)."""
+        if not isinstance(value, dict):
+            return False
+        keys = [k for k in value.keys() if k != "typeName"]
+        return any(k != "value" for k in keys)
+
+    def _meta_subfields(
+        self, entry: dict, prefix: str = ""
+    ) -> list[tuple[str, str]]:
+        """(label, display) pairs for one compound metadata entry.
+
+        The entry's own noun is stripped from each subfield label, so an
+        author entry reads Name / Affiliation / Identifier rather than
+        Author name / Author affiliation / …
+        """
+        rows: list[tuple[str, str]] = []
+        for key, value in entry.items():
+            if key == "typeName":
+                continue
+            if isinstance(value, dict) and "value" in value and not self._meta_is_compound(value):
+                shown = self._meta_display(value.get("value"))
+            else:
+                shown = self._meta_display(value)
+            label = self._pretty_meta_key(key)
+            if prefix and label.lower().startswith(prefix.lower() + " "):
+                trimmed = label[len(prefix) + 1:]
+                if trimmed:
+                    label = trimmed[:1].upper() + trimmed[1:]
+            rows.append((label, shown))
+        return rows
+
+    def _meta_value_entries(self, result: dict) -> list[tuple[str, str, list]]:
+        """Child entries for a check: [(label, summary, subfields)]."""
+        block = str(result.get("block") or "")
+        name = str(result.get("name") or "")
+        if not block or not name or self._metadata is None:
+            return []
+        try:
+            from metadata_check import _field
+
+            meta = self._metadata or {}
+            latest = meta.get("latestVersion") or {}
+            blocks = latest.get("metadataBlocks") or meta.get("metadataBlocks") or {}
+            raw = _field(blocks, block, name)
+        except Exception:
+            return []
+        if isinstance(raw, list):
+            seq = raw
+        elif self._meta_is_compound(raw):
+            seq = [raw]
+        else:
+            return []
+        if not seq:
+            return []
+        noun = self._pretty_meta_key(name) or str(result.get("field") or "Entry")
+        entries: list[tuple[str, str, list]] = []
+        for i, item in enumerate(seq):
+            label = f"{noun} {i + 1}"
+            if isinstance(item, dict):
+                subs = self._meta_subfields(item, noun)
+                summary = next(
+                    (text for _lbl, text in subs if text and text != t("common.em_dash")),
+                    t("common.em_dash"),
+                )
+                entries.append((label, summary, subs))
+            else:
+                entries.append((label, self._meta_display(item), []))
+        return entries
+
+    def _build_meta_tree(self, results: list[dict]) -> None:
+        """Rebuild the Check | Block | Value | Status tree from results."""
+        from PySide6.QtGui import QBrush, QStandardItem
+
+        tree = self._meta_check_tree
+        model = self._meta_model
+        model.removeRows(0, model.rowCount())
+
+        def _item(
+            text: str,
+            *,
+            tooltip: str = "",
+            bold: bool = False,
+            color: str | None = None,
+            italic: bool = False,
+        ) -> QStandardItem:
+            item = QStandardItem(str(text))
+            item.setEditable(False)
+            if tooltip:
+                item.setToolTip(tooltip)
+            if color:
+                item.setForeground(QBrush(QColor(color)))
+            font = item.font()
+            if bold:
+                font.setBold(True)
+            if italic:
+                font.setItalic(True)
+            item.setFont(font)
+            return item
+
+        from ui.icons import icon as _icon
+
+        for result in results:
+            ok = result.get("status") == "complete"
+            status_text = (
+                t("detail.metadata_check.status_complete")
+                if ok
+                else t("detail.metadata_check.status_incomplete")
             )
-            header_h = table.horizontalHeader().height() or 30
-            row_h = table.verticalHeader().defaultSectionSize() or 28
-            table.setFixedHeight(header_h + visible * row_h + 4)
+            requirement = str(result.get("requirement") or "")
+            value_text = str(result.get("value", t("common.em_dash")))
+            field_item = _item(
+                str(result.get("field") or ""),
+                tooltip=requirement,
+                bold=True,
+                color=TEXT_PRIMARY if ok else TEXT_DANGER,
+            )
+            block_item = _item(
+                self._meta_block_label(str(result.get("block") or "")),
+                tooltip=(
+                    self._meta_block_label(str(result.get("block") or ""))
+                    + (f"\n\n{requirement}" if requirement else "")
+                ),
+            )
+            value_item = _item(
+                value_text,
+                tooltip=requirement
+                + t("detail.metadata_check.value_tooltip", value=value_text),
+            )
+            status_item = _item(status_text, tooltip=requirement, bold=True,
+                                color=TEXT_SUCCESS if ok else TEXT_DANGER)
+            try:
+                status_item.setIcon(
+                    _icon("check", color=STATE_SUCCESS_GRAPHIC)
+                    if ok
+                    else _icon("x", color=STATE_ERROR_GRAPHIC)
+                )
+            except Exception:
+                pass
+            parent = [field_item, block_item, value_item, status_item]
+            for label, summary, subs in self._meta_value_entries(result):
+                child = [
+                    _item(label, color=TEXT_MUTED, bold=True),
+                    _item(""),
+                    _item(summary, tooltip=summary),
+                    _item(""),
+                ]
+                parent[0].appendRow(child)
+                for sub_label, sub_value in subs:
+                    grand = [
+                        _item(sub_label, color=TEXT_MUTED),
+                        _item(""),
+                        _item(
+                            sub_value,
+                            tooltip=sub_value,
+                            italic=sub_value == t("common.em_dash"),
+                            color=TEXT_SUBTLE
+                            if sub_value == t("common.em_dash")
+                            else None,
+                        ),
+                        _item(""),
+                    ]
+                    child[0].appendRow(grand)
+            model.appendRow(parent)
+
+        try:
+            tree.blockSignals(True)
+            tree.expandAll()
+        finally:
+            tree.blockSignals(False)
+        self._fit_meta_tree_height()
+        # Size the fixed columns to their content (with sane caps) and let
+        # the stretched Value column take the rest.
+        try:
+            for col, floor, ceiling in ((0, 170, 320), (1, 100, 220), (3, 90, 160)):
+                tree.resizeColumnToContents(col)
+                tree.setColumnWidth(
+                    col, max(floor, min(ceiling, tree.columnWidth(col)))
+                )
+        except Exception:
+            pass
+
+    def _on_meta_tree_expansion_changed(self, _index=None) -> None:
+        self._fit_meta_tree_height()
+
+    def _fit_meta_tree_height(self) -> None:
+        """Grow the checks tree to its visible rows (no inner scrollbar)."""
+        try:
+            tree = self._meta_check_tree
+            model = tree.model()
+            visible_rows = 0
+            if model is not None:
+                stack = [tree.rootIndex()]
+                while stack:
+                    parent = stack.pop()
+                    count = model.rowCount(parent)
+                    visible_rows += count
+                    for r in range(count):
+                        idx = model.index(r, 0, parent)
+                        if model.hasChildren(idx) and tree.isExpanded(idx):
+                            stack.append(idx)
+            header_h = tree.header().height() or 30
+            tree.setFixedHeight(max(80, header_h + visible_rows * 30 + 2))
         except Exception:
             pass
 
@@ -827,15 +1142,26 @@ class DatasetDetailView(QWidget):
         """Sidebar section navigation — jumps the main column to each box."""
         from ui.icons import icon as _nav_icon
 
-        card, body, _title, _header = make_card(t("detail.sections.title"))
+        card, body, _title, header = make_card(t("detail.sections.title"))
         body.setSpacing(6)
+        # Collapse the sidebar. On a narrow window the 280px it holds
+        # squeezes the main column (the File Manifest tree) below a
+        # usable width, so the sidebar folds away and its links move
+        # into the top bar's Sections menu.
+        self._sidebar_collapse_btn = make_action_button("", kind="ghost", size="sm")
+        try:
+            self._sidebar_collapse_btn.setIcon(
+                _nav_icon("chevron-right", color=ACCENT_PRIMARY)
+            )
+        except Exception:
+            pass
+        self._sidebar_collapse_btn.setToolTip(t("detail.sidebar.collapse_tip"))
+        self._sidebar_collapse_btn.setAccessibleName(t("detail.sidebar.collapse_a11y"))
+        self._sidebar_collapse_btn.clicked.connect(self._toggle_sidebar)
+        header.addWidget(self._sidebar_collapse_btn)
         self._nav_buttons: list = []
-        for label, attr in [
-            (t("detail.sections.metadata_check"), "_meta_card"),
-            (t("detail.sections.file_manifest"), "_file_card"),
-            (t("detail.sections.auto_checks"), "_auto_card"),
-            (t("detail.sections.version_log"), "_version_card"),
-        ]:
+        for key, attr in _SECTION_LINKS:
+            label = t(key)
             btn = make_action_button(label, kind="link", size=None)
             try:
                 btn.setIcon(_nav_icon("arrow-right", color=ACCENT_PRIMARY))
@@ -1408,6 +1734,75 @@ class DatasetDetailView(QWidget):
             return ok
         except Exception:
             return False
+
+    # -- responsive sidebar ------------------------------------------------
+    # Below this width the sidebar's 280px squeezes the main column (the
+    # File Manifest tree) below a usable width, so it folds away.
+    _SIDEBAR_COLLAPSE_BELOW = 1100
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+        super().resizeEvent(event)
+        self._sync_sidebar()
+
+    def _sync_sidebar(self) -> None:
+        """Fold the sticky sidebar away on a narrow window.
+
+        The user can fold or unfold it by hand; until they do, the width
+        decides. The section links move into the top bar's Sections menu
+        and the dataset log moves to the bottom of the main column, so
+        nothing disappears.
+        """
+        try:
+            if self._sidebar_user_collapsed is None:
+                collapsed = self.width() < self._SIDEBAR_COLLAPSE_BELOW
+            else:
+                collapsed = self._sidebar_user_collapsed
+            if collapsed == self._sidebar_collapsed:
+                return
+            self._sidebar_collapsed = collapsed
+            self._side_scroll.setVisible(not collapsed)
+            self._sections_btn.setVisible(collapsed)
+            self._move_dataset_log(to_sidebar=not collapsed)
+        except Exception:
+            pass
+
+    def _toggle_sidebar(self) -> None:
+        """Fold or unfold the sidebar (the user's choice wins over width)."""
+        try:
+            self._sidebar_user_collapsed = not self._sidebar_collapsed
+            self._sync_sidebar()
+        except Exception:
+            pass
+
+    def _move_dataset_log(self, to_sidebar: bool) -> None:
+        """Park the dataset log in the sidebar, or at the page's foot."""
+        card = getattr(self, "_dataset_log_card", None)
+        if card is None:
+            return
+        try:
+            if to_sidebar:
+                self._main_wrap.removeWidget(card)
+                self._side_wrap.addWidget(card, 1)
+            else:
+                self._side_wrap.removeWidget(card)
+                self._main_wrap.addWidget(card)
+        except Exception:
+            pass
+
+    def _fill_sections_menu(self) -> None:
+        """Rebuild the top bar's Sections menu (the folded sidebar's nav)."""
+        try:
+            self._sections_menu.clear()
+            show = self._sections_menu.addAction(t("detail.sidebar.show_action"))
+            show.triggered.connect(self._toggle_sidebar)
+            self._sections_menu.addSeparator()
+            for key, attr in _SECTION_LINKS:
+                action = self._sections_menu.addAction(t(key))
+                action.triggered.connect(
+                    lambda _checked=False, a=attr: self._goto_section(a)
+                )
+        except Exception:
+            pass
 
     def _goto_section(self, attr: str) -> None:
         """Scroll so the section's top sits at the main column's top (+ margin)."""
@@ -1997,9 +2392,27 @@ class DatasetDetailView(QWidget):
         self._expand_btn.setToolTip(t("detail.files.expand_tip"))
         self._expand_btn.clicked.connect(self._on_toggle_expand_all)
         header_lay.addWidget(self._expand_btn)
-        self._file_filter = make_search_field(t("detail.files.filter_placeholder"), height=36, min_width=180)
+        lay = QVBoxLayout()
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        # The filters live on their own row under the card's title bar.
+        # Packed into the title row - title, tip, Open folder, Expand all,
+        # the filter box, the status combo and the reset button - the card
+        # needed 742px, wider than the column it sits in, so the page
+        # scrolled sideways at the app's own 960px minimum width.
+        tools = QWidget()
+        tools.setObjectName("FileManifestTools")
+        tools.setStyleSheet(transparent_surface_qss("FileManifestTools"))
+        tools_lay = QHBoxLayout(tools)
+        tools_lay.setContentsMargins(16, 8, 16, 8)
+        tools_lay.setSpacing(8)
+        self._file_filter = make_search_field(
+            t("detail.files.filter_placeholder"), height=36, min_width=140
+        )
+        self._file_filter.setAccessibleName(t("detail.files.filter_placeholder"))
         self._file_filter.textChanged.connect(self._on_file_filter)
-        header_lay.addWidget(self._file_filter)
+        tools_lay.addWidget(self._file_filter, 1)
         self._scan_filter = make_combo(
             [(label, key) for label, key in [
                 (t("detail.files.filter_all"), "all"),
@@ -2014,7 +2427,7 @@ class DatasetDetailView(QWidget):
             min_width=130,
         )
         self._scan_filter.currentIndexChanged.connect(lambda _i: self._apply_file_filter_internal())
-        header_lay.addWidget(self._scan_filter)
+        tools_lay.addWidget(self._scan_filter)
         # Reset columns button - restores default widths/order
         self._file_reset_btn = make_reset_columns_button(
             "",
@@ -2023,10 +2436,8 @@ class DatasetDetailView(QWidget):
             fallback_text=t("common.reset"),
         )
         self._file_reset_btn.clicked.connect(self._on_reset_file_view)
-        header_lay.addWidget(self._file_reset_btn)
-        lay = QVBoxLayout()
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
+        tools_lay.addWidget(self._file_reset_btn)
+        lay.addWidget(tools)
         # NOTE: tree + footer live in a flush sub-layout so the header keeps
         # its top radius and the footer keeps its bottom radius.
         card.layout().addLayout(lay)
@@ -2040,8 +2451,12 @@ class DatasetDetailView(QWidget):
         # scrollbar starts below the header row, themed header sections).
         self._file_tree = AppTree(row_height=30, flush=True)
         self._file_tree.clicked.connect(self._on_tree_clicked)
-        self._file_tree.expanded.connect(lambda _i: (self._sync_tree_carets(), self._update_expand_btn()))
-        self._file_tree.collapsed.connect(lambda _i: (self._sync_tree_carets(), self._update_expand_btn()))
+        self._file_tree.expanded.connect(self._on_tree_expansion_changed)
+        self._file_tree.collapsed.connect(self._on_tree_expansion_changed)
+        # No internal scrollbars: the manifest card grows to fit every
+        # visible row and the page canvas scrolls instead.
+        self._file_tree.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._file_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         lay.addWidget(self._file_tree, 1)
         # Compat alias: old code paths referenced _file_table; keep a None
         # placeholder so stray attribute access fails loudly, not silently.
@@ -2052,11 +2467,17 @@ class DatasetDetailView(QWidget):
         footer.setStyleSheet(band_qss(SURFACE_PAGE, SURFACE_SUBTLE, edge="top"))
         fl = QHBoxLayout(footer)
         fl.setContentsMargins(16, 10, 16, 10)
-        self._file_footer_left = make_small_body_label(t("detail.files.no_files"), wrap=False)
-        fl.addWidget(self._file_footer_left)
+        # Both footer labels elide: "No files yet - load metadata to see
+        # the Dataverse file list." is a long sentence, and a label that
+        # cannot wrap would set the card's minimum width for the whole
+        # card (the page then scrolls sideways).
+        self._file_footer_left = make_elided_label(
+            t("detail.files.no_files"), object_name="BodySM"
+        )
+        fl.addWidget(self._file_footer_left, 1)
         fl.addStretch()
         self._file_footer_right = make_small_body_label("", wrap=False)
-        fl.addWidget(self._file_footer_right)
+        fl.addWidget(self._file_footer_right, 0)
         lay.addWidget(footer)
 
         # Hidden checks list for compatibility (was QListWidget; now we show inline)
@@ -2093,7 +2514,7 @@ class DatasetDetailView(QWidget):
         _pill_name, pill_text = _pill_state(version_state, getattr(self, "_in_review", False))
         status_pill = getattr(self, "_status_pill", None)
         if status_pill is not None:
-            self._dress_pill(status_pill, pill_text.upper(), pill_text)
+            self._dress_pill(status_pill, pill_text, pill_text)
         # Contact/date
         if meta and isinstance(meta, dict):
             latest = meta.get("latestVersion") or {}
@@ -2169,7 +2590,7 @@ class DatasetDetailView(QWidget):
             label = ""
         try:
             if label:
-                self._dress_pill(self._curation_pill, label.upper(), label)
+                self._dress_pill(self._curation_pill, label, label)
                 self._curation_pill.setToolTip(tip)
                 self._curation_pill.setVisible(True)
             else:
@@ -2336,6 +2757,10 @@ class DatasetDetailView(QWidget):
 
     def _auto_row(self, check_id: str, desc: str, passed: bool, level: str, badge: str | None = None) -> QFrame:
         frame = QFrame()
+        # Scope the row face to the row itself. A bare `QFrame` selector
+        # would also style every QLabel inside it (QLabel subclasses
+        # QFrame), drawing a rounded box around each line of text.
+        frame.setObjectName("AutoCheckRow")
         # Explicit SKIPPED (warning+passed with "Missing"/"skipped" wording)
         # renders grey so it is never confused with a real pass.
         from ui.icons import icon_label as _icon_label
@@ -2346,7 +2771,7 @@ class DatasetDetailView(QWidget):
             or "not executed" in desc.lower()
             or "Missing" in (badge or desc)
         ):
-            frame.setStyleSheet(surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE))
+            frame.setStyleSheet(surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow"))
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = (
                 t("status.badges.skipped")
@@ -2356,7 +2781,7 @@ class DatasetDetailView(QWidget):
             badge_bg = SURFACE_ALT
             badge_fg = TEXT_MUTED
         elif not passed and level in ("error", "warning"):
-            frame.setStyleSheet(surface_frame_qss(STATE_ERROR_BG, STATE_ERROR_BORDER))
+            frame.setStyleSheet(surface_frame_qss(STATE_ERROR_BG, STATE_ERROR_BORDER, selector="QFrame#AutoCheckRow"))
             icon_name, icon_color = (
                 ("octagon-x", STATE_ERROR_GRAPHIC) if level == "error"
                 else ("octagon-alert", STATE_WARNING_GRAPHIC)
@@ -2365,19 +2790,19 @@ class DatasetDetailView(QWidget):
             badge_bg = STATE_ERROR_BG
             badge_fg = STATE_ERROR_TEXT
         elif passed and level == "warning" and "Missing" in (badge or desc):
-            frame.setStyleSheet(surface_frame_qss(STATE_ERROR_SURFACE, STATE_ERROR_BORDER))
+            frame.setStyleSheet(surface_frame_qss(STATE_ERROR_SURFACE, STATE_ERROR_BORDER, selector="QFrame#AutoCheckRow"))
             icon_name, icon_color = "octagon-alert", STATE_WARNING_GRAPHIC
             badge_text = badge or t("status.badges.warning")
             badge_bg = STATE_ERROR_BG
             badge_fg = STATE_ERROR_TEXT
         elif passed:
-            frame.setStyleSheet(surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE))
+            frame.setStyleSheet(surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow"))
             icon_name, icon_color = "check", ACCENT_PRIMARY
             badge_text = badge or t("status.badges.passed")
             badge_bg = ACCENT_PRIMARY
             badge_fg = TEXT_ON_ACCENT
         else:
-            frame.setStyleSheet(surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE))
+            frame.setStyleSheet(surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow"))
             icon_name, icon_color = "minus", TEXT_MUTED
             badge_text = badge or t("common.em_dash")
             badge_bg = SURFACE_ALT
@@ -2742,6 +3167,39 @@ class DatasetDetailView(QWidget):
         self._update_expand_btn()
         # Re-apply the saved layout (the user's widths win over the fit).
         self._track_table_widths("dataset_files", self._file_tree.header())
+        self._fit_file_tree_height()
+
+    def _on_tree_expansion_changed(self, _index=None) -> None:
+        self._sync_tree_carets()
+        self._update_expand_btn()
+        self._fit_file_tree_height()
+
+    def _fit_file_tree_height(self) -> None:
+        """Grow the manifest tree to its visible rows (no inner scroll).
+
+        The tree lives on the page's scroll canvas, so an inner scrollbar
+        only traps the wheel. Every expanded row contributes its 30px
+        row height plus the header band.
+        """
+        try:
+            tree = self._file_tree
+            model = tree.model()
+            visible_rows = 0
+            if model is not None:
+                stack = [tree.rootIndex()]
+                while stack:
+                    parent = stack.pop()
+                    count = model.rowCount(parent)
+                    visible_rows += count
+                    for r in range(count):
+                        idx = model.index(r, 0, parent)
+                        if model.hasChildren(idx) and tree.isExpanded(idx):
+                            stack.append(idx)
+            row_h = 30
+            header_h = tree.header().height() or 30
+            tree.setFixedHeight(max(80, header_h + visible_rows * row_h + 2))
+        except Exception:
+            pass
 
     def _sync_tree_carets(self) -> None:
         """Re-sync folder icons with the manifest tree's expanded state."""
@@ -2793,6 +3251,7 @@ class DatasetDetailView(QWidget):
                 self._file_tree.collapseAll()
             self._sync_tree_carets()
             self._update_expand_btn()
+            self._fit_file_tree_height()
         except Exception:
             pass
 
@@ -2827,9 +3286,18 @@ class DatasetDetailView(QWidget):
 
     # -- metadata loading -------------------------------------------------
     def _on_load_metadata(self) -> None:
-        if self._meta_worker is not None and self._meta_worker.isRunning():
-            self._set_status(t("detail.status.metadata_load_running"))
-            return
+        # The worker deletes itself (deleteLater) when it finishes or
+        # errors, which can leave a stale Python reference to a dead C++
+        # object; calling isRunning() on it raised
+        # "Internal C++ object already deleted". Drop the stub instead.
+        worker = self._meta_worker
+        if worker is not None:
+            try:
+                if worker.isRunning():
+                    self._set_status(t("detail.status.metadata_load_running"))
+                    return
+            except RuntimeError:
+                self._meta_worker = None
         self._load_meta_btn.setEnabled(False)
         self._set_status(t("detail.status.loading_metadata"))
         self._progress.setVisible(True)
@@ -2850,6 +3318,10 @@ class DatasetDetailView(QWidget):
         self._meta_worker.start()
 
     def _on_metadata_finished(self, metadata: dict, inventory: list[dict], curation: dict | None = None, version_diff: dict | None = None, extra: dict | None = None) -> None:
+        # Drop the reference before the worker's deleteLater runs; a stale
+        # reference made the next Load metadata click crash with
+        # "Internal C++ object (MetadataWorker) already deleted".
+        self._meta_worker = None
         self._progress.setVisible(False)
         self._load_meta_btn.setEnabled(True)
         self._inventory = inventory if isinstance(inventory, list) else []
@@ -2952,7 +3424,7 @@ class DatasetDetailView(QWidget):
     def _on_reset_meta_view(self) -> None:
         try:
             self._reset_table_view(
-                "dataset_meta", self._meta_check_table.horizontalHeader()
+                "dataset_meta", self._meta_check_tree.header()
             )
             if self._metadata is not None:
                 self._populate_completeness(self._metadata)
@@ -3021,7 +3493,8 @@ class DatasetDetailView(QWidget):
             results = [
                 {"field": r["field"], "requirement": r["requirement"],
                  "value": r.get("value", t("common.em_dash")), "status": r["status"],
-                 "block": r.get("block", "") or ""}
+                 "block": r.get("block", "") or "",
+                 "name": r.get("name", "") or ""}
                 for r in full
             ]
         except Exception:
@@ -3056,78 +3529,12 @@ class DatasetDetailView(QWidget):
                     total=total,
                 )
             )
-        # Full per-check table: Check | Block | Value | Status (requirement
-        # in the Check cell's tooltip).
-        # Sorting stays OFF while rows are inserted: with sorting on, each
-        # setItem re-sorts immediately and later writes land in the wrong
-        # visual rows (duplicated text in some rows, empty cells in others).
-        _was_sorting = self._meta_check_table.isSortingEnabled()
-        self._meta_check_table.setSortingEnabled(False)
-        # Block header signals too: changing row counts toggles the
-        # vertical scrollbar, which recomputes the stretch (Value) column
-        # and would otherwise persist a mid-populate width.
-        try:
-            self._meta_check_table.horizontalHeader().blockSignals(True)
-        except Exception:
-            pass
-        try:
-            self._meta_check_table.setRowCount(total)
-            for row, r in enumerate(results):
-                ok = r["status"] == "complete"
-                field_item = QTableWidgetItem(r["field"])
-                field_item.setToolTip(r["requirement"])
-                _ff = field_item.font()
-                _ff.setBold(True)
-                field_item.setFont(_ff)
-                value_item = QTableWidgetItem(r.get("value", t("common.em_dash")))
-                value_item.setToolTip(
-                    r["requirement"]
-                    + t(
-                        "detail.metadata_check.value_tooltip",
-                        value=r.get("value", t("common.em_dash")),
-                    )
-                )
-                from ui.icons import icon as _icon
-
-                block_item = QTableWidgetItem(self._meta_block_label(r.get("block", "")))
-                block_item.setToolTip(
-                    self._meta_block_label(r.get("block", ""))
-                    + (f"\n\n{r['requirement']}" if r.get("requirement") else "")
-                )
-                status_item = QTableWidgetItem(
-                    t("detail.metadata_check.status_complete")
-                    if ok
-                    else t("detail.metadata_check.status_incomplete")
-                )
-                status_item.setToolTip(r["requirement"])
-                status_item.setForeground(QColor(TEXT_SUCCESS if ok else TEXT_DANGER))
-                status_item.setData(Qt.UserRole, bool(ok))
-                try:
-                    status_item.setIcon(
-                        _icon("check", color=STATE_SUCCESS_GRAPHIC)
-                        if ok else _icon("x", color=STATE_ERROR_GRAPHIC)
-                    )
-                except Exception:
-                    pass
-                _bf = status_item.font()
-                _bf.setBold(True)
-                status_item.setFont(_bf)
-                self._meta_check_table.setItem(row, 0, field_item)
-                self._meta_check_table.setItem(row, 1, block_item)
-                self._meta_check_table.setItem(row, 2, value_item)
-                self._meta_check_table.setItem(row, 3, status_item)
-        finally:
-            try:
-                self._meta_check_table.horizontalHeader().blockSignals(False)
-            except Exception:
-                pass
-            self._meta_check_table.setSortingEnabled(_was_sorting)
-        self._meta_check_table.resizeRowsToContents()
-        # Content-width columns (Value stays Stretch and absorbs slack);
-        # no-op when a saved view was restored or the user resized.
-        self._meta_check_table.fit_columns_to_content()
-        # Apply the active Complete/Incomplete filter; it also refits the
-        # card height to the visible rows (no internal scrollbar).
+        # Full per-check tree: Check | Block | Value | Status (requirement
+        # in the Check cell's tooltip). Repeatable fields grow child rows
+        # per entry and grandchild rows per subfield.
+        self._meta_results = results
+        # Apply the active Complete/Incomplete filter; it rebuilds the tree
+        # and refits the card height to the visible rows (no inner scroll).
         self._apply_meta_filter()
         # Keep the Response draft in sync (preserves manual edits).
         try:
@@ -3153,6 +3560,7 @@ class DatasetDetailView(QWidget):
             pass
 
     def _on_metadata_error(self, msg: str) -> None:
+        self._meta_worker = None
         self._progress.setVisible(False)
         self._load_meta_btn.setEnabled(True)
         self._set_status("")
@@ -3255,6 +3663,28 @@ class DatasetDetailView(QWidget):
             pass
 
     # -- assessment commit --
+    def _confirm_remote_write(self, decision: str) -> bool:
+        """Ask before writing the decision to Dataverse. Defaults to No.
+
+        A decision drawn from the instance's curation labels is not a
+        local note: it changes the dataset on the server, for everyone.
+        The curator confirms that explicitly before anything is written
+        or logged.
+        """
+        try:
+            return confirm(
+                self,
+                t("detail.decision.confirm_remote_title"),
+                t(
+                    "detail.decision.confirm_remote_body",
+                    decision=decision,
+                    pid=self._pid,
+                ),
+                confirm_label=t("detail.decision.confirm_remote_yes"),
+            )
+        except Exception:
+            return False
+
     def _on_commit(self) -> None:
         decision = self._decision_combo.currentData()
         if not isinstance(decision, str) or not decision:
@@ -3265,6 +3695,11 @@ class DatasetDetailView(QWidget):
             )
             return
         _options, from_labels = self._decision_choices()
+        # The gate: a remote write asks first, and the answer decides
+        # whether anything at all happens - no log entry, no workflow
+        # step, no push.
+        if from_labels and not self._confirm_remote_write(decision):
+            return
         notes = self._notes_edit.toPlainText().strip()
         msg = t("detail.decision.decision_prefix", decision=decision)
         if notes:
@@ -3419,6 +3854,7 @@ class DatasetDetailView(QWidget):
         self._dl_worker.start()
 
     def _on_download_finished(self, staged: Path) -> None:
+        self._dl_worker = None
         self._progress.setVisible(False)
         self._hide_ring()
         self._dl_btn.setEnabled(True)
@@ -3449,6 +3885,7 @@ class DatasetDetailView(QWidget):
             pass
 
     def _on_download_error(self, msg: str) -> None:
+        self._dl_worker = None
         self._progress.setVisible(False)
         self._hide_ring()
         self._dl_btn.setEnabled(True)
@@ -3510,6 +3947,7 @@ class DatasetDetailView(QWidget):
             self._check_btn.setEnabled(True)
             return
         self._check_btn.setEnabled(False)
+        self._checks_cancel_btn.setVisible(True)
         self._set_status(t("detail.status.running_checks"))
         self._progress.setVisible(True)
         self._progress.setRange(0, 0)
@@ -3525,13 +3963,40 @@ class DatasetDetailView(QWidget):
         self._check_worker.progressFraction.connect(self._on_ring_fraction)
         self._check_worker.finished.connect(self._on_checks_finished)
         self._check_worker.error.connect(self._on_checks_error)
+        self._check_worker.cancelled.connect(self._on_checks_cancelled)
         self._check_worker.finished.connect(self._check_worker.deleteLater)
         self._check_worker.error.connect(self._check_worker.deleteLater)
+        self._check_worker.cancelled.connect(self._check_worker.deleteLater)
         self._check_worker.start()
+
+    def _on_cancel_checks_click(self) -> None:
+        """Ask the running check pass to stop at the next checkpoint."""
+        worker = self._check_worker
+        if worker is None:
+            return
+        try:
+            worker.cancel()
+        except Exception:
+            try:
+                worker.requestInterruption()
+            except Exception:
+                pass
+        self._set_status(t("detail.status.cancelling"))
+        self._checks_cancel_btn.setEnabled(False)
+
+    def _on_checks_cancelled(self) -> None:
+        """Reset the header after a cancelled check pass (no report)."""
+        self._progress.setVisible(False)
+        self._hide_ring()
+        self._check_btn.setEnabled(True)
+        self._checks_cancel_btn.setVisible(False)
+        self._checks_cancel_btn.setEnabled(True)
+        self._set_status(t("detail.status.checks_cancelled"))
 
     def _on_checks_finished(self, report) -> None:
         from engine.status import summarize
 
+        self._check_worker = None
         self._report = report
         # Auto-cache: always save the JSON report into the dataset's
         # workspace folder (no dialog) so checks survive re-opening the
@@ -3545,6 +4010,8 @@ class DatasetDetailView(QWidget):
         self._progress.setVisible(False)
         self._hide_ring()
         self._check_btn.setEnabled(True)
+        self._checks_cancel_btn.setVisible(False)
+        self._checks_cancel_btn.setEnabled(True)
         self._history_btn.setEnabled(True)
         # Update dataset-checks card + manifest tree
         self._refresh_curation_preview()
@@ -3599,11 +4066,17 @@ class DatasetDetailView(QWidget):
         self._refresh_workflow()
 
     def _on_checks_error(self, msg: str) -> None:
+        self._check_worker = None
         self._progress.setVisible(False)
         self._hide_ring()
         self._check_btn.setEnabled(True)
-        self._set_status("")
+        self._checks_cancel_btn.setVisible(False)
+        self._checks_cancel_btn.setEnabled(True)
         headline, details = describe_error(msg)
+        # The failure stays on the page: an empty status strip read as
+        # "nothing happened" once the dialog was closed. The strip now
+        # carries the reason and stays until the next run replaces it.
+        self._set_status(t("detail.status.checks_failed", reason=headline))
         show_critical(self, t("detail.checks.title"), headline, details=details,
                      retry=self._on_run_checks)
 

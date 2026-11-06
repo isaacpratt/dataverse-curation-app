@@ -58,6 +58,7 @@ from ui.widgets import (
     PaneFooter,
     flush_table_style,
     make_action_button,
+    make_body_label,
     make_combo,
     make_line_edit,
     make_page_heading,
@@ -176,21 +177,23 @@ class SettingsPane(QWidget):
         form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         form.setFormAlignment(Qt.AlignTop)
 
+        # Field labels wear the same BodyMD type token as the field text
+        # (13px), so a label and the value beside it read as one row.
         self.preset_combo = make_combo(list(PRESETS), min_width=200)
-        form.addRow(t("settings.fields.preset"), self.preset_combo)
+        form.addRow(make_body_label(t("settings.fields.preset")), self.preset_combo)
 
         self.url_edit = make_line_edit(t("settings.fields.url_placeholder"))
-        form.addRow(t("settings.fields.url"), self.url_edit)
+        form.addRow(make_body_label(t("settings.fields.url")), self.url_edit)
 
         self.token_edit = make_line_edit(
             t("settings.fields.token_placeholder"), password=True
         )
-        form.addRow(t("settings.fields.token"), self.token_edit)
+        form.addRow(make_body_label(t("settings.fields.token")), self.token_edit)
 
         self.subtree_edit = make_line_edit(
             t("settings.fields.collection_placeholder")
         )
-        form.addRow(t("settings.fields.collection"), self.subtree_edit)
+        form.addRow(make_body_label(t("settings.fields.collection")), self.subtree_edit)
 
         ws_row = QHBoxLayout()
         ws_row.setContentsMargins(0, 0, 0, 0)
@@ -200,7 +203,7 @@ class SettingsPane(QWidget):
         browse_btn.clicked.connect(self._browse_workspace)
         ws_row.addWidget(self.workspace_edit, 1)
         ws_row.addWidget(browse_btn, 0)
-        form.addRow(t("settings.fields.workspace"), ws_row)
+        form.addRow(make_body_label(t("settings.fields.workspace")), ws_row)
 
         test_btn = make_action_button(
             t("settings.fields.test_connection"), kind="secondary", size="sm"
@@ -240,15 +243,15 @@ class SettingsPane(QWidget):
         user_heading.setContentsMargins(0, 8, 0, 0)
         form.addRow(user_heading)
         self._user_identifier = self._make_user_value()
-        form.addRow(t("settings.user.identifier"), self._user_identifier)
+        form.addRow(make_body_label(t("settings.user.identifier")), self._user_identifier)
         self._user_display = self._make_user_value()
-        form.addRow(t("settings.user.display"), self._user_display)
+        form.addRow(make_body_label(t("settings.user.display")), self._user_display)
         self._user_super = self._make_user_value()
-        form.addRow(t("settings.user.superuser"), self._user_super)
+        form.addRow(make_body_label(t("settings.user.superuser")), self._user_super)
         self._user_affil = self._make_user_value()
-        form.addRow(t("settings.user.affiliation"), self._user_affil)
+        form.addRow(make_body_label(t("settings.user.affiliation")), self._user_affil)
         self._user_role = self._make_user_value()
-        form.addRow(t("settings.user.collection_role"), self._user_role)
+        form.addRow(make_body_label(t("settings.user.collection_role")), self._user_role)
         self._user_status = QLabel("")
         self._user_status.setWordWrap(True)
         self._user_status.setObjectName("HintSM")
@@ -926,6 +929,16 @@ class SettingsPane(QWidget):
             self.ext_status.setText(
                 t("settings.extensions.uninstall_frozen_status")
             )
+            return
+        # Removing a package changes what the app can do, and the
+        # extension may be the one an optional check depends on. Ask
+        # first; the dialog's safe answer is No.
+        if not confirm(
+            self,
+            t("settings.extensions.uninstall_confirm_title", package=pip_name),
+            t("settings.extensions.uninstall_confirm_body"),
+            confirm_label=t("settings.extensions.uninstall_confirm_yes"),
+        ):
             return
         self._run_shell(
             lambda: self._pip_run(["uninstall", "-y", pip_name], pip_name, "uninstalled"),

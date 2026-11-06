@@ -36,6 +36,9 @@ SURFACE_VARIANT = "#dae2fd"
 
 OUTLINE_VARIANT = "#c3c6d8"
 OUTLINE = "#737687"
+# Interactive control edge: heavier than a decorative card edge so an
+# input or button boundary clears the 3:1 WCAG 1.4.11 floor on white.
+CONTROL_OUTLINE = "#8b90a3"        # 3.2:1 on a card
 
 ON_SURFACE = "#131b2e"
 ON_SURFACE_VARIANT = "#424656"
@@ -97,6 +100,11 @@ LOG_IDENTIFIER_PALETTE = (
 TEXT_PRIMARY = ON_SURFACE              # body copy, headings, values
 TEXT_MUTED = ON_SURFACE_VARIANT        # captions, hints, timestamps, metadata
 TEXT_SUBTLE = ON_SECONDARY_CONTAINER   # de-emphasised hints, field help
+# A field's placeholder is the example text ("Search datasets..."). It
+# has to read as text (WCAG 1.4.3) without pretending to be the value
+# the curator typed: 5.9:1 on a white field, a step below the muted
+# body colour.
+TEXT_PLACEHOLDER = ON_SECONDARY_CONTAINER
 TEXT_ON_ACCENT = ON_PRIMARY            # text on the brand fill
 TEXT_ON_TINT = ON_SECONDARY_CONTAINER  # text on a tinted surface
 TEXT_ON_SECONDARY = ON_SECONDARY_FIXED # text on the secondary fill (nav)
@@ -106,6 +114,10 @@ TEXT_SUCCESS = SUCCESS_DARK            # success copy (5.0:1 on a card)
 TEXT_WARNING = WARNING_DARK            # warning copy (5.0:1 on a card)
 TEXT_AMBER = AMBER_700                 # amber copy (log tokens, caution notes)
 TEXT_DISABLED = MUTED_TEXT             # disabled control text (3.7:1 on a card)
+# A workflow step that cannot run yet is still a step the user reads and
+# clicks: it carries body-legible text (8.9:1 on a card), never the
+# disabled grey. The lock mark says "blocked"; the text says what.
+TEXT_BLOCKED = ON_SURFACE_VARIANT
 
 # --- Surface roles ---
 SURFACE_PAGE = BACKGROUND              # the page behind everything
@@ -121,6 +133,7 @@ SURFACE_DISABLED = MUTED_BG            # a disabled control's face
 # --- Border roles ---
 BORDER_SUBTLE = OUTLINE_VARIANT        # card and section edges
 BORDER_STRONG = OUTLINE                # dividers that carry meaning
+BORDER_CONTROL = CONTROL_OUTLINE       # input / button edges (>= 3:1)
 BORDER_DISABLED = MUTED_BORDER         # a disabled control's edge
 
 # --- Accent roles ---
@@ -129,7 +142,8 @@ ACCENT_PRIMARY_HOVER = ON_PRIMARY_FIXED_VARIANT
 ACCENT_PRIMARY_PRESSED = PRIMARY_PRESSED
 ACCENT_PRIMARY_DISABLED = PRIMARY_DISABLED
 ACCENT_TINT = PRIMARY_FIXED            # selected row / pressed fill
-ACCENT_FOCUS_TINT = PRIMARY_FIXED_DIM  # the focus ring's fill
+ACCENT_FOCUS_TINT = PRIMARY_FIXED_DIM  # the focus tint's fill
+ACCENT_FOCUS_RING = PRIMARY            # the focus ring's stroke (7.2:1 on a card)
 ACCENT_PRIMARY_DEEP = PRIMARY_DEEP     # the deepest brand blue (a live badge)
 ACCENT_SECONDARY = SECONDARY_CONTAINER # the secondary fill (nav, selection)
 ACCENT_TERTIARY = TERTIARY             # the tertiary accent
@@ -267,6 +281,8 @@ CONTRAST_PAIRS: tuple[tuple[str, str, str, str, float], ...] = (
     ("text on the secondary fill", TEXT_ON_SECONDARY, ACCENT_SECONDARY, "text", 4.5),
     ("text on the error fill", TEXT_ON_ERROR, STATE_ERROR_GRAPHIC, "text", 4.5),
     ("amber text on a card", TEXT_AMBER, SURFACE_CARD, "text", 4.5),
+    ("blocked step text on a card", TEXT_BLOCKED, SURFACE_CARD, "text", 4.5),
+    ("blocked step text on the page", TEXT_BLOCKED, SURFACE_PAGE, "text", 4.5),
     ("disabled text on a card", TEXT_DISABLED, SURFACE_CARD, "disabled", 3.0),
     ("disabled text on the page", TEXT_DISABLED, SURFACE_PAGE, "disabled", 3.0),
     ("disabled primary label", TEXT_PRIMARY, ACCENT_PRIMARY_DISABLED, "disabled", 3.0),
@@ -275,6 +291,10 @@ CONTRAST_PAIRS: tuple[tuple[str, str, str, str, float], ...] = (
     ("error icon on a card", STATE_ERROR_GRAPHIC, SURFACE_CARD, "graphic", 3.0),
     ("brand icon on a card", ACCENT_PRIMARY, SURFACE_CARD, "graphic", 3.0),
     ("tertiary icon on a card", ACCENT_TERTIARY, SURFACE_CARD, "graphic", 3.0),
+    ("control edge on a card", BORDER_CONTROL, SURFACE_CARD, "graphic", 3.0),
+    ("control edge on the page", BORDER_CONTROL, SURFACE_PAGE, "graphic", 3.0),
+    ("placeholder text on a field", TEXT_PLACEHOLDER, SURFACE_CONTAINER_LOWEST, "text", 4.5),
+    ("focus ring on a card", ACCENT_FOCUS_RING, SURFACE_CARD, "graphic", 3.0),
 )
 
 
@@ -410,7 +430,14 @@ def header_section_qss(*, flush: bool = False) -> str:
         f"color: {ON_SURFACE_VARIANT}; padding: 8px 14px 8px 12px; "
         f"border: none; border-bottom: 1px solid {OUTLINE_VARIANT}; "
         f"border-right: 1px solid {OUTLINE_VARIANT}; font-size: {FONT_CAPTION}px; "
-        "font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; } "
+        # No text-transform here: Qt applies it when it *paints* a label
+        # but not when it *measures* one, so the painted header was wider
+        # than the text Qt elided against and a narrow section lost its
+        # first letter ("SUBMITTING AUTHOR" read as "UBMITTING AUTHOR").
+        # The kit stores the header labels in the case they are painted
+        # in (see AppTable.setHorizontalHeaderLabels), so the metrics and
+        # the paint agree - and a translation can choose its own casing.
+        "font-weight: 600; } "
         f"QHeaderView::section:hover {{ background: {SURFACE_CONTAINER_HIGH}; "
         f"border-right: 1px solid {OUTLINE}; }} "
         f"QHeaderView::section:pressed {{ background: {PRIMARY_FIXED}; "
@@ -492,7 +519,7 @@ def button_qss(
     if kind == "secondary":
         return (
             f"{sel} {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; "
-            f"border: 1px solid {OUTLINE_VARIANT}; border-radius: {RADIUS_LG}; "
+            f"border: 1px solid {BORDER_CONTROL}; border-radius: {RADIUS_LG}; "
             f"padding: 7px 14px; font-weight: 600; font-size: {FONT_SMALL}px; }} "
             f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; }} '
             f"{sel}:hover {{ background: {SURFACE_CONTAINER_HIGH}; "
@@ -514,7 +541,7 @@ def button_qss(
     if kind == "chip":
         return (
             f"{sel} {{ background: {SURFACE_CONTAINER_LOWEST}; "
-            f"border: 1px solid {OUTLINE_VARIANT}; border-radius: {RADIUS_LG}; "
+            f"border: 1px solid {BORDER_CONTROL}; border-radius: {RADIUS_LG}; "
             f"padding: 6px 10px; font-size: {FONT_SMALL}px; font-weight: 600; "
             f"color: {ON_SURFACE_VARIANT}; }} "
             f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
@@ -529,7 +556,7 @@ def button_qss(
         # system, cell-sized padding.
         return (
             f"{sel} {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; "
-            f"border: 1px solid {OUTLINE_VARIANT}; border-radius: 6px; "
+            f"border: 1px solid {BORDER_CONTROL}; border-radius: 6px; "
             f"padding: 0 8px; font-weight: 600; font-size: {FONT_SMALL}px; }} "
             f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; }} '
             f"{sel}:hover {{ background: {SURFACE_CONTAINER_HIGH}; "
@@ -707,8 +734,10 @@ def workflow_step_qss(state: str = "todo") -> str:
             f"border: 1px solid {ACCENT_PRIMARY}; }}"
         )
     if state == "blocked":
+        # A blocked step is guidance, not a disabled control: it stays
+        # clickable and stays legible (the lock mark carries the state).
         return (
-            f"QPushButton#WorkflowStep {{ color: {TEXT_DISABLED}; font-size: 12px; "
+            f"QPushButton#WorkflowStep {{ color: {TEXT_BLOCKED}; font-size: 12px; "
             f"background: transparent; border: none; padding: 3px 6px; }} {hover}"
         )
     return (
@@ -735,10 +764,13 @@ def input_qss(
     stack = f"font-family: {family}; " if family else ""
     return (
         f"{selector} {{ background: {SURFACE_CONTAINER_LOWEST}; "
-        f"border: 1px solid {OUTLINE_VARIANT}; border-radius: {RADIUS_LG}; "
+        f"border: 1px solid {BORDER_CONTROL}; border-radius: {RADIUS_LG}; "
         f"padding: 7px 10px; font-size: {font_size}px; {stack}"
         f"selection-background-color: {PRIMARY_FIXED}; }} "
-        f"{selector}:focus {{ border: 1px solid {PRIMARY}; }}"
+        f"{selector}:focus {{ border: 1px solid {ACCENT_FOCUS_RING}; }} "
+        # The placeholder is text: it carries its own colour instead of
+        # inheriting the platform's (a pale grey that fails 4.5:1).
+        f"{selector}::placeholder-text {{ color: {TEXT_PLACEHOLDER}; }}"
     )
 
 
@@ -831,16 +863,55 @@ QMainWindow, QStackedWidget, QScrollArea {{
 {button_qss("cell")}
 {button_qss("link")}
 
+/* ===== Dialog buttons (QDialogButtonBox) ===== */
+/* QDialogButtonBox builds its own buttons, so they never carry a kit
+   object name and used to fall back to the platform face: no border, no
+   focus ring, a different type size. The rule below gives every dialog
+   button the app's secondary face; an affirmative button that opts into
+   the #PrimaryButton id (see ui.dialogs) picks up the brand fill. */
+QDialogButtonBox QPushButton {{
+    background: {SURFACE_CONTAINER_LOWEST};
+    color: {ON_SURFACE};
+    border: 1px solid {BORDER_CONTROL};
+    border-radius: {RADIUS_LG};
+    padding: 7px 16px;
+    font-weight: 600;
+    font-size: {FONT_SMALL}px;
+    min-height: 18px;
+}}
+QDialogButtonBox QPushButton:hover {{
+    background: {SURFACE_CONTAINER_HIGH};
+    border-color: {PRIMARY};
+}}
+QDialogButtonBox QPushButton:focus {{
+    outline: 2px solid {ACCENT_FOCUS_RING};
+    outline-offset: 2px;
+}}
+QDialogButtonBox QPushButton#PrimaryButton {{
+    background: {PRIMARY};
+    color: {ON_PRIMARY};
+    border: none;
+}}
+QDialogButtonBox QPushButton#PrimaryButton:hover {{
+    background: {ON_PRIMARY_FIXED_VARIANT};
+}}
+
 /* ===== Inputs ===== */
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox {{
     background: {SURFACE_CONTAINER_LOWEST};
-    border: 1px solid {OUTLINE_VARIANT};
+    border: 1px solid {BORDER_CONTROL};
     border-radius: {RADIUS_LG};
     padding: 7px 10px;
     selection-background-color: {PRIMARY_FIXED};
 }}
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{
-    border: 1px solid {PRIMARY};
+    border: 1px solid {ACCENT_FOCUS_RING};
+}}
+/* The placeholder is text, so it carries its own colour: the platform
+   default is a pale grey that does not clear 4.5:1 on a white field. */
+QLineEdit::placeholder-text, QTextEdit::placeholder-text,
+QPlainTextEdit::placeholder-text {{
+    color: {TEXT_PLACEHOLDER};
 }}
 /* Keyboard focus (Tab/arrow navigation) paints a colour tint — never an
    outline (2026-10-02 — replaces both the outline batch and its removal).
@@ -855,10 +926,30 @@ QTabBar[focusVisible="true"]::tab:selected {{
     background: {PRIMARY_FIXED_DIM};
     color: {ON_SURFACE};
 }}
+/* Keyboard focus ring — 2px offset, high-contrast stroke.
+   Applied to every focusable control so keyboard users never lose their place. */
+QPushButton[focusVisible="true"],
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus,
+QHeaderView[focusVisible="true"],
+QTreeView[focusVisible="true"],
+QTreeWidget[focusVisible="true"],
+QTableWidget[focusVisible="true"],
+QTabBar[focusVisible="true"]::tab:selected,
+QToolButton[focusVisible="true"],
+QAbstractScrollArea[focusVisible="true"],
+QWidget[focusVisible="true"] {{
+    outline: 2px solid {ACCENT_FOCUS_RING};
+    outline-offset: 2px;
+}}
 
 QLineEdit#SearchField {{
     padding-left: 32px;
     background: {SURFACE_CONTAINER_LOWEST};
+    border: 1px solid {BORDER_CONTROL};
+    border-radius: {RADIUS_LG};
+}}
+QLineEdit#SearchField:focus {{
+    border: 1px solid {ACCENT_FOCUS_RING};
 }}
 
 /* ComboBox drop-down: fully owner-drawn button so no native edge, groove
@@ -911,12 +1002,8 @@ QComboBox:on {{
 }}
 
 /* ===== Table ===== */
-/* Item views mark the current cell/row with the selection tint. Qt's native
-   focus rectangle (the black box drawn around the current cell) is noise on
-   top of that tint, so it is suppressed app-wide. */
-QAbstractItemView {{
-    outline: 0;
-}}
+/* Item views mark the current cell/row with the selection tint.
+   A visible focus ring (added above) now carries focus for keyboard users. */
 QTableWidget {{
     background: {SURFACE_CONTAINER_LOWEST};
     border: none;
