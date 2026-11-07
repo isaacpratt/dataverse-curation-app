@@ -228,10 +228,12 @@
     "queue": {
       "title": "Curation Queue",
       "search": "Search datasets, authors...",
-      "columns": "Columns…"
+      "columns": "Columns…",
+      "refine": "Refine"
     },
     "filters": {
       "all": "All Datasets",
+      "pending": "Pending (Draft + In Review)",
       "draft": "Draft unsubmitted",
       "published": "Published",
       "in_review": "In Review",

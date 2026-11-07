@@ -605,11 +605,9 @@ class SettingsPane(QWidget):
 
     @staticmethod
     def _humanize_bytes(total: int) -> str:
-        for unit in ("B", "KB", "MB", "GB"):
-            if total < 1024 or unit == "GB":
-                return f"{total:.1f} {unit}" if unit != "B" else f"{total} B"
-            total /= 1024
-        return f"{total:.1f} GB"
+        from ui.widgets import human_size
+
+        return human_size(total)
 
     @staticmethod
     def _package_size(pip_name: str, import_name: str = "") -> str:

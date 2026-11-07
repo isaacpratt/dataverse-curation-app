@@ -237,7 +237,7 @@ MARGIN_CARD_H = 16    # card header/body horizontal padding
 MARGIN_CARD_V = 12    # card header/body vertical padding
 
 # --- Type scale (px) ---
-FONT_MICRO = 10      # log level badges (the smallest text in the app)
+FONT_MICRO = 11      # log level badges (the smallest text in the app; dv-vw0)
 FONT_HEADLINE = 22
 FONT_TITLE = 16
 FONT_SECTION = 15
@@ -1319,7 +1319,9 @@ def apply_theme(app) -> None:
     font = QFont("Inter")
     if font.family() != "Inter":
         font = QFont("Segoe UI")
-    font.setPointSize(9)
+    # Pixel size (not point size) so Qt measures what the QSS paints:
+    # tokens are px (FONT_BODY=13) while a 9pt app font is ~12px.
+    font.setPixelSize(FONT_BODY)
     app.setFont(font)
     app.setStyleSheet(global_qss())
     _install_interaction_tracking(app)

@@ -35,7 +35,7 @@ python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
-pytest                        # 454 tests (212 engine + 242 UI; run pytest --collect-only -q for current count)
+pytest                        # 459 tests (212 engine + 247 UI; run pytest --collect-only -q for current count)
 python -m pip install -e ".[dev]"   # dev extras: needed only for `make typecheck` (mypy)
 python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
 python main.py --gallery      # the component gallery: every kit component on one page

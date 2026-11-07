@@ -199,9 +199,14 @@ def test_human_size_gb_and_tb():
     for fn in (checks_size, dash_size, detail_size, dl_size):
         assert fn(512) == "512 B"
         assert "KB" in fn(2048)
-        assert "MB" in fn(5 * 1024 * 1024)
-        assert "GB" in fn(3 * 1024**3)
-        assert "TB" in fn(2 * 1024**4)
+        assert "MB" in fn(5 * 1000 * 1000)
+        assert "GB" in fn(3 * 1000**3)
+        assert "TB" in fn(2 * 1000**4)
+    # All four are the same shared helper (dv-005).
+    assert checks_size is dash_size or checks_size(2048) == dash_size(2048)
+    for fn in (checks_size, dash_size, detail_size, dl_size):
+        assert fn(999) == "999 B"
+        assert fn(1000).startswith("1.0 KB")
 
 
 # -- dead modules removed ----------------------------------------------------

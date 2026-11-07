@@ -119,6 +119,7 @@ __all__ = [
     "make_line_edit",
     "make_combo",
     "BUTTON_HEIGHTS",
+    "human_size",
 ]
 
 # Button heights (px) by size token.
@@ -126,6 +127,27 @@ __all__ = [
 # platform's own menus and toolbars land on 32, and a 28px chip is easy
 # to miss with a mouse or a stylus. Every button in the app clears 32.
 BUTTON_HEIGHTS = {"sm": 32, "md": 36, "lg": 40}
+
+
+def human_size(n: int) -> str:
+    """Human-readable size with B/KB/MB/GB/TB (dv-005, single helper).
+
+    Decimal scaling, so the divisor is 1000 and the label matches what the
+    user reads (KB means 1000 bytes here, not KiB). All call sites share
+    this: dashboard, detail, checks tree, download dialog, settings.
+    """
+    try:
+        n_int = int(n)
+    except Exception:
+        return str(n)
+    if n_int < 1000:
+        return f"{n_int} B"
+    value = float(n_int)
+    for unit in ("KB", "MB", "GB", "TB"):
+        value /= 1000.0
+        if value < 1000 or unit == "TB":
+            return f"{value:.1f} {unit}"
+    return f"{value:.1f} TB"
 
 # The kinds and the object name each paints under live in the theme,
 # next to the rules that style them.

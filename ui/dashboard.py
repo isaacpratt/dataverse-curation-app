@@ -7,6 +7,7 @@ leftover space, and toggleable via Columns… including the local Downloaded
 date sourced from the workspace state.db + staged folders.
 """
 
+import math
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
@@ -32,7 +33,6 @@ from ui.theme import (
     BORDER_SUBTLE,
     STATE_ERROR_GRAPHIC,
     SURFACE_CARD,
-    SURFACE_HEADER,
     SURFACE_TINT,
     band_qss,
     page_background_qss,
@@ -43,7 +43,6 @@ from ui.theme import (
 from ui.widgets import (
     AppTable,
     ElidedLabel,
-    SortArrowHeaderView,
     flush_table_style,
     make_action_button,
     make_caption_label,
@@ -125,13 +124,7 @@ _COLUMN_WIDTHS = {
     "downloaded_at": 130,
 }
 
-# The queue's column bar: by default it is the table's own header. Qt
-# already starts the vertical scrollbar below the header row, so the
-# split header (the table's header hidden, a second display header
-# painted above it) bought nothing but two-way sync -- the source of
-# the clipped columns and the off-centre last label. The split stays
-# available as a fallback: flip this to True to get it back.
-SPLIT_QUEUE_HEADER = False
+
 
 # Metric-card value: the real count (DisplayLG, 22px bold) versus a named
 # pre-crawl state (StateMD, 12px muted words, 2026-10-02 P2) - the number
@@ -159,19 +152,27 @@ def _apply_metric_token(label: QLabel) -> None:
         style.polish(label)
 
 
+def _system_datetime_text(mtime: float) -> str:
+    """Local timestamp in the user's system date/time format (dv-bqk)."""
+    from PySide6.QtCore import QDateTime, QLocale
+
+    qdt = QDateTime.fromMSecsSinceEpoch(math.floor(mtime * 1000))
+    return QLocale.system().toString(qdt, QLocale.FormatType.ShortFormat)
+
+
+def _now_datetime_text() -> str:
+    """Return current local time in the user's system date/time format (dv-bqk)."""
+    from PySide6.QtCore import QDateTime, QLocale
+
+    return QLocale.system().toString(QDateTime.currentDateTime(), QLocale.FormatType.ShortFormat)
+
+
 def _human_size(n: int) -> str:
-    """Human-readable size with B/KB/MB/GB/TB (shared with detail)."""
-    try:
-        n = int(n)
-    except Exception:
-        return str(n)
-    if n < 1024:
-        return f"{n} B"
-    for unit in ("KB", "MB", "GB", "TB"):
-        n /= 1024.0
-        if n < 1024 or unit == "TB":
-            return f"{n:.1f} {unit}"
-    return f"{n:.1f} TB"
+    # Re-exported from the shared helper (dv-005): labels are decimal (KB/MB),
+    # so the divisor is 1000. The shared helper lives in ui.widgets.
+    from ui.widgets import human_size as _shared
+
+    return _shared(n)
 
 
 def _sanitize(pid: str) -> str:
@@ -248,7 +249,6 @@ def _local_downloaded_batch(workspace: Path, pids: list[str]) -> dict[str, str]:
                             out[pid] = str(ts)[:16].replace("T", " ")
             finally:
                 conn.close()
-        import datetime
 
         for pid in pids:
             if out[pid] or not pid:
@@ -256,9 +256,7 @@ def _local_downloaded_batch(workspace: Path, pids: list[str]) -> dict[str, str]:
             staged = ws / "downloads" / _sanitize(pid) / "files"
             try:
                 if staged.exists():
-                    out[pid] = datetime.datetime.fromtimestamp(
-                        staged.stat().st_mtime
-                    ).strftime("%Y-%m-%d %H:%M")
+                    out[pid] = _system_datetime_text(staged.stat().st_mtime)
             except OSError:
                 continue
     except Exception:
@@ -602,6 +600,8 @@ class DashboardView(QWidget):
         self._metric_cards: list[QFrame] = []
         self._metric_subs: list[str] = []
         self._metric_value_labels: list[QLabel] = []
+        self._needs_action_only: bool = False
+        self._refine_expanded: bool = True
         # When the numbers below were last measured ("never" pre-crawl) —
         # carried in every card's tooltip so a 0 is never a mystery.
         self._last_refresh = t("dashboard.metrics.never")
@@ -661,6 +661,14 @@ class DashboardView(QWidget):
         )
         title_row.addWidget(hdr_title, 1)
 
+        self._refine_btn = make_action_button(
+            t("dashboard.queue.refine"), kind="chip"
+        )
+        self._refine_btn.setCheckable(True)
+        self._refine_btn.setChecked(True)
+        self._refine_btn.toggled.connect(self._on_refine_toggled)
+        title_row.addWidget(self._refine_btn)
+
         self._columns_btn = make_action_button(
             t("dashboard.queue.columns"), kind="chip"
         )
@@ -697,6 +705,7 @@ class DashboardView(QWidget):
         self._state_filter = make_combo(
             [
                 (t("dashboard.filters.all"), "All"),
+                (t("dashboard.filters.pending"), "PENDING"),
                 (t("dashboard.filters.draft"), "DRAFT"),
                 (t("dashboard.filters.published"), "PUBLISHED"),
                 (t("dashboard.filters.in_review"), "IN REVIEW"),
@@ -704,7 +713,7 @@ class DashboardView(QWidget):
             ],
             min_width=110,
         )
-        self._state_filter.currentTextChanged.connect(self._apply_filter)
+        self._state_filter.currentTextChanged.connect(self._on_state_filter_changed)
         filter_row.addWidget(self._state_filter)
 
         self._label_filter = make_combo(
@@ -725,7 +734,11 @@ class DashboardView(QWidget):
         )
         self._collection_filter.currentTextChanged.connect(self._apply_filter)
         filter_row.addWidget(self._collection_filter)
-        hdr_layout.addLayout(filter_row)
+        self._filter_wrap = QWidget()
+        self._filter_wrap.setObjectName("QueueFilterWrap")
+        self._filter_wrap.setStyleSheet(transparent_surface_qss("QueueFilterWrap"))
+        self._filter_wrap.setLayout(filter_row)
+        hdr_layout.addWidget(self._filter_wrap)
 
         queue_layout.addWidget(header)
 
@@ -767,27 +780,13 @@ class DashboardView(QWidget):
         # Ensure the sort indicator is shown at startup
         native_hdr.setSortIndicatorShown(True)
         self._table.setSortingEnabled(True)
-        # Column bar. By default the table's own header is the column bar:
-        # the header the user drags is the header that is painted, and Qt
-        # already starts the vertical scrollbar below the header row. The
-        # split header (a separate display header above the table) stays
-        # available behind SPLIT_QUEUE_HEADER as a fallback.
-        self._syncing_header = False
-        # Widths the fit scaled down (kept so a wider window restores them).
+        # Column bar: the table's own header is the column bar (native
+        # mode, dv-5oh). Widths the fit scaled down are kept so a wider
+        # window restores them.
         self._queue_unscaled: dict[int, int] | None = None
-        # None in native-header mode: there is no second header to sync.
-        self._queue_header = None
-        # The table reports user gestures (a dragged edge, a moved
-        # column): the fit follows them, and the layout controller saves
-        # them.
+        self._table.horizontalHeader().setVisible(True)
         self._table.user_layout_changed.connect(self._on_user_layout_changed)
-        # Content fit runs on the table header; re-fit so the columns keep
-        # filling the viewport (and mirror them in split-header mode).
         self._table.columns_fitted.connect(self._on_columns_fitted)
-        if SPLIT_QUEUE_HEADER:
-            self._build_split_queue_header(queue_layout)
-        else:
-            self._table.horizontalHeader().setVisible(True)
         # Table + first-run overlay occupy the same grid cell so the card
         # floats over the (empty) table without any layout surgery when
         # datasets arrive.
@@ -877,6 +876,7 @@ class DashboardView(QWidget):
         outer.addLayout(foot)
         _sync_sep()
         self._sync_status_bar()
+        self._update_refine_visibility()
 
         self._apply_default_column_visibility()
         # Snapshot the construction view for the Columns-menu reset, then
@@ -891,7 +891,6 @@ class DashboardView(QWidget):
             )
             if self._queue_layout.restore():
                 self._table.disable_auto_fit()
-            self._sync_header_from_table()
         except Exception:
             pass
         selectable_labels(self)
@@ -1322,9 +1321,9 @@ class DashboardView(QWidget):
             "primary": ACCENT_PRIMARY,
             "error": STATE_ERROR_GRAPHIC,
         }[accent]
-        card.setStyleSheet(
-            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#MetricCard")
-        )
+        # No widget-level sheet: the global #MetricCard rule in theme.py paints
+        # it. A local stylesheet would shadow the app sheet for the subtree
+        # (dv-g98).
         card.setMinimumHeight(52)
         card.setToolTip(sub)
         lay = QHBoxLayout(card)
@@ -1350,88 +1349,58 @@ class DashboardView(QWidget):
         _apply_metric_token(v)
         v.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         lay.addWidget(v, 0)
+        # Tappable filter (dv-896): click or Enter/Space applies the card's
+        # filter via eventFilter. Cursor + focus make it discoverable.
+        card.setCursor(Qt.PointingHandCursor)
+        card.setFocusPolicy(Qt.StrongFocus)
+        card.installEventFilter(self)
         return card, v
 
-    def _build_split_queue_header(self, queue_layout) -> None:
-        """Build the fallback split header (SPLIT_QUEUE_HEADER = True).
+    def _on_metric_clicked(self, accent: str) -> None:
+        """Apply a metric card's filter (dv-896)."""
+        if accent == "primary":
+            self._needs_action_only = False
+            self._state_filter.setCurrentIndex(4)
+        elif accent == "error":
+            self._needs_action_only = True
+            self._state_filter.setCurrentIndex(1)
+        else:
+            self._needs_action_only = False
+            self._state_filter.setCurrentIndex(1)
+        self._apply_filter()
 
-        The table's own header is hidden and a second header, sharing the
-        table's model, is painted above it. Every size and move has to be
-        mirrored between the two -- the native header does this for free.
-        """
-        self._table.horizontalHeader().setVisible(False)
-        # The mirror matches the table header's paint, including the
-        # self-drawn sort arrow (the style's native indicator floats in
-        # the seam above the header on this Qt build).
-        self._queue_header = SortArrowHeaderView(Qt.Horizontal)
-        self._queue_header.setModel(self._table.model())
-        self._queue_header.setSectionsMovable(True)
-        self._queue_header.setSectionsClickable(True)
-        # Never stretch on the display header: its widths are mirrored from
-        # the table header (which is fitted to the viewport). Stretching
-        # here as well let the last label drift off-centre after a move
-        # or resize.
-        self._queue_header.setStretchLastSection(False)
-        self._queue_header.setFocusPolicy(Qt.NoFocus)
-        self._queue_header.setFixedHeight(
-            self._table.horizontalHeader().sizeHint().height()
-        )
-        # Same flush section rules as the table's own header had. The extra
-        # QHeaderView background fills the slack right of the last section
-        # (the vertical scrollbar's lane) so no page colour shows through.
-        self._queue_header.setStyleSheet(
-            flush_table_style(header_background=SURFACE_HEADER)
-        )
-        self._sync_header_from_table()
-        self._queue_header.sectionResized.connect(self._on_display_header_resized)
-        self._queue_header.sectionMoved.connect(self._on_display_header_moved)
-        self._queue_header.sectionClicked.connect(self._on_header_clicked)
-        queue_layout.addWidget(self._queue_header)
+    def _on_state_filter_changed(self) -> None:
+        if getattr(self, "_needs_action_only", False):
+            # User changed the combo themselves: clear the needs-action flag.
+            try:
+                idx = self._state_filter.currentIndex()
+            except Exception:
+                idx = -1
+            if idx != 1:
+                self._needs_action_only = False
+        self._apply_filter()
 
+    def _on_refine_toggled(self, checked: bool) -> None:
+        self._refine_expanded = bool(checked)
+        self._update_refine_visibility()
 
-    # -- column visibility -------------------------------------------------
-
-    def _sync_header_from_table(self) -> None:
-        """Copy sizes/hidden state from the table header to the display header.
-
-        A no-op in native-header mode: there is no second header.
-        """
-        if self._queue_header is None:
-            return
+    def _update_refine_visibility(self) -> None:
+        """Collapse the filter row under 1100px unless Refine is on (dv-896)."""
         try:
-            table_hdr = self._table.horizontalHeader()
-            self._syncing_header = True
-            count = self._table.columnCount()
-            for i in range(count):
-                self._queue_header.resizeSection(i, table_hdr.sectionSize(i))
-                self._queue_header.setSectionHidden(i, table_hdr.isSectionHidden(i))
-            # Visual order too (restore/moves must reflect on both headers).
-            for target in range(count):
-                logical = next(
-                    (i for i in range(count)
-                     if table_hdr.visualIndex(i) == target),
-                    None,
-                )
-                if logical is None:
-                    continue
-                try:
-                    current = self._queue_header.visualIndex(logical)
-                    if current != target:
-                        self._queue_header.moveSection(current, target)
-                except Exception:
-                    continue
-        finally:
-            self._syncing_header = False
+            narrow = self.width() < 1100
+            self._refine_btn.setVisible(narrow)
+            self._filter_wrap.setVisible((not narrow) or bool(getattr(self, "_refine_expanded", True)))
+        except Exception:
+            pass
 
     def _on_columns_fitted(self) -> None:
-        """Content fit changed the column widths: re-fit and mirror them.
+        """Content fit changed the column widths: re-fit them.
 
         The fit sizes the columns to their content; the slack that is left
         over goes to the filler column so the queue still reads at window
         width.
         """
         self._fit_queue_columns()
-        self._sync_header_from_table()
 
     def _schedule_column_fit(self) -> None:
         """Re-fit the queue columns once the layout has settled.
@@ -1538,8 +1507,6 @@ class DashboardView(QWidget):
                     hdr.resizeSection(i, w)
             finally:
                 hdr.blockSignals(False)
-            # Mirror the settled widths so both headers agree.
-            self._sync_header_from_table()
         except Exception:
             pass
 
@@ -1555,43 +1522,6 @@ class DashboardView(QWidget):
             return
         layout.save()
 
-    def _schedule_header_sync(self) -> None:
-        """Mirror the table header onto the display header after layout settles.
-
-        QHeaderView emits sectionResized *before* the new size is applied:
-        reading sectionSize() inside the handler returns the old value, so a
-        synchronous copy would persist stale widths (and the last column's
-        label would drift off-centre). A zero-delay timer runs once the
-        resize has been applied.
-
-        A no-op in native-header mode: there is no second header.
-        """
-        if self._queue_header is None:
-            return
-        try:
-            QTimer.singleShot(0, self._sync_header_from_table)
-        except Exception:
-            pass
-
-    def _on_display_header_resized(self, logical: int, _old: int, new: int) -> None:
-        if self._syncing_header or self._queue_header is None:
-            return
-        self._syncing_header = True
-        try:
-            self._table.horizontalHeader().resizeSection(logical, new)
-        finally:
-            self._syncing_header = False
-        # The user set this width: it wins over the fit's downscale.
-        self._queue_unscaled = None
-        # The queue has no horizontal scrollbar: the filler column takes up
-        # the difference so the columns keep filling the viewport (and the
-        # last label stays centred in its column).
-        self._fit_queue_columns()
-        # Resizing one section changes the filler's width too; mirror the
-        # settled widths so both headers agree.
-        self._schedule_header_sync()
-        self._save_queue_layout()
-
     def _on_user_layout_changed(self) -> None:
         """Keep the queue filling its viewport after a user layout change.
 
@@ -1599,28 +1529,8 @@ class DashboardView(QWidget):
         sectionResized can fire before Qt applied the new size, and the
         fit must see the settled widths.
         """
-        if self._syncing_header:
-            return
         self._queue_unscaled = None
         self._schedule_column_fit()
-        self._schedule_header_sync()
-
-    def _on_display_header_moved(self, logical: int, old_visual: int, new_visual: int) -> None:
-        if self._syncing_header or self._queue_header is None:
-            return
-        self._syncing_header = True
-        try:
-            self._table.horizontalHeader().moveSection(old_visual, new_visual)
-        finally:
-            self._syncing_header = False
-        # The user reordered the columns: the fit starts from the widths
-        # as they are now.
-        self._queue_unscaled = None
-        # The move can change which column is the filler; re-fit, then copy
-        # the resulting order and widths back onto the display header.
-        self._fit_queue_columns()
-        self._schedule_header_sync()
-        self._save_queue_layout()
 
     def _sort_by_column(self, logical: int) -> None:
         """Sort the table by a column (toggle on repeat), like a header click."""
@@ -1632,27 +1542,10 @@ class DashboardView(QWidget):
         self._table.sortItems(logical, order)
         table_hdr.setSortIndicator(logical, order)
         table_hdr.setSortIndicatorShown(True)
-        if self._queue_header is not None:
-            self._queue_header.setSortIndicator(logical, order)
-            self._queue_header.setSortIndicatorShown(True)
-        self._save_queue_layout()
-
-    def _on_header_clicked(self, logical: int) -> None:  # split-header mode
-        """Sort the table like its own header click would (toggle on repeat)."""
-        table_hdr = self._table.horizontalHeader()
-        if table_hdr.sortIndicatorSection() == logical and table_hdr.isSortIndicatorShown():
-            order = Qt.DescendingOrder if table_hdr.sortIndicatorOrder() == Qt.AscendingOrder else Qt.AscendingOrder
-        else:
-            order = Qt.AscendingOrder
-        self._table.sortItems(logical, order)
-        table_hdr.setSortIndicator(logical, order)
-        if self._queue_header is not None:
-            self._queue_header.setSortIndicator(logical, order)
-            self._queue_header.setSortIndicatorShown(True)
         self._save_queue_layout()
 
     def _set_column_visible(self, idx: int, visible: bool) -> None:
-        """Hide/show a column on the table and the display header together.
+        """Hide/show a column.
 
         No save here on purpose: __init__ calls this for defaults, and a
         save during defaults would clobber the persisted view before
@@ -1660,11 +1553,6 @@ class DashboardView(QWidget):
         surface) saves after toggling.
         """
         self._table.setColumnHidden(idx, not visible)
-        if self._queue_header is not None:
-            try:
-                self._queue_header.setSectionHidden(idx, not visible)
-            except Exception:
-                pass
         # Hiding/showing a column changes the total width: re-fit so the
         # remaining columns keep filling the viewport.
         self._fit_queue_columns()
@@ -1719,22 +1607,8 @@ class DashboardView(QWidget):
             self._table.enable_auto_fit()
             self._queue_unscaled = None
             self._fit_queue_columns()
-            self._sync_header_from_table()
-            # Mirror the sort indicator onto the display header, then
-            # repaint rows (repopulation re-sorts exactly like a fresh
+            # Repaint rows (repopulation re-sorts exactly like a fresh
             # table, so reset reproduces startup order precisely).
-            if self._queue_header is not None:
-                try:
-                    table_hdr = self._table.horizontalHeader()
-                    self._queue_header.setSortIndicator(
-                        table_hdr.sortIndicatorSection(),
-                        table_hdr.sortIndicatorOrder(),
-                    )
-                    self._queue_header.setSortIndicatorShown(
-                        table_hdr.isSortIndicatorShown()
-                    )
-                except Exception:
-                    pass
             self._apply_filter()
         except Exception:
             pass
@@ -1971,11 +1845,7 @@ class DashboardView(QWidget):
             self._all_datasets = datasets
             self._crawled = True
             try:
-                import datetime as _dt_now
-
-                self._last_refresh = _dt_now.datetime.now().strftime(
-                    "%Y-%m-%d %H:%M"
-                )
+                self._last_refresh = _now_datetime_text()
             except Exception:
                 self._last_refresh = t("dashboard.metrics.just_now")
             self._merge_row_labels()
@@ -2176,11 +2046,15 @@ class DashboardView(QWidget):
             except Exception:
                 wanted_collection = ""
             filtered = []
+            wanted = str(state_key).upper() if state_key != "All" else ""
             for ds in self._all_datasets:
                 ds_state = (ds.get("state") or "").upper()
                 if state_key != "All":
-                    wanted = str(state_key).upper()
-                    if wanted == "PUBLISHED" and ds_state not in ("RELEASED", "PUBLISHED"):
+                    if wanted == "PENDING":
+                        # Pending metric: plain drafts plus locked in-review.
+                        if ds_state != "DRAFT" and "REVIEW" not in ds_state:
+                            continue
+                    elif wanted == "PUBLISHED" and ds_state not in ("RELEASED", "PUBLISHED"):
                         continue
                     elif wanted == "DRAFT" and ds_state != "DRAFT":
                         continue
@@ -2188,7 +2062,12 @@ class DashboardView(QWidget):
                         continue
                     elif wanted == "DEACCESSIONED" and "DEACCESSIONED" not in ds_state:
                         continue
-                    elif wanted not in ("PUBLISHED", "DRAFT", "IN REVIEW", "DEACCESSIONED") and wanted != ds_state:
+                    elif wanted not in ("PENDING", "PUBLISHED", "DRAFT", "IN REVIEW", "DEACCESSIONED") and wanted != ds_state:
+                        continue
+                if wanted == "PENDING" and getattr(self, "_needs_action_only", False):
+                    # Needs Action card: pending items with no logged decision.
+                    decided = getattr(self, "_decided_cache", None) or set()
+                    if ds.get("persistent_id") in decided:
                         continue
                 if wanted_label == _NO_LABEL_SENTINEL:
                     if str(ds.get("curation_label") or "").strip():
@@ -2312,6 +2191,10 @@ class DashboardView(QWidget):
         )
         self._update_empty_state()
 
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+        super().resizeEvent(event)
+        self._update_refine_visibility()
+
     def eventFilter(self, obj, event):
         """Keyboard parity for the queue table (P0).
 
@@ -2322,14 +2205,25 @@ class DashboardView(QWidget):
         vertical scrollbar) changes its width, the queue columns are
         re-fitted so they keep filling it.
         """
+        tbl = getattr(self, "_table", None)
         if event.type() == QEvent.Type.Resize:
             try:
-                if obj is self._table or obj is self._table.viewport():
+                if tbl is not None and (obj is tbl or obj is tbl.viewport()):
                     self._schedule_column_fit()
                     return False
             except Exception:
                 pass
-        if obj is self._table and event.type() == QEvent.Type.KeyPress:
+        # Metric cards are tappable filters (dv-896).
+        if isinstance(obj, QFrame) and obj.objectName() == "MetricCard":
+            if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.LeftButton:
+                self._on_metric_clicked(str(obj.property("accent") or ""))
+                return True
+            if event.type() == QEvent.Type.KeyPress and event.key() in (
+                Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space,
+            ):
+                self._on_metric_clicked(str(obj.property("accent") or ""))
+                return True
+        if tbl is not None and obj is tbl and event.type() == QEvent.Type.KeyPress:
             key = event.key()
             if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 row = self._table.currentRow()
@@ -2344,8 +2238,8 @@ class DashboardView(QWidget):
                     self._filter_edit.clear()
                     return True
         # Header keyboard sort: Space/Return toggles sort on focused section
-        hdr = self._table.horizontalHeader()
-        if obj is hdr and event.type() == QEvent.Type.KeyPress:
+        hdr = tbl.horizontalHeader() if tbl is not None else None
+        if hdr is not None and obj is hdr and event.type() == QEvent.Type.KeyPress:
             key = event.key()
             if key in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 logical = hdr.currentIndex()

@@ -44,6 +44,30 @@ _TICK_MS = 100
 # Sweep speed (degrees per second) for indeterminate / stalled states.
 _SWEEP_DEG_PER_S = 90.0
 
+# Reduced-motion override for tests / callers; None means "detect".
+_reduced_motion_override: bool | None = None
+
+
+def _reduced_motion() -> bool:
+    """Return whether the OS asks for less animation (dv-9bf).
+
+    This Qt build exposes no `QStyleHints.reducedMotion` property, so the
+    platform preference is read from `QT_REDUCED_MOTION` (and
+    `QT_REDUCED_MOTION=0` explicitly disables it). Tests use
+    `_set_reduced_motion_override`.
+    """
+    import os
+
+    if _reduced_motion_override is not None:
+        return _reduced_motion_override
+    return os.environ.get("QT_REDUCED_MOTION", "").strip() not in ("", "0")
+
+
+def _set_reduced_motion_override(value: bool | None) -> None:
+    """Force reduced motion on/off for tests; None restores detection."""
+    global _reduced_motion_override
+    _reduced_motion_override = value
+
 
 class RingProgress(QWidget):
     """Circular progress indicator with catch-up, backoff and error state."""
@@ -124,6 +148,15 @@ class RingProgress(QWidget):
         return int(monotonic() * 1000)
 
     def _on_tick(self) -> None:
+        if _reduced_motion():
+            # Reduced motion: snap to the target, no sweep/easing.
+            target = self._target
+            if target is not None:
+                self._displayed = target
+                if self._displayed >= 1.0 and self._complete:
+                    self._timer.stop()
+            self.update()
+            return
         target = self._target
         if target is None:
             # Indeterminate: keep the sweep moving.
