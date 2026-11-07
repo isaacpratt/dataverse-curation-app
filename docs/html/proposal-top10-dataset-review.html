@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dataset Review — Top 10 Improvement Proposals</title>
+<style>
+  body { font-family: var(--font-sans, system-ui); color: var(--foreground); margin: 0; }
+  .wrap { max-width: 880px; margin: 0 auto; padding-bottom: 24px; }
+  h1 { font-size: 1.5rem; margin: 24px 0 4px; }
+  h2 { font-size: 1.12rem; margin: 30px 0 8px; }
+  h3 { font-size: 1rem; margin: 0 0 2px; line-height: 1.4; }
+  .muted { color: var(--muted-foreground); }
+  .small { font-size: .84rem; }
+  .lead { font-size: .95rem; line-height: 1.55; }
+  .idea { border: 1px solid var(--border); border-radius: var(--radius, 10px); padding: 14px 18px 12px; margin: 14px 0; background: var(--card); }
+  .tagrow { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; align-items: center; }
+  .pill { font-size: .72rem; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted-foreground); }
+  .pill.score { border-color: var(--chart-1); color: var(--chart-1); font-weight: 600; }
+  .blk { margin: 9px 0; line-height: 1.5; font-size: .9rem; }
+  .blk b.label { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-foreground); margin-bottom: 3px; }
+  code { font-family: var(--font-mono, monospace); font-size: .82em; background: var(--code-background); color: var(--code-foreground); padding: 1px 5px; border-radius: 4px; }
+  .src { font-size: .78rem; color: var(--muted-foreground); border-top: 1px dashed var(--border); margin-top: 10px; padding-top: 7px; }
+  .callout { border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: var(--radius, 10px); padding: 10px 14px; margin: 12px 0; font-size: .88rem; line-height: 1.5; background: var(--card); }
+  .approve { position: sticky; bottom: 0; background: var(--card); border-top: 1px solid var(--border); margin-top: 20px; padding: 12px 0 10px; }
+  .approve input[type=text] { width: 100%; box-sizing: border-box; margin: 8px 0; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius, 8px); background: var(--background); color: var(--foreground); font: inherit; font-size: .88rem; }
+  .approve button { font: inherit; font-size: .92rem; font-weight: 600; padding: 8px 18px; border-radius: var(--radius, 8px); border: 1px solid var(--primary); background: var(--primary); color: var(--primary-foreground); cursor: pointer; }
+  .approve button:disabled { opacity: .6; cursor: default; }
+  .approve .master { margin-right: 10px; }
+  .idea-check { accent-color: var(--primary); margin-right: 8px; transform: scale(1.15); }
+  ul { margin: 4px 0; padding-left: 20px; }
+  li { line-height: 1.5; font-size: .9rem; }
+  .rubric { font-size: .86rem; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Dataset review page — Top 10 improvement proposals</h1>
+<p class="muted small">Prepared for the dataverse-curation-app · 6 Nov 2026 · companion report: <code>other-ideas-dataset-review.html</code> (22 more ideas)</p>
+
+<p class="lead">These ten proposals were selected from 32 generated after a critical walkthrough of the dataset page (<code>ui/dataset_detail.py</code>, <code>ui/workflow.py</code>, <code>ui/checks_tree.py</code>, <code>ui/dashboard.py</code>), the check engine and contracts (<code>engine/</code>, <code>metadata_check.py</code>, <code>review_rules.py</code>, <code>response_draft.py</code>, <code>storage.py</code>), and current curation practice: the DCN CURATE(D) workflow and primers, the HEAL Data Packaging Tool and VLMD utilities, the Digital Research Alliance of Canada's Dataverse Curation and Metadata guides, Dataverse's Curation Status API and QDR's curation tools, and F-UJI / FAIR assessment practice.</p>
+
+<div class="callout">The page is already strong: a six-step workflow rail, rule-driven metadata checks with editable rulesets and response templates, a depositor draft letter, version diffing, a curation timeline, PII and secrets scans, and checksum-verified downloads. Every idea below is <b>net-new on top of that reality</b> — several "obvious" ideas (README detection, PII scan, ORCID checks) already exist and were excluded. Each idea was scored independently against the rubric; nothing was ranked by taste.</div>
+
+<h2>How the 32 ideas were evaluated</h2>
+<p class="rubric">
+Each idea scored 1–5 on four axes, independently: <b>Curator impact</b> (×3 — does it make review more straightforward, intuitive, informative), <b>Practice alignment</b> (×2.5 — does it operationalize a step that DCN / HEAL / the Alliance guides / Dataverse tooling treat as standard), <b>Feasibility</b> (×2 — fits existing seams: rulesets v2, state.db, the report contract, the client's curation APIs), and <b>Risk safety</b> (×1 — higher means lower risk of surprising the curator or corrupting state). Maximum 50. The ten below scored ≥ 35; the other 22 are in the companion report. Effort tags (S/M/L/XL) are informational only — none of these was filtered by cost.
+</p>
+
+<h2>The ten proposals</h2>
+
+<!-- 1 -->
+<div class="idea" id="idea-1">
+  <h3><input type="checkbox" class="idea-check" data-idea="1" checked>1 · Per-finding dispositions — let curator decisions survive a re-run</h3>
+  <div class="tagrow"><span class="pill">Decision layer</span><span class="pill">Effort: M</span><span class="pill score">40.5 / 50</span><span class="pill">Impact 5 · Practice 5 · Feasibility 4 · Safety 5</span></div>
+  <div class="blk"><b class="label">Desired outcome</b>Every finding — auto-check result or incomplete metadata rule — can be marked <i>Acknowledged / Fix requested / Won't fix / Blocked</i> with a one-line note. Dispositions persist across sessions and re-runs, colour the Auto-Checks rows and manifest check-nodes, automatically exclude "Won't fix" findings from the depositor letter, and roll up as "3 of 9 findings resolved" in the checks summary.</div>
+  <div class="blk"><b class="label">Summary of code changes</b>Add an additive table <code>finding_dispositions(dataset_id, finding_key, disposition, note, updated_at)</code> to <code>storage.py</code> (<code>CREATE TABLE IF NOT EXISTS</code>, so no migration). <code>finding_key</code> = stable hash of (check_id, file path, normalized message), so a re-run that reproduces a finding re-attaches its disposition while genuinely new findings start unresolved. Add a disposition combo + inline note to <code>DatasetDetailView._auto_row()</code> and the <code>ui/checks_tree.py</code> check nodes; filter <code>response_draft.collect_metadata_sections()</code>/<code>collect_filecheck_sections()</code> by disposition; surface the roll-up count in <code>_refresh_curation_preview()</code>.</div>
+  <div class="blk"><b class="label">Why it's a good idea</b>Today a curator's judgment lives in exactly one fragile place: the response-draft checkbox list, which resets whenever findings change, plus a single dataset-level free-text notes box. Curation is iterative — re-running checks (encouraged by the workflow rail) currently erases the curator's memory of "I already told the depositor about this one". DCN's Request step explicitly requires <i>tracking provenance of any changes and why</i>, and the Document step requires a curator log; this is the data structure both need. It is also the foundation the curation-record export (idea 4) and the verdict card (idea 2) consume.</div>
+  <div class="src">Sources: DCN CURATE(D) Request + Document steps (z.umn.edu/curate); DCN Curator Log practice.</div>
+</div>
+
+<!-- 2 -->
+<div class="idea" id="idea-2">
+  <h3><input type="checkbox" class="idea-check" data-idea="2" checked>2 · A readiness verdict card — one answer to "where does this stand?"</h3>
+  <div class="tagrow"><span class="pill">Decision layer</span><span class="pill">Effort: M</span><span class="pill score">40 / 50</span><span class="pill">Impact 5 · Practice 4 · Feasibility 5 · Safety 5</span></div>
+  <div class="blk"><b class="label">Desired outcome</b>A compact banner at the top of the Review page stating a synthesized verdict — <b>Ready</b> / <b>Revisions needed</b> / <b>Blocked</b> / <b>Not yet reviewed</b> — with reason chips ("2 required metadata fields missing", "1 check error in data.csv", "README absent", "sensitivity review pending"). Each chip links to the card it came from. The verdict is recomputed live from data already in memory and printed in headless runs.</div>
+  <div class="blk"><b class="label">Summary of code changes</b>New pure module <code>engine/verdict.py</code>: <code>assess(report, completeness_full, dispositions, ruleset, sensitivity) -> Verdict(reasons, level)</code> — no Qt, no I/O, trivially testable (matches the <code>ui/workflow.py</code> pattern this repo already trusts). <code>DatasetDetailView</code> calls it whenever <code>_refresh_workflow()</code> fires; a new banner card renders level + clickable reason chips. Headless <code>main.py</code> prints the same verdict and factors it into exit codes.</div>
+  <div class="blk"><b class="label">Why it's a good idea</b>The page answers "what did you find?" richly but "what does it mean?" not at all: the curator must mentally join five cards (metadata completeness, file manifest, auto-checks, version diff, log) to decide anything. Every serious tool in this space converges on a roll-up: HEAL's packaging tool ends in an audit/"shareable" step, F-UJI rolls 16 FAIR metrics into one score with sub-scores, HEAL's vlmd validate returns a single pass/fail. A verdict that is computed — never stored as truth — keeps the curator in command while removing the synthesis tax from every dataset in the queue. It also gives the dashboard's "Needs action" metric something honest to count.</div>
+  <div class="src">Sources: HEAL Data Packaging Tool (audit/shareable step, norc-heal/heal-data-pkg-tool); F-UJI FAIRsFAIR metrics (f-uji.net); HEAL vlmd validate.</div>
+</div>
+
+<!-- 3 -->
+<div class="idea" id="idea-3">
+  <h3><input type="checkbox" class="idea-check" data-idea="3" checked>3 · A structured sensitivity & ethics review gate</h3>
+  <div class="tagrow"><span class="pill">Decision layer</span><span class="pill">Effort: M</span><span class="pill score">39.5 / 50</span><span class="pill">Impact 5 · Practice 5 · Feasibility 4 · Safety 4</span></div>
+  <div class="blk"><b class="label">Desired outcome</b>Before a decision can be committed, a short structured questionnaire records the human judgments no regex can make: human subjects involved? consent/IRB documentation referenced? direct identifiers or small-cell risk beyond the automated PII scan? Indigenous data — CARE considerations? restricted files covered by terms of access? Answers are stored per dataset, pre-filled from the existing PII/access findings, shown next to the decision combo, exported with the curation record, and (when the ruleset says a collection requires it) block "Approve" until completed.</div>
+  <div class="blk"><b class="label">Summary of code changes</b>New <code>sensitivity.py</code>: a declarative question schema (id, prompt, help text, type) persisted in <code>state.db</code> as <code>sensitivity_reviews(dataset_id, answers_json, updated_at)</code>. A card on the Response page between the draft editor and the Assessment Action card. <code>engine/checks/access_check.py</code> and the PII scan results seed suggested answers. Rulesets gain an optional <code>"requires_sensitivity": true</code> flag; <code>_on_commit()</code> checks completion before allowing Approve. Included in the curation-record export.</div>
+  <div class="blk"><b class="label">Why it's a good idea</b>Sensitivity review is the one curation step that is universally prescribed and completely absent from the app's data model. The DRA Canada Dataverse Curation Guide makes privacy review an explicit stage; the CARE Principles ask specific, checkable questions for Indigenous data; NIH's DMS policy expects documented human-subjects handling; Dataverse's own curation-label examples include "Privacy Review". The automated PII scan (already ported from the R tools) catches patterns — but the decision "this email column is the contact person, not a leak" is exactly the human judgment curators make and institutions audit. Recording it costs minutes and converts an invisible judgment into evidence.</div>
+  <div class="src">Sources: DRA Canada Dataverse Curation Guide (doi:10.5281/zenodo.5579819); CARE Principles for Indigenous Data Governance; NIH DMS policy; Dataverse AllowedCurationLabels examples ("Privacy Review").</div>
+</div>
+
+<!-- 4 -->
+<div class="idea" id="idea-4">
+  <h3><input type="checkbox" class="idea-check" data-idea="4" checked>4 · One-click curation record export (the "Document" step, made real)</h3>
+  <div class="tagrow"><span class="pill">Decision layer</span><span class="pill">Effort: S</span><span class="pill score">39.5 / 50</span><span class="pill">Impact 4 · Practice 5 · Feasibility 5 · Safety 5</span></div>
+  <div class="blk"><b class="label">Desired outcome</b>A single "Export curation record" action writes <code>curation-record/<date>/</code> beside the dataset's workspace folder containing: the checks report (JSON + Markdown), the depositor response letter, the full curation timeline (versions, review submissions, label history, local actions), all per-finding dispositions with notes, the sensitivity questionnaire answers, the recorded decision and pushed curation label, and a SHA-256 manifest of staged files. One folder an institution can file, audit, or attach to a ticket.</div>
+  <div class="blk"><b class="label">Summary of code changes</b>New <code>curation_record.py</code> orchestrator (pure I/O composition, no Qt) that reuses the existing exports — <code>DatasetReport.save/save_markdown</code>, <code>response_draft</code> render, <code>AppState.list_actions()</code>, <code>hash_file()</code> from <code>dataverse_client.py</code> — plus the new dispositions (idea 1) and sensitivity (idea 3) stores, and writes a small <code>index.json</code> binding them. One button in the header actions row beside "Export reports"; one <code>--export-record</code> flag in headless mode.</div>
+  <div class="blk"><b class="label">Why it's a good idea</b>Everything the record needs is already produced by the app — it is just scattered across state.db, the workspace folder, and Dataverse itself, and reassembling it by hand is tedious enough that it rarely happens. DCN's Document step ("Document all curation activities… Curator Log, correspondence") is the standard this implements; QDR's dvCurator institutionalized the same pattern (a local curation folder per dataset with original + prepared versions and a file manifest). This is the cheapest idea in the top ten and the one that makes every other idea auditable. It also naturally becomes the attachment a curator drops into their institution's ticket system or Dataverse correspondence.</div>
+  <div class="src">Sources: DCN CURATE(D) Document step; QDR dvCurator (Code4Lib Journal, "Open Source Tools for Scaling Data Curation at QDR").</div>
+</div>
+
+<!-- 5 -->
+<div class="idea" id="idea-5">
+  <h3><input type="checkbox" class="idea-check" data-idea="5" checked>5 · A rationale & remediation layer for every check</h3>
+  <div class="tagrow"><span class="pill">Guidance</span><span class="pill">Effort: M–L</span><span class="pill score">37 / 50</span><span class="pill">Impact 4 · Practice 4 · Feasibility 5 · Safety 5</span></div>
+  <div class="blk"><b class="label">Desired outcome</b>Every failed check offers an expandable "Why this matters / How to fix it" pair, written for curators rather than engineers — e.g. for a delimiter-drift finding: "Mixed delimiters break parsers and are the most common cause of ingest failure; re-export the file with a single comma delimiter and quoting on." The same text flows into tooltips, the Markdown report, and the depositor response templates as an optional paragraph.</div>
+  <div class="blk"><b class="label">Summary of code changes</b><code>CheckResult</code> (<code>engine/checks/base.py</code>) gains two optional fields, <code>rationale</code> and <code>remediation</code>, with a tolerant <code>from_dict</code> (old payloads keep working — the status.py taxonomy already established this compatibility pattern). Guidance text lives beside each check as class attributes or a <code>CHECK_GUIDANCE</code> dict in each module (later consolidated by the registry idea in the companion report). <code>ui/checks_tree.py</code> renders an expandable guidance node under failures; <code>engine/report_md.py</code> emits it; <code>response_draft.py</code> appends it when a ruleset template opts in with a <code>{remediation}</code> placeholder.</div>
+  <div class="blk"><b class="label">Why it's a good idea</b>The engine's messages are precise but terse — they tell a curator <i>what</i> was found, never <i>why it matters</i> or <i>what to do</i>, so the meaning currently lives in the requirements tooltips of the metadata card alone and in institutional folklore. The DCN primers are precisely this genre of writing — per-format "here is why this check exists and how to satisfy it" — and this project already ports the R inspectors' logic; porting their pedagogy is a natural, low-risk extension. It shortens the distance from finding to fix, makes the depositor letter concretely actionable, and improves the checks' teaching value for new curators without changing a single pass/fail decision.</div>
+  <div class="src">Sources: DCN data curation primers (datacurationnetwork.org/data-primers); CUR_Res_CurationTools (the ported R inspectors' documentation).</div>
+</div>
+
+<!-- 6 -->
+<div class="idea" id="idea-6">
+  <h3><input type="checkbox" class="idea-check" data-idea="6" checked>6 · A CURATE(D) overlay on the workflow rail</h3>
+  <div class="tagrow"><span class="pill">Information architecture</span><span class="pill">Effort: M</span><span class="pill score">36.5 / 50</span><span class="pill">Impact 4 · Practice 5 · Feasibility 4 · Safety 4</span></div>
+  <div class="blk"><b class="label">Desired outcome</b>The six-step rail (metadata → changes → download → checks → export → respond) gains a practice view that maps its steps onto the DCN CURATE(D) letters — <b>C</b>heck, <b>U</b>nderstand, <b>R</b>equest, <b>A</b>ugment, <b>T</b>ransform, <b>E</b>valuate, <b>D</b>ocument — each step carrying a live open-item count (R: "4 required fields missing"; T: "3 files in proprietary formats"; D: "decision not yet recorded"). Toggling between the mechanical and practice views is one click; both remain navigation-only.</div>
+  <div class="blk"><b class="label">Summary of code changes</b>Extend <code>ui/workflow.py</code> (already a pure, fully-tested derivation module) with <code>derive_curated(inp) -> Workflow</code> mapping CURATE(D) steps onto the existing flags/counts plus report summaries and metadata completeness — no new I/O, honouring the rail's "never stats, never acts" contract. <code>WorkflowRail</code> in <code>ui/widgets.py</code> accepts either step set with a small view toggle persisted per user. Counts come from <code>engine.status.summarize()</code>, <code>_completeness_full</code>, and the dispositions store.</div>
+  <div class="blk"><b class="label">Why it's a good idea</b>The current rail is honest but app-mechanical: it describes what the software does, not what curation <i>is</i>. DCN's CURATE(D) steps are the de-facto shared vocabulary for North American data curation — used for onboarding, training, and cross-institutional work — and the Alliance's Curation Guide similarly frames review as named stages. Mapping the page's flow onto that vocabulary costs almost nothing (the derivation module is already pure and tested) and pays off twice: trained curators instantly recognize the process, and new curators learn it from the tool they work in. Live counts turn the rail from a progress indicator into a to-do list.</div>
+  <div class="src">Sources: DCN CURATE(D) steps (z.umn.edu/curate); DRA Canada Dataverse Curation Guide; DCN workshop curriculum.</div>
+</div>
+
+<!-- 7 -->
+<div class="idea" id="idea-7">
+  <h3><input type="checkbox" class="idea-check" data-idea="7" checked>7 · Variable-level metadata coverage, with a dictionary-draft generator</h3>
+  <div class="tagrow"><span class="pill">New check</span><span class="pill">Effort: L</span><span class="pill score">36.5 / 50</span><span class="pill">Impact 4 · Practice 5 · Feasibility 4 · Safety 4</span></div>
+  <div class="blk"><b class="label">Desired outcome</b>Every tabular file gets a coverage meter: what fraction of its variables carry a label/description in Dataverse's variable metadata (for .tab ingests) or in the deposited file itself (SPSS/Stata labels — the engine already reads those). A "Draft data dictionary" action generates a CSV (variable name, human label, type, allowed values, missing codes) the curator can send to the depositor, and a dataset-level check flags tabular files with zero documentation.</div>
+  <div class="blk"><b class="label">Summary of code changes</b><code>dataverse_client.py</code> gains <code>get_variable_metadata(file_id)</code> hitting the dataset version's file-level variable metadata (the same surface Dataverse's Data Curation Tool edits). New dataset-level check <code>metadata.var_coverage</code> in the registry, consuming the runner context (inventory) like <code>access_check</code> does, plus local label coverage reusing the existing pyreadstat dictionary work in <code>dta_check</code>/<code>sav_check</code>. The manifest tree gains a coverage cell for tabular rows; a generator dialog exports the draft dictionary (name/label/type/values), HEAL-vlmd-shaped (Frictionless-flavoured: name + description minimum).</div>
+  <div class="blk"><b class="label">Why it's a good idea</b>Variable-level metadata is the single most requested documentation layer for quantitative reuse — ICPSR requires codebooks, the DRA Metadata Best Practices guide devotes sections to it, Dataverse ships a whole "Data Curation Tool" for editing it, and HEAL built its vlmd schema (name + description as the floor) and an entire packaging tool around per-file data dictionaries. The engine checks file formats exhaustively but never asks "can a stranger tell what <code>v14</code> means?" — the curator currently has no signal for this gap at all. The draft generator turns the finding into a ready-made ask for the depositor letter, which is exactly how curators request it today.</div>
+  <div class="src">Sources: HEAL vlmd / healdata-utils (extract · start · validate, Frictionless-based); HEAL Data Packaging Tool per-file data dictionaries; Dataverse Data Curation Tool (varMetaData); DRA Canada Metadata Best Practices v3; ICPSR deposit requirements.</div>
+</div>
+
+<!-- 8 -->
+<div class="idea" id="idea-8">
+  <h3><input type="checkbox" class="idea-check" data-idea="8" checked>8 · README depth check + a pre-filled README builder</h3>
+  <div class="tagrow"><span class="pill">New check</span><span class="pill">Effort: M</span><span class="pill score">36.5 / 50</span><span class="pill">Impact 4 · Practice 5 · Feasibility 4 · Safety 4</span></div>
+  <div class="blk"><b class="label">Desired outcome</b>README presence is already detected via content rules — this upgrades it to <i>depth</i>: the README is parsed for the standard sections (dataset & file overview, file inventory/naming, methodological information, missing-data codes, sharing & access), scored, and shown as a checklist. A builder generates a pre-filled README draft from what the app already knows (citation metadata, file inventory with sizes/formats, license, terms) that the curator can hand to the depositor to complete.</div>
+  <div class="blk"><b class="label">Summary of code changes</b>Extend <code>review_rules.py</code> with a <code>section_rules</code> rule type (heading/substring probes per section) evaluated by a new dataset-level <code>readme_check</code> consuming the staged folder via the runner context, so it works headless too. New <code>ui/readme_builder.py</code> dialog assembling the draft from <code>self._metadata</code> + <code>self._inventory</code> (both already loaded), Cornell/recherche.data.gouv headings, exported to the dataset folder. Response template gains a <code>{readme_sections}</code> placeholder so the letter lists exactly which sections are missing.</div>
+  <div class="blk"><b class="label">Why it's a good idea</b>"Is there a README?" and "is the README any good?" are different review questions, and the app currently answers only the first. The DCN Understand step centres on reading documentation; the Cornell README template and recherche.data.gouv template define the canonical section set; HEAL's packaging tool goes further and ships a README generator as a core feature — precedent that curators want scaffolding, not just detection. Generating the draft from metadata the app already holds makes the deposit-review loop faster and the ask specific ("add Missing data codes") instead of generic ("add a README").</div>
+  <div class="src">Sources: DCN CURATE(D) Understand step; Cornell University Readme Template for Data (Kozlowski 2025); recherche.data.gouv.fr README template; HEAL Data Packaging Tool (readme.py + template); Social Science Data Editors template README.</div>
+</div>
+
+<!-- 9 -->
+<div class="idea" id="idea-9">
+  <h3><input type="checkbox" class="idea-check" data-idea="9" checked>9 · Depositor follow-up tracker — review is a conversation, not a snapshot</h3>
+  <div class="tagrow"><span class="pill">Workflow</span><span class="pill">Effort: M</span><span class="pill score">36 / 50</span><span class="pill">Impact 4 · Practice 4 · Feasibility 4 · Safety 4</span></div>
+  <div class="blk"><b class="label">Desired outcome</b>When a decision commits as "Revisions requested", the dataset enters a <i>waiting on depositor</i> state visible in the dashboard queue ("awaiting reply · since 14 Oct · 23 days"). When the draft version later changes server-side (the timestamps endpoint already provides <code>lastUpdateTime</code>), the queue and the page surface "depositor updated — re-run checks & diff", and a click re-enters the workflow at the Changes step. The follow-up closes automatically when the decision moves.</div>
+  <div class="blk"><b class="label">Summary of code changes</b>Record follow-ups in <code>state.db</code> (new additive <code>follow_ups(dataset_id, opened_at, state)</code> or reuse <code>datasets.status</code>, which is already reserved-but-unused). The dashboard already receives <code>lastUpdateTime</code> via metadata enrichment — add a "changed since decision" comparison in <code>_merge_enriched_rows()</code> and a queue column/pill; the detail view shows a banner with a "re-run checks" shortcut when the draft's timestamp postdates the decision entry in <code>curation_actions</code>.</div>
+  <div class="blk"><b class="label">Why it's a good idea</b>The DRA Curation Guide treats review as correspondence over days or weeks — yet the app's model is a single session: nothing remembers "I asked for changes on the 14th", so curators track follow-ups outside the tool in spreadsheets or inboxes, exactly where institutional memory goes to die. All the ingredients exist already (decision log entries, version timestamps, dashboard enrichment batches); this idea merely joins them. It turns the queue from a list of datasets into a list of obligations, which is how curation queues actually behave.</div>
+  <div class="src">Sources: DRA Canada Dataverse Curation Guide (correspondence-driven staging); Dataverse timestamps API (already consumed by the app).</div>
+</div>
+
+<!-- 10 -->
+<div class="idea" id="idea-10">
+  <h3><input type="checkbox" class="idea-check" data-idea="10" checked>10 · In-app file preview — "open the files" without leaving the review</h3>
+  <div class="tagrow"><span class="pill">Understanding</span><span class="pill">Effort: L</span><span class="pill score">35 / 50</span><span class="pill">Impact 5 · Practice 4 · Feasibility 3 · Safety 4</span></div>
+  <div class="blk"><b class="label">Desired outcome</b>Clicking a file in the manifest opens a preview card (in the sidebar, or under the tree): tabular files show the first rows with column types; text/markdown shows the head; images render a thumbnail; PDFs show page count + first-page text snippet; archives list their entries (the containers check already enumerates them). Previews read head bytes only — never whole files — and degrade gracefully when an optional library is missing, exactly like the checks' "Missing …" behaviour.</div>
+  <div class="blk"><b class="label">Summary of code changes</b>New <code>ui/preview.py</code>: a lazy preview widget keyed by extension, reusing the engine's optional-library conventions (<code>missing_library()</code> from <code>_util.py</code>) and, where available, Pillow/pypdf/openpyxl — the lite/full packaging split already anticipates this. <code>ui/checks_tree.py</code> click signal routes to the preview; a stub in the sidebar shows "select a file to preview". No worker needed for head-byte reads under a few MB (guard with a size cap and offer "Open folder" beyond it).</div>
+  <div class="blk"><b class="label">Why it's a good idea</b>The very first thing every curation workflow prescribes is to open the files — DCN's Check step and the Alliance guide both start there — yet the app's only affordance is "Open folder", which ejects the curator into Explorer, breaks their place in the page, and quietly discourages spot-checking. QDR built dv-Previewers for exactly this reason: repositories that show files get reviewed faster. The engine already opens most of these formats to run checks, so the riskiest parsing work exists; this adds the view, not the parsing. Spot-checking in place also makes the "Understand" step real for binary formats curators can't otherwise eyeball.</div>
+  <div class="src">Sources: DCN CURATE(D) Check step; QDR dv-Previewers (Code4Lib Journal 15436); DRA Canada Dataverse Curation Guide.</div>
+</div>
+
+<div class="approve" id="approval-bar">
+  <label class="small"><input type="checkbox" id="selectAll" class="master" checked> <b>Select all</b> — <span id="countLbl" class="muted">10 of 10 selected</span> · unchecked ideas will not become beads</label>
+  <input type="text" id="noteInput" placeholder="Conditions or notes for the beads you approve (optional)…">
+  <button id="approveBtn">Approve for beads</button>
+  <span id="fallbackOut" class="small muted" style="margin-left:10px"></span>
+</div>
+
+<p class="small muted">On approval, each accepted proposal becomes one bead (one outcome per bead), created from <code>.beads/templates/bead-creation.md</code> after a <code>bd list</code>/<code>bd search</code> de-duplication pass, with sequencing dependencies where the ideas build on each other (1 → 4, 5 → registry). The other 22 ideas live in <code>other-ideas-dataset-review.html</code> — say the word and any of them can join the batch.</p>
+
+</div>
+<script>
+(function () {
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('input.idea-check'));
+  var master = document.getElementById('selectAll');
+  var count = document.getElementById('countLbl');
+  var btn = document.getElementById('approveBtn');
+  var note = document.getElementById('noteInput');
+  var out = document.getElementById('fallbackOut');
+  function sync() {
+    var n = boxes.filter(function (b) { return b.checked; }).length;
+    count.textContent = n + ' of 10 selected';
+    master.checked = n === boxes.length;
+  }
+  boxes.forEach(function (b) { b.addEventListener('change', sync); });
+  master.addEventListener('change', function () {
+    boxes.forEach(function (b) { b.checked = master.checked; });
+    sync();
+  });
+  btn.addEventListener('click', function () {
+    var approved = boxes.filter(function (b) { return b.checked; })
+                        .map(function (b) { return Number(b.dataset.idea); });
+    var summary = 'Approved ' + approved.length + ' of 10 proposals for beads';
+    if (window.openchamber && typeof openchamber.submit === 'function') {
+      btn.disabled = true;
+      openchamber.submit({ approved: approved, note: note.value || '' }, summary)
+        .catch(function () { btn.disabled = false; });
+    } else {
+      out.textContent = 'Standalone copy — approvals are not wired here. Selected: ' +
+        (approved.join(', ') || 'none');
+    }
+  });
+  sync();
+})();
+</script>
+</body>
+</html>
