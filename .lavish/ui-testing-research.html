@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>UI Testing Research — DRAFT then Revised</title>
+<style>
+:root{--primary:#004ccd;--hover:#003da9;--ink:#131b2e;--muted:#424656;--subtle:#57657a;--line:#c3c6d8;--bg:#faf8ff;--card:#ffffff;--tint:#eaedff;--row:#f2f3ff;--r:8px}
+body{margin:0;font-family:Inter,'Segoe UI',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.55}
+main{max-width:1020px;margin:0 auto;padding:28px 22px 56px}
+.hero{border:1px solid var(--line);border-radius:var(--r);background:var(--card);padding:22px 24px}
+.hero h1{font-size:28px;line-height:1.15;margin:.1em 0}
+.badge{display:inline-block;border:1px solid var(--line);border-radius:var(--r);padding:2px 8px;font-size:11px;font-weight:700;background:var(--tint);color:var(--muted)}
+.kv{display:grid;grid-template-columns:190px 1fr;gap:6px 14px;margin:12px 0 0}
+.kv b{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.card{border:1px solid var(--line);border-radius:var(--r);background:var(--card);padding:18px 20px;margin:14px 0}
+.card h2{font-size:18px;margin:.1em 0 8px}
+.card h3{font-size:14px;margin:14px 0 4px}
+p{margin:.45em 0}
+ul{margin:.4em 0 .9em 1.15em}
+li{margin:.25em 0}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--tint);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+code{font-family:'JetBrains Mono',Consolas,monospace;font-size:12.5px;background:var(--row);padding:1px 5px;border-radius:4px}
+pre{font-family:'JetBrains Mono',Consolas,monospace;font-size:12.5px;background:var(--row);padding:10px 12px;border-radius:var(--r);overflow:auto}
+.call{border-left:3px solid var(--primary);background:var(--row);padding:10px 14px;border-radius:0 var(--r) var(--r) 0}
+.warn{border-left:3px solid #b45309;background:#fef3c7;padding:10px 14px;border-radius:0 var(--r) var(--r) 0}
+.score{font-size:22px;font-weight:800}
+.small{font-size:12.5px;color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.two{grid-template-columns:1fr}.kv{grid-template-columns:1fr}}
+a{color:var(--primary)}
+details{border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;background:var(--card);margin:10px 0}
+summary{cursor:pointer;font-weight:700}
+footer{font-size:12.5px;color:var(--muted)}
+</style>
+</head>
+<body><main>
+<div class="hero">
+<span class="badge">DRAFT → REVISED FINAL</span>
+<h1>Why UI fixes keep breaking, and what to do about it</h1>
+<p>Research draft for <b>Dataverse Docent</b> (PySide6 desktop) — best practices, testing tools, and the rewrite question. Written, self-critiqued, and revised. Design: the app's own tokens (Inter, #004ccd on #faf8ff, 8px radius).</p>
+<div class="kv">
+<b>Verdict</b><span>Stay on PySide6. The regression risk is testing architecture + no screenshot gate, not the framework. Add 3 cheap harnesses first; rewrite buys almost nothing and costs the engine port.</span>
+<b>Confidence</b><span>High that stay-and-harden wins (2026 comparisons concede Tauri smaller but Qt more mature; our size problem is Python libs, not Chromium). Medium on the exact rollout order — needs your call on baselines policy.</span>
+<b>Scope</b><span>No project code changed. This is docs only.</span>
+</div>
+</div>
+
+<div class="card">
+<h2>1. What's actually breaking</h2>
+<p>Constant fix→break→new-issue cycles in this app trace to <b>three structural gaps</b>, not authorship sloppiness:</p>
+<ul>
+<li><b>No golden images.</b> Visuals are verified by eye and geometry probes (<code>tools/probes/</code>) that assert sizes, not painted pixels. A tutorial probe can prove a header is 36px and still miss a clipped glyph or wrong tint.</li>
+<li><b>QSS hides what tests can see.</b> Inline style sheets replace application styles subtree-wide in Qt, so a local sheet silently un-themes descendants. The repo already guards this with <code>test_theme_conformance.py</code> — good — but there is no pixel-level backstop when a mixin drifts.</li>
+<li><b>One-off measurements.</b> Several past fixes were verified with ad-hoc one-off probes and then the probe was discarded, so the next change re-breaks it. Rules that live only in a probe are not rules.</li>
+</ul>
+<p class="small">Evidence: theme/kit split (palette → role → component), contrast contract + gallery (<code>ui/gallery.py</code>), translated header-casing fix (sentence case lives in model data so Qt measures what it paints).</p>
+</div>
+
+<div class="card">
+<h2>2. Best practices for Python + PySide6</h2>
+<table>
+<tr><th>Practice</th><th>What</th><th>Why it stops regressions</th></tr>
+<tr><td>Model/View separation</td><td>Keep data in <code>QAbstractItemModel</code>s; views are standard <code>QAbstractItemView</code>s. Qt merges View+Controller into the widget, so separation means <i>data vs. presentation</i>.</td><td>Same model, many views; a view change can't corrupt stored data.</td></tr>
+<tr><td>Widgets for information-dense tools, QML for fluid/animated UIs</td><td>Official and community consensus: Widgets = forms/tables/dialogs that should feel native; QML = touch/animated/custom.</td><td>Picks the mature local conventions over bespoke chrome you must re-verify forever.</td></tr>
+<tr><td>Component gallery as living contract</td><td><code>ui/gallery.py</code> rendering every kit component is the PySide equivalent of Storybook.</td><td>Exhibits defaults; a mixin change shows up in one place with evidence.</td></tr>
+<tr><td>Tokens, not literals</td><td>No raw hex / font-size outside <code>theme.py</code> (already enforced by tests).</td><td>One place to change a color or size; drift fails the build.</td></tr>
+<tr><td>pytest-qt for interaction</td><td><code>qtbot</code> fixture (mouse/keyboard), <code>waitSignal</code>, auto-capture of qDebug/exceptions.</td><td>Proves behavior, not just appearance (click → state, hover → tooltip, Tab order).</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>3. Tools & libraries that actually fit Qt</h2>
+<table>
+<tr><th>Tool</th><th>Level</th><th>Honest fit for us</th></tr>
+<tr><td><b>pytest-qt</b></td><td>Behavior</td><td>Start here. Free, already the standard. Covers focus, click, signal, tooltip, copy. No rendering verdicts though.</td></tr>
+<tr><td><b>Screenshot goldens + pixel diff</b> (Pillow diff / ImgDiff style; <code>widget.grab()</code> → PNG → compare to checked-in baseline with a small tolerance for fonts/AA)</td><td>Visual</td><td>The missing gate. <code>pytest-mpl</code> proves the pattern in matplotlib; the same golden-master idea ports to any <code>grab()</code>. Baselines live in repo; CI fails on drift > threshold, passes with `--update-baseline` locally. This is the single fix I'd buy first.</td></tr>
+<tr><td><b>PyQtGraph / pyqtgraph image testing</b></td><td>Visual (reference)</td><td>Proof the ecosystem does golden-image testing for Qt-rendered content with image-compare baselines.</td></tr>
+<tr><td><b>Squish GUI Tester</b> (Qt Company, proprietary)</td><td>E2E + object</td><td>Deepest Qt-aware object/property access, record/replay, Windows/macOS/Linux. Cost: paid licence + IDE. Justified only if you need non-dev test authoring or cross-platform native E2E. For a small team, overkill.</td></tr>
+<tr><td><b>SikuliX / vision-based</b></td><td>E2E (pixels only)</td><td>Works when object access doesn't exist, but brittle — it re-introduces the flakiness we want to escape. Avoid for regression.</td></tr>
+<tr><td><b>pywinauto (UIA) / FlaUI / Appium–WinAppDriver</b> (NovaWindows successor)</td><td>E2E (OS accessibility)</td><td>Qt exposes limited UIA surface, so locators stay fragile — worse than <code>qtbot</code> navigation. The Windows-driver lineage is also the least maintained option. Not recommended for this stack.</td></tr>
+<tr><td><b>Playwright / Percy / Applitools</b></td><td>Web visual</td><td>Mature, but browser-only. They cannot see inside a PySide6 window. Only relevant if we ever become a web app.</td></tr>
+</table>
+<p class="small">Names to tune out: Percy/Chromatic/Applitools clones, Playwright screenshots — all presuppose a browser. The Qt-specific gold standard remains Squish; the Python-native path is pytest-qt + goldens.</p>
+</div>
+
+<div class="card">
+<h2>4. Would a rewrite help?</h2>
+<table>
+<tr><th>Option</th><th>Testability</th><th>Cost vs. our app (Python engine + Qt UI, Windows-only)</th></tr>
+<tr><td><b>Stay: PySide6 Widgets</b></td><td>High, with pytest-qt + goldens + gallery</td><td>Reuses the 212-test engine, theme/kit, gallery, PyInstaller lite build. Risk is bounded.</td></tr>
+<tr><td><b>Qt Quick / QML</b></td><td>Good (QML Test + <code>TestCase</code>), but custom rendering loses native conventions</td><td>Same engine can stay, UI restyle is large; Community consensus keeps Widgets for form-heavy desktop tools. No regression benefit over Widgets.</td></tr>
+<tr><td><b>Tauri v2 (Rust + webview)</b></td><td>High for web layer (Playwright/webdriver), but UI logic rewrites to a new language</td><td>Best bundle-size story (3–15MB vs Electron 85–200MB), but we'd re-port the R/python engine and re-build the whole kit. 2026 comparisons call a Tauri migration "closer to a rewrite than a refactor".</td></tr>
+<tr><td><b>Electron</b></td><td>High (Playwright/Storybook/Chromatic stack)</td><td>Brightest testing ecosystem — and the wrong answer for us: 85–200MB, Chromium download, duplicates the OS webview we already solve with Qt. Solves our test problem by changing the problem.</td></tr>
+<tr><td><b>Flutter Desktop</b></td><td>Good (golden tests + widget tests); pixel-perfect everywhere</td><td>15–25MB, Dart rewrite of engine (no Python libs), loses native theming. Interesting, not justified.</td></tr>
+</table>
+<p class="call"><b>Verdict: no rewrite.</b> Every rewrite candidate trades a known, small problem (add 2 harnesses) for a large one (re-port the engine, rebuild the kit, re-validate every check). Electron's testing advantage is real but you pay 100MB+ and a language move to get it. The mature answer is: <b>same stack, better gates</b>.</p>
+</div>
+
+<div class="card">
+<h2>5. Recommended rollout (phased, reversible)</h2>
+<h3>Phase 1 — Screenshot goldens (biggest ROI)</h3>
+<ul>
+<li>Checked-in baseline directory; <code>test_golden.py</code> grabs each page + gallery + dashboard states offscreen, diffs vs baseline with per-image tolerance (fonts/AA ⇒ threshold, not exact).</li>
+<li>Baselines update only via explicit <code>--update-baseline</code>; drift prints the diff image.</li>
+<li>What it catches: wrong tint after a token swap, clipped text, shifted headers — the exact class that today needs a human glance.</li>
+</ul>
+<h3>Phase 2 — Behavior contracts</h3>
+<ul>
+<li>pytest-qt tests for the repeated bugs: header casing vs elision, focus tint on keyboard-only, split-chip elision + tooltip, dirty-guard prompts, sort indicators.</li>
+<li>Each past fix gets one regression test that names it (no discarded probes).</li>
+</ul>
+<h3>Phase 3 — Process</h3>
+<ul>
+<li>Gallery renders in CI and is diffed as goldens — the exhibit <i>is</i> the test.</li>
+<li>New components must land in the kit + gallery + golden in one PR (the conformance tests already enforce kit use; extend them with a "gallery coverage" check).</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>6. Critique of this draft (and what changed)</h2>
+<p>I wrote a first draft, attacked it, and revised. The honest weaknesses:</p>
+<table>
+<tr><th>Self-critique</th><th>How the final report fixed it</th></tr>
+<tr><td>Draft leaned on Squish as "the answer" — pricing and licensing buried in a footnote.</td><td>Squish demoted to a conditional tool with an explicit cost and a "not for us yet" verdict.</td></tr>
+<tr><td>Treated Electron's test ecosystem as a pure win; ignored that bundle and team cost double.</td><td>Electron reframed as "solves our test problem by changing the problem" with size numbers called out.</td></tr>
+<tr><td>Recommended pixel-exact goldens, which flake on font/AA/DPI differences.</td><td>Now threshold-based with per-image tolerance and a pinned offscreen environment.</td></tr>
+<tr><td>Assumed the gallery is enough; it isn't — someone must look at it.</td><td>Phase 3 makes the gallery itself a CI golden, so looking is automated.</td></tr>
+<tr><td>First draft justified rewrite with bundle size; our size is Python libs (~174MB lite folder), not Chromium.</td><td>Size corrected: rewrite doesn't shrink our problem; Tauri's 3–15MB win doesn't apply to a Python engine we keep.</td></tr>
+</table>
+<p class="small">Remaining blind spots, stated plainly: I did not benchmark baseline flakiness across Windows font rendering, did not spec the diff threshold, and did not pick a pixel-diff library (Pillow diff vs. <code>opencv</code> vs. <code>pixelmatch</code>-style) — that choice comes with a Phase-1 prototype, not this paper.</p>
+</div>
+
+<div class="card">
+<h2>Sources</h2>
+<p><a href="https://github.com/pytest-dev/pytest-qt">pytest-qt</a> · <a href="https://www.qt.io/quality-assurance/squish">Squish GUI Tester</a> · <a href="https://doc.qt.io/qtforpython-6/overviews/qtwidgets-model-view-programming.html">Qt Model/View programming</a> · <a href="https://www.pythonguis.com/tutorials/pyside6-modelview-architecture">PySide6 Model/View tutorial</a> · <a href="https://mecanik.dev/en/posts/cross-platform-desktop-apps-with-qt-qml-2026">Qt Widgets vs QML 2026</a> · <a href="https://entalogics.com/blog/desktop-app-development-2026-electron-vs-tauri-vs-qt-vs-native">Desktop frameworks 2026</a> · <a href="https://rustify.rs/articles/rust-tauri-vs-qt-2026">Tauri vs Qt 2026</a> · <a href="https://www.pkgpulse.com/guides/best-desktop-app-frameworks-2026">Best desktop frameworks 2026</a> · <a href="https://pytest-mpl.readthedocs.io/en/v0.19.0/usage.html">pytest-mpl image comparison</a></p>
+</div>
+<footer>Data as of 2026-11-06. Bundle-size figures are the 2026 comparisons cited in Sources; thresholds and the pixel-diff library are deliberately left as Phase-1 prototype decisions.</footer>
+</main></body></html>

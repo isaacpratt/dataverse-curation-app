@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Rust rewrite — fit report for Dataverse Docent</title>
+<style>
+:root{--primary:#004ccd;--ink:#131b2e;--muted:#424656;--line:#c3c6d8;--bg:#faf8ff;--card:#ffffff;--tint:#eaedff;--row:#f2f3ff;--r:8px}
+body{margin:0;font-family:Inter,'Segoe UI',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.55}
+main{max-width:1020px;margin:0 auto;padding:28px 22px 56px}
+.hero{border:1px solid var(--line);border-radius:var(--r);background:var(--card);padding:22px 24px}
+.hero h1{font-size:28px;line-height:1.15;margin:.1em 0}
+.badge{display:inline-block;border:1px solid var(--line);border-radius:var(--r);padding:2px 8px;font-size:11px;font-weight:700;background:var(--tint);color:var(--muted)}
+.kv{display:grid;grid-template-columns:190px 1fr;gap:6px 14px;margin:12px 0 0}
+.kv b{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.card{border:1px solid var(--line);border-radius:var(--r);background:var(--card);padding:18px 20px;margin:14px 0}
+.card h2{font-size:18px;margin:.1em 0 8px}
+p{margin:.45em 0}
+ul{margin:.4em 0 .9em 1.15em}
+li{margin:.25em 0}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--tint);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+code{font-family:'JetBrains Mono',Consolas,monospace;font-size:12.5px;background:var(--row);padding:1px 5px;border-radius:4px}
+.call{border-left:3px solid var(--primary);background:var(--row);padding:10px 14px;border-radius:0 var(--r) var(--r) 0}
+.small{font-size:12.5px;color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.two{grid-template-columns:1fr}.kv{grid-template-columns:1fr}}
+a{color:var(--primary)}
+footer{font-size:12.5px;color:var(--muted)}
+</style>
+</head>
+<body><main>
+<div class="hero">
+<span class="badge">SUPPLEMENT · UI TESTING RESEARCH</span>
+<h1>Rust rewrite — advantages, disadvantages, fit</h1>
+<p>For <b>Dataverse Docent</b> (PySide6 desktop + Python check engine, 212 engine tests). Companion to <code>ui-testing-research.html</code>, which recommended staying on PySide6. This page evaluates the <b>other</b> language you asked about: Rust.</p>
+<div class="kv">
+<b>Verdict</b><span>Don't rewrite the app in Rust. The two real Rust paths split apart: Tauri (Rust backend + web frontend) keeps most Python assets but trades Qt for a webview; the native Rust GUIs (Iced, Slint, GPUI, egui) are a full re-port with no testing advantage over PySide6. The one Rust move worth considering is <b>PyO3 hotspots</b>, not a rewrite.</span>
+<b>Confidence</b><span>High for "no full rewrite" (migration cost is structural, not a judgment call). Medium on Tauri as a future shell — worth a prototype only if you ever need a web frontend anyway.</span>
+</div>
+</div>
+
+<div class="card">
+<h2>1. What "rewriting in Rust" would even mean here</h2>
+<p>There are two different Rust futures, and they look nothing alike:</p>
+<table>
+<tr><th>Path</th><th>What changes</th><th>What survives</th></tr>
+<tr><td><b>A. Tauri shell</b> (Rust backend + webview frontend)</td><td>PySide6 UI → HTML/JS (any web framework); Rust commands replace Qt signals/slots.</td><td>The Python engine could stay as a sidecar, or move behind PyO3. Tests port per-layer.</td></tr>
+<tr><td><b>B. Native Rust GUI</b> (Iced/Slint/GPUI/egui)</td><td>UI → Rust code in a new retained/immediate model; engine → Rust if you go all-in.</td><td>Almost nothing. The kit, gallery, and theme are rebuilt from zero.</td></tr>
+</table>
+<p class="small">Dioxus sits between these: "React in Rust" rendered in a WebView on desktop (Wry) — web frontend economics with a Rust authoring model. Slint is the dual-licensed declarative option (free on desktop/web, GPL otherwise). GPUI is Zed's component framework, CSS-like API, still maturing outside Zed.</p>
+</div>
+
+<div class="card">
+<h2>2. Advantages of Rust (honest list)</h2>
+<ul>
+<li><b>Bundle & startup:</b> Tauri builds are 3–15 MB vs 85–200 MB for Electron, and clearly smaller than our PyInstaller lite folder (~174 MB). Rust cold start is under half a second vs Python import cost.</li>
+<li><b>Memory & concurrency safety:</b> no GC pauses, data-race-free threading (useful for the download/check workers), release-mode speed for the engine.</li>
+<li><b>Library power, if you go all-in:</b> Polars, Pydantic-core, orjson, DataFusion, Polars-in-Python — the industry pattern is Rust <i>under</i> Python (PyO3/maturin) for the hot 5%, which you already benefit from transitively through those libraries.</li>
+<li><b>Single-binary story:</b> one Rust binary replaces onedir folders, no interpreter, no DLL hell.</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>3. Disadvantages (also honest)</h2>
+<table>
+<tr><th>Cost</th><th>What it hits in <i>our</i> repo</th></tr>
+<tr><td><b>Engine re-port</b></td><td>212 Python tests covering R-ported checks (22 format modules + report contract + dispatcher). Every check becomes new Rust + new tests. Migration guides stress: keep test parity per commit, downstream consumers per downstream consumer.</td></tr>
+<tr><td><b>UI rebuild from zero</b></td><td>Kit (<code>widgets.py</code>), theme roles/contrast contract, gallery, table-layout persistence — the parts that currently stop regressions — all rebuild. Native Rust GUIs (Iced/egui/Slint/GPUI) also lack Qt's accessibility story (VoiceOver/NVDA, IME parity) that the 2026 survey calls out as the winners' edge.</td></tr>
+<tr><td><b>Team / bus factor</b></td><td>One person learns Rust; the next curator-dev inherits a language they may not read. Python's library depth (scipy, pyreadstat, netCDF4/h5py in the full build) has no Rust equivalents at parity — the full build's heavy libs would stay Python anyway.</td></tr>
+<tr><td><b>Timeline risk</b></td><td>"Closer to a rewrite than a refactor" is the consensus line on Electron↔Tauri moves; a full Python→Rust move is larger. You pay the cost up front for perf you don't currently need (the window cap is 2,000 rows, cheap).</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>4. Fit verdict</h2>
+<div class="call"><b>Do not rewrite the app in Rust.</b> The advantages that matter for <i>us</i> (perf, memory) aren't your bottleneck — your UI regression cycle is. Tauri would hand you a webview and force a frontend in JS, trading Qt's mature desktop conventions (and our existing test guards) for browser conventions you'd have to re-secure (allowlist, sandboxing). The native Rust GUIs remove the webview but also remove everything that makes the current app testable.</div>
+<p><b>The narrow exception worth doing instead:</b> if profiling ever shows a hotspot (e.g., file-format checks on big deposits), port <i>that function</i> to Rust via PyO3/maturin and ship it as an optional acceleration next to the Python implementation. That's the Polars/Pydantic pattern: one codebase you can read, Rust only where it earns the effort. Everything else stays Python.</p>
+</div>
+
+<div class="card">
+<h2>Sources</h2>
+<p><a href="https://www.pkgpulse.com/guides/best-desktop-app-frameworks-2026">Best desktop frameworks 2026</a> · <a href="https://rustify.rs/articles/rust-tauri-vs-qt-2026">Tauri vs Qt 2026</a> · <a href="https://blog.wybxc.cc/blog/rust-gui-survey-2026">2026 survey of Rust GUIs</a> · <a href="https://amental.modify.codes/blog/rust-gui-2026">Rust GUI 2026 survey</a> · <a href="https://blog.gitguardian.com/how-we-migrated-the-heart-of-our-platform-to-rust">Python→Rust migration (GitGuardian)</a> · <a href="https://corrode.dev/learn/migration-guides/python-to-rust">Corrode Python→Rust guide</a> · <a href="https://pyo3.rs/main">PyO3 user guide</a> · <a href="https://github.com/PyO3/maturin">maturin</a></p>
+</div>
+<footer>Data as of 2026-11-07. Native-GUI comparison points: 2026 survey + state-of-Rust-GUI libraries roundups; bundle figures from 2026 framework comparisons.</footer>
+</main></body></html>
