@@ -1510,6 +1510,49 @@ def make_combo(items=None, parent: QWidget | None = None, *, height: int = 36,
     return combo
 
 
+# -- finding dispositions (dv-32x) ----------------------------------------
+# Canonical tokens mirror storage.DISPOSITION_TOKENS; the tuple is
+# duplicated (not imported) so the kit stays free of the storage layer,
+# and a test asserts the two stay identical.
+
+DISPOSITION_TOKENS = ("", "acknowledged", "fix-requested", "wontfix", "blocked")
+
+_DISPOSITION_LABEL_KEYS = {
+    "": "detail.disposition.unset",
+    "acknowledged": "detail.disposition.acknowledged",
+    "fix-requested": "detail.disposition.fix_requested",
+    "wontfix": "detail.disposition.wontfix",
+    "blocked": "detail.disposition.blocked",
+}
+
+
+def disposition_label(token: str) -> str:
+    """Human label for a disposition token (the unset label when unknown)."""
+    return t(_DISPOSITION_LABEL_KEYS.get(str(token or ""), "detail.disposition.unset"))
+
+
+def make_disposition_combo(current: str = "", on_change=None,
+                           parent: QWidget | None = None) -> QComboBox:
+    """Compact disposition dropdown for one finding row.
+
+    current: the stored token ("" = none recorded). on_change(token) fires
+    when the curator picks a different disposition. The initial index is
+    set before the signal is connected, so building a row never fires.
+    """
+    combo = make_combo(
+        [(disposition_label(token), token) for token in DISPOSITION_TOKENS],
+        parent,
+        height=28,
+        min_width=118,
+        tip=t("detail.disposition.combo_tip"),
+    )
+    tokens = list(DISPOSITION_TOKENS)
+    combo.setCurrentIndex(tokens.index(current if current in tokens else ""))
+    if on_change is not None:
+        combo.currentIndexChanged.connect(lambda _i: on_change(combo.currentData()))
+    return combo
+
+
 class PaneFooter(QFrame):
     """Shared Save/Revert footer for stack pages.
 

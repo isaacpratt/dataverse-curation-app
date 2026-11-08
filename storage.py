@@ -60,11 +60,43 @@ CREATE TABLE IF NOT EXISTS curation_actions (
     notes TEXT DEFAULT '',
     details_json TEXT DEFAULT '{}'
 );
+CREATE TABLE IF NOT EXISTS finding_dispositions (
+    dataset_id TEXT NOT NULL,
+    finding_key TEXT NOT NULL,
+    disposition TEXT NOT NULL DEFAULT '',
+    note TEXT DEFAULT '',
+    updated_at TEXT,
+    PRIMARY KEY (dataset_id, finding_key)
+);
 CREATE INDEX IF NOT EXISTS idx_curation_actions_dataset
     ON curation_actions(dataset_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_curation_actions_action
     ON curation_actions(action, dataset_id);
 """
+
+# Canonical disposition tokens (storage-stable; labels live in the string
+# catalogue via ui.widgets.disposition_label). "" = no disposition recorded.
+DISPOSITION_TOKENS = ("", "acknowledged", "fix-requested", "wontfix", "blocked")
+
+# Dispositions that mean "the curator has dealt with this finding" — the
+# roll-up count in the Auto-Checks header and the verdict card count these.
+RESOLVED_DISPOSITIONS = frozenset({"acknowledged", "wontfix"})
+
+
+def finding_key(check_id: str, path: str = "", message: str = "") -> str:
+    """Stable identity for one finding across check re-runs.
+
+    sha1 of (check_id, path, whitespace-normalized message): a re-run that
+    reproduces a finding yields the same key, so stored dispositions and
+    notes re-attach to it, while genuinely new findings start unresolved.
+    Metadata rule findings pass the rule id as ``check_id`` and the
+    requirement text as ``message`` (path empty).
+    """
+    import hashlib
+
+    normalized = " ".join(str(message or "").split())
+    raw = "\x1f".join([str(check_id or ""), str(path or ""), normalized])
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
 def _utcnow_iso() -> str:
@@ -188,6 +220,75 @@ class AppState:
                     "details": details,
                 }
             )
+        return out
+
+    # -- finding dispositions (dv-32x) ------------------------------------
+
+    def set_finding_disposition(
+        self,
+        dataset_id: str,
+        key: str,
+        disposition: str,
+        note: str = "",
+    ) -> None:
+        """Record (or clear, with disposition="") one finding's disposition."""
+        key = str(key or "")
+        if not key:
+            return
+        token = str(disposition or "")
+        if token and token not in DISPOSITION_TOKENS:
+            token = ""
+        with self._lock:
+            if token:
+                self._conn.execute(
+                    "INSERT INTO finding_dispositions "
+                    "(dataset_id, finding_key, disposition, note, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT(dataset_id, finding_key) DO UPDATE SET "
+                    "disposition=excluded.disposition, note=excluded.note, "
+                    "updated_at=excluded.updated_at",
+                    (dataset_id, key, token, str(note or ""), _utcnow_iso()),
+                )
+            else:
+                self._conn.execute(
+                    "DELETE FROM finding_dispositions "
+                    "WHERE dataset_id = ? AND finding_key = ?",
+                    (dataset_id, key),
+                )
+            self._conn.commit()
+
+    def get_finding_disposition(
+        self, dataset_id: str, key: str
+    ) -> dict[str, Any] | None:
+        """One finding's disposition row, or None when unset."""
+        cur = self._conn.execute(
+            "SELECT disposition, note, updated_at FROM finding_dispositions "
+            "WHERE dataset_id = ? AND finding_key = ?",
+            (dataset_id, key),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return {
+            "disposition": str(row["disposition"] or ""),
+            "note": str(row["note"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def list_finding_dispositions(self, dataset_id: str) -> dict[str, dict[str, Any]]:
+        """{finding_key: {disposition, note, updated_at}} for one dataset."""
+        cur = self._conn.execute(
+            "SELECT finding_key, disposition, note, updated_at "
+            "FROM finding_dispositions WHERE dataset_id = ?",
+            (dataset_id,),
+        )
+        out: dict[str, dict[str, Any]] = {}
+        for row in cur.fetchall():
+            out[str(row["finding_key"])] = {
+                "disposition": str(row["disposition"] or ""),
+                "note": str(row["note"] or ""),
+                "updated_at": str(row["updated_at"] or ""),
+            }
         return out
 
     def last_action(self, dataset_id: str, action: str) -> dict[str, Any] | None:

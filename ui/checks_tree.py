@@ -28,9 +28,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 from engine.status import classify
+from storage import finding_key
 from ui.i18n import t
 from ui.icons import file_icon, icon, status_icon
 from ui.status_text import badge_text, status_text
+from ui.widgets import disposition_label
 
 COLUMNS = [
     t("checks.columns.name"),
@@ -153,13 +155,16 @@ def _new_item(text: str, tooltip: str = "") -> QStandardItem:
 
 
 def build_tree_model(rows, report=None, is_staged=None, human_size=None,
-                     inventory=None) -> QStandardItemModel:
+                     inventory=None, dispositions=None) -> QStandardItemModel:
     """Build the folder>file>check model.
 
     rows: list of (path, size_bytes, fmt, original) like _all_file_rows.
     report: DatasetReport or None (pre-run: file nodes only, no checks).
     is_staged: callable(path) -> bool (staged files render ink, others muted).
     inventory: optional raw inventory list (adds restricted/embargo/ingest notes).
+    dispositions: optional {finding_key: {disposition, note}} (dv-32x) —
+    check nodes with a recorded disposition carry its label in the Scan
+    column and tooltip, and the context menu in dataset_detail edits them.
     """
     model = QStandardItemModel()
     # Titles stay in sentence case, like every other table in the app.
@@ -273,23 +278,42 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
                 kind = {"passed": "pass", "failed-warning": "warn",
                         "failed-error": "fail", "skipped": "skip"}.get(
                             classify(check), "pass")
+                # Disposition reflection (dv-32x): the label joins the Scan
+                # text so a resolved finding reads as dealt-with at a glance.
+                token = ""
+                try:
+                    token = str(
+                        (dispositions or {})
+                        .get(finding_key(check.check_id, path, check.message), {})
+                        .get("disposition")
+                        or ""
+                    )
+                except Exception:
+                    token = ""
+                scan_text = f"{badge}{t('common.separator')}{check.message}"
+                tip = format_details_tooltip(check)
+                if token:
+                    label = disposition_label(token)
+                    scan_text += t("common.separator") + label
+                    tip += "\n" + t("detail.disposition.tree_note", label=label)
                 c_name = _new_item(
                     check.check_id,
-                    format_details_tooltip(check),
+                    tip,
                 )
                 try:
                     c_name.setIcon(status_icon(kind))
                 except Exception:
                     pass
                 c_name.setData(
-                    {"kind": "check", "path": path, "check_id": check.check_id},
+                    {"kind": "check", "path": path, "check_id": check.check_id,
+                     "msg": check.message},
                     _KIND_ROLE,
                 )
                 c_size = _new_item("")
                 c_fmt = _new_item("")
                 c_scan = _new_item(
-                    f"{badge}{t('common.separator')}{check.message}",
-                    format_details_tooltip(check),
+                    scan_text,
+                    tip,
                 )
                 name_item.appendRow([c_name, c_size, c_fmt, c_scan])
             if parent_item is not None:

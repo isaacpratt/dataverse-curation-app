@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QFrame,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QMenu,
     QScrollArea,
@@ -30,6 +31,7 @@ from config import Config
 from dataverse_client import DataverseClient
 from download_manager import DownloadManager
 from metadata_check import DEFAULT_PROFILE, PROFILES
+from storage import RESOLVED_DISPOSITIONS, finding_key
 from ui.dialogs import confirm, describe_error, show_critical, show_info, show_warning
 from ui.download_dialog import DownloadApprovalDialog
 from ui.i18n import t
@@ -74,6 +76,7 @@ from ui.widgets import (
     AppTree,
     WorkflowRail,
     add_info_tip,
+    disposition_label,
     flush_list_style,
     flush_table_style,
     make_action_button,
@@ -82,6 +85,7 @@ from ui.widgets import (
     make_caption_label,
     make_card,
     make_combo,
+    make_disposition_combo,
     make_elided_label,
     make_field_label,
     make_list,
@@ -809,6 +813,12 @@ class DatasetDetailView(QWidget):
         self._meta_check_tree.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._meta_check_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._meta_check_tree.setFixedHeight(80)
+        # Right-click a top-level check row to set its disposition
+        # (dv-32x): the metadata card's tree rows map 1:1 to rule results.
+        self._meta_check_tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._meta_check_tree.customContextMenuRequested.connect(
+            self._on_meta_context_menu
+        )
         body.addWidget(self._meta_check_tree)
         return card
 
@@ -955,6 +965,9 @@ class DatasetDetailView(QWidget):
         tree = self._meta_check_tree
         model = self._meta_model
         model.removeRows(0, model.rowCount())
+        # Row -> result mapping for the disposition context menu (the
+        # filtered list the tree was built from, in row order).
+        self._meta_tree_results = list(results)
 
         def _item(
             text: str,
@@ -1412,6 +1425,7 @@ class DatasetDetailView(QWidget):
             md, sections = build_response(
                 ruleset, self._completeness_full or [], self._report,
                 self._title, self._pid,
+                dispositions=self._dispositions_map(),
             )
             self._response_sections = sections
             self._rebuild_findings_list(keep_checks=False)
@@ -1866,6 +1880,154 @@ class DatasetDetailView(QWidget):
         except Exception:
             pass
 
+    # -- finding dispositions (dv-32x) -------------------------------------
+
+    def _dispositions_map(self) -> dict:
+        """{finding_key: {disposition, note}} for this dataset (cached)."""
+        cached = getattr(self, "_dispositions_cache", None)
+        if isinstance(cached, dict):
+            return cached
+        out: dict = {}
+        try:
+            st = self._state()
+            if st is not None:
+                out = st.list_finding_dispositions(self._pid)
+        except Exception:
+            out = {}
+        self._dispositions_cache = out
+        return out
+
+    def _set_disposition(self, key: str, token: str, note: str = "",
+                         refresh: bool = False) -> None:
+        """Persist one disposition, update the cache, the log, and views."""
+        try:
+            st = self._state()
+            if st is not None:
+                st.set_finding_disposition(self._pid, key, token, note or "")
+        except Exception:
+            return
+        cache = getattr(self, "_dispositions_cache", None)
+        if isinstance(cache, dict):
+            if token:
+                cache[key] = {"disposition": token, "note": note or "", "updated_at": ""}
+            else:
+                cache.pop(key, None)
+        self._refresh_finding_summary()
+        self._log_action(
+            "disposition",
+            (disposition_label(token) if token else t("detail.disposition.cleared"))
+            + (t("detail.dataset_log.action_notes", notes=(note or "")[:120]) if note else ""),
+            {"finding_key": key, "disposition": token},
+        )
+        if refresh:
+            # Reflection surfaces: manifest tint + response exclusion.
+            try:
+                self._apply_file_filter_internal()
+            except Exception:
+                pass
+            try:
+                self._refresh_response(force=False)
+            except Exception:
+                pass
+
+    def _on_disposition_changed(self, key: str, token: str) -> None:
+        """Combo change on an Auto-Checks row: keep the existing note."""
+        current = self._dispositions_map().get(key, {})
+        self._set_disposition(key, str(token or ""), str(current.get("note") or ""))
+
+    def _on_edit_disposition_note(self, key: str, token: str = "") -> None:
+        """Edit (or add) the note stored with one finding's disposition."""
+        current = self._dispositions_map().get(key, {})
+        existing = str(current.get("note") or "")
+        if not token:
+            token = str(current.get("disposition") or "")
+        text, ok = QInputDialog.getMultiLineText(
+            self,
+            t("detail.disposition.note_title"),
+            t("detail.disposition.note_label"),
+            existing,
+        )
+        if ok:
+            self._set_disposition(key, token, text, refresh=True)
+
+    def _show_disposition_menu(self, key: str, global_pos) -> None:
+        """Right-click menu for one finding: mark, note, or clear."""
+        current = str(self._dispositions_map().get(key, {}).get("disposition") or "")
+        menu = QMenu(self)
+        for token in ("acknowledged", "fix-requested", "wontfix", "blocked"):
+            action = menu.addAction(disposition_label(token))
+            action.setCheckable(True)
+            action.setChecked(token == current)
+            action.triggered.connect(
+                lambda _c=False, tok=token: self._set_disposition(key, tok, refresh=True)
+            )
+        menu.addSeparator()
+        note_action = menu.addAction(t("detail.disposition.note_action"))
+        note_action.triggered.connect(
+            lambda: self._on_edit_disposition_note(key, current)
+        )
+        clear_action = menu.addAction(t("detail.disposition.clear"))
+        clear_action.triggered.connect(lambda: self._set_disposition(key, "", refresh=True))
+        menu.exec(global_pos)
+
+    def _on_meta_context_menu(self, pos) -> None:
+        """Disposition menu for one metadata rule row (top-level rows only)."""
+        tree = self._meta_check_tree
+        index = tree.indexAt(pos)
+        if not index.isValid():
+            return
+        while index.parent().isValid():
+            index = index.parent()
+        results = getattr(self, "_meta_tree_results", [])
+        row = index.row()
+        if row < 0 or row >= len(results):
+            return
+        result = results[row]
+        if result.get("status") == "complete":
+            return
+        rule_id = str(result.get("rule_id") or result.get("field") or "")
+        requirement = str(result.get("requirement") or "")
+        key = finding_key(rule_id, "", requirement or str(result.get("field") or ""))
+        self._show_disposition_menu(key, tree.viewport().mapToGlobal(pos))
+
+    def _on_file_context_menu(self, pos) -> None:
+        """Disposition menu for one check node in the file manifest tree."""
+        tree = self._file_tree
+        index = tree.indexAt(pos)
+        if not index.isValid():
+            return
+        model = tree.model()
+        item = model.itemFromIndex(index.siblingAtColumn(0)) if model is not None else None
+        data = item.data(Qt.UserRole + 1) if item is not None else None
+        if not isinstance(data, dict) or data.get("kind") != "check":
+            return
+        key = finding_key(
+            str(data.get("check_id") or ""),
+            str(data.get("path") or ""),
+            str(data.get("msg") or ""),
+        )
+        self._show_disposition_menu(key, tree.viewport().mapToGlobal(pos))
+
+    def _set_auto_summary(self, text: str) -> None:
+        """Set the Auto-Checks header text, re-applying the roll-up suffix."""
+        self._auto_summary_base = text
+        self._auto_summary.setText(text + self._disposition_suffix())
+
+    def _disposition_suffix(self) -> str:
+        keys = getattr(self, "_finding_keys", [])
+        if not keys:
+            return ""
+        disp = self._dispositions_map()
+        tokens = [str(disp.get(k, {}).get("disposition") or "") for k in keys]
+        resolved = sum(1 for tok in tokens if tok in RESOLVED_DISPOSITIONS)
+        return t("detail.disposition.summary_suffix", resolved=resolved, total=len(tokens))
+
+    def _refresh_finding_summary(self) -> None:
+        base = getattr(self, "_auto_summary_base", None)
+        if base is None:
+            return
+        self._auto_summary.setText(base + self._disposition_suffix())
+
     def _refresh_dataset_log(self) -> None:
         """Newest-first timeline: versions, record dates, review, labels, files, local actions.
 
@@ -2062,6 +2224,7 @@ class DatasetDetailView(QWidget):
             "decision": t("detail.dataset_log.action_decision"),
             "exported": t("detail.dataset_log.action_exported"),
             "response_exported": t("detail.dataset_log.action_response_exported"),
+            "disposition": t("detail.dataset_log.action_disposition"),
         }
         for a in actions:
             act = a.get("action") or ""
@@ -2445,6 +2608,11 @@ class DatasetDetailView(QWidget):
         self._file_tree.clicked.connect(self._on_tree_clicked)
         self._file_tree.expanded.connect(self._on_tree_expansion_changed)
         self._file_tree.collapsed.connect(self._on_tree_expansion_changed)
+        # Right-click a check node to set its disposition (dv-32x).
+        self._file_tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._file_tree.customContextMenuRequested.connect(
+            self._on_file_context_menu
+        )
         # No internal scrollbars: the manifest card grows to fit every
         # visible row and the page canvas scrolls instead.
         self._file_tree.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -2615,13 +2783,14 @@ class DatasetDetailView(QWidget):
                 if w is not None:
                     w.deleteLater()
             if not files:
+                self._finding_keys = []
                 if self._inventory is not None and len(self._inventory) == 0 and self._metadata is not None:
                     ph = make_small_body_label(t("detail.auto_checks.no_files_in_dataverse"))
                     # A measured zero, not a placeholder — name it (2026-10-02 P2).
-                    self._auto_summary.setText(t("detail.auto_checks.no_file_checks"))
+                    self._set_auto_summary(t("detail.auto_checks.no_file_checks"))
                 else:
                     ph = make_small_body_label(t("detail.auto_checks.no_file_list"))
-                    self._auto_summary.setText(t("detail.auto_checks.not_run"))
+                    self._set_auto_summary(t("detail.auto_checks.not_run"))
                 self._auto_body.addWidget(ph)
                 return
             # Count will_run
@@ -2633,7 +2802,7 @@ class DatasetDetailView(QWidget):
                     c for f in self._report.files for c in f.checks
                 ]
                 summary = summarize(all_results)
-                self._auto_summary.setText(
+                self._set_auto_summary(
                     t(
                         "detail.auto_checks.summary_counts",
                         passed=summary["passed"],
@@ -2642,8 +2811,23 @@ class DatasetDetailView(QWidget):
                         skipped=summary["skipped"],
                     )
                 )
+                from engine.status import classify
+
+                # Findings carry a stable disposition key (dv-32x): failed
+                # rows get an inline disposition combo; passes/skips don't.
+                finding_keys: list[str] = []
                 for c in self._report.dataset_checks:
-                    row = self._auto_row(c.check_id, c.message, c.passed, c.level)
+                    kind = classify(c)
+                    key = (
+                        finding_key(c.check_id, "", c.message)
+                        if kind in ("failed-error", "failed-warning")
+                        else ""
+                    )
+                    if key:
+                        finding_keys.append(key)
+                    row = self._auto_row(
+                        c.check_id, c.message, c.passed, c.level, disposition_key=key
+                    )
                     try:
                         from ui.checks_tree import format_details_tooltip
 
@@ -2656,8 +2840,6 @@ class DatasetDetailView(QWidget):
                 # skipped checks (missing library) that did not run.
                 # Passes stay in the manifest tree only — they are the
                 # bulk and the tree shows them per file.
-                from engine.status import classify
-
                 file_findings = [
                     (f, c)
                     for f in self._report.files
@@ -2680,7 +2862,11 @@ class DatasetDetailView(QWidget):
                             badge=t("status.badges.skipped"),
                         )
                     else:
-                        row = self._auto_row(c.check_id, desc, c.passed, c.level)
+                        key = finding_key(c.check_id, f.path, c.message)
+                        finding_keys.append(key)
+                        row = self._auto_row(
+                            c.check_id, desc, c.passed, c.level, disposition_key=key
+                        )
                     try:
                         from ui.checks_tree import format_details_tooltip
 
@@ -2688,6 +2874,8 @@ class DatasetDetailView(QWidget):
                     except Exception:
                         pass
                     self._auto_body.addWidget(row)
+                self._finding_keys = finding_keys
+                self._refresh_finding_summary()
                 if (
                     not self._report.dataset_checks
                     and not file_findings
@@ -2699,7 +2887,8 @@ class DatasetDetailView(QWidget):
             else:
                 # Only checks that will actually run for this dataset's
                 # files (checks with no matching files are not listed).
-                self._auto_summary.setText(t("detail.auto_checks.will_run", count=will))
+                self._finding_keys = []
+                self._set_auto_summary(t("detail.auto_checks.will_run", count=will))
                 if not will:
                     ph = make_small_body_label(t("detail.auto_checks.no_matching_checks"))
                     self._auto_body.addWidget(ph)
@@ -2747,7 +2936,8 @@ class DatasetDetailView(QWidget):
         except Exception:
             pass
 
-    def _auto_row(self, check_id: str, desc: str, passed: bool, level: str, badge: str | None = None) -> QFrame:
+    def _auto_row(self, check_id: str, desc: str, passed: bool, level: str, badge: str | None = None,
+                  disposition_key: str = "") -> QFrame:
         frame = QFrame()
         # Scope the row face to the row itself. A bare `QFrame` selector
         # would also style every QLabel inside it (QLabel subclasses
@@ -2811,6 +3001,27 @@ class DatasetDetailView(QWidget):
         d = make_caption_label(desc)
         txt.addWidget(d)
         lay.addLayout(txt, 1)
+        # Inline disposition controls for findings (dv-32x): the combo
+        # writes through _on_disposition_changed; Note… edits the stored
+        # note (tooltip carries it once one exists).
+        if disposition_key:
+            current = self._dispositions_map().get(disposition_key, {})
+            token = str(current.get("disposition") or "")
+            note = str(current.get("note") or "")
+            combo = make_disposition_combo(
+                token,
+                on_change=lambda tok, k=disposition_key: self._on_disposition_changed(k, tok),
+            )
+            lay.addWidget(combo)
+            note_btn = make_action_button(
+                t("detail.disposition.note_action"), kind="ghost", size="sm"
+            )
+            if note:
+                note_btn.setToolTip(note)
+            note_btn.clicked.connect(
+                lambda _c=False, k=disposition_key: self._on_edit_disposition_note(k)
+            )
+            lay.addWidget(note_btn)
         badge_lbl = make_badge(
             badge_text,
             background=badge_bg,
@@ -3113,6 +3324,7 @@ class DatasetDetailView(QWidget):
             self._is_staged,
             _human_size,
             inventory=self._inventory if isinstance(self._inventory, list) else None,
+            dispositions=self._dispositions_map(),
         )
         # The header's signals are blocked while the tree is rebuilt and
         # the columns are fitted to their content: sectionResized persists
@@ -3486,7 +3698,8 @@ class DatasetDetailView(QWidget):
                 {"field": r["field"], "requirement": r["requirement"],
                  "value": r.get("value", t("common.em_dash")), "status": r["status"],
                  "block": r.get("block", "") or "",
-                 "name": r.get("name", "") or ""}
+                 "name": r.get("name", "") or "",
+                 "rule_id": r.get("rule_id", "") or r["field"]}
                 for r in full
             ]
         except Exception:
@@ -3514,7 +3727,7 @@ class DatasetDetailView(QWidget):
         # Auto-checks header belongs to the checks summary (see
         # _refresh_curation_preview); leave it alone once a report exists.
         if self._report is None:
-            self._auto_summary.setText(
+            self._set_auto_summary(
                 t(
                     "detail.metadata_check.fields_complete",
                     complete=complete,

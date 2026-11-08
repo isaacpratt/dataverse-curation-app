@@ -773,6 +773,21 @@
       "save_dialog_failed": "Could not open the save dialog:\n{exc}",
       "write_failed": "Could not write the draft:\n{exc}"
     },
+    "disposition": {
+      "combo_tip": "Mark how this finding is handled; the choice survives re-runs.",
+      "unset": "Disposition",
+      "acknowledged": "Acknowledged",
+      "fix_requested": "Fix requested",
+      "wontfix": "Won't fix",
+      "blocked": "Blocked",
+      "clear": "Clear disposition",
+      "cleared": "Disposition cleared",
+      "note_action": "Note…",
+      "note_title": "Finding note",
+      "note_label": "Note for this finding (stored with the disposition):",
+      "summary_suffix": " · {resolved} of {total} findings resolved",
+      "tree_note": "Disposition: {label}"
+    },
     "dataset_log": {
       "tip": "Timeline for this dataset (newest first): creation, versions, record dates, review submissions, curation labels, embargoes, and local curation actions.",
       "timeline_format": "{stamp} — {text}",
@@ -794,6 +809,7 @@
       "action_decision": "Decision recorded",
       "action_exported": "Curation report exported",
       "action_response_exported": "Response draft exported",
+      "action_disposition": "Disposition updated",
       "action_notes": ": {notes}",
       "unnamed_file": "(unnamed file)",
       "embargoed": "File '{path}' embargoed until {date}",
