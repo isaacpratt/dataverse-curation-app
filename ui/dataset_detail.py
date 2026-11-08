@@ -497,6 +497,10 @@ class DatasetDetailView(QWidget):
         self._history_btn.setToolTip(t("detail.header.export_reports_tip"))
         self._history_btn.clicked.connect(self._on_export)
         actions_row.addWidget(self._history_btn)
+        self._record_btn = make_action_button(t("detail.header.export_record"), kind="secondary", size="md")
+        self._record_btn.setToolTip(t("detail.header.export_record_tip"))
+        self._record_btn.clicked.connect(self._on_export_record)
+        actions_row.addWidget(self._record_btn)
         self._load_meta_btn = make_action_button(t("detail.header.load_metadata"), kind="secondary", size="md")
         self._load_meta_btn.setToolTip(t("detail.header.load_metadata_tip"))
         self._load_meta_btn.clicked.connect(self._on_load_metadata)
@@ -2502,6 +2506,7 @@ class DatasetDetailView(QWidget):
             "exported": t("detail.dataset_log.action_exported"),
             "response_exported": t("detail.dataset_log.action_response_exported"),
             "disposition": t("detail.dataset_log.action_disposition"),
+            "curation_record_exported": t("detail.dataset_log.action_record"),
             "sensitivity_reviewed": t("detail.dataset_log.action_sensitivity"),
         }
         for a in actions:
@@ -4637,6 +4642,53 @@ class DatasetDetailView(QWidget):
         # Legacy table slot (pre-tree). Kept so old signal wiring fails
         # loudly in one place instead of scattered AttributeErrors.
         return None
+
+    def _on_export_record(self) -> None:
+        """One click: the dated curation-record folder (dv-vwt)."""
+        try:
+            from curation_record import export_record
+
+            st = self._state()
+            actions = st.list_actions(self._pid, limit=500) if st is not None else []
+            decision_row = st.last_action(self._pid, "decision") if st is not None else None
+            decision = str((decision_row or {}).get("notes") or "")
+            dispositions = (
+                st.list_finding_dispositions(self._pid) if st is not None else {}
+            )
+            sensitivity_data = (
+                st.get_sensitivity_review(self._pid) if st is not None else None
+            )
+            try:
+                response_text = self._response_edit.toPlainText()
+            except Exception:
+                response_text = ""
+            try:
+                staged = self._dl_mgr.files_dir(self._pid)
+            except Exception:
+                staged = None
+            record_dir = export_record(
+                self._dl_mgr.dataset_dir(self._pid),
+                report=self._report,
+                response_text=response_text,
+                actions=actions,
+                dispositions=dispositions,
+                sensitivity=sensitivity_data,
+                decision=decision,
+                curation_label=str((self._curation or {}).get("label") or ""),
+                staged_dir=staged if (staged and staged.exists()) else None,
+            )
+            self._log_action(
+                "curation_record_exported",
+                t("detail.status.record_saved_log", name=record_dir.name),
+                {"path": str(record_dir)},
+            )
+            self._set_status(t("detail.status.record_saved", path=record_dir))
+        except Exception as exc:
+            show_warning(
+                self,
+                t("detail.header.export_record"),
+                t("detail.status.record_failed", exc=exc),
+            )
 
     def _on_export(self) -> None:
         if not self._report:

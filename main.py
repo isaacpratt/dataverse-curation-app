@@ -114,6 +114,11 @@ def main(argv: list[str] | None = None) -> int:
         "--persistent-id", default="", help=t("app.cli.persistent_id_help")
     )
     parser.add_argument(
+        "--export-record",
+        action="store_true",
+        help=t("app.cli.export_record_help"),
+    )
+    parser.add_argument(
         "--config",
         default="config.json",
         help=t("app.cli.config_help"),
@@ -200,6 +205,20 @@ def main(argv: list[str] | None = None) -> int:
             print(t("app.cli.verdict_line", verdict=format_line(assess(report))))
         except Exception:
             pass
+        # Optional curation-record bundle (dv-vwt).
+        if getattr(args, "export_record", False):
+            try:
+                from curation_record import export_record
+
+                record_dir = export_record(
+                    out_path.parent,
+                    report=report,
+                    staged_dir=dataset_path,
+                )
+                print(t("app.cli.record_written", path=str(record_dir)))
+            except Exception as exc:
+                print(t("app.cli.run_failed", exc=exc), file=sys.stderr)
+                return 2
         # CI-usable exit code: 1 when error-level findings exist, 0 otherwise.
         # Warnings alone do not fail the run.
         return 1 if errors else 0
