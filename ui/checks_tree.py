@@ -136,6 +136,15 @@ def format_details_tooltip(result) -> str:
             parts.append(_json.dumps(shown, indent=1)[:2000])
         except Exception:
             parts.append(str(shown)[:2000])
+    # Curator guidance (dv-lfn): why the check matters + how to fix a fail.
+    if classify(result) in ("failed-error", "failed-warning"):
+        from engine.checks.guidance import for_result
+
+        rationale, remediation = for_result(result)
+        if rationale:
+            parts.append(t("checks.guidance_why", text=rationale))
+        if remediation:
+            parts.append(t("checks.guidance_fix", text=remediation))
     return "\n".join(parts)
 
 

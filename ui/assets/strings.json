@@ -145,6 +145,8 @@
     "files_folder": "Files",
     "skipped": "Skipped",
     "skipped_reason": "Skipped: {reason}",
+    "guidance_why": "Why this matters: {text}",
+    "guidance_fix": "How to fix: {text}",
     "tabular_ingest": "Tabular ingest — server derivative: {derivative}",
     "access_restricted": "Access: restricted",
     "embargo_until": "Embargo until {date}",

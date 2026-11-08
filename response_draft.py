@@ -117,7 +117,16 @@ def collect_filecheck_sections(ruleset: dict[str, Any], report: Any,
 
     def _one(check_id: str, level: str, message: str, path: str) -> None:
         template = str(templates.get(check_id) or fallback)
-        ctx = {"check_id": check_id, "message": message, "path": path or "dataset"}
+        try:
+            from engine.checks.guidance import for_check
+
+            remediation = for_check(check_id)[1]
+        except Exception:
+            remediation = ""
+        ctx = {
+            "check_id": check_id, "message": message, "path": path or "dataset",
+            "remediation": remediation,
+        }
         rendered = _fmt(template, ctx)
         if "{path}" not in template and path:
             rendered = f"{rendered} (file: {path})" if not rendered.endswith(f"({path})") else rendered
