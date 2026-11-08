@@ -68,6 +68,12 @@ CREATE TABLE IF NOT EXISTS finding_dispositions (
     updated_at TEXT,
     PRIMARY KEY (dataset_id, finding_key)
 );
+CREATE TABLE IF NOT EXISTS sensitivity_reviews (
+    dataset_id TEXT PRIMARY KEY,
+    answers_json TEXT DEFAULT '{}',
+    note TEXT DEFAULT '',
+    updated_at TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_curation_actions_dataset
     ON curation_actions(dataset_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_curation_actions_action
@@ -290,6 +296,45 @@ class AppState:
                 "updated_at": str(row["updated_at"] or ""),
             }
         return out
+
+    def get_sensitivity_review(self, dataset_id: str) -> dict[str, Any] | None:
+        """One dataset's sensitivity questionnaire, or None when never saved."""
+        cur = self._conn.execute(
+            "SELECT answers_json, note, updated_at FROM sensitivity_reviews "
+            "WHERE dataset_id = ?",
+            (dataset_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        try:
+            answers = json.loads(row["answers_json"] or "{}")
+        except Exception:
+            answers = {}
+        if not isinstance(answers, dict):
+            answers = {}
+        return {
+            "answers": answers,
+            "note": str(row["note"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def set_sensitivity_review(
+        self, dataset_id: str, answers: dict[str, Any], note: str = ""
+    ) -> None:
+        """Upsert one dataset's sensitivity questionnaire (never raises)."""
+        payload = {str(k): str(v or "") for k, v in (answers or {}).items()}
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO sensitivity_reviews "
+                "(dataset_id, answers_json, note, updated_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(dataset_id) DO UPDATE SET "
+                "answers_json=excluded.answers_json, note=excluded.note, "
+                "updated_at=excluded.updated_at",
+                (dataset_id, json.dumps(payload, ensure_ascii=False),
+                 str(note or ""), _utcnow_iso()),
+            )
+            self._conn.commit()
 
     def last_action(self, dataset_id: str, action: str) -> dict[str, Any] | None:
         """Newest action of a given type, or None."""

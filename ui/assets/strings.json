@@ -789,6 +789,18 @@
       "summary_suffix": " · {resolved} of {total} findings resolved",
       "tree_note": "Disposition: {label}"
     },
+    "sensitivity": {
+      "title": "Sensitivity & ethics review",
+      "tip": "The human judgments the automated PII and access scans cannot make. Answers persist per dataset; a collection whose ruleset requires this review blocks Approve until it is complete.",
+      "answer_unset": "Unanswered",
+      "answer_yes": "Yes",
+      "answer_no": "No",
+      "suggested": "Suggested: {value}",
+      "status_caption": "{answered} of {total} questions answered",
+      "log_note": "{answered} of {total} answered",
+      "gate_title": "Sensitivity review incomplete",
+      "gate_body": "This collection's ruleset requires the sensitivity & ethics review before approval. {answered} of {total} questions answered — complete the review above, then commit again."
+    },
     "verdict": {
       "banner_tip": "Live verdict from the checks and metadata below; click a reason to jump to it.",
       "level_ready": "Ready",
@@ -823,6 +835,7 @@
       "action_exported": "Curation report exported",
       "action_response_exported": "Response draft exported",
       "action_disposition": "Disposition updated",
+      "action_sensitivity": "Sensitivity review updated",
       "action_notes": ": {notes}",
       "unnamed_file": "(unnamed file)",
       "embargoed": "File '{path}' embargoed until {date}",

@@ -14,6 +14,7 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -31,6 +32,16 @@ from config import Config
 from dataverse_client import DataverseClient
 from download_manager import DownloadManager
 from metadata_check import DEFAULT_PROFILE, PROFILES
+from sensitivity import (
+    ANSWER_TOKENS,
+    NO,
+    QUESTIONS,
+    YES,
+    answered_count,
+    is_complete,
+    ruleset_requires,
+    suggested_answers,
+)
 from storage import RESOLVED_DISPOSITIONS, finding_key
 
 # Verdict reason/level keys (dv-6nv): stable engine tokens mapped to
@@ -322,6 +333,8 @@ class DatasetDetailView(QWidget):
         self._response_dirty = False
         self._response_loading = False
         self._response_save_timer: QTimer | None = None
+        # Sensitivity & ethics review (dv-3c2): answers load with the card.
+        self._sensitivity_answers: dict = {}
 
         self._client = DataverseClient(config.dataverse.base_url, config.dataverse.api_token)
         self._dl_mgr = DownloadManager(self._client, config.app.workspace)
@@ -1372,6 +1385,9 @@ class DatasetDetailView(QWidget):
 
         lay.addLayout(cols, 1)
 
+        self._sensitivity_card = self._build_sensitivity_card()
+        lay.addWidget(self._sensitivity_card)
+
         # Assessment Action (moved from the review-page sidebar): the
         # response workflow reads left-to-right, top-to-bottom —
         # checklist → draft → decision — so the commit step lives here.
@@ -2141,6 +2157,154 @@ class DatasetDetailView(QWidget):
             return
         self._auto_summary.setText(base + self._disposition_suffix())
 
+    # -- sensitivity & ethics review (dv-3c2) ------------------------------
+
+    def _sensitivity_suggestions(self) -> dict:
+        """Machine-suggested answers from the report + inventory."""
+        try:
+            return suggested_answers(self._report, self._inventory)
+        except Exception:
+            return {}
+
+    def _load_sensitivity_review(self) -> None:
+        """Stored answers, plus machine suggestions where nothing is stored."""
+        try:
+            st = self._state()
+            data = st.get_sensitivity_review(self._pid) if st is not None else None
+        except Exception:
+            data = None
+        answers = dict((data or {}).get("answers") or {})
+        for qid, suggestion in self._sensitivity_suggestions().items():
+            if qid not in answers and suggestion in ("yes", "no"):
+                answers[qid] = suggestion
+        self._sensitivity_answers = answers
+
+    def _build_sensitivity_card(self) -> QFrame:
+        """Questionnaire card on the Response page, above the decision."""
+        card, body, _title, header = make_card(t("detail.sensitivity.title"))
+        add_info_tip(
+            header,
+            t("detail.sensitivity.tip"),
+            name=t("detail.sensitivity.title"),
+        )
+        body.setContentsMargins(16, 12, 16, 12)
+        body.setSpacing(8)
+        self._load_sensitivity_review()
+        self._sensitivity_status = QLabel("")
+        self._sensitivity_status.setObjectName("StateMD")
+        self._sensitivity_status.setTextFormat(Qt.RichText)
+        body.addWidget(self._sensitivity_status)
+        self._sensitivity_combos: dict[str, QComboBox] = {}
+        suggestions = self._sensitivity_suggestions()
+        for q in QUESTIONS:
+            qid = str(q.get("id") or "")
+            prompt = make_small_body_label(str(q.get("prompt") or ""), wrap=True)
+            prompt.setToolTip(str(q.get("help") or ""))
+            body.addWidget(prompt)
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            combo = make_combo(
+                [
+                    (t("detail.sensitivity.answer_unset"), ""),
+                    (t("detail.sensitivity.answer_yes"), "yes"),
+                    (t("detail.sensitivity.answer_no"), "no"),
+                ],
+                height=28,
+                min_width=120,
+                tip=str(q.get("help") or ""),
+            )
+            stored = str((self._sensitivity_answers or {}).get(qid) or "")
+            combo.setCurrentIndex({"": 0, "yes": 1, "no": 2}.get(stored, 0))
+            combo.currentIndexChanged.connect(
+                lambda _i, qid=qid: self._on_sensitivity_answer(qid)
+            )
+            self._sensitivity_combos[qid] = combo
+            row.addWidget(combo)
+            caption = make_caption_label("")
+            if stored and stored == suggestions.get(qid):
+                word = (
+                    t("detail.sensitivity.answer_yes")
+                    if stored == "yes"
+                    else t("detail.sensitivity.answer_no")
+                )
+                caption.setText(t("detail.sensitivity.suggested", value=word))
+            row.addWidget(caption, 1)
+            wrap = QWidget()
+            wrap.setLayout(row)
+            body.addWidget(wrap)
+        self._refresh_sensitivity_status()
+        return card
+
+    def _refresh_sensitivity_card(self) -> None:
+        """Re-pull stored answers + suggestions after metadata/checks load."""
+        combos = getattr(self, "_sensitivity_combos", {})
+        if not combos:
+            return
+        self._load_sensitivity_review()
+        for qid, combo in combos.items():
+            stored = str((self._sensitivity_answers or {}).get(qid) or "")
+            combo.blockSignals(True)
+            combo.setCurrentIndex({"": 0, "yes": 1, "no": 2}.get(stored, 0))
+            combo.blockSignals(False)
+        self._refresh_sensitivity_status()
+
+    def _refresh_sensitivity_status(self) -> None:
+        try:
+            answered = answered_count(self._sensitivity_answers)
+            total = len(QUESTIONS)
+            color = TEXT_SUCCESS if is_complete(self._sensitivity_answers) else TEXT_AMBER
+            self._sensitivity_status.setText(
+                f"<span style='color: {color};'>"
+                + t("detail.sensitivity.status_caption", answered=answered, total=total)
+                + "</span>"
+            )
+        except Exception:
+            pass
+
+    def _on_sensitivity_answer(self, qid: str) -> None:
+        """One answer changed: persist, refresh the caption, log."""
+        combo = getattr(self, "_sensitivity_combos", {}).get(qid)
+        if combo is None:
+            return
+        token = str(combo.currentData() or "")
+        answers = dict(getattr(self, "_sensitivity_answers", {}) or {})
+        if token in ("yes", "no"):
+            answers[qid] = token
+        else:
+            answers.pop(qid, None)
+        self._sensitivity_answers = answers
+        try:
+            st = self._state()
+            if st is not None:
+                st.set_sensitivity_review(self._pid, answers)
+        except Exception:
+            return
+        self._refresh_sensitivity_status()
+        self._log_action(
+            "sensitivity_reviewed",
+            t(
+                "detail.sensitivity.log_note",
+                answered=answered_count(answers),
+                total=len(QUESTIONS),
+            ),
+            {"answered": answered_count(answers)},
+        )
+
+    def _sensitivity_blocks(self) -> tuple[bool, str]:
+        """(blocked, message) for an Approve decision under this ruleset."""
+        try:
+            if not ruleset_requires(self._ruleset):
+                return False, ""
+            if is_complete(self._sensitivity_answers):
+                return False, ""
+            return True, t(
+                "detail.sensitivity.gate_body",
+                answered=answered_count(self._sensitivity_answers),
+                total=len(QUESTIONS),
+            )
+        except Exception:
+            return False, ""
+
     def _refresh_dataset_log(self) -> None:
         """Newest-first timeline: versions, record dates, review, labels, files, local actions.
 
@@ -2338,6 +2502,7 @@ class DatasetDetailView(QWidget):
             "exported": t("detail.dataset_log.action_exported"),
             "response_exported": t("detail.dataset_log.action_response_exported"),
             "disposition": t("detail.dataset_log.action_disposition"),
+            "sensitivity_reviewed": t("detail.dataset_log.action_sensitivity"),
         }
         for a in actions:
             act = a.get("action") or ""
@@ -3659,6 +3824,7 @@ class DatasetDetailView(QWidget):
         self._update_curation_pill()
         self._populate_version_diff()
         self._refresh_decision_options()
+        self._refresh_sensitivity_card()
         self._raw_view.setPlainText(_format_metadata(metadata))
         self._populate_completeness(metadata)
         self.metadataLoaded.emit(self._pid, metadata, self._inventory)
@@ -4013,6 +4179,13 @@ class DatasetDetailView(QWidget):
             )
             return
         _options, from_labels = self._decision_choices()
+        # Sensitivity gate (dv-3c2): a collection whose ruleset requires
+        # the review must complete it before an Approve decision commits.
+        if decision == t("detail.decision.option_approve"):
+            blocked, gate_msg = self._sensitivity_blocks()
+            if blocked:
+                show_warning(self, t("detail.sensitivity.gate_title"), gate_msg)
+                return
         # The gate: a remote write asks first, and the answer decides
         # whether anything at all happens - no log entry, no workflow
         # step, no push.
@@ -4334,6 +4507,8 @@ class DatasetDetailView(QWidget):
         # Update dataset-checks card + manifest tree
         self._refresh_curation_preview()
         self._apply_file_filter_internal()
+        # Sensitivity suggestions can now use real PII/access findings.
+        self._refresh_sensitivity_card()
         all_results = list(report.dataset_checks) + [c for f in report.files for c in f.checks]
         summary = summarize(all_results)
         findings = summary["failed"]

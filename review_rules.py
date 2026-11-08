@@ -24,10 +24,15 @@ Schema (requirements_profiles.json v2):
          "response_template": "..."}
       ],
       "filecheck_templates": {"<check_id>": "...", "*": "..."},
-      "response_header": "...", "response_footer": "..."
+      "response_header": "...", "response_footer": "...",
+      "requires_sensitivity": true
     }
   }
 }
+
+Optional per-ruleset ``"requires_sensitivity": true`` (dv-3c2) marks the
+ruleset's collections as requiring the sensitivity & ethics review
+(sensitivity.py) before an Approve decision can commit.
 
 Built-ins (mcmaster-default, minimal) reproduce the legacy hard-coded
 McMaster/Minimal checks exactly (same labels + requirement strings), so a
