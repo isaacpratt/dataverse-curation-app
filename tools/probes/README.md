@@ -14,8 +14,6 @@ python tools/probes/probe_queue_columns.py    # the queue's columns fill the vie
 python tools/probes/probe_manifest_columns.py  # the manifest fits, persists the user's widths, resets
 python tools/probes/probe_headings.py          # every full-page heading wears the same token
 python tools/probes/probe_card_corner.py       # a card's bottom-right corner stays connected
-python tools/probes/probe_buttons.py          # the app sheet and the scoped sheet agree, kind by kind
-python tools/probes/probe_gallery.py           # the gallery builds and shows every kit component
 ```
 
 `run_all.py` runs each `probe_*.py` in turn and exits non-zero when any
@@ -79,10 +77,21 @@ alone covers them in CI:
 - `ui/tests/test_table_geometry.py` — the queue's geometry
 - `ui/tests/test_page_headings.py` — the heading contract
 - `ui/tests/test_type_scale.py` — the type scale
+- `ui/tests/test_gallery_contract.py` — the button-sheet agreement and the gallery exhibit (promoted from `probe_buttons.py` / `probe_gallery.py`, now deleted)
+- `ui/tests/test_interactions.py` — real input: Tab focus, header click, disabled ink
+- `ui/tests/test_kit_exports.py` — the kit's importable surface
 
 ```powershell
 python -m pytest ui/tests -q
 ```
 
 Keep the probe and the test in step: the probe shows *what* broke, the
-test stops it from coming back.
+test stops it from coming back. When a probe's contract moves into
+pytest, delete the probe — a rule that lives in both places drifts.
+
+## Promote or delete
+
+A probe is a temporary instrument. Once its contract is in
+`ui/tests/`, the probe is redundant: port it in the same change and
+delete the probe file. A probe that has outlived two changes without
+being promoted or deleted is dead weight — promote it or remove it.

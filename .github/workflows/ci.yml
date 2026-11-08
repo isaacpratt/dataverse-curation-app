@@ -51,9 +51,9 @@ jobs:
 
   probes:
     # The checks pytest cannot see: a pixel at a card's corner, a column
-    # geometry after a drag, the two button sheets agreeing, the gallery
-    # showing every kit component. Each probe prints PASS/FAIL per check
-    # and exits non-zero when one fails.
+    # geometry after a drag. Each probe prints PASS/FAIL per check and
+    # exits non-zero when one fails. The button-sheet and gallery
+    # contracts moved into pytest (test_gallery_contract.py).
     runs-on: windows-latest
     timeout-minutes: 15
     env:
