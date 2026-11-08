@@ -43,6 +43,24 @@ from sensitivity import (
     suggested_answers,
 )
 from storage import RESOLVED_DISPOSITIONS, finding_key
+from storage import read_ui_pref, write_ui_pref
+
+# Rail view preference (dv-sce): "mechanical" (default) or "curated".
+# Deliberately not catalogue-key shaped (it is a prefs key, not copy).
+RAIL_VIEW_PREF = "rail_view"
+
+# Where each CURATE(D) step navigates: a Review-page card attribute, or
+# the literal "respond" for the Response page. Navigation only, like the
+# mechanical rail — clicking a step never runs an action.
+_CURATED_TARGETS = {
+    "check": "_file_card",
+    "understand": "_auto_card",
+    "request": "_meta_card",
+    "augment": "_meta_card",
+    "transform": "_auto_card",
+    "evaluate": "_auto_card",
+    "document": "respond",
+}
 
 # Verdict reason/level keys (dv-6nv): stable engine tokens mapped to
 # catalogue copy. Module-level so the string guard sees the keys.
@@ -564,6 +582,7 @@ class DatasetDetailView(QWidget):
         # six steps, each navigates only — no step ever runs an action.
         self._rail = WorkflowRail()
         self._rail.stepClicked.connect(self._on_workflow_step)
+        self._rail.viewToggled.connect(self._on_rail_view_toggled)
         top_lay.addWidget(self._rail)
 
         # ---- Main column content (inside main_scroll canvas) ----
@@ -1424,6 +1443,17 @@ class DatasetDetailView(QWidget):
                 self._show_response_page()
                 return
 
+            # CURATE(D) practice view (dv-sce): same navigation contract,
+            # mapped onto the card that owns each practice step.
+            target = _CURATED_TARGETS.get(key)
+            if target is not None:
+                if target == "respond":
+                    self._show_response_page()
+                else:
+                    self._show_review_page()
+                    self._goto_section(target)
+                return
+
             # Review steps: return to the review page first, then scroll.
             self._show_review_page()
             if key == "metadata":
@@ -1451,8 +1481,28 @@ class DatasetDetailView(QWidget):
     def _refresh_workflow(self) -> None:
         """Repaint the rail from flags/counts already in memory (no I/O)."""
         try:
-            from ui.workflow import WorkflowInput, derive_workflow
+            from ui.workflow import WorkflowInput, derive_workflow, derive_curated
 
+            curated = (
+                read_ui_pref(self._config.app.workspace, RAIL_VIEW_PREF, "mechanical")
+                == "curated"
+            )
+            # Unresolved review signals from the verdict derivation (the
+            # same numbers the banner shows; resolved findings stop counting).
+            counts: dict = {}
+            try:
+                from engine.verdict import assess
+
+                counts = {
+                    r.key: r.count
+                    for r in assess(
+                        self._report,
+                        self._completeness_full,
+                        self._dispositions_map(),
+                    ).reasons
+                }
+            except Exception:
+                counts = {}
             state = WorkflowInput(
                 metadata_loaded=self._metadata is not None,
                 changes_loaded=bool(getattr(self, "_changes_loaded", False)),
@@ -1464,14 +1514,35 @@ class DatasetDetailView(QWidget):
                 response_open=bool(getattr(self, "_in_response", False)),
                 decision_committed=bool(getattr(self, "_decision_committed", False))
                 or bool((self._curation or {}).get("label")),
+                errors=int(counts.get("errors", 0)),
+                warnings=int(counts.get("warnings", 0)),
+                required_missing=int(counts.get("required-missing", 0)),
+                optional_missing=int(counts.get("optional-missing", 0)),
             )
-            self._rail.set_workflow(derive_workflow(state))
+            workflow = derive_curated(state) if curated else derive_workflow(state)
+            self._rail.set_workflow(workflow)
+            self._rail.set_toggle_label(
+                t("workflow.curated.toggle_steps" if curated else "workflow.curated.toggle_curated")
+            )
         except Exception:
             pass
         try:
             self._refresh_verdict()
         except Exception:
             pass
+
+    def _on_rail_view_toggled(self) -> None:
+        """Flip the rail between the mechanical and CURATE(D) views."""
+        try:
+            current = read_ui_pref(self._config.app.workspace, RAIL_VIEW_PREF, "mechanical")
+            write_ui_pref(
+                self._config.app.workspace,
+                RAIL_VIEW_PREF,
+                "mechanical" if current == "curated" else "curated",
+            )
+        except Exception:
+            pass
+        self._refresh_workflow()
 
     def _staged_dir_or_none(self):  # type: ignore[no-untyped-def]
         try:
@@ -2046,6 +2117,7 @@ class DatasetDetailView(QWidget):
             else:
                 cache.pop(key, None)
         self._refresh_finding_summary()
+        self._refresh_workflow()
         self._log_action(
             "disposition",
             (disposition_label(token) if token else t("detail.disposition.cleared"))

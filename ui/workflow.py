@@ -67,6 +67,14 @@ class WorkflowInput:
     exported: bool = False
     response_open: bool = False
     decision_committed: bool = False
+    # Review-signal counts (dv-sce): only the CURATE(D) derivation reads
+    # them; the mechanical derivation ignores them. Unresolved findings
+    # and incomplete rules — the caller computes them from the report,
+    # completeness, and dispositions (no I/O here).
+    errors: int = 0
+    warnings: int = 0
+    required_missing: int = 0
+    optional_missing: int = 0
 
 
 @dataclass(frozen=True)
@@ -76,6 +84,9 @@ class Step:
     state: str
     hint: str
     accessible: str
+    # Optional short prefix replacing the step number (dv-sce): the
+    # CURATE(D) view badges its steps C/U/R/A/T/E/D.
+    badge: str = ""
 
 
 @dataclass(frozen=True)
@@ -203,6 +214,147 @@ def derive_workflow(inp: WorkflowInput) -> Workflow:
                 state=state,
                 hint=step_hint,
                 accessible=t("workflow.accessible.step", label=label, state=state),
+            )
+        )
+    return Workflow(steps=tuple(steps), current=current, hint=hint)
+
+
+# --------------------------------------------------------------------------
+# The CURATE(D) practice view (dv-sce): the same rail, spoken in the DCN's
+# shared curation vocabulary (Check, Understand, Request, Augment, Transform,
+# Evaluate, Document — z.umn.edu/curate), each step carrying a live
+# open-item count. Pure like derive_workflow: no I/O, never acts.
+
+CURATED_ORDER: tuple[str, ...] = (
+    "check",
+    "understand",
+    "request",
+    "augment",
+    "transform",
+    "evaluate",
+    "document",
+)
+
+CURATED_BADGES: dict[str, str] = {
+    "check": "C",
+    "understand": "U",
+    "request": "R",
+    "augment": "A",
+    "transform": "T",
+    "evaluate": "E",
+    "document": "D",
+}
+
+# The label keys are literal so the string guard sees every reference.
+CURATED_LABEL_KEYS: dict[str, str] = {
+    "check": "workflow.curated.label_check",
+    "understand": "workflow.curated.label_understand",
+    "request": "workflow.curated.label_request",
+    "augment": "workflow.curated.label_augment",
+    "transform": "workflow.curated.label_transform",
+    "evaluate": "workflow.curated.label_evaluate",
+    "document": "workflow.curated.label_document",
+}
+
+
+def derive_curated(inp: WorkflowInput) -> Workflow:
+    """Derive the seven CURATE(D) step states, current step, and hint."""
+    meta = bool(inp.metadata_loaded)
+    inv_ok = bool(inp.inventory_ok)
+    total = max(0, int(inp.total_files))
+    staged = max(0, int(inp.staged))
+    no_files = meta and inv_ok and total == 0
+    download_done = no_files or (meta and inv_ok and total > 0 and staged >= total)
+    download_blocked = meta and not no_files and total > 0 and staged == 0
+    outstanding = max(0, int(inp.errors)) + max(0, int(inp.warnings))
+    required = max(0, int(inp.required_missing))
+    optional = max(0, int(inp.optional_missing))
+    report_ready = bool(inp.report_ready)
+
+    base: dict[str, tuple[str, str]] = {}
+    base["check"] = (
+        (DONE, t("workflow.curated.check_done"))
+        if download_done
+        else (BLOCKED, t("workflow.hint.load_metadata_first"))
+        if not meta
+        else (
+            AVAILABLE,
+            t("workflow.hint.staged", staged=staged, total=total)
+            if total
+            else t("workflow.curated.check_open"),
+        )
+    )
+    base["understand"] = (
+        (DONE, t("workflow.curated.understand_done"))
+        if report_ready
+        else (BLOCKED, t("workflow.hint.download_first"))
+        if download_blocked
+        else (AVAILABLE, t("workflow.curated.understand_pending"))
+    )
+    base["request"] = (
+        (DONE, t("workflow.curated.request_done"))
+        if meta and required == 0
+        else (BLOCKED, t("workflow.hint.load_metadata_first"))
+        if not meta
+        else (AVAILABLE, t("workflow.curated.request_pending", count=required))
+    )
+    base["augment"] = (
+        (DONE, t("workflow.curated.augment_done"))
+        if meta and optional == 0
+        else (BLOCKED, t("workflow.hint.load_metadata_first"))
+        if not meta
+        else (AVAILABLE, t("workflow.curated.augment_pending", count=optional))
+    )
+    base["transform"] = (
+        (DONE, t("workflow.curated.transform_done"))
+        if report_ready
+        else (BLOCKED, t("workflow.hint.download_first"))
+        if download_blocked
+        else (AVAILABLE, t("workflow.curated.transform_pending"))
+    )
+    base["evaluate"] = (
+        (DONE, t("workflow.curated.evaluate_done"))
+        if report_ready and outstanding == 0
+        else (BLOCKED, t("workflow.hint.download_first"))
+        if download_blocked
+        else (AVAILABLE, t("workflow.curated.evaluate_pending", count=outstanding))
+    )
+    base["document"] = (
+        (DONE, t("workflow.curated.document_done"))
+        if inp.decision_committed
+        else (AVAILABLE, t("workflow.curated.document_pending"))
+    )
+
+    done = {key for key, (state, _hint) in base.items() if state == DONE}
+    current: str | None = None
+    if inp.response_open and not inp.decision_committed:
+        current = "document"
+    else:
+        for key in CURATED_ORDER:
+            if key not in done:
+                current = key
+                break
+
+    labels = {key: t(CURATED_LABEL_KEYS[key]) for key in CURATED_ORDER}
+    if current is None:
+        hint = t("workflow.hint.complete")
+    else:
+        hint = t("workflow.hint.next", label=labels[current])
+
+    steps: list[Step] = []
+    for key in CURATED_ORDER:
+        state, step_hint = base[key]
+        if key == current:
+            state = CURRENT
+        label = labels[key]
+        steps.append(
+            Step(
+                key=key,
+                label=label,
+                state=state,
+                hint=step_hint,
+                accessible=t("workflow.accessible.step", label=label, state=state),
+                badge=CURATED_BADGES[key],
             )
         )
     return Workflow(steps=tuple(steps), current=current, hint=hint)

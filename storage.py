@@ -367,6 +367,35 @@ def open_state(workspace: Path) -> AppState:
 
 _SIZE_CACHE_NAME = "dataset_sizes.json"
 _TABLE_LAYOUT_NAME = "table_layout.json"
+_UI_PREFS_NAME = "ui_prefs.json"
+
+
+def read_ui_pref(workspace: Path, key: str, default=None):
+    """One UI preference from <workspace>/ui_prefs.json (never raises)."""
+    try:
+        raw = json.loads((Path(workspace) / _UI_PREFS_NAME).read_text(encoding="utf-8"))
+    except Exception:
+        return default
+    if not isinstance(raw, dict):
+        return default
+    value = raw.get(key, default)
+    return value if value is not None else default
+
+
+def write_ui_pref(workspace: Path, key: str, value) -> None:
+    """Persist one UI preference (best-effort, never raises)."""
+    try:
+        path = Path(workspace) / _UI_PREFS_NAME
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except Exception:
+            raw = {}
+        if not isinstance(raw, dict):
+            raw = {}
+        raw[key] = value
+        _atomic_write_json(path, raw)
+    except Exception:
+        pass
 
 
 def read_size_cache(workspace: Path) -> dict[str, dict[str, Any]]:

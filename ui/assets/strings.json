@@ -1006,6 +1006,32 @@
     },
     "accessible": {
       "step": "{label}, {state} step"
+    },
+    "curated": {
+      "toggle_tip": "Switch the rail between app steps and the CURATE(D) curation steps",
+      "toggle_curated": "CURATE(D)",
+      "toggle_steps": "Steps",
+      "label_check": "Check",
+      "label_understand": "Understand",
+      "label_request": "Request",
+      "label_augment": "Augment",
+      "label_transform": "Transform",
+      "label_evaluate": "Evaluate",
+      "label_document": "Document",
+      "check_done": "All files staged and inventoried",
+      "check_open": "Download and inventory the deposit",
+      "understand_done": "Checks complete — findings and guidance below",
+      "understand_pending": "Open the files, read the README, run checks",
+      "request_done": "All required metadata fields present",
+      "request_pending": "Required metadata fields missing: {count}",
+      "augment_done": "Recommended metadata fields complete",
+      "augment_pending": "Recommended fields missing: {count}",
+      "transform_done": "Format census ran — review the advice in checks",
+      "transform_pending": "Review the format census; prefer open formats where practical",
+      "evaluate_done": "No outstanding findings",
+      "evaluate_pending": "Findings outstanding: {count}",
+      "document_done": "Decision recorded — Export record files the trail",
+      "document_pending": "Record the decision and export the curation record"
     }
   },
   "gallery": {

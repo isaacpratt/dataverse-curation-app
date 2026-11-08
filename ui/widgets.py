@@ -1629,6 +1629,9 @@ class WorkflowRail(QWidget):
     """
 
     stepClicked = Signal(str)
+    # The mechanical/practice toggle (dv-sce): the owner persists the
+    # choice and re-derives the steps; the rail just re-renders.
+    viewToggled = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -1638,28 +1641,63 @@ class WorkflowRail(QWidget):
         layout.setSpacing(4)
         self.buttons: dict[str, QPushButton] = {}
         self._indexes: dict[str, int] = {}
-        for i, key in enumerate(STEP_ORDER):
+        self.hint = QLabel("")
+        self.hint.setObjectName("CaptionSM")
+        self.hint.setWordWrap(False)
+        self.hint.setMinimumWidth(0)
+        self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self._toggle = QPushButton("")
+        self._toggle.setObjectName("WorkflowStep")
+        self._toggle.setFlat(True)
+        self._toggle.setCursor(Qt.PointingHandCursor)
+        self._toggle.setMinimumWidth(0)
+        self._toggle.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self._toggle.setToolTip(t("workflow.curated.toggle_tip"))
+        self._toggle.setAccessibleName(t("workflow.curated.toggle_tip"))
+        self._toggle.clicked.connect(lambda _c: self.viewToggled.emit())
+        self._rebuild_steps(list(STEP_ORDER))
+        layout.addWidget(self.hint)
+        layout.addWidget(self._toggle)
+
+    def _rebuild_steps(self, keys: list[str]) -> None:
+        """Rebuild the step buttons for a step set (mechanical or CURATE(D))."""
+        if keys == list(self.buttons):
+            return
+        lay = self.layout()
+        for w in (self.hint, self._toggle):
+            lay.removeWidget(w)
+        while lay.count():
+            item = lay.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.setParent(None)
+                w.deleteLater()
+        self.buttons = {}
+        self._indexes = {}
+        for i, key in enumerate(keys):
             self._indexes[key] = i + 1
             btn = QPushButton("")
             btn.setObjectName("WorkflowStep")
             btn.setFlat(True)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setMinimumWidth(0)
+            # Ignored horizontally: seven CURATE(D) steps must compress
+            # inside the app's 960px floor instead of forcing the window.
+            btn.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
             btn.clicked.connect(lambda _c, k=key: self.stepClicked.emit(k))
-            layout.addWidget(btn)
+            lay.addWidget(btn)
             self.buttons[key] = btn
-            if i < len(STEP_ORDER) - 1:
+            if i < len(keys) - 1:
                 connector = QLabel("\u203a")
                 connector.setObjectName("WorkflowSeparator")
-                layout.addWidget(connector)
-        layout.addStretch(1)
-        self.hint = QLabel("")
-        self.hint.setObjectName("WorkflowHint")
-        self.hint.setWordWrap(False)
-        self.hint.setMinimumWidth(0)
-        self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.hint.setObjectName("CaptionSM")
-        layout.addWidget(self.hint)
+                lay.addWidget(connector)
+        lay.addStretch(1)
+        lay.addWidget(self.hint)
+        lay.addWidget(self._toggle)
+
+    def set_toggle_label(self, text: str) -> None:
+        """Show the name of the view the toggle switches TO."""
+        self._toggle.setText(text)
 
     @staticmethod
     def _style_for(state: str) -> str:
@@ -1668,11 +1706,12 @@ class WorkflowRail(QWidget):
 
     def set_workflow(self, workflow: Workflow) -> None:
         """Paint each step and the next-step hint; never disables a step."""
+        self._rebuild_steps([step.key for step in workflow.steps])
         for step in workflow.steps:
             btn = self.buttons.get(step.key)
             if btn is None:
                 continue
-            number = str(self._indexes.get(step.key, 0))
+            number = step.badge or str(self._indexes.get(step.key, 0))
             done = step.state == "done"
             # Done steps lead with the app's Lucide check, not a text
             # glyph; the number stays for every other state.
