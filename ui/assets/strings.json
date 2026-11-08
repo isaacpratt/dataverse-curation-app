@@ -18,6 +18,7 @@
       "cannot_create_output": "cannot create output directory ({exc})",
       "run_failed": "headless run failed: {exc}",
       "report_written": "Report written to {written} ({files} files, {warnings} finding(s))",
+      "verdict_line": "Verdict: {verdict}",
       "config_warning": "config warning: {exc} — using defaults",
       "gallery_help": "open the component gallery (every kit component on one page)"
     }
@@ -787,6 +788,18 @@
       "note_label": "Note for this finding (stored with the disposition):",
       "summary_suffix": " · {resolved} of {total} findings resolved",
       "tree_note": "Disposition: {label}"
+    },
+    "verdict": {
+      "banner_tip": "Live verdict from the checks and metadata below; click a reason to jump to it.",
+      "level_ready": "Ready",
+      "level_revisions": "Revisions needed",
+      "level_blocked": "Blocked",
+      "level_unreviewed": "Not yet reviewed",
+      "reason_required": "{count} required metadata fields missing",
+      "reason_optional": "{count} recommended fields missing",
+      "reason_errors": "{count} error-level findings",
+      "reason_warnings": "{count} warning-level findings",
+      "reason_sensitivity": "Sensitivity review pending"
     },
     "dataset_log": {
       "tip": "Timeline for this dataset (newest first): creation, versions, record dates, review submissions, curation labels, embargoes, and local curation actions.",

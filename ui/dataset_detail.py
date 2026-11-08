@@ -32,6 +32,22 @@ from dataverse_client import DataverseClient
 from download_manager import DownloadManager
 from metadata_check import DEFAULT_PROFILE, PROFILES
 from storage import RESOLVED_DISPOSITIONS, finding_key
+
+# Verdict reason/level keys (dv-6nv): stable engine tokens mapped to
+# catalogue copy. Module-level so the string guard sees the keys.
+_VERDICT_REASON_KEYS = {
+    "required-missing": "detail.verdict.reason_required",
+    "optional-missing": "detail.verdict.reason_optional",
+    "errors": "detail.verdict.reason_errors",
+    "warnings": "detail.verdict.reason_warnings",
+    "sensitivity": "detail.verdict.reason_sensitivity",
+}
+_VERDICT_LEVEL_KEYS = {
+    "ready": "detail.verdict.level_ready",
+    "revisions": "detail.verdict.level_revisions",
+    "blocked": "detail.verdict.level_blocked",
+    "unreviewed": "detail.verdict.level_unreviewed",
+}
 from ui.dialogs import confirm, describe_error, show_critical, show_info, show_warning
 from ui.download_dialog import DownloadApprovalDialog
 from ui.i18n import t
@@ -534,11 +550,14 @@ class DatasetDetailView(QWidget):
         top_lay.addWidget(self._rail)
 
         # ---- Main column content (inside main_scroll canvas) ----
-        # MAIN column: completeness → files → auto-checks → version diff
+        # MAIN column: verdict → completeness → files → auto-checks → version diff
         main_wrap = QVBoxLayout()
         main_wrap.setSpacing(20)
         main_wrap.setContentsMargins(0, 0, 0, 0)
         self._main_wrap = main_wrap
+
+        self._verdict_card = self._build_verdict_card()
+        main_wrap.addWidget(self._verdict_card)
 
         self._meta_card = self._build_metadata_card()
         main_wrap.addWidget(self._meta_card)
@@ -698,6 +717,96 @@ class DatasetDetailView(QWidget):
             pass
 
     # ---- Builders ----
+    def _build_verdict_card(self) -> QFrame:
+        """Readiness banner (dv-6nv): one synthesized answer, top of page."""
+        from ui.icons import icon as _icon
+
+        card = QFrame()
+        card.setObjectName("VerdictCard")
+        lay = QHBoxLayout(card)
+        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setSpacing(10)
+        self._verdict_icon = QLabel()
+        try:
+            self._verdict_icon.setPixmap(_icon("circle-dashed", color=TEXT_MUTED).pixmap(18, 18))
+        except Exception:
+            pass
+        lay.addWidget(self._verdict_icon)
+        self._verdict_label = QLabel(t("detail.verdict.level_unreviewed"))
+        self._verdict_label.setObjectName("LabelStrongSM")
+        self._verdict_label.setTextFormat(Qt.RichText)
+        self._verdict_label.setWordWrap(True)
+        lay.addWidget(self._verdict_label)
+        lay.addStretch(1)
+        self._verdict_chips = QHBoxLayout()
+        self._verdict_chips.setSpacing(6)
+        lay.addLayout(self._verdict_chips)
+        card.setToolTip(t("detail.verdict.banner_tip"))
+        return card
+
+    def _refresh_verdict(self) -> None:
+        """Recompute + paint the readiness banner from in-memory state."""
+        try:
+            from engine.verdict import assess
+            from ui.icons import icon as _icon
+
+            verdict = assess(
+                self._report,
+                self._completeness_full,
+                self._dispositions_map(),
+            )
+            faces = {
+                "ready": (SURFACE_TINT, STATE_SUCCESS_GRAPHIC, TEXT_SUCCESS, "check"),
+                "revisions": (SURFACE_TINT, STATE_WARNING_GRAPHIC, TEXT_AMBER, "octagon-alert"),
+                "blocked": (STATE_ERROR_BG, STATE_ERROR_BORDER, TEXT_DANGER, "octagon-x"),
+                "unreviewed": (SURFACE_SUBTLE, BORDER_SUBTLE, TEXT_MUTED, "circle-dashed"),
+            }
+            bg, border, ink, icon_name = faces.get(
+                verdict.level, faces["unreviewed"]
+            )
+            self._verdict_card.setStyleSheet(
+                surface_frame_qss(bg, border, selector="QFrame#VerdictCard")
+            )
+            try:
+                self._verdict_icon.setPixmap(_icon(icon_name, color=ink).pixmap(18, 18))
+            except Exception:
+                pass
+            self._verdict_label.setText(
+                f"<span style='color: {ink};'>"
+                + t(_VERDICT_LEVEL_KEYS.get(verdict.level, "detail.verdict.level_unreviewed"))
+                + "</span>"
+            )
+            while self._verdict_chips.count():
+                item = self._verdict_chips.takeAt(0)
+                w = item.widget() if item is not None else None
+                if w is not None:
+                    w.setParent(None)  # unparent now; deleteLater is async
+                    w.deleteLater()
+            for reason in verdict.reasons:
+                key = _VERDICT_REASON_KEYS.get(reason.key)
+                if not key:
+                    continue
+                chip = make_action_button(
+                    t(key, count=reason.count), kind="chip", size="sm"
+                )
+                chip.setToolTip(t("detail.verdict.banner_tip"))
+                chip.clicked.connect(
+                    lambda _c=False, tgt=reason.target: self._on_verdict_chip(tgt)
+                )
+                self._verdict_chips.addWidget(chip)
+        except Exception:
+            pass
+
+    def _on_verdict_chip(self, target: str) -> None:
+        """A reason chip navigates to the card that owns the reason."""
+        try:
+            if target == "respond":
+                self._show_response_page()
+            elif target:
+                self._goto_section(target)
+        except Exception:
+            pass
+
     def _build_auto_checks_card(self) -> QFrame:
         card, _body_host, _title, header_lay = make_card(t("detail.sections.auto_checks"))
         add_info_tip(
@@ -1337,6 +1446,10 @@ class DatasetDetailView(QWidget):
                 or bool((self._curation or {}).get("label")),
             )
             self._rail.set_workflow(derive_workflow(state))
+        except Exception:
+            pass
+        try:
+            self._refresh_verdict()
         except Exception:
             pass
 

@@ -193,6 +193,13 @@ def main(argv: list[str] | None = None) -> int:
                 warnings=warnings,
             )
         )
+        # One synthesized verdict line (dv-6nv); tokens, not copy.
+        try:
+            from engine.verdict import assess, format_line
+
+            print(t("app.cli.verdict_line", verdict=format_line(assess(report))))
+        except Exception:
+            pass
         # CI-usable exit code: 1 when error-level findings exist, 0 otherwise.
         # Warnings alone do not fail the run.
         return 1 if errors else 0
