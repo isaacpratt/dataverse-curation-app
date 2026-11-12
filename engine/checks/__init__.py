@@ -25,6 +25,7 @@ from engine.checks import (
     sqlite_check,
     text_check,
     tiff_check,
+    varmeta_check,
     xlsx_check,
     xml_check,
 )
@@ -53,6 +54,7 @@ _MODULES = (
     secret_check,
     containers_check,
     fastq_check,
+    varmeta_check,
 )
 
 registry: dict = {}

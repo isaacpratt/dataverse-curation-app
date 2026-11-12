@@ -365,6 +365,10 @@ GUIDANCE: dict[str, tuple[str, str]] = {
         "Embargoed files unlock on a date; the deposit page should explain when and why.",
         "State the embargo reason and end date in the dataset description or terms.",
     ),
+    "metadata.var_coverage": (
+        "Variable documentation is the layer reuse depends on: without labels, coded columns are uninterpretable outside the original team.",
+        "Provide a codebook or label the variables at the source; the Draft data dictionary action exports a CSV the depositor can fill in.",
+    ),
 }
 
 

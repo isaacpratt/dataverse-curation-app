@@ -122,6 +122,7 @@ def run_report(
     is_cancelled=None,
     inventory: list[dict] | None = None,
     metadata: dict | None = None,
+    variable_metadata: dict | None = None,
 ) -> DatasetReport:
     """Run all applicable checks on a staged dataset directory.
 
@@ -160,7 +161,13 @@ def run_report(
         except Exception:
             return False
 
-    dataset_context = {"inventory": inventory, "metadata": metadata}
+    dataset_context = {
+        "inventory": inventory,
+        "metadata": metadata,
+        # path -> {variable: {label, type}} for tabular files (dv-tfy);
+        # the UI worker fetches it from Dataverse's per-file DDI.
+        "variable_metadata": variable_metadata,
+    }
     _report_progress(f"Found {len(files)} file(s), starting {len(dataset_level_checks())} dataset-level check(s)…")
     dataset_checks: list[CheckResult] = []
     for check_cls in dataset_level_checks():
@@ -283,6 +290,7 @@ def run_report_to_file(
     fmt: str = "json",
     inventory: list[dict] | None = None,
     metadata: dict | None = None,
+    variable_metadata: dict | None = None,
 ) -> DatasetReport:
     """Write the report in json, md, or both (sibling extension swap).
 
@@ -295,6 +303,7 @@ def run_report_to_file(
         max_workers=max_workers,
         inventory=inventory,
         metadata=metadata,
+        variable_metadata=variable_metadata,
     )
     out_path = Path(out_path)
     fmt = (fmt or "json").lower()

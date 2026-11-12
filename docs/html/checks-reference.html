@@ -90,6 +90,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td><code>fastq_check</code></td><td><code>format.fastq.*</code></td><td>Gzip-aware 4-line validation (header/<code>+</code>/seq-qual length), length/GC on capped sample</td><td>Malformed incl. length mismatch (warning); no valid reads (error)</td></tr>
 <tr><td><code>extensions_check</code> (dataset)</td><td><code>inventory.*</code></td><td>Extension census, 0-byte files, executables, OS junk (nested <code>__MACOSX</code> incl.)</td><td>0-byte (error); executables/junk (warning)</td></tr>
 <tr><td><code>access_check</code> (dataset)</td><td><code>inventory.restricted_files</code>, <code>inventory.embargoed_files</code></td><td>Names restricted and embargoed files from the Dataverse inventory; each finding carries the embargo date and the dataset's terms of access</td><td>Restricted/embargoed file(s) (warning); skipped without an inventory (staged-only run)</td></tr>
+<tr><td><code>varmeta_check</code> (dataset)</td><td><code>metadata.var_coverage</code></td><td>Per-file variable-metadata coverage from Dataverse's DDI: how many variables carry a label. Rides the per-file coverage map and the labels on its first result so the File Manifest annotates each tabular file and the dictionary draft works offline.</td><td>Tabular file with no variable labels (warning); under half labeled (warning); skipped without an inventory</td></tr>
 </table>
 <div class="callout warn">MATLAB <code>.mat</code> (and any format without a module) is reported once per dataset as <code>inventory.unchecked_types</code> (warning) — manual review required. <code>scipy</code> stays optional by design.</div>
 
@@ -178,6 +179,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td><code>inventory.restricted_files</code></td><td>Restricted files are invisible to the public; reuse depends on the terms of access being complete.</td><td>Confirm the terms of access explain how to request the restricted files.</td></tr>
 <tr><td><code>inventory.system_junk</code></td><td>OS junk (.DS_Store, Thumbs.db, __MACOSX) is noise that clutters the deposit and leaks local paths.</td><td>Delete the junk files and re-upload a clean folder.</td></tr>
 <tr><td><code>inventory.zero_byte</code></td><td>Zero-byte files are failed uploads or empty placeholders — they carry no data and fail ingest.</td><td>Delete them or replace them with the real files; explain any intentional placeholder in the README.</td></tr>
+<tr><td><code>metadata.var_coverage</code></td><td>A tabular file without variable labels is a spreadsheet of unexplained column names — no one can reuse it without asking the depositor.</td><td>Use “Draft dictionary” in the File Manifest to write a CSV draft (variable, label, type) and ask the depositor to fill the labels; re-run checks once they do.</td></tr>
 </table>
 
 <h2>Download verification (a gate, not a check)</h2>

@@ -2096,6 +2096,40 @@ class DataverseClient:
             payload = self._get_json(f"/api/datasets/{identifier}")
         return payload.get("data", {})
 
+    def get_variable_metadata(self, file_id: str) -> dict[str, dict[str, str]] | None:
+        """Variable-level metadata for one tabular file, from its DDI.
+
+        Returns ``{variable name: {"label": str, "type": str}}`` (label may
+        be empty), or None when the fetch/parse fails — callers treat None
+        as "unknown coverage", never as "no documentation".
+        """
+        try:
+            text = self._get_text(f"/api/access/datafile/{file_id}/metadata/ddi")
+            import xml.etree.ElementTree as ET
+
+            root = ET.fromstring(text)
+        except Exception:
+            return None
+        out: dict[str, dict[str, str]] = {}
+        try:
+            for var in root.iter():
+                tag = var.tag.rsplit("}", 1)[-1]
+                if tag != "var":
+                    continue
+                name = str(var.get("name") or "").strip()
+                if not name:
+                    continue
+                label = ""
+                intrvl = str(var.get("intrvl") or "")
+                for child in var:
+                    ctag = child.tag.rsplit("}", 1)[-1]
+                    if ctag == "labl":
+                        label = (child.text or "").strip()
+                out[name] = {"label": label, "type": intrvl}
+        except Exception:
+            return None
+        return out or None
+
     def get_guestbook(self, guestbook_id: int | str) -> dict[str, Any]:
         """Fetch one guestbook definition (required fields + custom questions).
 

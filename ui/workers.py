@@ -641,7 +641,7 @@ class CheckWorker(QThread):
 
     def __init__(self, dataset_dir: Path, persistent_id: str, label: str,
                  inventory: list | None = None, metadata: dict | None = None,
-                 parent=None):
+                 client=None, parent=None):
         super().__init__(parent)
         register_worker(self)
         self._dataset_dir = dataset_dir
@@ -649,6 +649,9 @@ class CheckWorker(QThread):
         self._label = label
         self._inventory = inventory
         self._metadata = metadata
+        # Optional Dataverse client (dv-tfy): used to fetch per-file DDI
+        # variable metadata for the coverage check. Never required.
+        self._client = client
         self._cancel_requested = False
 
     def cancel(self) -> None:
@@ -683,6 +686,26 @@ class CheckWorker(QThread):
                     pass
 
             workers = max(1, min(8, (os.cpu_count() or 4)))
+            # Variable metadata for tabular files (dv-tfy): best-effort DDI
+            # fetch, capped so a large deposit never stalls the check pass.
+            variable_metadata: dict | None = None
+            if self._client is not None and isinstance(self._inventory, list):
+                variable_metadata = {}
+                tabular = [
+                    e for e in self._inventory
+                    if isinstance(e, dict) and e.get("tabular") and e.get("id")
+                ][:50]
+                for entry in tabular:
+                    if self._stop_requested():
+                        break
+                    try:
+                        meta = self._client.get_variable_metadata(str(entry["id"]))
+                    except Exception:
+                        meta = None
+                    if meta:
+                        variable_metadata[
+                            str(entry.get("path") or entry.get("label") or "")
+                        ] = meta
             report = run_report(
                 self._dataset_dir,
                 persistent_id=self._pid,
@@ -693,6 +716,7 @@ class CheckWorker(QThread):
                 is_cancelled=self._stop_requested,
                 inventory=self._inventory,
                 metadata=self._metadata,
+                variable_metadata=variable_metadata,
             )
             if self._stop_requested():
                 self.cancelled.emit()

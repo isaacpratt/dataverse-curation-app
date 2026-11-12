@@ -2580,6 +2580,7 @@ class DatasetDetailView(QWidget):
             "disposition": t("detail.dataset_log.action_disposition"),
             "curation_record_exported": t("detail.dataset_log.action_record"),
             "sensitivity_reviewed": t("detail.dataset_log.action_sensitivity"),
+            "dictionary_drafted": t("detail.dataset_log.action_dictionary"),
         }
         for a in actions:
             act = a.get("action") or ""
@@ -2938,6 +2939,14 @@ class DatasetDetailView(QWidget):
         )
         self._scan_filter.currentIndexChanged.connect(lambda _i: self._apply_file_filter_internal())
         tools_lay.addWidget(self._scan_filter)
+        # Variable-dictionary draft (dv-tfy): one CSV per tabular file from
+        # the variable metadata the coverage check fetched.
+        self._dictionary_btn = make_action_button(
+            t("detail.dictionary.action"), kind="secondary", size="md"
+        )
+        self._dictionary_btn.setToolTip(t("detail.dictionary.tip"))
+        self._dictionary_btn.clicked.connect(self._on_draft_dictionary)
+        tools_lay.addWidget(self._dictionary_btn)
         # Reset columns button - restores default widths/order
         self._file_reset_btn = make_reset_columns_button(
             "",
@@ -3623,6 +3632,111 @@ class DatasetDetailView(QWidget):
                 t("detail.files.open_folder"),
                 t("detail.files.could_not_open", path=target, exc=exc),
             )
+
+    def _on_draft_dictionary(self) -> None:
+        """Write a variable-dictionary draft CSV for one tabular file (dv-tfy)."""
+        from pathlib import Path as _P
+
+        from PySide6.QtWidgets import QFileDialog
+
+        from engine.checks.varmeta_check import write_dictionary_draft
+        from ui.dialogs import show_critical, show_info, show_warning
+
+        variables_by_path: dict[str, dict] = {}
+        if self._report is not None:
+            for check in getattr(self._report, "dataset_checks", []) or []:
+                if getattr(check, "check_id", "") != "metadata.var_coverage":
+                    continue
+                vmap = (getattr(check, "details", {}) or {}).get("variables")
+                if isinstance(vmap, dict):
+                    variables_by_path = {
+                        str(path): vars_
+                        for path, vars_ in vmap.items()
+                        if isinstance(vars_, dict) and vars_
+                    }
+                break
+        # No report yet (or the check skipped the fetch): ask Dataverse
+        # directly for the tabular files, best effort, capped like the worker.
+        if not variables_by_path and self._client is not None and isinstance(
+            self._inventory, list
+        ):
+            for entry in self._inventory[:50]:
+                if not isinstance(entry, dict) or not entry.get("tabular"):
+                    continue
+                if not entry.get("id"):
+                    continue
+                try:
+                    meta = self._client.get_variable_metadata(str(entry["id"]))
+                except Exception:
+                    meta = None
+                if isinstance(meta, dict) and meta:
+                    path = str(entry.get("path") or entry.get("label") or "")
+                    variables_by_path[path] = meta
+        options = sorted(variables_by_path)
+        if not options:
+            show_info(
+                self,
+                t("detail.dictionary.action"),
+                t("detail.dictionary.none"),
+            )
+            return
+        chosen = options[0]
+        if len(options) > 1:
+            chosen, ok = QInputDialog.getItem(
+                self,
+                t("detail.dictionary.pick_title"),
+                t("detail.dictionary.pick_label"),
+                options,
+                0,
+                False,
+            )
+            if not ok or not chosen:
+                return
+        variables = variables_by_path.get(chosen) or {}
+        if not variables:
+            show_info(
+                self,
+                t("detail.dictionary.action"),
+                t("detail.dictionary.none"),
+            )
+            return
+        try:
+            self._dl_mgr.reports_dir(self._pid).mkdir(parents=True, exist_ok=True)
+            start = str(
+                self._dl_mgr.reports_dir(self._pid)
+                / (f"{_P(chosen).stem or 'variables'}-dictionary.csv")
+            )
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                t("detail.dictionary.save_title"),
+                start,
+                t("detail.dictionary.csv_filter"),
+                options=QFileDialog.DontUseNativeDialog,
+            )
+        except Exception as exc:
+            show_critical(
+                self,
+                t("detail.dictionary.action"),
+                t("detail.dictionary.failed", exc=exc),
+            )
+            return
+        if not path:
+            return
+        try:
+            out = write_dictionary_draft(_P(path), variables)
+        except Exception as exc:
+            show_warning(
+                self,
+                t("detail.dictionary.action"),
+                t("detail.dictionary.failed", exc=exc),
+            )
+            return
+        self._set_status(t("detail.dictionary.saved", path=str(out)))
+        self._log_action(
+            "dictionary_drafted",
+            t("detail.dictionary.saved_log", name=out.name),
+            {"path": str(out), "file": chosen, "variables": len(variables)},
+        )
 
     def _on_file_filter(self, text: str) -> None:
         self._apply_file_filter_internal()
@@ -4525,6 +4639,7 @@ class DatasetDetailView(QWidget):
             self._title,
             inventory=self._inventory if isinstance(self._inventory, list) else None,
             metadata=self._metadata if isinstance(self._metadata, dict) else None,
+            client=self._client,
             parent=self,
         )
         self._check_worker.progress.connect(lambda msg: self._set_status(msg))

@@ -155,6 +155,35 @@ def _human_size(n: int) -> str:
     return _shared(n)
 
 
+def variable_coverage(report) -> dict[str, dict[str, int]]:
+    """Per-file ``{labeled, total}`` from the report's var-coverage check.
+
+    The check (dv-tfy) rides its coverage map on the first result's details;
+    returns {} when the check did not run or carried no map.
+    """
+    if report is None:
+        return {}
+    try:
+        results = list(getattr(report, "dataset_checks", []) or [])
+    except Exception:
+        return {}
+    for result in results:
+        if getattr(result, "check_id", "") != "metadata.var_coverage":
+            continue
+        details = getattr(result, "details", None)
+        if not isinstance(details, dict):
+            return {}
+        coverage = details.get("coverage")
+        if isinstance(coverage, dict):
+            return {
+                str(path): dict(cov)
+                for path, cov in coverage.items()
+                if isinstance(cov, dict)
+            }
+        return {}
+    return {}
+
+
 def _new_item(text: str, tooltip: str = "") -> QStandardItem:
     item = QStandardItem(text)
     item.setEditable(False)
@@ -181,6 +210,7 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
     # text it paints and a narrow column elides instead of clipping.
     model.setHorizontalHeaderLabels([str(c) for c in COLUMNS])
     hs = human_size or _human_size
+    coverage = variable_coverage(report)
     by_path = {}
     if report is not None:
         by_path = {f.path: f for f in report.files}
@@ -271,6 +301,18 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
             # Append restriction/ingest notes to the Scan tooltip too.
             if note:
                 tip = tip + note
+            # Variable-metadata coverage (dv-tfy): a short suffix on the Scan
+            # column plus the exact counts in the tooltip.
+            cov = coverage.get(path)
+            if isinstance(cov, dict):
+                labeled = int(cov.get("labeled") or 0)
+                total = int(cov.get("total") or 0)
+                scan = scan + t(
+                    "checks.var_coverage_suffix", labeled=labeled, total=total
+                )
+                tip = tip + "\n" + t(
+                    "checks.var_coverage_tip", labeled=labeled, total=total
+                )
             base = path.split("/")[-1]
             name_item = _new_item(base, tip)
             try:

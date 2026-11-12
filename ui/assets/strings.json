@@ -159,7 +159,9 @@
     "no_automated": "No automated check — manual review",
     "no_automated_prefix": "No automated",
     "no_auto_format": "No automated check for this format.",
-    "size_bytes": "{size} bytes"
+    "size_bytes": "{size} bytes",
+    "var_coverage_suffix": " · {labeled}/{total} variables documented",
+    "var_coverage_tip": "Variable metadata: {labeled} of {total} variables have labels"
   },
   "workers": {
     "connecting": "Connecting to {base_url} …",
@@ -798,6 +800,18 @@
       "summary_suffix": " · {resolved} of {total} findings resolved",
       "tree_note": "Disposition: {label}"
     },
+    "dictionary": {
+      "action": "Draft dictionary",
+      "tip": "Write a CSV variable-dictionary draft (name, label, type) for a tabular file from its Dataverse variable metadata, for the depositor to complete.",
+      "pick_title": "Draft variable dictionary",
+      "pick_label": "Tabular file to draft:",
+      "none": "No tabular files with variable metadata — load metadata from Dataverse first.",
+      "save_title": "Save variable-dictionary draft",
+      "csv_filter": "CSV (*.csv)",
+      "saved": "Variable-dictionary draft written to {path}",
+      "saved_log": "Variable-dictionary draft {name}",
+      "failed": "Could not write the variable-dictionary draft:\n{exc}"
+    },
     "sensitivity": {
       "title": "Sensitivity & ethics review",
       "tip": "The human judgments the automated PII and access scans cannot make. Answers persist per dataset; a collection whose ruleset requires this review blocks Approve until it is complete.",
@@ -845,6 +859,7 @@
       "action_response_exported": "Response draft exported",
       "action_disposition": "Disposition updated",
       "action_sensitivity": "Sensitivity review updated",
+      "action_dictionary": "Variable-dictionary draft exported",
       "action_record": "Curation record exported",
       "action_notes": ": {notes}",
       "unnamed_file": "(unnamed file)",
