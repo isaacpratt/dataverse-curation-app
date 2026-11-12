@@ -101,14 +101,12 @@ footer .wrap{padding:16px 24px}
 </div>
 
 <h2>Quick start</h2>
-<pre><code>python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+<pre><code>uv sync                                  # create .venv from uv.lock incl. dev group
 copy config.example.json config.json   # PowerShell: Copy-Item config.example.json config.json
-pytest                                  # 513 tests
-python main.py                          # GUI — pick the Dataverse in Settings
-python main.py --gallery                # the component gallery: every kit component on one page
-python main.py --headless &lt;staged_dir&gt; --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE</code></pre>
+uv run pytest                            # 513 tests
+uv run python main.py                    # GUI — pick the Dataverse in Settings
+uv run python main.py --gallery          # the component gallery: every kit component on one page
+uv run python main.py --headless &lt;staged_dir&gt; --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE</code></pre>
 <p>Requirements: Python 3.10+ (Windows recommended). Headless exit codes: <b>0</b> clean, <b>1</b> error-level findings, <b>2</b> usage/IO failure.</p>
 
 <h2>Documentation audit — what was fixed</h2>
