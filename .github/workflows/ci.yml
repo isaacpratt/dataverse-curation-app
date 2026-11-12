@@ -34,20 +34,22 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-          cache: pip
-          cache-dependency-path: requirements.txt
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Lockfile check
+        run: uv lock --check
       - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: uv sync --group dev
       - name: Lint
-        run: python -m ruff check .
+        run: uv run --group dev python -m ruff check .
       - name: Tests
-        run: python -m pytest -q --cov=engine --cov-report=term-missing
+        run: uv run --group dev python -m pytest -q --cov=engine --cov-report=term-missing
       - name: Compile check
-        run: python -m compileall -q engine dataverse_client.py download_manager.py storage.py config.py main.py
+        run: uv run --group dev python -m compileall -q engine dataverse_client.py download_manager.py storage.py config.py main.py
       - name: Headless smoke
-        run: python main.py --headless --help
+        run: uv run --group dev python main.py --headless --help
 
   probes:
     # The checks pytest cannot see: a pixel at a card's corner, a column
@@ -64,11 +66,13 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-          cache: pip
-          cache-dependency-path: requirements.txt
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Lockfile check
+        run: uv lock --check
       - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: uv sync --group dev
       - name: UI probes
-        run: python tools/probes/run_all.py
+        run: uv run --group dev python tools/probes/run_all.py

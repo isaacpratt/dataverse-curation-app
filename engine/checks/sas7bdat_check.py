@@ -29,15 +29,16 @@ def _detect_format(path: Path) -> str:
 def _read(path: Path, fmt: str):
     import pyreadstat
 
+    # output_format="dict" keeps the check free of a pandas/polars runtime
+    # dependency (pandas is deliberately not declared anywhere in this repo).
     if fmt == "xport":
-        return pyreadstat.read_xport(str(path), row_limit=_ROW_LIMIT)
-    return pyreadstat.read_sas7bdat(str(path), row_limit=_ROW_LIMIT)
+        return pyreadstat.read_xport(str(path), row_limit=_ROW_LIMIT, output_format="dict")
+    return pyreadstat.read_sas7bdat(str(path), row_limit=_ROW_LIMIT, output_format="dict")
 
 
 def _has_non_ascii(frame) -> bool:
-    for column in frame.columns:
-        series = frame[column].dropna()
-        for value in series.head(_ROW_LIMIT):
+    for _column, values in frame.items():
+        for value in values[:_ROW_LIMIT]:
             if isinstance(value, str):
                 if any(ord(ch) > 127 for ch in value):
                     return True
@@ -132,9 +133,10 @@ class Sas7bdatCheck(Check):
 
         variables = []
         unlabeled = []
-        for index, column in enumerate(frame.columns):
+        columns = list(frame)
+        for index, column in enumerate(columns):
             label = labels[index] if index < len(labels) else None
-            var_type = types[index] if index < len(types) else str(frame[column].dtype)
+            var_type = types[index] if index < len(types) else "unknown"
             variables.append(
                 {
                     "name": column,
@@ -157,7 +159,7 @@ class Sas7bdatCheck(Check):
             level="info",
             passed=True,
             message=(
-                f"{name}: {len(frame.columns)} variables "
+                f"{name}: {len(columns)} variables "
                 f"({len(value_labels)} with value labels)"
             ),
             details={"variables": variables[:_MAX_VARIABLES_LISTED]},

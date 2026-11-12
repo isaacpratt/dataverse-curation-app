@@ -449,7 +449,7 @@ _WRAPPER_KEYS = ("typeName", "value", "multiple", "typeClass")
 
 
 def _is_wrapper(v: Any) -> bool:
-    """True for a leaf wrapper like {"value": "Ada", "typeName": "text", …}."""
+    """Return True for a leaf wrapper like {"value": "Ada", "typeName": "text", …}."""
     return isinstance(v, dict) and "value" in v and set(v) <= set(_WRAPPER_KEYS)
 
 
@@ -506,7 +506,7 @@ def _walk_path(node: Any, parts: list[str]) -> Any:
 
 
 def _field_path(blocks: dict[str, Any], block: str, field: str):
-    """Resolve a dotted field path (\"author.authorIdentifier\") to its leaves.
+    r"""Resolve a dotted field path ("author.authorIdentifier") to its leaves.
 
     The first segment is the actual metadatablock field; the rest walk down
     compound children. Never raises; returns [] when the path cannot resolve.
