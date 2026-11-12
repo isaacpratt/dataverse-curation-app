@@ -1,0 +1,5 @@
+[codespell]
+# sav    - SPSS .sav file extension, a domain term, not a typo of "save".
+# requestor - product/API terminology used across the Dataverse client code.
+# unparseable - acceptable variant; codespell only knows "unparsable".
+ignore-words-list = sav,requestor,unparseable

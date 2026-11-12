@@ -351,4 +351,3 @@ class LogHighlighter(QSyntaxHighlighter):
                 self._apply(m, self.line_warn_format)
             else:
                 self._apply(m, self.value_format)
-
