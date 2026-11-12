@@ -734,7 +734,30 @@ def parse_metadatablock_fields(payload: dict[str, Any]) -> list[dict[str, str]]:
                 label = fname.strip()
                 if isinstance(spec, dict):
                     label = str(spec.get("displayName") or spec.get("displayname") or label)
-                out.append({"block": block or "citation", "field": fname.strip(), "label": label.strip() or fname.strip()})
+                block_name = block or "citation"
+                out.append({
+                    "block": block_name, "field": fname.strip(),
+                    "label": label.strip() or fname.strip(),
+                })
+                if isinstance(spec, dict):
+                    sub = spec.get("childFields") or spec.get("subFields") or spec.get("fields")
+                    if isinstance(sub, dict):
+                        parent_label = label.strip() or fname.strip()
+                        for sname, sspec in sub.items():
+                            if not isinstance(sname, str) or not sname.strip():
+                                continue
+                            slabel = sname.strip()
+                            if isinstance(sspec, dict):
+                                slabel = str(sspec.get("title") or sspec.get("displayName")
+                                             or sspec.get("displayname") or slabel)
+                            out.append({
+                                "block": block_name,
+                                "field": f"{fname.strip()}.{sname.strip()}",
+                                "label": slabel.strip() or sname.strip(),
+                                "parent": fname.strip(),
+                                "parent_label": parent_label,
+                                "is_subfield": True,
+                            })
         elif isinstance(fields, list):
             for spec in fields:
                 if not isinstance(spec, dict):
@@ -743,7 +766,26 @@ def parse_metadatablock_fields(payload: dict[str, Any]) -> list[dict[str, str]]:
                 if not fname:
                     continue
                 label = str(spec.get("displayName") or spec.get("displayname") or fname)
-                out.append({"block": block or "citation", "field": fname, "label": label})
+                block_name = block or "citation"
+                out.append({"block": block_name, "field": fname, "label": label})
+                sub = spec.get("childFields") or spec.get("subFields") or spec.get("fields")
+                if isinstance(sub, dict):
+                    parent_label = label.strip() or fname
+                    for sname, sspec in sub.items():
+                        if not isinstance(sname, str) or not sname.strip():
+                            continue
+                        slabel = sname.strip()
+                        if isinstance(sspec, dict):
+                            slabel = str(sspec.get("title") or sspec.get("displayName")
+                                         or sspec.get("displayname") or slabel)
+                        out.append({
+                            "block": block_name,
+                            "field": f"{fname}.{sname.strip()}",
+                            "label": slabel.strip() or sname.strip(),
+                            "parent": fname,
+                            "parent_label": parent_label,
+                            "is_subfield": True,
+                        })
     except Exception:
         pass
     return out

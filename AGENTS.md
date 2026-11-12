@@ -35,7 +35,7 @@ python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
-pytest                        # 499 tests (212 engine + 287 UI; run pytest --collect-only -q for current count)
+pytest                        # 513 tests (218 engine + 295 UI; run pytest --collect-only -q for current count)
 python -m pip install -e ".[dev]"   # dev extras: needed only for `make typecheck` (mypy)
 python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
 python main.py --gallery      # the component gallery: every kit component on one page
@@ -88,6 +88,16 @@ bd update <id> --claim  # Claim work atomically
 bd close <id>         # Complete work
 bd dolt push          # Push beads data to remote
 ```
+
+## Testing
+
+Gate before handoff; run from the repository root when code (not docs-only) changed:
+
+- `python -m pytest -q` — must exit 0
+- `python tools/probes/run_all.py` — must end with `all N probes passed`; mandatory for UI/theme changes, and cheap enough to always run
+- headless box? set `QT_QPA_PLATFORM=offscreen` first, or the probes fail for the wrong reason
+- probes run against a throwaway temp workspace (see `tools/probes/README.md`) — never against the configured instance or the real `workspace/table_layout.json`
+- docs-only changes need neither
 
 ## Non-Interactive Shell Commands
 
@@ -214,9 +224,10 @@ For more details, see README.md and https://github.com/gastownhall/beads/blob/ma
 
 The managed Beads block is task-tracking guidance, not permission to override repository, user, or orchestrator instructions.
 
-- **Conservative (default)**: Use `bd` for task tracking. Do not run git commits, git pushes, or Dolt remote sync unless explicitly asked. At handoff, report changed files, validation, and suggested next commands.
+- **Conservative**: Use `bd` for task tracking. Do not run git commits, git pushes, or Dolt remote sync unless explicitly asked. At handoff, report changed files, validation, and suggested next commands.
+- **Standard (default)**: Use `bd` for task tracking. At handoff, report changed files, validation, and next commands. When the user's request is satisfied: run the gates (if code changed — pytest + tools/probes/run_all.py), git commit only the files changed for the task (never git add -A), and bd dolt push. Do not git push without being asked. Do not commit unrelated modifications or untracked files. Close the bead for the work with `bd close --reason`
 - **Minimal**: Keep tool instruction files as pointers to `bd prime`; use the same conservative git policy unless active instructions say otherwise.
-- **Team-maintainer**: Only when the repository explicitly opts in, agents may close beads, run quality gates, commit, and push as part of session close. A current "do not commit" or "do not push" instruction still wins.
+- **Team-maintainer**: Only when the repository explicitly opts in, agents may close beads, run quality gates, and commit as part of session close. A current "do not commit" or "do not push" instruction still wins.
 
 ## Session Completion
 
@@ -227,13 +238,12 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 3. **Update issue status** - Close finished work, update in-progress items
 4. **Handle git/sync by active profile**:
    ```bash
-   # Conservative/minimal/default: report status and proposed commands; wait for approval.
+   # Conservative/minimal: report status and proposed commands; wait for approval.
    git status
 
-   # Team-maintainer opt-in only, unless current instructions forbid it:
+   # Standard/Team-maintainer: report status and proposed commands, and unless current instructions forbid it:
    git pull --rebase
    bd dolt push
-   git push
    git status
    ```
 5. **Hand off** - Summarize changes, validation, issue status, and any blocked sync/commit/push step
@@ -244,6 +254,10 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 - If a required sync or push is blocked, stop and report the exact command and error.
 
 <!-- END BEADS INTEGRATION -->
+
+## Git rules
+
+- ❌ Do NOT `git push` without being asked. No profile authorizes it; only an explicit user request or orchestrator instruction does.
 
 ## Bead creation
 

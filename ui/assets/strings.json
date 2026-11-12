@@ -564,7 +564,8 @@
       "live_catalog": " — live Dataverse catalog",
       "builtin_catalog": " — built-in catalog (press “Load fields from Dataverse”)",
       "missing_field_template": "The dataset is missing {label}. Please provide it.",
-      "field_rule_tip": "{block}.{field} — {handler}"
+      "field_rule_tip": "{block}.{field} — {handler}",
+      "group_tip": "Composite of {count} field(s) — it must be filled when required"
     },
     "dialogs": {
       "new_ruleset_title": "New ruleset",
@@ -717,6 +718,10 @@
       "reset_columns_tip": "Reset columns, sort and widths to default",
       "status_complete": "Complete",
       "status_incomplete": "Incomplete",
+      "level_required": "Required",
+      "level_optional": "Optional",
+      "level_tip": "Required — blocks approval per the active ruleset\nOptional — recommended; does not block approval",
+      "level_header": "Level",
       "fields_complete_html": "<span style='font-weight:700;color:{color}'>{complete}/{total} fields complete</span>",
       "fields_complete": "{complete}/{total} metadata fields",
       "value_tooltip": "\n\nValue: {value}"

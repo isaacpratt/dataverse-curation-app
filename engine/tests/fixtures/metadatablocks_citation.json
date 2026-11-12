@@ -1,0 +1,151 @@
+{
+    "data":  {
+                 "fields":  {
+                                "author":  {
+                                               "name":  "author",
+                                               "displayName":  "Author",
+                                               "displayOnCreate":  true,
+                                               "title":  "Author",
+                                               "type":  "NONE",
+                                               "typeClass":  "compound",
+                                               "watermark":  "",
+                                               "description":  "The entity, e.g. a person or organization, that created the Dataset",
+                                               "multiple":  true,
+                                               "isControlledVocabulary":  false,
+                                               "isAdvancedSearchFieldType":  false,
+                                               "displayFormat":  "",
+                                               "displayOrder":  7,
+                                               "isRequired":  true,
+                                               "childFields":  {
+                                                                   "authorName":  {
+                                                                                      "name":  "authorName",
+                                                                                      "displayName":  "Author Name",
+                                                                                      "displayOnCreate":  true,
+                                                                                      "title":  "Name",
+                                                                                      "type":  "TEXT",
+                                                                                      "typeClass":  "primitive",
+                                                                                      "watermark":  "1) Family Name, Given Name or 2) Organization XYZ",
+                                                                                      "description":  "The name of the author, such as the person\u0027s name or the name of an organization",
+                                                                                      "multiple":  false,
+                                                                                      "isControlledVocabulary":  false,
+                                                                                      "isAdvancedSearchFieldType":  true,
+                                                                                      "displayFormat":  "#VALUE",
+                                                                                      "displayOrder":  8,
+                                                                                      "isRequired":  true
+                                                                                  },
+                                                                   "authorAffiliation":  {
+                                                                                             "name":  "authorAffiliation",
+                                                                                             "displayName":  "Author Affiliation",
+                                                                                             "displayOnCreate":  true,
+                                                                                             "title":  "Affiliation",
+                                                                                             "type":  "TEXT",
+                                                                                             "typeClass":  "primitive",
+                                                                                             "watermark":  "Organization XYZ",
+                                                                                             "description":  "The name of the entity affiliated with the author, e.g. an organization\u0027s name",
+                                                                                             "multiple":  false,
+                                                                                             "isControlledVocabulary":  false,
+                                                                                             "isAdvancedSearchFieldType":  true,
+                                                                                             "displayFormat":  "(#VALUE)",
+                                                                                             "displayOrder":  9,
+                                                                                             "isRequired":  false
+                                                                                         },
+                                                                   "authorIdentifierScheme":  {
+                                                                                                  "name":  "authorIdentifierScheme",
+                                                                                                  "displayName":  "Author Identifier Type",
+                                                                                                  "displayOnCreate":  true,
+                                                                                                  "title":  "Identifier Type",
+                                                                                                  "type":  "TEXT",
+                                                                                                  "typeClass":  "controlledVocabulary",
+                                                                                                  "watermark":  "",
+                                                                                                  "description":  "The type of identifier that uniquely identifies the author (e.g. ORCID, ISNI)",
+                                                                                                  "multiple":  false,
+                                                                                                  "isControlledVocabulary":  true,
+                                                                                                  "isAdvancedSearchFieldType":  false,
+                                                                                                  "displayFormat":  "- #VALUE:",
+                                                                                                  "displayOrder":  10,
+                                                                                                  "isRequired":  false,
+                                                                                                  "controlledVocabularyValues":  [
+                                                                                                                                     "ORCID",
+                                                                                                                                     "ROR",
+                                                                                                                                     "ISNI",
+                                                                                                                                     "LCNA",
+                                                                                                                                     "VIAF",
+                                                                                                                                     "GND",
+                                                                                                                                     "DAI",
+                                                                                                                                     "ResearcherID",
+                                                                                                                                     "ScopusID"
+                                                                                                                                 ]
+                                                                                              },
+                                                                   "authorIdentifier":  {
+                                                                                            "name":  "authorIdentifier",
+                                                                                            "displayName":  "Author Identifier",
+                                                                                            "displayOnCreate":  true,
+                                                                                            "title":  "Identifier",
+                                                                                            "type":  "TEXT",
+                                                                                            "typeClass":  "primitive",
+                                                                                            "watermark":  "",
+                                                                                            "description":  "Uniquely identifies the author when paired with an identifier type",
+                                                                                            "multiple":  false,
+                                                                                            "isControlledVocabulary":  false,
+                                                                                            "isAdvancedSearchFieldType":  false,
+                                                                                            "displayFormat":  "#VALUE",
+                                                                                            "displayOrder":  11,
+                                                                                            "isRequired":  false
+                                                                                        }
+                                                               }
+                                           },
+                                "dsDescription":  {
+                                                      "name":  "dsDescription",
+                                                      "displayName":  "Description",
+                                                      "displayOnCreate":  true,
+                                                      "title":  "Description",
+                                                      "type":  "NONE",
+                                                      "typeClass":  "compound",
+                                                      "watermark":  "",
+                                                      "description":  "A summary describing the purpose, nature, and scope of the Dataset",
+                                                      "multiple":  true,
+                                                      "isControlledVocabulary":  false,
+                                                      "isAdvancedSearchFieldType":  false,
+                                                      "displayFormat":  "",
+                                                      "displayOrder":  16,
+                                                      "isRequired":  true,
+                                                      "childFields":  {
+                                                                          "dsDescriptionValue":  {
+                                                                                                     "name":  "dsDescriptionValue",
+                                                                                                     "displayName":  "Description Text",
+                                                                                                     "displayOnCreate":  true,
+                                                                                                     "title":  "Text",
+                                                                                                     "type":  "TEXTBOX",
+                                                                                                     "typeClass":  "primitive",
+                                                                                                     "watermark":  "",
+                                                                                                     "description":  "A summary describing the purpose, nature, and scope of the Dataset",
+                                                                                                     "multiple":  false,
+                                                                                                     "isControlledVocabulary":  false,
+                                                                                                     "isAdvancedSearchFieldType":  true,
+                                                                                                     "displayFormat":  "#VALUE",
+                                                                                                     "displayOrder":  17,
+                                                                                                     "isRequired":  true
+                                                                                                 },
+                                                                          "dsDescriptionDate":  {
+                                                                                                    "name":  "dsDescriptionDate",
+                                                                                                    "displayName":  "Description Date",
+                                                                                                    "displayOnCreate":  true,
+                                                                                                    "title":  "Date",
+                                                                                                    "type":  "DATE",
+                                                                                                    "typeClass":  "primitive",
+                                                                                                    "watermark":  "YYYY-MM-DD",
+                                                                                                    "description":  "The date when the description was added to the Dataset. If the Dataset contains more than one description, e.g. the data producer supplied one description and the data repository supplied another, this date is used to distinguish between the descriptions",
+                                                                                                    "multiple":  false,
+                                                                                                    "isControlledVocabulary":  false,
+                                                                                                    "isAdvancedSearchFieldType":  false,
+                                                                                                    "displayFormat":  "(#VALUE)",
+                                                                                                    "displayOrder":  18,
+                                                                                                    "isRequired":  false
+                                                                                                }
+                                                                      }
+                                                  }
+                            },
+                 "name":  "citation",
+                 "displayName":  "Citation"
+             }
+}

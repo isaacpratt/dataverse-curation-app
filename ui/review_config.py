@@ -491,14 +491,35 @@ class ReviewConfigView(QWidget):
     # -- data -> ui --------------------------------------------------------
 
     def _schema_fields(self) -> list[dict[str, str]]:
+        # The live metadatablocks catalog (or a cached copy of its last
+        # fetch) wins for the fields it knows — but it may predate our
+        # dotted composite-child entries, so the built-in catalog fills the
+        # gaps (composite children only). This keeps the review page useful
+        # offline and upgrades stale on-disk caches silently.
         if self._schema:
-            return [dict(f) for f in self._schema if isinstance(f, dict) and f.get("field")]
-        try:
-            from review_rules import FIELD_CATALOG
+            live = [
+                dict(f) for f in self._schema
+                if isinstance(f, dict) and f.get("field")
+            ]
+            try:
+                from review_rules import FIELD_CATALOG as _FC
+            except Exception:
+                _FC = []
+            seen = {(str(f.get("block") or "citation"), str(f.get("field") or "")) for f in live}
+            fallback = [dict(f) for f in _FC if isinstance(f, dict) and f.get("field")]
+            for f in fallback:
+                key = (str(f.get("block") or "citation"), str(f.get("field") or ""))
+                if key not in seen:
+                    seen.add(key)
+                    live.append(f)
+            base = live
+        else:
+            try:
+                from review_rules import FIELD_CATALOG
 
-            base = [dict(f) for f in FIELD_CATALOG]
-        except Exception:
-            base = []
+                base = [dict(f) for f in FIELD_CATALOG]
+            except Exception:
+                base = []
         # Union with fields referenced by any ruleset so custom fields persist.
         seen = {(f.get("block"), f.get("field")) for f in base}
         for rs in (self._rulesets or {}).values():
@@ -531,12 +552,14 @@ class ReviewConfigView(QWidget):
             field = str(fr.get("field") or "")
             handler = str(fr.get("handler") or "nonempty")
             covered.add((block, field, handler))
+            parent = field.split(".", 1)[0] if "." in field else ""
             entries.append({
                 "kind": "rule", "label": str(fr.get("label") or field),
                 "block": block, "field": field, "handler": handler,
                 "block_label": schema_labels.get((block, field), ""),
                 "level": fr.get("level") if fr.get("level") in ("required", "optional") else "required",
                 "req": str(fr.get("requirement") or ""),
+                "parent": parent if parent and parent != field else "",
             })
         for f in self._schema_fields():
             block, field = str(f.get("block") or ""), str(f.get("field") or "")
@@ -547,6 +570,7 @@ class ReviewConfigView(QWidget):
                 "block": block, "field": field, "handler": "nonempty",
                 "block_label": str(f.get("block_label") or ""),
                 "level": "unchecked", "req": "",
+                "parent": str(f.get("parent") or (field.split(".", 1)[0] if "." in field else "")),
             })
         return entries
 
@@ -657,7 +681,17 @@ class ReviewConfigView(QWidget):
                 # Top item joins the tree first: setItemWidget needs the
                 # child row present before the combo is attached.
                 tree.addTopLevelItem(top)
-                for e in rows:
+
+                # Dotted field paths ("author.authorIdentifier") nest under a
+                # synthetic group row named for their parent field (e.g.
+                # "Author") — Borealis shows the same shape: the composite is
+                # the heading, its children fill it. Composite rule rows
+                # (author_affiliation, author_count) join the group too.
+                def _grp(e):
+                    return str(e.get("field") or "").split(".", 1)[0]
+
+                def _add_field_row(e, parent_item=None, block_item=None):
+                    parent_item = parent_item if parent_item is not None else block_item
                     block, field = e["block"], e["field"]
                     child = QTreeWidgetItem([str(e.get("label") or field)])
                     child.setToolTip(
@@ -671,9 +705,6 @@ class ReviewConfigView(QWidget):
                         + (f"\n{e['req']}" if e["req"] else ""),
                     )
                     child.setData(0, Qt.UserRole, {"kind": "field"})
-                    # Compact 32px combos: the standard 36px face makes
-                    # 35-row blocks (citation) scroll forever; 32px still
-                    # clears the 12px text + theme padding without clipping.
                     combo = make_combo(
                         [
                             (t("review.level_required"), "required"),
@@ -689,9 +720,51 @@ class ReviewConfigView(QWidget):
                     combo.setProperty("field", field)
                     combo.setProperty("handler", e["handler"])
                     combo.currentIndexChanged.connect(self._on_field_level_changed)
-                    top.addChild(child)
-                    n_fields += 1
+                    target = parent_item if parent_item is not None else block_item
+                    target.addChild(child)
                     tree.setItemWidget(child, 1, combo)
+                    return child
+
+                groups_by_prefix: dict[str, list] = {}
+                for e in rows:
+                    groups_by_prefix.setdefault(_grp(e), []).append(e)
+                for prefix, members in sorted(groups_by_prefix.items(), key=lambda kv: kv[0]):
+                    children = [e for e in members if "." in str(e.get("field") or "")]
+                    leaders = [e for e in members if "." not in str(e.get("field") or "")]
+                    if not children:
+                        for e in leaders:
+                            _add_field_row(e, block_item=top)
+                        n_fields += len(leaders)
+                        continue
+                    # Group heading: the parent's catalog label if we know
+                    # it, else title-cased prefix.
+                    parent_label = next(
+                        (c.get("parent_label") for c in children if c.get("parent_label")),
+                        "",
+                    ) or (prefix[:1].upper() + prefix[1:])
+                    group = QTreeWidgetItem([parent_label])
+                    group.setData(0, Qt.UserRole, {"kind": "group"})
+                    try:
+                        font = group.font(0)
+                        font.setBold(True)
+                        group.setFont(0, font)
+                    except Exception:
+                        pass
+                    group.setToolTip(
+                        0,
+                        t(
+                            "review.messages.group_tip",
+                            label=parent_label,
+                            count=len(members),
+                        ),
+                    )
+                    top.addChild(group)
+                    for e in leaders:
+                        _add_field_row(e, group)
+                        n_fields += 1
+                    for e in sorted(children, key=lambda x: str(x.get("label") or x.get("field") or "")):
+                        _add_field_row(e, group)
+                        n_fields += 1
             tree.expandAll()
             self._update_blocks_btn()
         finally:

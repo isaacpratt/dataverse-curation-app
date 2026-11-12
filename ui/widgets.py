@@ -455,15 +455,48 @@ class AppTable(QTableWidget):
 
         Populates often run during __init__ (cached dashboard, settings
         reload) when the widget is still hidden — viewport().width() is
-        meaningless there, so fit defers to here.
+        meaningless there, so fit defers to here. Hidden-built cell
+        widgets (Settings extensions' Reinstall/Uninstall) keep their
+        construction-time geometry until one full layout pass runs.
         """
         super().showEvent(event)
         if self._auto_fit and not self._fitted and self.rowCount() > 0:
             QTimer.singleShot(0, self._fit_after_show)
+        QTimer.singleShot(0, self.refresh_cell_geometry)
 
     def _fit_after_show(self) -> None:
         if self._auto_fit and not self._fitted and self.isVisible():
             self.fit_columns_to_content()
+
+    def refresh_cell_geometry(self) -> None:
+        """Force one full layout pass on cell widgets.
+
+        A hidden-built table remembers every cell widget at its
+        construction-time width; once visible, the column may have a
+        different width, and Qt does not re-lay the widgets until some
+        item geometry pass happens. Call this after the table's first
+        show so action columns (Reinstall/Uninstall) fit the real cell
+        rect. Cheap: one QStyle rediscover of all geometry.
+        """
+        try:
+            self.updateGeometries()
+        except Exception:
+            # updateGeometries is protected but always present on
+            # QAbstractItemView; fall back to a column-width roundtrip of
+            # a visible section, which forces the same re-layout.
+            try:
+                hdr = self.horizontalHeader()
+                if hdr is None or hdr.count() == 0:
+                    return
+                w = hdr.sectionSize(0)
+                hdr.resizeSection(0, max(1, w + 1))
+                hdr.resizeSection(0, w)
+            except Exception:
+                pass
+        try:
+            self.viewport().update()
+        except Exception:
+            pass
 
     def populate_guarded(self, row_count: int) -> None:
         """SetRowCount with sorting suppressed so inserts stay in order."""
