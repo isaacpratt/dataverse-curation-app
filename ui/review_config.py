@@ -53,6 +53,7 @@ from ui.widgets import (
     make_page_heading,
     make_reset_columns_button,
     make_search_field,
+    transparent_surface_qss,
 )
 
 _LEVELS = ["required", "optional", "unchecked"]
@@ -328,8 +329,14 @@ class ReviewConfigView(QWidget):
         add_info_tip(
             header_lay, t("review.checks_hint"), name=t("review.card_checks")
         )
-        # Filters live in the card header (file-manifest pattern): text
-        # search + required-status dropdown + expand/collapse toggle.
+        # The title bar keeps title + (i) only; the filters and actions are
+        # tools, so they sit on their own row under it (file-manifest pattern).
+        checks_tools = QWidget()
+        checks_tools.setObjectName("ChecksTools")
+        checks_tools.setStyleSheet(transparent_surface_qss("ChecksTools"))
+        tools_lay = QHBoxLayout(checks_tools)
+        tools_lay.setContentsMargins(16, 8, 16, 8)
+        tools_lay.setSpacing(8)
         self._field_filter = make_search_field(
             t("review.filter_placeholder"), height=36, min_width=160
         )
@@ -342,7 +349,7 @@ class ReviewConfigView(QWidget):
         self._filter_timer.setInterval(200)
         self._filter_timer.timeout.connect(self._refresh_field_table)
         self._field_filter.textChanged.connect(lambda _t: self._filter_timer.start())
-        header_lay.addWidget(self._field_filter)
+        tools_lay.addWidget(self._field_filter, 1)
         self._level_filter = make_combo(
             [
                 (t("review.level_all"), "all"),
@@ -355,13 +362,13 @@ class ReviewConfigView(QWidget):
             tip=t("review.level_filter_tip"),
         )
         self._level_filter.currentIndexChanged.connect(lambda _i: self._refresh_field_table())
-        header_lay.addWidget(self._level_filter)
+        tools_lay.addWidget(self._level_filter)
         self._blocks_btn = make_action_button(
             t("review.collapse_all"), kind="secondary", size="md"
         )
         self._blocks_btn.setToolTip(t("review.blocks_tip"))
         self._blocks_btn.clicked.connect(self._on_toggle_blocks)
-        header_lay.addWidget(self._blocks_btn)
+        tools_lay.addWidget(self._blocks_btn)
         self._fields_reset_btn = make_reset_columns_button(
             "",
             tip=t("review.reset_tip"),
@@ -369,7 +376,10 @@ class ReviewConfigView(QWidget):
             fallback_text=t("review.reset"),
         )
         self._fields_reset_btn.clicked.connect(self._on_reset_field_view)
-        header_lay.addWidget(self._fields_reset_btn)
+        tools_lay.addWidget(self._fields_reset_btn)
+        # Sibling of the body, not inside it: the tree is rebuilt on filter
+        # changes and the tools must survive that.
+        card.layout().insertWidget(1, checks_tools)
         # Body margins go to zero so the tree bleeds edge-to-edge like
         # every other flush table in the app; the text-rules section
         # below carries its own inset.

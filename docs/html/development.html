@@ -35,14 +35,14 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 pip install -r requirements.txt
 copy config.example.json config.json     # cmd; PowerShell: Copy-Item config.example.json config.json
                                           # Borealis demo preset is the default; edit base_url/api_token/collection
-pytest -q                                # 459 tests (212 engine + 247 UI; run pytest --collect-only -q for the live count)
+pytest -q                                # 499 tests (212 engine + 287 UI; run pytest --collect-only -q for the live count)
 python main.py                           # GUI
 python main.py --config path/to/config.json
 python main.py --dataverse https://demo.borealisdata.ca
 python main.py --headless &lt;staged_dir&gt; --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE
 python -c "import compileall; compileall.compile_dir('.',force=True)"
 python -c "import compileall; compileall.compile_dir('ui',quiet=1)"</code></pre>
-<p>Headless rejects <code>--dataverse/--config</code> (GUI-only); <code>--format</code> accepts <code>json</code> (default), <code>md</code>, or <code>both</code>. The walk dispatches every file to its format checks and writes the <a href="report-contract.html">DatasetReport JSON contract</a>. Example: <code>engine/tests/test_runner.py</code> runs <code>run_report</code> against <code>CUR_Res_CurationTools/data/Inspect_gpkg</code> (13 files, 0 findings). Test files: 21 engine suites (incl. <code>test_audit_fixes</code> 32, <code>test_dataverse</code> 44, <code>test_formats</code> 18, <code>test_review_rules</code> 18, <code>test_enrichment</code> 14) + 33 UI suites.</p>
+<p>Headless rejects <code>--dataverse/--config</code> (GUI-only); <code>--format</code> accepts <code>json</code> (default), <code>md</code>, or <code>both</code>. The walk dispatches every file to its format checks and writes the <a href="report-contract.html">DatasetReport JSON contract</a>. Example: <code>engine/tests/test_runner.py</code> runs <code>run_report</code> against <code>CUR_Res_CurationTools/data/Inspect_gpkg</code> (13 files, 0 findings). Test files: 21 engine suites (incl. <code>test_audit_fixes</code> 32, <code>test_dataverse</code> 44, <code>test_formats</code> 18, <code>test_review_rules</code> 18, <code>test_enrichment</code> 14) + 42 UI suites.</p>
 
 <h2>Quality gates</h2>
 <p>CI runs ruff, pytest with engine coverage, <code>compileall</code> and the headless smoke (<code>.github/workflows/ci.yml</code>). Locally: <code>make test</code>, <code>make lint</code>, <code>make typecheck</code>. mypy is a dev-only extra and is not in <code>requirements.txt</code>; install it with <code>python -m pip install -e ".[dev]"</code> before running <code>make typecheck</code>. The full configured coverage (<code>pytest --cov</code>) is 60.8%; CI measures the engine subset (85.4%).</p>
@@ -221,6 +221,6 @@ python -m ruff check ui/           # lint</code></pre>
 </ul>
 
 </div></main>
-<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-11-07, verified against code.</div></footer>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-11-12, verified against code.</div></footer>
 </body>
 </html>

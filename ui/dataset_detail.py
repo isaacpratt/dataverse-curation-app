@@ -791,16 +791,20 @@ class DatasetDetailView(QWidget):
         )
         self._meta_check_tree.setModel(self._meta_model)
         _meta_hdr = self._meta_check_tree.header()
-        # Value absorbs the slack and elides long text; Status only needs
-        # its word + icon. Stretching the last section instead let a long
-        # value push Status off the (scrollbar-less) card.
+        # Every column is Interactive so each boundary drags - including
+        # Value|Status, whose Stretch/ResizeToContents pair used to ignore
+        # the mouse (dv-dmv). Value still absorbs the slack and elides
+        # long text, but it does so through _fit_meta_value_column, not a
+        # Stretch mode (a Stretch section cannot be resized by hand).
         _meta_hdr.setStretchLastSection(False)
         _meta_hdr.setSectionResizeMode(0, _QHV.Interactive)
         _meta_hdr.setSectionResizeMode(1, _QHV.Interactive)
-        _meta_hdr.setSectionResizeMode(2, _QHV.Stretch)
-        _meta_hdr.setSectionResizeMode(3, _QHV.ResizeToContents)
+        _meta_hdr.setSectionResizeMode(2, _QHV.Interactive)
+        _meta_hdr.setSectionResizeMode(3, _QHV.Interactive)
         self._meta_check_tree.setColumnWidth(0, 170)
         self._meta_check_tree.setColumnWidth(1, 120)
+        self._meta_check_tree.setColumnWidth(2, 260)
+        self._meta_check_tree.setColumnWidth(3, 120)
         self._meta_check_tree.expanded.connect(self._on_meta_tree_expansion_changed)
         self._meta_check_tree.collapsed.connect(self._on_meta_tree_expansion_changed)
         self._track_table_widths("dataset_meta", _meta_hdr)
@@ -1049,19 +1053,53 @@ class DatasetDetailView(QWidget):
         finally:
             tree.blockSignals(False)
         self._fit_meta_tree_height()
-        # Size the fixed columns to their content (with sane caps) and let
-        # the stretched Value column take the rest.
+        # Size the fixed columns to their content (with sane caps), then
+        # hand the leftover width to Value. Programmatic: wrapped in the
+        # layout's suppressed scope so a rebuild never overwrites the
+        # widths the user dragged (only their own gestures persist).
         try:
-            for col, floor, ceiling in ((0, 170, 320), (1, 100, 220), (3, 90, 160)):
-                tree.resizeColumnToContents(col)
-                tree.setColumnWidth(
-                    col, max(floor, min(ceiling, tree.columnWidth(col)))
-                )
+            layout = self._layout_for("dataset_meta", tree.header())
+            with layout.suppressed():
+                for col, floor, ceiling in ((0, 170, 320), (1, 100, 220), (3, 90, 160)):
+                    tree.resizeColumnToContents(col)
+                    tree.setColumnWidth(
+                        col, max(floor, min(ceiling, tree.columnWidth(col)))
+                    )
         except Exception:
             pass
+        self._fit_meta_value_column()
 
     def _on_meta_tree_expansion_changed(self, _index=None) -> None:
         self._fit_meta_tree_height()
+
+    def _fit_meta_value_column(self) -> None:
+        """Give the metadata table's Value column the leftover width.
+
+        With every column Interactive (so the Value|Status boundary
+        drags - dv-dmv) no section stretches; this keeps the (scrollbar
+        -less) table filling its card instead of leaving a gap after
+        Status. Programmatic, so it never persists over a user's drag.
+        """
+        try:
+            tree = self._meta_check_tree
+        except AttributeError:
+            return
+        hdr = tree.header()
+        if hdr is None or hdr.count() < 4:
+            return
+        others = sum(hdr.sectionSize(i) for i in range(hdr.count()) if i != 2)
+        target = max(48, tree.viewport().width() - others)
+        if hdr.sectionSize(2) == target:
+            return
+        try:
+            layout = self._layout_for("dataset_meta", hdr)
+            with layout.suppressed():
+                hdr.resizeSection(2, target)
+        except Exception:
+            try:
+                hdr.resizeSection(2, target)
+            except Exception:
+                pass
 
     def _fit_meta_tree_height(self) -> None:
         """Grow the checks tree to its visible rows (no inner scrollbar)."""
@@ -1735,6 +1773,8 @@ class DatasetDetailView(QWidget):
     def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
         super().resizeEvent(event)
         self._sync_sidebar()
+        # The metadata Value column tracks the card width (dv-dmv).
+        self._fit_meta_value_column()
 
     def _sync_sidebar(self) -> None:
         """Fold the sticky sidebar away on a narrow window.
@@ -2127,6 +2167,14 @@ class DatasetDetailView(QWidget):
         # Named not-loaded state, never "—" (2026-10-02 P2).
         self._version_summary = make_field_label(t("detail.version_log.not_loaded"))
         header_lay.addWidget(self._version_summary)
+        # The reset is a table tool, so it lives on the tools row under the
+        # title bar; the title row keeps title + (i) + summary only.
+        self._version_tools = QWidget()
+        self._version_tools.setObjectName("VersionLogTools")
+        self._version_tools.setStyleSheet(transparent_surface_qss("VersionLogTools"))
+        _version_tools_lay = QHBoxLayout(self._version_tools)
+        _version_tools_lay.setContentsMargins(16, 8, 16, 8)
+        _version_tools_lay.setSpacing(8)
         self._version_reset_btn = make_reset_columns_button(
             "",
             tip=t("detail.version_log.reset_columns_tip"),
@@ -2134,7 +2182,11 @@ class DatasetDetailView(QWidget):
             fallback_text=t("common.reset"),
         )
         self._version_reset_btn.clicked.connect(self._on_reset_version_view)
-        header_lay.addWidget(self._version_reset_btn)
+        _version_tools_lay.addWidget(self._version_reset_btn)
+        _version_tools_lay.addStretch()
+        # Sibling of the body (not inside it): _populate_version_diff clears
+        # the body on every refresh and must not take the tools with it.
+        card.layout().insertWidget(1, self._version_tools)
         self._version_body = _body_host
         return card
 
@@ -2375,24 +2427,21 @@ class DatasetDetailView(QWidget):
         )
         _body_unused.setContentsMargins(0, 0, 0, 0)
         _body_unused.setSpacing(0)
+        # Actions are tools: they live on the tools row under the title bar,
+        # never in the title bar (title + tooltip + summary only).
         self._open_folder_btn = make_action_button(t("detail.files.open_folder"), kind="secondary", size="md")
         self._open_folder_btn.setToolTip(t("detail.files.open_folder_tip"))
         self._open_folder_btn.clicked.connect(self._on_open_folder)
-        header_lay.addWidget(self._open_folder_btn)
         # Expand/Collapse all toggle for the folder > file > check tree.
         self._expand_btn = make_action_button(t("detail.files.expand_all"), kind="secondary", size="md")
         self._expand_btn.setToolTip(t("detail.files.expand_tip"))
         self._expand_btn.clicked.connect(self._on_toggle_expand_all)
-        header_lay.addWidget(self._expand_btn)
         lay = QVBoxLayout()
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
-        # The filters live on their own row under the card's title bar.
-        # Packed into the title row - title, tip, Open folder, Expand all,
-        # the filter box, the status combo and the reset button - the card
-        # needed 742px, wider than the column it sits in, so the page
-        # scrolled sideways at the app's own 960px minimum width.
+        # The title bar carries title + (i) only; every tool - search,
+        # status filter, reset, Open folder, Expand all - sits on this row.
         tools = QWidget()
         tools.setObjectName("FileManifestTools")
         tools.setStyleSheet(transparent_surface_qss("FileManifestTools"))
@@ -2429,6 +2478,8 @@ class DatasetDetailView(QWidget):
         )
         self._file_reset_btn.clicked.connect(self._on_reset_file_view)
         tools_lay.addWidget(self._file_reset_btn)
+        tools_lay.addWidget(self._open_folder_btn)
+        tools_lay.addWidget(self._expand_btn)
         lay.addWidget(tools)
         # NOTE: tree + footer live in a flush sub-layout so the header keeps
         # its top radius and the footer keeps its bottom radius.

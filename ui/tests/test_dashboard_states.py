@@ -42,7 +42,7 @@ def test_idle_metrics_read_not_fetched(win, monkeypatch):
     dash._update_metrics()
     vals = [_mval(c) for c in dash._metric_cards]
     assert vals == ["Not fetched"] * 3, vals
-    assert "Last refresh: never" in dash._metric_cards[0].toolTip()
+    assert dash._metric_cards[0].toolTip() == "", "cards carry no tooltip (dv-1k4)"
 
 
 def test_loading_metrics_read_checking(win, monkeypatch):
@@ -82,13 +82,13 @@ def test_state_switch_restores_12px_muted_style(win, monkeypatch):
     assert label.font().pixelSize() == 12
 
 
-def test_metric_tooltips_always_carry_last_refresh(win, monkeypatch):
+def test_metric_cards_have_no_tooltip(win, monkeypatch):
+    """The cards are filter controls, not a tooltip target (dv-1k4)."""
     dash = win._dashboard
     monkeypatch.setattr(dash, "_crawled", False)
     monkeypatch.setattr(dash, "_worker", None)
     dash._update_metrics()
-    tips = [c.toolTip() for c in dash._metric_cards]
-    assert all("Last refresh: " in t for t in tips), tips
+    assert [c.toolTip() for c in dash._metric_cards] == ["", "", ""]
 
 
 @pytest.fixture

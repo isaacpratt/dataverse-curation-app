@@ -428,8 +428,11 @@ def header_section_qss(*, flush: bool = False) -> str:
         f"QHeaderView {{ background: {SURFACE_CONTAINER}; }} "
         f"QHeaderView::section {{ background: {SURFACE_CONTAINER}; "
         f"color: {ON_SURFACE_VARIANT}; padding: 8px 14px 8px 12px; "
+        # One continuous band: a bottom rule only. A right border drew a
+        # vertical bar between sections, which reads as a column divider
+        # and crept back into the review-config and dataset tables.
         f"border: none; border-bottom: 1px solid {OUTLINE_VARIANT}; "
-        f"border-right: 1px solid {OUTLINE_VARIANT}; font-size: {FONT_CAPTION}px; "
+        f"font-size: {FONT_CAPTION}px; "
         # No text-transform here: Qt applies it when it *paints* a label
         # but not when it *measures* one, so the painted header was wider
         # than the text Qt elided against and a narrow section lost its
@@ -438,13 +441,43 @@ def header_section_qss(*, flush: bool = False) -> str:
         # in (see AppTable.setHorizontalHeaderLabels), so the metrics and
         # the paint agree - and a translation can choose its own casing.
         "font-weight: 600; } "
-        f"QHeaderView::section:hover {{ background: {SURFACE_CONTAINER_HIGH}; "
-        f"border-right: 1px solid {OUTLINE}; }} "
-        f"QHeaderView::section:pressed {{ background: {PRIMARY_FIXED}; "
-        f"border-right: 2px solid {PRIMARY}; }} "
+        f"QHeaderView::section:hover {{ background: {SURFACE_CONTAINER_HIGH}; }} "
+        f"QHeaderView::section:pressed {{ background: {PRIMARY_FIXED}; }} "
         f"QHeaderView::section:first {{ border-top-left-radius: {radius}; }} "
-        f"QHeaderView::section:last {{ border-top-right-radius: {radius}; "
-        "border-right: none; } "
+        f"QHeaderView::section:last {{ border-top-right-radius: {radius}; }} "
+    )
+
+
+def selection_qss(scope: str = "") -> str:
+    """Row selection and hover for an item view — one source of truth.
+
+    Every table and tree wears the same face: a quiet full-row tint on
+    selection (never a per-cell box) and an even quieter hover. Views
+    that set a local stylesheet have to repeat the rules, so they take
+    them from here instead of writing their own — the dashboard queue,
+    the metadata tree and the extensions table had drifted apart.
+
+    scope is the view selector ("QTableWidget", "QTreeView"). Leave it
+    empty when embedding in a rule that already carries the selector.
+    """
+    # No space between the scope and ``::item``: a descendant selector
+    # (``QTreeView ::item``) matches a *child widget*, so the rules were
+    # silently dead and views fell back to the native highlight colour.
+    prefix = f"{scope}::item" if scope else "::item"
+    # SECONDARY_CONTAINER is the palette's selection fill (it already backs
+    # menus and combo popups); SURFACE_TINT is the header band, so using it
+    # here made a selected row indistinguishable from its own header.
+    # The selected rules repeat instead of sharing a `tint` variable: the
+    # catalogue guard reads every prose-shaped literal in this module, and
+    # a bare ":selected { " fragment reads as prose.
+    return (
+        f"{prefix}:hover {{ background: {SURFACE_SUBTLE}; }} "
+        # Keep the selected face when the view loses focus: the inactive
+        # palette would otherwise drop the row back to an unstyled white.
+        f"{prefix}:selected {{ background: {SECONDARY_CONTAINER}; "
+        f"color: {TEXT_PRIMARY}; }} "
+        f"{prefix}:selected:!active {{ background: {SECONDARY_CONTAINER}; "
+        f"color: {TEXT_PRIMARY}; }} "
     )
 
 
@@ -849,6 +882,12 @@ QMainWindow, QStackedWidget, QScrollArea {{
     border: {CARD_BORDER};
     border-radius: {RADIUS_LG};
 }}
+/* The metric cards filter the queue: hover signals the affordance
+   (dv-1k4). Keyboard focus already tints via [focusVisible="true"]. */
+#MetricCard:hover {{
+    background: {SURFACE_CONTAINER_LOW};
+    border: 1px solid {PRIMARY};
+}}
 
 #SectionHeader {{
     background: {SURFACE_CONTAINER_LOWEST};
@@ -995,8 +1034,9 @@ QComboBox:on {{
 }}
 
 /* ===== Table ===== */
-/* Item views mark the current cell/row with the selection tint.
-   A visible focus ring (added above) now carries focus for keyboard users. */
+/* Item views mark the current cell/row with the secondary fill (the
+   palette's selection role). A visible focus ring (added above) carries
+   focus for keyboard users. */
 QTableWidget {{
     background: {SURFACE_CONTAINER_LOWEST};
     border: none;
@@ -1009,10 +1049,7 @@ QTableWidget::item {{
     border-bottom: 1px solid {SURFACE_CONTAINER_LOW};
 }}
 {header_section_qss()}
-QTableWidget::item:selected {{
-    background: {SECONDARY_CONTAINER};
-    color: {ON_SURFACE};
-}}
+{selection_qss("QTableWidget")}
 
 /* ===== Tooltips ===== */
 /* Explicit light face for EVERY tooltip app-wide: without this, the global

@@ -17,7 +17,7 @@ Intentional one-offs (NOT kit violations):
 
 import textwrap
 
-from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -32,6 +32,9 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTableWidget,
     QTextEdit,
     QToolButton,
@@ -77,6 +80,7 @@ from ui.theme import (
     input_qss,
     label_badge_style,
     scrollbar_lane_qss,
+    selection_qss,
     transparent_qss,
     transparent_surface_qss,
     workflow_step_qss,
@@ -341,6 +345,25 @@ class SortArrowHeaderView(QHeaderView):
             self._arrow.hide()
 
 
+class SelectionDelegate(QStyledItemDelegate):
+    """Paint item views without Qt's dotted focus rectangle.
+
+    The row tint marks the selection and the theme's ``focusVisible``
+    outline marks keyboard focus on the view itself. Qt's default
+    delegate adds a dotted black box around the current item on top of
+    both, inset by that view's padding — so the same selection looked
+    different in every table (the reported bug). Dropping
+    ``State_HasFocus`` for the base paint removes the box everywhere;
+    the row tint stays, because selection is a separate state.
+    """
+
+    def paint(self, painter, option, index) -> None:  # noqa: N802 (Qt naming)
+        if option.state & QStyle.State_HasFocus:
+            option = QStyleOptionViewItem(option)
+            option.state &= ~QStyle.State_HasFocus
+        super().paint(painter, option, index)
+
+
 class AppTable(QTableWidget):
     """Build a standard table (sortable columns, row selection, no grid).
 
@@ -418,6 +441,8 @@ class AppTable(QTableWidget):
         # focus. Visual outline stays off via the stylesheet.
         self.setFocusPolicy(Qt.StrongFocus)
         self.setSortingEnabled(sortable)
+        # One selection face app-wide, and no dotted focus box (dv-coj).
+        self.setItemDelegate(SelectionDelegate(self))
         self._auto_fit = True
         self._fitting = False
         self._fitted = False
@@ -591,6 +616,7 @@ def flush_table_style(
         "border-bottom-left-radius: " + bottom + "; "
         "border-bottom-right-radius: " + bottom + "; } "
         + header_section_qss(flush=True)
+        + selection_qss("QTableWidget")
         + scrollbar_lane_qss("QTableWidget")
         + (f" QHeaderView {{ background: {header_background}; }}" if header_background else "")
         + (f" QTableWidget::item {{ padding: {item_padding}; }}" if item_padding else "")
@@ -640,26 +666,71 @@ def tree_style(*, flush: bool = True, row_height: int | None = 30) -> str:
         if row_height
         else "QTreeView::item { border: none; } "
     )
-    try:
-        from ui.icons import tree_branch_qss as _branch_qss
-
-        branch = _branch_qss()
-    except Exception:
-        branch = ""
+    # Branch chevrons are painted by _BranchPainting, not by QSS: the
+    # native Windows 11 branch chip ignored ``image: none`` and put a
+    # blue accent chevron beside the selected row (dv-coj).
     return (
         f"QTreeView {{ background: {SURFACE_CARD}; {frame} "
         f"font-size: {FONT_SMALL}px; color: {TEXT_PRIMARY}; }} "
         + item
-        + f"QTreeView::item:hover {{ background: {SURFACE_SUBTLE}; }} "
-        f"QTreeView::item:selected {{ background: {SURFACE_TINT}; "
-        f"color: {TEXT_PRIMARY}; }} "
+        + selection_qss("QTreeView")
         + header_section_qss(flush=flush)
         + scrollbar_lane_qss("QTreeView")
-        + branch
     )
 
 
-class AppTree(QTreeView):
+class _BranchPainting:
+    """Draw tree branch chevrons ourselves instead of the native chip.
+
+    The Windows 11 style paints every branch as a grey rounded chip with
+    an accent-coloured chevron. On a selected row that chevron sits just
+    left of the tint and reads as a 2px blue vertical bar — the stray
+    stripe reported in the metadata tree (dv-coj). A Lucide chevron in
+    the muted ink is quieter, matches the icon set, and looks the same in
+    every tree. The dotted indent guides Qt draws go away with it.
+    """
+
+    _BRANCH_PX = 14
+
+    def drawBranches(self, painter, rect, index) -> None:  # noqa: N802 (Qt naming)
+        """Replace the style's branch painting with one chevron."""
+        self._paint_branch(painter, rect, index)
+
+    def _paint_branch(self, painter, rect, index) -> None:
+        """Draw the expand/collapse chevron for *index*, if it has children."""
+        try:
+            model = self.model()
+        except Exception:
+            return
+        if model is None or not index.isValid() or not model.hasChildren(index):
+            return
+        try:
+            from ui.icons import icon
+            from ui.theme import TEXT_MUTED
+
+            name = "chevron-down" if self.isExpanded(index) else "chevron-right"
+            size = self._BRANCH_PX
+            pixmap = icon(name, color=TEXT_MUTED, size=size).pixmap(
+                QSize(size, size)
+            )
+            indent = self.indentation()
+            # rect spans all ancestor indents; the last cell is this row's.
+            cell = QRect(
+                rect.right() - indent + 1,
+                rect.top(),
+                max(1, indent - 1),
+                rect.height(),
+            )
+            painter.drawPixmap(
+                cell.x() + (cell.width() - size) // 2,
+                cell.y() + (cell.height() - size) // 2,
+                pixmap,
+            )
+        except Exception:
+            pass
+
+
+class AppTree(_BranchPainting, QTreeView):
     """Standard tree view — the tree sibling of AppTable.
 
     Same contract as AppTable: themed header with square end caps when
@@ -691,6 +762,8 @@ class AppTree(QTreeView):
         self.setRootIsDecorated(True)
         self.setFrameStyle(QFrame.NoFrame)
         self.setStyleSheet(tree_style(flush=flush, row_height=row_height))
+        # One selection face app-wide, and no dotted focus box (dv-coj).
+        self.setItemDelegate(SelectionDelegate(self))
         self._fitting = False
         hdr = self.header()
         hdr.setSectionsMovable(True)
@@ -744,7 +817,7 @@ class AppTree(QTreeView):
             self._fitting = False
 
 
-class AppTreeWidget(QTreeWidget):
+class AppTreeWidget(_BranchPainting, QTreeWidget):
     """Standard tree widget — the QTreeWidget sibling of AppTree.
 
     Same contract as AppTree: themed chrome and user_layout_changed
@@ -782,6 +855,8 @@ class AppTreeWidget(QTreeWidget):
         self.setRootIsDecorated(True)
         self.setFrameStyle(QFrame.NoFrame)
         self.setStyleSheet(tree_style(flush=flush, row_height=row_height))
+        # One selection face app-wide, and no dotted focus box (dv-coj).
+        self.setItemDelegate(SelectionDelegate(self))
         self._fitting = False
         hdr = self.header()
         hdr.setSectionsMovable(True)
@@ -1030,6 +1105,23 @@ class _ElidedChipButton(QPushButton):
         self._full_text = text
         self._shown_text = text
 
+    def sizeHint(self) -> QSize:  # noqa: N802 (Qt naming)
+        """Ask for the room the FULL title needs.
+
+        QPushButton's own hint follows the *current* text, and
+        ``_apply_elide`` replaces that text with the elided string — so
+        the hint shrank after every elide and the chip ratcheted down to
+        "Selecti…" even with the nav bar nearly empty (dv-dvu). Measuring
+        the full text keeps the request stable; the layout still shrinks
+        the chip toward its minimum when the row is genuinely full, and
+        the elided paint keeps the title readable with an ellipsis.
+        """
+        hint = super().sizeHint()
+        metrics = self.fontMetrics()
+        full = metrics.horizontalAdvance(self._full_text)
+        shown = metrics.horizontalAdvance(self._shown_text)
+        return QSize(hint.width() + max(0, full - shown), hint.height())
+
     def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
         super().resizeEvent(event)
         self._apply_elide()
@@ -1042,6 +1134,7 @@ class _ElidedChipButton(QPushButton):
         if shown != self._shown_text:
             self._shown_text = shown
             self.setText(shown)
+            self.updateGeometry()
 
 
 def make_split_chip(
@@ -1071,7 +1164,9 @@ def make_split_chip(
     open_btn.setToolTip(tip or label)
     open_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
     open_btn.setFixedHeight(32)
-    open_btn.setMaximumWidth(240)
+    # No max width: the label asks for its full title (sizeHint) and only
+    # elides when the chip row runs out of width (dv-dvu). The old 240px
+    # cap cut ordinary titles even in an empty nav bar.
     open_btn.setMinimumWidth(72)
     open_btn.setStyleSheet(_split_chip_qss(active, "left"))
     if on_open is not None:
@@ -1091,7 +1186,9 @@ def make_split_chip(
         )
         close_btn.setIconSize(QSize(12, 12))
     except Exception:
-        close_btn.setText("x")
+        # Fallback glyph only when the SVG cannot be drawn at all; it is
+        # still centred by the right half's face (dv-ap7).
+        close_btn.setText("×")
     close_btn.setStyleSheet(_split_chip_qss(active, "right"))
     if on_close is not None:
         close_btn.clicked.connect(on_close)
@@ -1108,6 +1205,7 @@ def _split_chip_qss(active: bool, part: str) -> str:
     if part == "left":
         edges = "border-top-left-radius: 8px; border-bottom-left-radius: 8px;"
         padding = "padding: 0 12px;"
+        align = "left"
     else:
         edges = (
             "border-left: none; border-top-right-radius: 8px; "
@@ -1115,6 +1213,9 @@ def _split_chip_qss(active: bool, part: str) -> str:
         )
         fg = TEXT_PRIMARY if active else TEXT_ON_TINT
         padding = "padding: 0;"
+        # The x icon must sit dead-centre in the 32px square (dv-ap7):
+        # left alignment (right for the title half) pushed it to the edge.
+        align = "center"
     hover = (
         f"QPushButton:hover {{ color: {TEXT_DANGER}; "
         f"border-color: {TEXT_DANGER}; }}"
@@ -1122,9 +1223,9 @@ def _split_chip_qss(active: bool, part: str) -> str:
         else f"QPushButton:hover {{ border-color: {ACCENT_PRIMARY}; }}"
     )
     return (
-        f"QPushButton {{ background: {bg}; color: {fg}; border: 1px solid {border}; "
-        f"{edges} {padding} font-size: {FONT_CAPTION}px; font-weight: 700; "
-        f"text-align: left; }}"
+        f"QPushButton {{ background: {bg}; color: {fg}; text-align: {align}; "
+        f"border: 1px solid {border}; {edges} {padding} "
+        f"font-size: {FONT_CAPTION}px; font-weight: 700; }}"
         + hover
     )
 
@@ -1174,6 +1275,29 @@ def make_caption_label(text: str = "", *, wrap: bool = True) -> QLabel:
     lbl = QLabel(text)
     lbl.setObjectName("CaptionSM")
     lbl.setWordWrap(wrap)
+    return lbl
+
+
+def make_text_label(
+    text: str = "",
+    *,
+    color: str = "",
+    object_name: str = "BodySM",
+    tip: str = "",
+    wrap: bool = False,
+) -> QLabel:
+    """Plain text label wearing a body token, optionally recoloured.
+
+    For keys and legends where colour is the only decoration (dv-wp1):
+    the kit owns the face, so a view never writes its own stylesheet.
+    """
+    lbl = QLabel(text)
+    lbl.setObjectName(object_name)
+    lbl.setWordWrap(wrap)
+    if color:
+        lbl.setStyleSheet(f"QLabel#{object_name} {{ color: {color}; }}")
+    if tip:
+        lbl.setToolTip(tip)
     return lbl
 
 
