@@ -5,6 +5,7 @@ every metadata load / check run, and `render_response` whenever the curator
 toggles findings in/out. Placeholders supported in every template:
 
   {field} {rule_label} {value} {message} {path} {check_id}
+  {remediation} {readme_sections}
   {dataset_title} {persistent_id}
 """
 
@@ -115,7 +116,8 @@ def collect_filecheck_sections(ruleset: dict[str, Any], report: Any,
         templates = {}
     fallback = str(templates.get("*") or "{check_id}: {message}")
 
-    def _one(check_id: str, level: str, message: str, path: str) -> None:
+    def _one(check_id: str, level: str, message: str, path: str,
+             details: dict[str, Any] | None = None) -> None:
         template = str(templates.get(check_id) or fallback)
         try:
             from engine.checks.guidance import for_check
@@ -123,9 +125,18 @@ def collect_filecheck_sections(ruleset: dict[str, Any], report: Any,
             remediation = for_check(check_id)[1]
         except Exception:
             remediation = ""
+        # {readme_sections} (dv-81q): the README depth check lists exactly
+        # which standard sections are missing; empty for every other check.
+        readme_missing = ""
+        try:
+            missing = (details or {}).get("missing")
+            if isinstance(missing, list):
+                readme_missing = ", ".join(str(m) for m in missing if str(m).strip())
+        except Exception:
+            readme_missing = ""
         ctx = {
             "check_id": check_id, "message": message, "path": path or "dataset",
-            "remediation": remediation,
+            "remediation": remediation, "readme_sections": readme_missing,
         }
         rendered = _fmt(template, ctx)
         if "{path}" not in template and path:
@@ -156,7 +167,8 @@ def collect_filecheck_sections(ruleset: dict[str, Any], report: Any,
                     continue
                 if str(getattr(c, "level", "")) not in ("warning", "error"):
                     continue
-                _one(str(c.check_id), str(c.level), str(c.message), "")
+                _one(str(c.check_id), str(c.level), str(c.message), "",
+                     getattr(c, "details", None))
             except Exception:
                 continue
         for f in list(getattr(report, "files", None) or []):

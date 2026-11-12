@@ -641,7 +641,7 @@ class CheckWorker(QThread):
 
     def __init__(self, dataset_dir: Path, persistent_id: str, label: str,
                  inventory: list | None = None, metadata: dict | None = None,
-                 client=None, parent=None):
+                 client=None, ruleset: dict | None = None, parent=None):
         super().__init__(parent)
         register_worker(self)
         self._dataset_dir = dataset_dir
@@ -652,6 +652,9 @@ class CheckWorker(QThread):
         # Optional Dataverse client (dv-tfy): used to fetch per-file DDI
         # variable metadata for the coverage check. Never required.
         self._client = client
+        # Optional ruleset (dv-81q): a dataset-level check honours its
+        # README section rules. None falls back to the built-in defaults.
+        self._ruleset = ruleset
         self._cancel_requested = False
 
     def cancel(self) -> None:
@@ -717,6 +720,7 @@ class CheckWorker(QThread):
                 inventory=self._inventory,
                 metadata=self._metadata,
                 variable_metadata=variable_metadata,
+                ruleset=self._ruleset,
             )
             if self._stop_requested():
                 self.cancelled.emit()

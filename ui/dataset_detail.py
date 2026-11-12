@@ -3189,8 +3189,21 @@ class DatasetDetailView(QWidget):
                     )
                     if key:
                         finding_keys.append(key)
+                    detail_lines = None
+                    if c.check_id == "metadata.readme_sections":
+                        secs = (c.details or {}).get("sections")
+                        if isinstance(secs, list):
+                            detail_lines = [
+                                (
+                                    str(s.get("label") or s.get("id") or ""),
+                                    bool(s.get("found")),
+                                )
+                                for s in secs
+                                if isinstance(s, dict)
+                            ]
                     row = self._auto_row(
-                        c.check_id, c.message, c.passed, c.level, disposition_key=key
+                        c.check_id, c.message, c.passed, c.level,
+                        disposition_key=key, detail_lines=detail_lines,
                     )
                     try:
                         from ui.checks_tree import format_details_tooltip
@@ -3301,7 +3314,8 @@ class DatasetDetailView(QWidget):
             pass
 
     def _auto_row(self, check_id: str, desc: str, passed: bool, level: str, badge: str | None = None,
-                  disposition_key: str = "") -> QFrame:
+                  disposition_key: str = "",
+                  detail_lines: list[tuple[str, bool]] | None = None) -> QFrame:
         frame = QFrame()
         # Scope the row face to the row itself. A bare `QFrame` selector
         # would also style every QLabel inside it (QLabel subclasses
@@ -3364,6 +3378,18 @@ class DatasetDetailView(QWidget):
         txt.addWidget(cid)
         d = make_caption_label(desc)
         txt.addWidget(d)
+        # Per-section checklist (dv-81q): the README depth row lists every
+        # standard section with a found/missing mark under its message.
+        for label, found in detail_lines or []:
+            txt.addWidget(
+                make_caption_label(
+                    t(
+                        "detail.auto_checks.readme_section_found" if found
+                        else "detail.auto_checks.readme_section_missing",
+                        label=label,
+                    )
+                )
+            )
         lay.addLayout(txt, 1)
         # Inline disposition controls for findings (dv-32x): the combo
         # writes through _on_disposition_changed; Note… edits the stored
@@ -4640,6 +4666,7 @@ class DatasetDetailView(QWidget):
             inventory=self._inventory if isinstance(self._inventory, list) else None,
             metadata=self._metadata if isinstance(self._metadata, dict) else None,
             client=self._client,
+            ruleset=self._ruleset if isinstance(self._ruleset, dict) else None,
             parent=self,
         )
         self._check_worker.progress.connect(lambda msg: self._set_status(msg))

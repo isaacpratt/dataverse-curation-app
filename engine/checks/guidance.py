@@ -369,6 +369,10 @@ GUIDANCE: dict[str, tuple[str, str]] = {
         "Variable documentation is the layer reuse depends on: without labels, coded columns are uninterpretable outside the original team.",
         "Provide a codebook or label the variables at the source; the Draft data dictionary action exports a CSV the depositor can fill in.",
     ),
+    "metadata.readme_sections": (
+        "A README that skips overview, files, methods, missing-data codes or access leaves reusers guessing — the deposit is technically open but practically undocumented.",
+        "Add the missing sections (each as a heading) so the README answers what the data is, what each file holds, how it was produced, how missing values are coded, and how it may be reused.",
+    ),
 }
 
 

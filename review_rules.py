@@ -23,6 +23,10 @@ Schema (requirements_profiles.json v2):
          "case_sensitive": false,
          "response_template": "..."}
       ],
+      "section_rules": [
+        {"id": "overview", "label": "Dataset & file overview",
+         "level": "required|optional", "probes": ["overview", "about"]}
+      ],
       "filecheck_templates": {"<check_id>": "...", "*": "..."},
       "response_header": "...", "response_footer": "...",
       "requires_sensitivity": true
@@ -33,6 +37,10 @@ Schema (requirements_profiles.json v2):
 Optional per-ruleset ``"requires_sensitivity": true`` (dv-3c2) marks the
 ruleset's collections as requiring the sensitivity & ethics review
 (sensitivity.py) before an Approve decision can commit.
+
+Optional per-ruleset ``"section_rules"`` (dv-81q) overrides the README
+section list the depth check scores (see ``DEFAULT_README_SECTIONS``);
+when absent, the built-in five sections apply.
 
 Built-ins (mcmaster-default, minimal) reproduce the legacy hard-coded
 McMaster/Minimal checks exactly (same labels + requirement strings), so a
@@ -56,6 +64,74 @@ _RULESETS_MEMO: dict[str, Any] = {}
 FIELD_LEVELS = ("required", "optional", "unchecked")
 CONTENT_SCOPES = ("filenames", "metadata", "file-content")
 CONTENT_MATCHES = ("filename-glob", "substring", "regex")
+
+# README section-depth rules (dv-81q). Each rule names one standard section
+# from the Cornell Readme Template for Data and the recherche.data.gouv.fr
+# template, with the heading phrases that mark it. readme_check scans the
+# staged README's heading-ish lines (markdown headings, short standalone
+# lines) for these probes; a ruleset may override the list with
+# ``"section_rules": [...]``.
+DEFAULT_README_SECTIONS: list[dict[str, Any]] = [
+    {
+        "id": "overview",
+        "label": "Dataset & file overview",
+        "level": "required",
+        "probes": ["overview", "description", "about", "summary", "purpose", "what is"],
+    },
+    {
+        "id": "files",
+        "label": "File inventory & naming",
+        "level": "required",
+        "probes": ["file", "inventory", "folder", "directory", "contents", "naming", "structure"],
+    },
+    {
+        "id": "methods",
+        "label": "Methodology",
+        "level": "required",
+        "probes": [
+            "method", "procedure", "protocol", "instrument", "sampling",
+            "data collection", "processing", "experiment",
+        ],
+    },
+    {
+        "id": "missing",
+        "label": "Missing-data codes",
+        "level": "optional",
+        "probes": ["missing", "sentinel", "n/a", "not applicable", "blank", "null"],
+    },
+    {
+        "id": "access",
+        "label": "Sharing, access & licensing",
+        "level": "required",
+        "probes": [
+            "access", "licen", "sharing", "reuse", "terms", "restriction",
+            "citation", "contact", "rights",
+        ],
+    },
+]
+
+
+def readme_sections(ruleset: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Section rules for the README depth check, defaults when unset."""
+    raw = (ruleset or {}).get("section_rules") if isinstance(ruleset, dict) else None
+    if not isinstance(raw, list) or not raw:
+        raw = DEFAULT_README_SECTIONS
+    out: list[dict[str, Any]] = []
+    for rule in raw:
+        if not isinstance(rule, dict) or not rule.get("id"):
+            continue
+        probes = rule.get("probes")
+        if not isinstance(probes, list):
+            probes = [str(rule.get("label") or rule["id"])]
+        out.append(
+            {
+                "id": str(rule["id"]),
+                "label": str(rule.get("label") or rule["id"]),
+                "level": rule.get("level") if rule.get("level") in ("required", "optional") else "required",
+                "probes": [str(p).lower() for p in probes if str(p).strip()],
+            }
+        )
+    return out or [dict(rule) for rule in DEFAULT_README_SECTIONS]
 
 DEFAULT_RULESET_KEY = "mcmaster-default"
 
@@ -218,12 +294,14 @@ def _builtin_mcmaster() -> dict[str, Any]:
         "dataverses": ["*"],
         "field_rules": field_rules,
         "content_rules": content_rules,
+        "section_rules": [dict(r) for r in DEFAULT_README_SECTIONS],
         "filecheck_templates": {
             "*": "{check_id}: {message}",
             "inventory.zero_byte": "The file '{path}' is empty (0 bytes). Please remove it or upload the complete file.",
             "inventory.unchecked_types": "Some files need manual review: {message}",
             "inventory.restricted_files": "The dataset has {message}. Please confirm the access conditions for these files.",
             "inventory.embargoed_files": "The dataset has {message}. Please confirm the embargo date and terms of access.",
+            "metadata.readme_sections": "The README is missing these standard sections: {readme_sections}. Please add them so the data can be reused without contacting you.",
         },
         "response_header": (
             "Hello,\n\nThank you for depositing your dataset ({dataset_title}, {persistent_id}). "
@@ -282,6 +360,7 @@ def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
         "dataverses": raw.get("dataverses", builtin.get("dataverses", ["*"])),
         "field_rules": raw.get("field_rules", builtin.get("field_rules", [])),
         "content_rules": raw.get("content_rules", builtin.get("content_rules", [])),
+        "section_rules": raw.get("section_rules", builtin.get("section_rules", DEFAULT_README_SECTIONS)),
         "filecheck_templates": raw.get("filecheck_templates", builtin.get("filecheck_templates", {})),
         "response_header": str(raw.get("response_header") or builtin.get("response_header") or ""),
         "response_footer": str(raw.get("response_footer") or builtin.get("response_footer") or ""),
@@ -292,12 +371,19 @@ def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
         out["field_rules"] = []
     if not isinstance(out["content_rules"], list):
         out["content_rules"] = []
+    if not isinstance(out["section_rules"], list):
+        out["section_rules"] = [dict(r) for r in DEFAULT_README_SECTIONS]
     if not isinstance(out["filecheck_templates"], dict):
         out["filecheck_templates"] = {}
     # Copy rule dicts: normalization fills defaults in place and must never
     # mutate the caller's structures (or the built-in singletons).
     out["field_rules"] = [dict(r) for r in out["field_rules"] if isinstance(r, dict) and r.get("field")]
     out["content_rules"] = [dict(r) for r in out["content_rules"] if isinstance(r, dict) and r.get("id")]
+    out["section_rules"] = [
+        dict(r) for r in out["section_rules"] if isinstance(r, dict) and r.get("id")
+    ]
+    if not out["section_rules"]:
+        out["section_rules"] = [dict(r) for r in DEFAULT_README_SECTIONS]
     out["filecheck_templates"] = dict(out["filecheck_templates"])
     out["dataverses"] = list(out["dataverses"])
     for r in out["field_rules"]:
@@ -317,6 +403,14 @@ def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
         r.setdefault("pattern", "")
         r.setdefault("case_sensitive", False)
         r.setdefault("response_template", "")
+    for r in out["section_rules"]:
+        if r.get("level") not in ("required", "optional"):
+            r["level"] = "required"
+        r.setdefault("label", str(r.get("id") or ""))
+        probes = r.get("probes")
+        if not isinstance(probes, list):
+            probes = [str(r.get("label") or r.get("id") or "")]
+        r["probes"] = [str(p) for p in probes if str(p).strip()]
     return out
 
 

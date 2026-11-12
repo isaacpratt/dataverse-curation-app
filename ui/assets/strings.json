@@ -724,7 +724,9 @@
       "missing_pip": "Missing: pip install {package}",
       "will_run_badge": "Will run",
       "badge_missing": "MISSING",
-      "badge_pass": "PASS"
+      "badge_pass": "PASS",
+      "readme_section_found": "✓ {label}",
+      "readme_section_missing": "○ {label}"
     },
     "metadata_check": {
       "tip": "Metadata completeness for the active profile. Each row shows the field, its metadata block, the current value and a pass/issue status; incomplete rows are what is left to fill before publication. The requirement for a field lives in its tooltip.",
