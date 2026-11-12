@@ -839,6 +839,22 @@
       "log_opened": "Follow-up opened (revisions requested)",
       "log_closed": "Follow-up closed (decision changed)"
     },
+    "preview": {
+      "title": "Preview",
+      "tip": "A bounded look at the selected file — first rows, first pages, first entries. Head bytes only; never a full load, never a network call.",
+      "select_file": "Select a file in the manifest to preview it.",
+      "not_staged": "File not staged locally — use Open folder to reveal it.",
+      "too_large": "This file is larger than {cap} MiB — preview disabled. Use Open folder to inspect it.",
+      "open_folder": "Open folder",
+      "error": "Could not preview: {message}",
+      "unsupported": "No preview for .{ext} files — use Open folder to inspect it.",
+      "pdf_pages": "Pages: {pages}",
+      "no_pdf_text": "(no extractable text — scanned PDF?)",
+      "dims": "{width} × {height} {format}",
+      "dimensions": "{rows} rows × {cols} columns",
+      "truncated": "… (output truncated)",
+      "archive_more": "… and {extra} more entries ({total} total)"
+    },
     "verdict": {
       "banner_tip": "Live verdict from the checks and metadata below; click a reason to jump to it.",
       "level_ready": "Ready",
@@ -877,6 +893,7 @@
       "action_dictionary": "Variable-dictionary draft exported",
       "action_follow_up_opened": "Follow-up opened (revisions requested)",
       "action_follow_up_closed": "Follow-up closed",
+      "action_preview": "File preview opened",
       "action_record": "Curation record exported",
       "action_notes": ": {notes}",
       "unnamed_file": "(unnamed file)",

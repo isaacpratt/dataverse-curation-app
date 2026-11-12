@@ -650,6 +650,12 @@ class DatasetDetailView(QWidget):
         self._nav_card = self._build_nav_card()
         side_wrap.addWidget(self._nav_card)
 
+        # In-app file preview (dv-koz): shows the head of the file the
+        # curator clicked in the manifest; degrades to Missing-library
+        # notices or an Open-folder fallback when it can't render.
+        self._preview_card = self._build_preview_card()
+        side_wrap.addWidget(self._preview_card)
+
         self._dataset_log_card = self._build_dataset_log_card()
         # Stretch factor 1: the log owns the sidebar's free vertical space
         # so the timeline reads without constant scrolling.
@@ -1437,6 +1443,12 @@ class DatasetDetailView(QWidget):
         self._decision_combo.currentIndexChanged.connect(self._sync_decision_state)
         self._sync_decision_state()
         return card
+
+    def _build_preview_card(self) -> QFrame:
+        """Sidebar file preview (dv-koz): the head of the clicked manifest file."""
+        from ui.preview import PreviewCard
+
+        return PreviewCard(on_open_folder=self._on_open_folder, parent=self)
 
     def _build_nav_card(self) -> QFrame:
         """Sidebar section navigation — jumps the main column to each box."""
@@ -2737,6 +2749,7 @@ class DatasetDetailView(QWidget):
             "dictionary_drafted": t("detail.dataset_log.action_dictionary"),
             "follow_up_opened": t("detail.dataset_log.action_follow_up_opened"),
             "follow_up_closed": t("detail.dataset_log.action_follow_up_closed"),
+            "preview_rendered": t("detail.dataset_log.action_preview"),
         }
         for a in actions:
             act = a.get("action") or ""
@@ -4987,9 +5000,14 @@ class DatasetDetailView(QWidget):
                 )
             )
         elif kind == "file":
+            path = info.get("path", "")
+            # In-app preview (dv-koz): set it even without a report.
+            try:
+                self._show_preview_for_file(path)
+            except Exception:
+                pass
             if not self._report:
                 return
-            path = info.get("path", "")
             entry = next((f for f in self._report.files if f.path == path), None)
             if not entry:
                 self._set_status(t("detail.status.path_not_in_report", path=path))
@@ -5011,6 +5029,31 @@ class DatasetDetailView(QWidget):
                 )
         else:
             return
+
+    def _show_preview_for_file(self, path: str) -> None:
+        """Route a manifest click into the preview card (dv-koz)."""
+        try:
+            staged = self._dl_mgr.files_dir(self._pid)
+        except Exception:
+            staged = None
+        if self._preview_card is None:
+            return
+        candidate = (Path(staged) / path) if staged else Path(path)
+        try:
+            if candidate.is_file():
+                kind = self._preview_card.set_path(candidate, rel=path)
+            else:
+                kind = self._preview_card.set_not_staged(rel=path)
+        except Exception:
+            kind = "error"
+        try:
+            self._log_action(
+                "preview_rendered",
+                path,
+                {"path": str(path), "kind": str(kind)},
+            )
+        except Exception:
+            pass
 
     def _on_file_selected(self, row: int, _col: int) -> None:
         # Legacy table slot (pre-tree). Kept so old signal wiring fails
