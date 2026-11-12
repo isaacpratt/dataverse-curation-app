@@ -467,6 +467,25 @@ def _version_files_data(data: Any) -> dict[str, Any]:
         return {}
 
 
+def _version_last_update(data: Any) -> str:
+    """Best-effort version ``lastUpdateTime`` from a version payload (dv-5eg).
+
+    Used to tell whether the depositor touched the draft since a
+    revisions-requested decision; "" when the server did not say.
+    """
+    try:
+        version_data = _version_files_data(data)
+        if isinstance(version_data, dict):
+            ts = str(version_data.get("lastUpdateTime") or "")
+            if ts:
+                return ts
+        if isinstance(data, dict):
+            return str(data.get("lastUpdateTime") or "")
+    except Exception:
+        pass
+    return ""
+
+
 def _summarize_version_data(data: Any) -> tuple[list[dict[str, Any]], str, str, bool]:
     """Best-effort (files, depositor, versionState, files_known) from a payload.
 
@@ -2304,7 +2323,10 @@ class DataverseClient:
                 pid, fall_back_on_auth=True
             )
             files, depositor, state, files_known = _summarize_version_data(data)
-            return ds, (files, depositor, state, used_version, files_known)
+            return ds, (
+                files, depositor, state, used_version, files_known,
+                _version_last_update(data),
+            )
 
         def _auth_denied(exc: BaseException) -> bool:
             try:
@@ -2339,7 +2361,12 @@ class DataverseClient:
                             break
                         continue
                     try:
-                        files, depositor, state, used_version, files_known = summary
+                        (
+                            files, depositor, state, used_version, files_known,
+                            last_update,
+                        ) = summary
+                        if last_update:
+                            ds["draft_updated_at"] = last_update
                         if files_known:
                             ds["total_size_bytes"] = sum(
                                 int(f.get("size_bytes") or 0) for f in files

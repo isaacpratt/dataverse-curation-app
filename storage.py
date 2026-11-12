@@ -74,6 +74,13 @@ CREATE TABLE IF NOT EXISTS sensitivity_reviews (
     note TEXT DEFAULT '',
     updated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS follow_ups (
+    dataset_id TEXT PRIMARY KEY,
+    opened_at TEXT NOT NULL,
+    decision_label TEXT DEFAULT '',
+    last_update TEXT DEFAULT '',
+    updated_at TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_curation_actions_dataset
     ON curation_actions(dataset_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_curation_actions_action
@@ -335,6 +342,102 @@ class AppState:
                  str(note or ""), _utcnow_iso()),
             )
             self._conn.commit()
+
+    # -- depositor follow-ups (dv-5eg) ------------------------------------
+
+    def open_follow_up(
+        self,
+        dataset_id: str,
+        decision_label: str = "",
+        opened_at: str | None = None,
+    ) -> None:
+        """Open (or refresh) the waiting-on-depositor state for a dataset.
+
+        ``opened_at`` is preserved on a re-open so "since <date>" keeps the
+        original request date when the curator re-sends revisions.
+        """
+        ts = opened_at or _utcnow_iso()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO follow_ups "
+                "(dataset_id, opened_at, decision_label, updated_at) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(dataset_id) DO UPDATE SET "
+                "decision_label=excluded.decision_label, "
+                "updated_at=excluded.updated_at",
+                (dataset_id, ts, str(decision_label or ""), _utcnow_iso()),
+            )
+            self._conn.commit()
+
+    def close_follow_up(self, dataset_id: str) -> bool:
+        """Close a follow-up; True when one was open."""
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM follow_ups WHERE dataset_id = ?", (dataset_id,)
+            )
+            self._conn.commit()
+            return int(cur.rowcount or 0) > 0
+
+    def set_follow_up_last_update(self, dataset_id: str, last_update: str) -> None:
+        """Record the observed draft lastUpdateTime for an open follow-up."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE follow_ups SET last_update = ?, updated_at = ? "
+                "WHERE dataset_id = ?",
+                (str(last_update or ""), _utcnow_iso(), dataset_id),
+            )
+            self._conn.commit()
+
+    def get_follow_up(self, dataset_id: str) -> dict[str, Any] | None:
+        """One dataset's follow-up (with derived state), or None."""
+        try:
+            import follow_ups as _fu
+        except Exception:  # pragma: no cover - module is part of the app
+            _fu = None
+        cur = self._conn.execute(
+            "SELECT dataset_id, opened_at, decision_label, last_update "
+            "FROM follow_ups WHERE dataset_id = ?",
+            (dataset_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        opened_at = str(row["opened_at"] or "")
+        last_update = str(row["last_update"] or "")
+        state = (
+            _fu.state_for(opened_at, last_update) if _fu is not None else ""
+        )
+        return {
+            "dataset_id": str(row["dataset_id"] or ""),
+            "opened_at": opened_at,
+            "decision_label": str(row["decision_label"] or ""),
+            "last_update": last_update,
+            "state": state,
+        }
+
+    def list_follow_ups(self) -> dict[str, dict[str, Any]]:
+        """{persistent_id: follow-up} for every open follow-up."""
+        try:
+            import follow_ups as _fu
+        except Exception:  # pragma: no cover - module is part of the app
+            _fu = None
+        cur = self._conn.execute(
+            "SELECT dataset_id, opened_at, decision_label, last_update FROM follow_ups"
+        )
+        out: dict[str, dict[str, Any]] = {}
+        for row in cur.fetchall():
+            opened_at = str(row["opened_at"] or "")
+            last_update = str(row["last_update"] or "")
+            out[str(row["dataset_id"])] = {
+                "dataset_id": str(row["dataset_id"] or ""),
+                "opened_at": opened_at,
+                "decision_label": str(row["decision_label"] or ""),
+                "last_update": last_update,
+                "state": (
+                    _fu.state_for(opened_at, last_update) if _fu is not None else ""
+                ),
+            }
+        return out
 
     def last_action(self, dataset_id: str, action: str) -> dict[str, Any] | None:
         """Newest action of a given type, or None."""

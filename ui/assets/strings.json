@@ -205,7 +205,12 @@
       "total_size_bytes": "Size",
       "state": "Status",
       "curation_label": "Curation Label",
+      "follow_up": "Follow-up",
       "downloaded_at": "Downloaded"
+    },
+    "follow_up": {
+      "awaiting": "Awaiting reply — since {date}",
+      "updated": "Depositor updated — re-run checks"
     },
     "metrics": {
       "pending": {
@@ -826,6 +831,14 @@
       "gate_title": "Sensitivity review incomplete",
       "gate_body": "This collection's ruleset requires the sensitivity & ethics review before approval. {answered} of {total} questions answered — complete the review above, then commit again."
     },
+    "follow_up": {
+      "awaiting": "Revisions requested — awaiting the depositor since {date}.",
+      "updated": "Depositor updated the draft after your request — re-run checks and compare with the Changes step.",
+      "run_checks": "Re-run checks",
+      "changes": "View changes",
+      "log_opened": "Follow-up opened (revisions requested)",
+      "log_closed": "Follow-up closed (decision changed)"
+    },
     "verdict": {
       "banner_tip": "Live verdict from the checks and metadata below; click a reason to jump to it.",
       "level_ready": "Ready",
@@ -862,6 +875,8 @@
       "action_disposition": "Disposition updated",
       "action_sensitivity": "Sensitivity review updated",
       "action_dictionary": "Variable-dictionary draft exported",
+      "action_follow_up_opened": "Follow-up opened (revisions requested)",
+      "action_follow_up_closed": "Follow-up closed",
       "action_record": "Curation record exported",
       "action_notes": ": {notes}",
       "unnamed_file": "(unnamed file)",

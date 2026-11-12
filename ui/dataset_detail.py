@@ -329,6 +329,9 @@ class DatasetDetailView(QWidget):
         self._version_diff: dict | None = None
         self._versions: list = []
         self._timestamps: dict = {}
+        # Open depositor follow-up for this dataset (dv-5eg), refreshed from
+        # storage on load and after a decision commits; None when closed.
+        self._follow_up: dict | None = None
         self._review_submissions: list = []
         self._in_review: bool = False
         self._profile = DEFAULT_PROFILE
@@ -592,6 +595,11 @@ class DatasetDetailView(QWidget):
         main_wrap.setContentsMargins(0, 0, 0, 0)
         self._main_wrap = main_wrap
 
+        # Depositor follow-up banner (dv-5eg): shown while a revisions
+        # decision is awaiting the depositor, and again once the draft moves.
+        self._follow_up_card = self._build_follow_up_card()
+        main_wrap.addWidget(self._follow_up_card)
+
         self._verdict_card = self._build_verdict_card()
         main_wrap.addWidget(self._verdict_card)
 
@@ -832,6 +840,148 @@ class DatasetDetailView(QWidget):
                 self._verdict_chips.addWidget(chip)
         except Exception:
             pass
+
+    def _build_follow_up_card(self) -> QFrame:
+        """Waiting-on-depositor banner (dv-5eg), above the verdict banner."""
+        card = QFrame()
+        card.setObjectName("FollowUpCard")
+        lay = QHBoxLayout(card)
+        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setSpacing(10)
+        self._follow_up_icon = QLabel()
+        lay.addWidget(self._follow_up_icon)
+        self._follow_up_label = QLabel("")
+        self._follow_up_label.setObjectName("LabelStrongSM")
+        self._follow_up_label.setWordWrap(True)
+        lay.addWidget(self._follow_up_label, 1)
+        self._follow_up_checks_btn = make_action_button(
+            t("detail.follow_up.run_checks"), kind="primary", size="sm"
+        )
+        self._follow_up_checks_btn.clicked.connect(self._on_run_checks)
+        self._follow_up_checks_btn.setVisible(False)
+        lay.addWidget(self._follow_up_checks_btn)
+        self._follow_up_changes_btn = make_action_button(
+            t("detail.follow_up.changes"), kind="secondary", size="sm"
+        )
+        self._follow_up_changes_btn.clicked.connect(
+            lambda: self._on_workflow_step("changes")
+        )
+        lay.addWidget(self._follow_up_changes_btn)
+        card.setVisible(False)
+        return card
+
+    def _refresh_follow_up(self) -> None:
+        """Paint the follow-up banner from in-memory + stored state."""
+        from ui.icons import icon as _icon
+
+        opened_at = ""
+        state = ""
+        try:
+            st = self._state()
+            try:
+                row = st.get_follow_up(self._pid)
+            finally:
+                try:
+                    st.close()
+                except Exception:
+                    pass
+            if isinstance(row, dict):
+                opened_at = str(row.get("opened_at") or "")
+                state = str(row.get("state") or "")
+        except Exception:
+            pass
+        try:
+            last_update = str((self._timestamps or {}).get("lastUpdateTime") or "")
+        except Exception:
+            last_update = ""
+        if opened_at and last_update:
+            try:
+                import follow_ups as _fu
+
+                state = _fu.state_for(opened_at, last_update)
+            except Exception:
+                pass
+        self._follow_up = (
+            {"opened_at": opened_at, "state": state} if opened_at else None
+        )
+        if not opened_at:
+            self._follow_up_card.setVisible(False)
+            return
+        updated = state == "depositor_updated"
+        try:
+            self._follow_up_icon.setPixmap(
+                _icon(
+                    "triangle-alert" if updated else "clock",
+                    color=TEXT_AMBER if updated else TEXT_MUTED,
+                ).pixmap(18, 18)
+            )
+        except Exception:
+            pass
+        self._follow_up_card.setStyleSheet(
+            surface_frame_qss(
+                SURFACE_TINT if updated else SURFACE_SUBTLE,
+                STATE_WARNING_GRAPHIC if updated else BORDER_SUBTLE,
+                selector="QFrame#FollowUpCard",
+            )
+        )
+        self._follow_up_label.setText(
+            t(
+                "detail.follow_up.updated" if updated else "detail.follow_up.awaiting",
+                date=opened_at[:10],
+            )
+        )
+        self._follow_up_checks_btn.setVisible(bool(updated))
+        self._follow_up_changes_btn.setVisible(bool(updated))
+        self._follow_up_card.setVisible(True)
+
+    def _note_follow_up_update(self) -> None:
+        """Persist the observed draft lastUpdateTime for an open follow-up."""
+        try:
+            last_update = str((self._timestamps or {}).get("lastUpdateTime") or "")
+            if not last_update:
+                return
+            st = self._state()
+            try:
+                if st.get_follow_up(self._pid):
+                    st.set_follow_up_last_update(self._pid, last_update)
+            finally:
+                try:
+                    st.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        self._refresh_follow_up()
+
+    def _sync_follow_up(self, decision: str) -> None:
+        """Open/close the follow-up from a committed decision (dv-5eg)."""
+        try:
+            import follow_ups as _fu
+
+            is_revision = _fu.is_revision_decision(
+                decision, t("detail.decision.option_revisions")
+            )
+            st = self._state()
+            try:
+                if is_revision:
+                    st.open_follow_up(self._pid, decision_label=decision)
+                else:
+                    closed = st.close_follow_up(self._pid)
+                    if closed:
+                        self._log_action(
+                            "follow_up_closed",
+                            t("detail.follow_up.log_closed"),
+                        )
+            finally:
+                try:
+                    st.close()
+                except Exception:
+                    pass
+            if is_revision:
+                self._log_action("follow_up_opened", t("detail.follow_up.log_opened"))
+        except Exception:
+            pass
+        self._refresh_follow_up()
 
     def _on_verdict_chip(self, target: str) -> None:
         """A reason chip navigates to the card that owns the reason."""
@@ -1528,6 +1678,10 @@ class DatasetDetailView(QWidget):
             pass
         try:
             self._refresh_verdict()
+        except Exception:
+            pass
+        try:
+            self._refresh_follow_up()
         except Exception:
             pass
 
@@ -2581,6 +2735,8 @@ class DatasetDetailView(QWidget):
             "curation_record_exported": t("detail.dataset_log.action_record"),
             "sensitivity_reviewed": t("detail.dataset_log.action_sensitivity"),
             "dictionary_drafted": t("detail.dataset_log.action_dictionary"),
+            "follow_up_opened": t("detail.dataset_log.action_follow_up_opened"),
+            "follow_up_closed": t("detail.dataset_log.action_follow_up_closed"),
         }
         for a in actions:
             act = a.get("action") or ""
@@ -4044,6 +4200,7 @@ class DatasetDetailView(QWidget):
         self._refresh_sensitivity_card()
         self._raw_view.setPlainText(_format_metadata(metadata))
         self._populate_completeness(metadata)
+        self._note_follow_up_update()
         self.metadataLoaded.emit(self._pid, metadata, self._inventory)
         self._refresh_curation_preview()
         self._refresh_dataset_log()
@@ -4423,6 +4580,9 @@ class DatasetDetailView(QWidget):
             + (t("detail.decision.log_notes", notes=notes[:200]) if notes else ""),
             {"decision": decision, "notes": notes[:2000]},
         )
+        # Depositor follow-up (dv-5eg): a revisions decision opens one;
+        # any other decision closes it.
+        self._sync_follow_up(decision)
         # A recorded decision closes the last workflow step (the Dataverse
         # push may still fail; that is surfaced by the dialog below).
         self._decision_committed = True
