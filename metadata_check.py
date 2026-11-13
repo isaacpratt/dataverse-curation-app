@@ -125,7 +125,9 @@ ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
 
 
 def _fields_for_block(metadata_blocks: dict[str, Any], block_name: str) -> list[dict[str, Any]]:
-    return metadata_blocks.get(block_name, {}).get("fields", [])
+    block = metadata_blocks.get(block_name, {})
+    fields: list[dict[str, Any]] = block.get("fields", []) if isinstance(block, dict) else []
+    return fields
 
 
 def _field(metadata_blocks: dict[str, Any], block_name: str, type_name: str) -> Any:

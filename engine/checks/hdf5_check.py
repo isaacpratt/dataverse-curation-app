@@ -43,7 +43,7 @@ class Hdf5Check(Check):
         name = path.name
         items: list[str] = []
         datasets: list[dict] = []
-        external_links = []
+        external_links: list[str] = []
         truncated = False
         with h5py.File(str(path), "r", locking=False) as handle:
             def _visit(obj_path, obj):

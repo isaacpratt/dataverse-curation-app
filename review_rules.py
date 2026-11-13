@@ -52,6 +52,20 @@ FIELD_LEVELS = ("required", "optional", "unchecked")
 CONTENT_SCOPES = ("filenames", "metadata", "file-content")
 CONTENT_MATCHES = ("filename-glob", "substring", "regex")
 
+
+def _rule_scopes(rule: dict[str, Any]) -> list[str]:
+    """Content-rule scopes as a list, defaulting to ["filenames"].
+
+    ``scope`` is user-editable JSON, so it can be absent, a string, or a list
+    holding non-strings; anything unusable degrades to the filename scope.
+    """
+    raw = rule.get("scope")
+    if isinstance(raw, list):
+        scopes = [str(s) for s in raw if str(s) in CONTENT_SCOPES]
+        if scopes:
+            return scopes
+    return ["filenames"]
+
 DEFAULT_RULESET_KEY = "mcmaster-default"
 
 # Fallback catalog used when the live metadatablocks schema is unavailable
@@ -334,6 +348,7 @@ def load_rulesets() -> dict[str, dict[str, Any]]:
     on its own deep copy).
     """
     base = builtin_rulesets()
+    sig: tuple[str, int | None, int | None]
     try:
         path = rulesets_path()
         try:
@@ -342,7 +357,8 @@ def load_rulesets() -> dict[str, dict[str, Any]]:
         except OSError:
             sig = (str(path), None, None)
         if _RULESETS_MEMO.get("sig") == sig and isinstance(_RULESETS_MEMO.get("pool"), dict):
-            return _RULESETS_MEMO["pool"]
+            memo_pool: dict[str, dict[str, Any]] = _RULESETS_MEMO["pool"]
+            return memo_pool
         if sig[1] is None:
             _RULESETS_MEMO["sig"] = sig
             _RULESETS_MEMO["pool"] = base
@@ -672,7 +688,7 @@ def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any]
         authors = [a for a in raw if isinstance(a, dict)] if isinstance(raw, list) else []
         if not authors:
             return False, "—"
-        missing: list[str] = []
+        missing_orcid: list[str] = []
         found: list[str] = []
         for i, author in enumerate(authors):
             name = str(
@@ -687,17 +703,17 @@ def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any]
             if "orcid" in str(scheme_str).lower() and id_str.strip() and m.ORCID_RE.match(id_str.strip()):
                 found.append(f"{name}: {id_str.strip()}")
             else:
-                missing.append(name)
+                missing_orcid.append(name)
         val = "; ".join(found[:3]) if found else "—"
         if len(found) > 3:
             val += f" (+{len(found) - 3} more)"
-        if missing and found:
-            val += f" [missing: {', '.join(missing[:3])}]"
-        elif missing and not found:
+        if missing_orcid and found:
+            val += f" [missing: {', '.join(missing_orcid[:3])}]"
+        elif missing_orcid and not found:
             # Preserve the legacy single-value display ("—") for parity when
             # no author has an ORCID yet; the ok flag still tracks per-author.
             val = "—"
-        return (not missing), val
+        return (not missing_orcid), val
     if handler == "author_count":
         raw = m._field(blocks, "citation", "author") or []
         authors = [a for a in raw if isinstance(a, dict)] if isinstance(raw, list) else []
@@ -1002,8 +1018,7 @@ def evaluate_content_rule(rule: dict[str, Any], metadata: dict[str, Any],
                            staged_dir: Any = None,
                            _metadata_strings: list[str] | None = None) -> dict[str, Any]:
     """Evaluate one content rule across its chosen scopes (OR semantics)."""
-    scope = rule.get("scope") if isinstance(rule.get("scope"), list) else ["filenames"]
-    scope = [s for s in scope if s in CONTENT_SCOPES] or ["filenames"]
+    scope = _rule_scopes(rule)
     label = str(rule.get("label") or rule.get("id") or "Content check")
     req = str(rule.get("requirement") or "Custom content rule")
     level = rule.get("level") if rule.get("level") in ("required", "optional") else "required"
@@ -1067,7 +1082,7 @@ def evaluate_ruleset(metadata: dict[str, Any], ruleset: dict[str, Any],
     try:
         content_rules = [cr for cr in ((ruleset or {}).get("content_rules") or []) if isinstance(cr, dict)]
         metadata_strings = _iter_metadata_strings(metadata or {}) if any(
-            "metadata" in (cr.get("scope") if isinstance(cr.get("scope"), list) else ["filenames"])
+            "metadata" in _rule_scopes(cr)
             for cr in content_rules
         ) else []
     except Exception:

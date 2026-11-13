@@ -668,7 +668,7 @@ def write_allowed_labels_cache(
 
 _METADATABLOCKS_FILE = "metadatablocks_cache.json"
 
-_METADATABLOCKS_MEMO: dict[tuple, list[dict[str, str]]] = {}
+_METADATABLOCKS_MEMO: dict[tuple, list[dict[str, Any]]] = {}
 _METADATABLOCKS_LOCK = threading.Lock()
 
 
@@ -711,15 +711,16 @@ def parse_metadatablock_display_names(payload: dict[str, Any]) -> dict[str, str]
     return out
 
 
-def parse_metadatablock_fields(payload: dict[str, Any]) -> list[dict[str, str]]:
-    """[{block, field, label}] from a GET /api/metadatablocks/{name} payload.
+def parse_metadatablock_fields(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return [{block, field, label, parent?, ...}] from a metadatablocks payload.
 
+    Values are mostly strings, but ``is_subfield`` is a bool — hence Any.
     Field map lives under data.metadataFields on older servers and under
     data.fields (dict keyed by field name, or a list) on newer ones
     (verified on 6.8: {"name": ..., "fields": {"geographicCoverage":
     {"name": ..., "displayName": ...}}}). Missing/unknown shapes yield [].
     """
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     try:
         data = (payload or {}).get("data") or {}
         block = str(data.get("name") or "").strip()
@@ -791,7 +792,7 @@ def parse_metadatablock_fields(payload: dict[str, Any]) -> list[dict[str, str]]:
     return out
 
 
-def get_cached_metadata_fields(base_url: str) -> list[dict[str, str]] | None:
+def get_cached_metadata_fields(base_url: str) -> list[dict[str, Any]] | None:
     try:
         with _METADATABLOCKS_LOCK:
             hit = _METADATABLOCKS_MEMO.get((_metadatablocks_disk_key(base_url),))
@@ -800,7 +801,7 @@ def get_cached_metadata_fields(base_url: str) -> list[dict[str, str]] | None:
         return None
 
 
-def set_cached_metadata_fields(base_url: str, fields: list[dict[str, str]]) -> None:
+def set_cached_metadata_fields(base_url: str, fields: list[dict[str, Any]]) -> None:
     try:
         clean = [dict(f) for f in (fields or []) if isinstance(f, dict) and f.get("field")]
         with _METADATABLOCKS_LOCK:
@@ -809,7 +810,7 @@ def set_cached_metadata_fields(base_url: str, fields: list[dict[str, str]]) -> N
         pass
 
 
-def read_metadata_fields_cache(workspace, base_url: str) -> list[dict[str, str]] | None:
+def read_metadata_fields_cache(workspace, base_url: str) -> list[dict[str, Any]] | None:
     """Field catalog from disk for an instance (None = unknown). Never raises."""
     try:
         path = Path(workspace) / _METADATABLOCKS_FILE
@@ -1148,7 +1149,7 @@ class DataverseClient:
                 )
                 elapsed_ms = int((time.monotonic() - start) * 1000)
                 summary = ""
-                body = None
+                body: dict[str, Any] | None = None
                 if response.ok:
                     try:
                         body = response.json()
@@ -1178,7 +1179,8 @@ class DataverseClient:
                 # Reuse already-parsed body when available.
                 if body is not None:
                     return body
-                return response.json()
+                parsed: dict[str, Any] = response.json()
+                return parsed
             except requests.HTTPError as exc:
                 delay = _throttle_delay(exc)
                 if delay is not None and attempt < 2:
@@ -1863,7 +1865,7 @@ class DataverseClient:
             return {}
         return parse_metadatablock_display_names(payload)
 
-    def get_metadatablock_fields(self, block: str) -> list[dict[str, str]]:
+    def get_metadatablock_fields(self, block: str) -> list[dict[str, Any]]:
         """[{block, field, label}] for one block ([] when unavailable)."""
         try:
             payload = self._get_json(f"/api/metadatablocks/{block}")
@@ -1871,7 +1873,7 @@ class DataverseClient:
             return []
         return parse_metadatablock_fields(payload)
 
-    def fetch_metadata_field_catalog(self) -> list[dict[str, str]]:
+    def fetch_metadata_field_catalog(self) -> list[dict[str, Any]]:
         """Full field catalog across blocks (memory/disk cache first).
 
         One /api/metadatablocks call plus one per block on miss; cached per
@@ -2136,7 +2138,8 @@ class DataverseClient:
             )
         else:
             payload = self._get_json(f"/api/datasets/{identifier}")
-        return payload.get("data", {})
+        data: dict[str, Any] = payload.get("data", {})
+        return data
 
     def get_guestbook(self, guestbook_id: int | str) -> dict[str, Any]:
         """Fetch one guestbook definition (required fields + custom questions).
@@ -2303,7 +2306,7 @@ class DataverseClient:
         if not todo:
             return result
 
-        def _fetch_one(ds: dict) -> tuple[dict, tuple | None]:
+        def _fetch_one(ds: dict) -> tuple[dict, tuple]:
             pid = str(ds.get("persistent_id") or "")
             # fall_back_on_auth: a published dataset has no readable draft
             # and a guest token cannot see drafts at all — fall through to
