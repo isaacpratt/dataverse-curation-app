@@ -748,6 +748,21 @@ class ReviewConfigView(QWidget):
             except Exception:
                 pass
             return
+        if self._find_field_rule(block, field, new) is not None:
+            # A rule with this check already exists for the field — do not
+            # create a duplicate (block, field, handler) triple; the first
+            # match would silently win the params panel.
+            self._loading = True
+            try:
+                idx = combo.findData(old)
+                combo.setCurrentIndex(idx if idx >= 0 else 0)
+            finally:
+                self._loading = False
+            try:
+                self._status.setText(t("review.messages.duplicate_rule"))
+            except Exception:
+                pass
+            return
         fr["handler"] = new
         if new == "looks_correct" and not isinstance(fr.get("params"), dict):
             # Sensible default: catch the obvious placeholder entries first.

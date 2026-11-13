@@ -169,3 +169,13 @@ class TestResponseDraftExclusion:
     def test_collect_functions_accept_none(self):
         assert collect_metadata_sections({}, _completeness()) != []
         assert collect_filecheck_sections({}, _report()) != []
+
+    def test_skipped_rows_emit_no_sections(self):
+        rows = _completeness() + [{
+            "field": "Subject", "rule_id": "field:citation.subject",
+            "requirement": "off", "value": "—",
+            "status": "skipped", "level": "unchecked", "pending": False,
+            "response_template": "",
+        }]
+        sections = collect_metadata_sections({}, rows)
+        assert [s["label"] for s in sections] == ["Affiliation"]

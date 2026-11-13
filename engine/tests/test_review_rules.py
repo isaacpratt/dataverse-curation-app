@@ -66,6 +66,34 @@ def test_include_unchecked_synthesizes_skipped_rows():
     assert not any(r["field"] == "Subject" for r in res)
 
 
+def test_include_unchecked_does_not_duplicate_a_checked_rule():
+    rs = {"field_rules": [
+        {"block": "citation", "field": "title", "label": "Title", "level": "unchecked",
+         "requirement": "off", "handler": "nonempty", "response_template": ""},
+        {"block": "citation", "field": "title", "label": "Title", "level": "required",
+         "requirement": "on", "handler": "nonempty", "response_template": ""},
+    ]}
+    res = rr.evaluate_ruleset(_meta([_f("title", "T")]), rs, [], include_unchecked=True)
+    titles = [r for r in res if r["rule_id"] == "field:citation.title"]
+    assert len(titles) == 1, "the checked rule wins; the ghost row is dropped"
+    assert titles[0]["status"] == "complete"
+
+
+def test_handler_exception_surfaces_as_a_rule_error_row(monkeypatch):
+    rs = {"field_rules": [
+        {"block": "citation", "field": "title", "label": "Title", "level": "required",
+         "requirement": "boom", "handler": "nonempty", "response_template": ""},
+    ]}
+    def _boom(*_a, **_kw):
+        raise RuntimeError("handler exploded")
+
+    monkeypatch.setattr(rr, "_eval_handler", _boom)
+    res = rr.evaluate_ruleset(_meta([_f("title", "T")]), rs, [])
+    row = next(r for r in res if r["rule_id"] == "field:citation.title")
+    assert row["status"] == "incomplete"
+    assert "[rule error" in row["value"]
+
+
 def test_optional_missing_stays_incomplete_with_level():
     rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
     res = rr.evaluate_ruleset(_meta([]), rs, [])

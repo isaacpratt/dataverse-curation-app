@@ -282,14 +282,20 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
             # column plus the exact counts in the tooltip.
             cov = coverage.get(path)
             if isinstance(cov, dict):
-                labeled = int(cov.get("labeled") or 0)
-                total = int(cov.get("total") or 0)
-                scan = scan + t(
-                    "checks.var_coverage_suffix", labeled=labeled, total=total
-                )
-                tip = tip + "\n" + t(
-                    "checks.var_coverage_tip", labeled=labeled, total=total
-                )
+                try:
+                    labeled = int(cov.get("labeled") or 0)
+                    total = int(cov.get("total") or 0)
+                except (TypeError, ValueError):
+                    # A stale/hand-written report may carry non-numeric
+                    # coverage; never take down the manifest-tree build.
+                    labeled = total = 0
+                if total or labeled:
+                    scan = scan + t(
+                        "checks.var_coverage_suffix", labeled=labeled, total=total
+                    )
+                    tip = tip + "\n" + t(
+                        "checks.var_coverage_tip", labeled=labeled, total=total
+                    )
             base = path.split("/")[-1]
             name_item = _new_item(base, tip)
             try:

@@ -16,11 +16,12 @@ from typing import Any
 try:
     from storage import finding_key as _finding_key
 except Exception:  # pragma: no cover - storage is stdlib-only
+    import hashlib
+
     def _finding_key(check_id, path="", message=""):  # type: ignore[misc]
-        return "\x1f".join([
-            str(check_id or ""), str(path or ""),
-            " ".join(str(message or "").split()),
-        ])
+        normalized = " ".join(str(message or "").split())
+        raw = "\x1f".join([str(check_id or ""), str(path or ""), normalized])
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
 def _fmt(template: str, ctx: dict[str, Any]) -> str:
@@ -61,6 +62,9 @@ def collect_metadata_sections(ruleset: dict[str, Any],
     for r in completeness or []:
         try:
             if not isinstance(r, dict):
+                continue
+            # Synthesized "skipped" rows (unchecked rules) carry no verdict.
+            if r.get("status") == "skipped":
                 continue
             if r.get("status") == "complete" or r.get("pending"):
                 continue

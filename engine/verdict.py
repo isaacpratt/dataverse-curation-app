@@ -96,7 +96,13 @@ def assess(report: Any = None,
     """
     try:
         has_report = report is not None
-        has_meta = bool(completeness)
+        # Synthesized "skipped" rows from include_unchecked carry no verdict;
+        # a completeness list containing only those counts as unreviewed.
+        evaluable = [
+            r for r in (completeness or [])
+            if isinstance(r, dict) and r.get("status") != "skipped"
+        ]
+        has_meta = bool(evaluable)
         if not has_report and not has_meta:
             return Verdict(LEVEL_UNREVIEWED)
 
@@ -127,8 +133,9 @@ def assess(report: Any = None,
                 pass
 
         # Incomplete metadata rules, resolved ones discounted.
+        # Synthesized "skipped" rows (unchecked rules) carry no verdict.
         required_missing = optional_missing = 0
-        for r in completeness or []:
+        for r in evaluable:
             try:
                 if not isinstance(r, dict):
                     continue

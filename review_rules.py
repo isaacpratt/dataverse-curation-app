@@ -615,7 +615,8 @@ def _leaf_text(node: Any) -> str:
     node = _unwrap(node)
     if node is None:
         return ""
-    if isinstance(node, list):
+    if isinstance(node, (list, dict)):
+        # Never leak a dict repr into a verdict; a composite leaf is no text.
         return ""
     if isinstance(node, bool):
         return "true" if node else "false"
@@ -761,19 +762,32 @@ def _lc_strlist(value: Any) -> list[str]:
     return [p.strip() for p in parts if p and str(p).strip()]
 
 
-def _lc_params(rule: dict[str, Any]) -> dict[str, Any]:
-    """Tolerant params for a looks_correct rule; always a full dict."""
+def _lc_params(rule: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """Tolerant params for a looks_correct rule.
+
+    Returns (params, error). Tolerance is for sloppy JSON (numbers as
+    strings, lists as comma/newline-separated text), never for values
+    that would silently disable a configured check: anything unusable
+    fails the rule closed with a bracketed rule error instead.
+    """
     p = rule.get("params") if isinstance(rule, dict) else None
     p = p if isinstance(p, dict) else {}
-    try:
-        min_length = int(p.get("min_length") or 0)
-    except (TypeError, ValueError):
-        min_length = 0
-    min_length = max(0, min_length)
+    error = ""
+    raw_min = p.get("min_length")
+    min_length = 0
+    if raw_min not in (None, "", 0):
+        try:
+            min_length = int(raw_min)
+            if min_length < 0:
+                error = f"min_length must be >= 0, got {raw_min!r}"
+        except (TypeError, ValueError):
+            error = f"invalid min_length {raw_min!r}"
     regex = str(p.get("regex") or "").strip()
     mode = str(p.get("regex_mode") or "search").strip().lower()
+    if "regex_mode" in p and mode not in ("search", "full"):
+        error = error or f"invalid regex_mode {p.get('regex_mode')!r}"
     return {
-        "min_length": min_length,
+        "min_length": max(0, min_length),
         "regex": regex,
         "regex_mode": "full" if mode == "full" else "search",
         "blocklist": [b.lower() for b in _lc_strlist(p.get("blocklist"))],
@@ -783,7 +797,7 @@ def _lc_params(rule: dict[str, Any]) -> dict[str, Any]:
         "date": bool(p.get("date")),
         "date_order": bool(p.get("date_order")),
         "url": bool(p.get("url")),
-    }
+    }, error
 
 
 def _lc_clip(text: Any, limit: int = 60) -> str:
@@ -848,10 +862,21 @@ def _lc_texts_of(node: Any) -> list[str]:
     return out
 
 
-def _lc_find_pair_key(item: dict[str, Any], pattern: str) -> str | None:
-    for key in item:
-        if re.search(pattern, str(key), flags=re.IGNORECASE):
-            return key
+def _lc_key_side(key: Any) -> str | None:
+    """'start'/'end' when a key carries a whole-word side token.
+
+    Word-token match: ``restarts`` doesn't count as start, and camelCase
+    boundaries split ``timePeriodCoveredStart``/``startDateTime`` cleanly.
+    """
+    words = re.split(
+        r"[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])",
+        str(key or ""),
+    )
+    low = {w.lower() for w in words if w}
+    if "start" in low:
+        return "start"
+    if "end" in low:
+        return "end"
     return None
 
 
@@ -916,9 +941,15 @@ def _looks_correct(m, blocks: dict[str, Any], block: str, field: str,
     reason so a finding is never a silent pass. A rule with no effective
     check configured also fails closed with ``[no entry checks configured]``.
     """
-    p = _lc_params(rule)
+    p, params_error = _lc_params(rule)
     dotted = "." in str(field or "")
+    if params_error:
+        return False, f"[rule error: {params_error}]"
     if dotted:
+        # date_order is meaningless per-leaf (it needs the compound parent);
+        # drop it so a dotted rule configured with only date_order fails
+        # closed below instead of passing untested.
+        p = dict(p, date_order=False)
         # Dotted paths ("author.authorIdentifier") address compound children;
         # a missing/empty leaf fails the rule like the nonempty path does.
         leaves = _field_path(blocks, block, field) or []
@@ -967,23 +998,36 @@ def _lc_effective(p: dict[str, Any]) -> list[bool]:
 
 
 def _lc_date_order(raw: Any, p: dict[str, Any]) -> tuple[str, str]:
-    """Per item in a compound field: start-named <= end-named children."""
+    """Per item in a compound field: start-named <= end-named children.
+
+    An item carrying a start without an end (or vice versa) is a partial
+    pair: it never silently passes. When no complete pair exists at all,
+    the rule fails closed and says how many entries were one-sided.
+    """
     items = raw if isinstance(raw, list) else [raw]
     pairs: list[tuple[str, str]] = []
+    partial = 0
     for item in items:
         if not isinstance(item, dict):
             item = _unwrap(item)
         if not isinstance(item, dict):
             continue
-        start_key = _lc_find_pair_key(item, r"start")
-        end_key = _lc_find_pair_key(item, r"end")
-        if not start_key or not end_key:
+        sides = {side: key for key in item
+                 for side in (_lc_key_side(key),) if side}
+        start_key, end_key = sides.get("start"), sides.get("end")
+        if start_key is None or end_key is None:
+            if start_key is not None or end_key is not None:
+                partial += 1
             continue
         st = _leaf_text(item.get(start_key))
         en = _leaf_text(item.get(end_key))
         if st and en:
             pairs.append((st, en))
+        else:
+            partial += 1
     if not pairs:
+        if partial:
+            return "", f"no complete date range ({partial} one-sided {'entry' if partial == 1 else 'entries'})"
         return "", "no checkable value for date range"
     shown = "; ".join(f"{st} → {en}" for st, en in pairs[:3])
     if len(pairs) > 3:
@@ -1482,6 +1526,23 @@ def evaluate_ruleset(metadata: dict[str, Any], ruleset: dict[str, Any],
     checked" view; they carry no verdict and no disposition key.
     """
     results: list[dict[str, Any]] = []
+    # Pre-scan: ids of the checked field rules, so a synthesized unchecked
+    # row never duplicates a rule the curator actually enabled (the checked
+    # row wins ties). Also dedupes the synthesized rows themselves.
+    field_rules_raw = [fr for fr in (ruleset or {}).get("field_rules") or []
+                       if isinstance(fr, dict)]
+    checked_ids: set[str] = set()
+    for fr in field_rules_raw:
+        if (fr.get("level") or "required") == "unchecked":
+            continue
+        block = str(fr.get("block") or "citation")
+        field = str(fr.get("field") or "")
+        handler = str(fr.get("handler") or "nonempty")
+        rid = f"field:{block}.{field}"
+        if handler != "nonempty":
+            rid += f":{handler}"
+        checked_ids.add(rid)
+    checked_seen: set[str] = set(checked_ids)  # checked ids + synthesized ids
     try:
         blocks = _blocks(metadata or {})
     except Exception:
@@ -1499,39 +1560,34 @@ def evaluate_ruleset(metadata: dict[str, Any], ruleset: dict[str, Any],
         try:
             if not isinstance(fr, dict):
                 continue
-            if (fr.get("level") or "required") == "unchecked":
-                if include_unchecked:
-                    block = str(fr.get("block") or "citation")
-                    field = str(fr.get("field") or "")
-                    handler = str(fr.get("handler") or "nonempty")
-                    rule_id = f"field:{block}.{field}"
-                    if handler != "nonempty":
-                        rule_id += f":{handler}"
-                    results.append({
-                        "rule_id": rule_id,
-                        "kind": "field", "field": str(fr.get("label") or field),
-                        "requirement": str(fr.get("requirement") or ""),
-                        "value": "—", "status": "skipped",
-                        "level": "unchecked", "pending": False,
-                        "response_template": str(fr.get("response_template") or ""),
-                        "block": block, "name": field,
-                    })
-                continue
             block = str(fr.get("block") or "citation")
             field = str(fr.get("field") or "")
             label = str(fr.get("label") or field)
             req = str(fr.get("requirement") or "")
             level = fr.get("level") if fr.get("level") in ("required", "optional") else "required"
             handler = str(fr.get("handler") or "nonempty")
-            ok, val = _eval_handler(
-                handler, metadata or {}, blocks, block, field, fr, inventory=inventory
-            )
             # rule_id carries the handler: several rules may share one field
             # (author names vs ORCiDs both live on citation.author) and the
             # Response findings list keys off rule_id.
             rule_id = f"field:{block}.{field}"
             if handler != "nonempty":
                 rule_id += f":{handler}"
+            if (fr.get("level") or "required") == "unchecked":
+                if include_unchecked and rule_id not in checked_seen:
+                    checked_seen.add(rule_id)
+                    results.append({
+                        "rule_id": rule_id,
+                        "kind": "field", "field": label,
+                        "requirement": req,
+                        "value": "—", "status": "skipped",
+                        "level": "unchecked", "pending": False,
+                        "response_template": str(fr.get("response_template") or ""),
+                        "block": block, "name": field,
+                    })
+                continue
+            ok, val = _eval_handler(
+                handler, metadata or {}, blocks, block, field, fr, inventory=inventory
+            )
             results.append({
                 "rule_id": rule_id,
                 "kind": "field", "field": label, "requirement": req,
@@ -1540,8 +1596,20 @@ def evaluate_ruleset(metadata: dict[str, Any], ruleset: dict[str, Any],
                 "response_template": str(fr.get("response_template") or ""),
                 "block": block, "name": field,
             })
-        except Exception:
-            continue
+        except Exception as exc:
+            # A crashing rule must surface as a finding, never vanish —
+            # a missing required row is a silent pass.
+            try:
+                results.append({
+                    "rule_id": rule_id,
+                    "kind": "field", "field": label, "requirement": req,
+                    "value": f"[rule error: {_lc_clip(exc)}]", "status": "incomplete",
+                    "level": level, "pending": False,
+                    "response_template": str(fr.get("response_template") or ""),
+                    "block": block, "name": field,
+                })
+            except Exception:
+                continue
     for cr in (ruleset or {}).get("content_rules") or []:
         try:
             if not isinstance(cr, dict):

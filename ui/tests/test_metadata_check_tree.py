@@ -121,7 +121,6 @@ def test_every_rule_renders_as_a_row(detail):
     assert "Dataset Contact" in fields
     assert "Description" in fields
     assert "Subject" in fields
-    assert "Time Period / Date of Collection" in fields or "Subject" in fields
 
 
 def test_badge_and_status_complete_for_title(detail):
@@ -191,15 +190,17 @@ def test_single_entry_description_has_no_numbered_entry(detail):
 
 def test_incomplete_rows_carry_disposition_controls(detail):
     row = _row(detail, "ORCiD for authors")
-    if "Incomplete" not in _labels_in(row):
-        pytest.skip("ORCID rule completed for this fixture")
+    assert "Incomplete" in _labels_in(row), (
+        "fixture requires the ORCID rule to fail (Grace Hopper has no identifier)"
+    )
     assert row.findChildren(QComboBox), "incomplete findings carry the disposition combo"
 
 
 def test_complete_filter_rebuilds_the_rows(detail):
     detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("incomplete"))
-    for widget in _rows(detail):
-        assert "Complete" not in _labels_in(widget)
+    fields = [widget.property("meta_field") for widget in _rows(detail)]
+    assert fields, "the incomplete filter must still show something"
+    assert "Title" not in fields, "a complete check must be filtered out"
     detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("all"))
     assert _rows(detail), "the All filter must restore the rows"
 
@@ -251,3 +252,61 @@ def test_section_toggles_collapse_the_block(detail):
     assert row.isHidden()
     btn.click()
     assert not row.isHidden()
+
+
+def test_drawer_keeps_its_open_state_across_section_collapse(detail):
+    from PySide6.QtWidgets import QPushButton
+
+    lay = detail._meta_body_lay
+    header = next(
+        lay.itemAt(i).widget() for i in range(lay.count())
+        if lay.itemAt(i).widget() is not None
+        and lay.itemAt(i).widget().objectName() == "MetaSectionHeader"
+    )
+    btn = next(w for w in header.findChildren(QPushButton) if w.text() == "Citation")
+    row = _row(detail, "Author Name & Affiliation")
+    drawer = _drawer(detail, row)
+    chevrons = list(row.findChildren(QToolButton))
+    # Open the drawer, collapse and re-expand: it stays open.
+    chevrons[0].click()
+    assert not drawer.isHidden()
+    btn.click()
+    assert row.isHidden() and drawer.isHidden()
+    btn.click()
+    assert not row.isHidden() and not drawer.isHidden()
+    # Close the drawer, collapse and re-expand: it stays closed.
+    chevrons[0].click()
+    assert drawer.isHidden()
+    btn.click()
+    btn.click()
+    assert not row.isHidden() and drawer.isHidden()
+
+
+def test_note_without_disposition_defaults_to_acknowledged(detail, monkeypatch):
+    written = {}
+
+    class _State:
+        def list_finding_dispositions(self, pid):
+            return {key: {"disposition": tok, "note": note, "updated_at": ""}
+                    for key, (tok, note) in written.items()}
+
+        def set_finding_disposition(self, pid, key, token, note=""):
+            written[key] = (token, note)
+
+        def log_action(self, pid, action, notes="", details=None):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(detail, "_state", lambda: _State())
+    import PySide6.QtWidgets as _qw
+
+    monkeypatch.setattr(
+        _qw.QInputDialog, "getMultiLineText",
+        staticmethod(lambda *a, **kw: ("looks fine manually", True)),
+    )
+    detail._dispositions_cache = {}
+    key = "rule-id::Note me"
+    detail._on_edit_disposition_note(key)
+    assert written[key] == ("acknowledged", "looks fine manually")

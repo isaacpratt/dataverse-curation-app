@@ -1334,12 +1334,14 @@ class DatasetDetailView(QWidget):
             checked = [r for _i, r in rows if r.get("status") != "skipped"]
             complete = sum(1 for r in checked if r.get("status") == "complete")
             # Rows first: the section header's toggle needs the row widgets.
-            widgets: list[QFrame] = []
+            # Entries carry an is_drawer flag so collapsing the block only
+            # hides what the user had open, never forces a drawer shut.
+            widgets: list[tuple[QFrame, bool]] = []
             for idx, result in rows:
                 row, drawer = self._meta_row(result, idx)
-                widgets.append(row)
+                widgets.append((row, False))
                 if drawer is not None:
-                    widgets.append(drawer)
+                    widgets.append((drawer, True))
             label = self._meta_block_label(block) or (block[:1].upper() + block[1:])
             if checked:
                 counts_text = t(
@@ -1353,21 +1355,27 @@ class DatasetDetailView(QWidget):
             open_state = {"open": True}
 
             def _toggle(_c=False, _rows=widgets, _open=open_state, _chev=chev):
-                _open["open"] = not _open["open"]
-                for w in _rows:
-                    w.setVisible(_open["open"])
+                opening = not _open["open"]
+                _open["open"] = opening
+                for w, is_drawer in _rows:
+                    if is_drawer:
+                        # Restore the drawer's own open state, not "always
+                        # visible" — a collapsed block must not reopen it.
+                        w.setVisible(opening and bool(w.property("drawer_open")))
+                    else:
+                        w.setVisible(opening)
                 from ui.icons import icon as _ic
 
                 from PySide6.QtCore import QSize
 
                 _chev.setPixmap(
-                    _ic("chevron-down" if _open["open"] else "chevron-right",
+                    _ic("chevron-down" if opening else "chevron-right",
                         color=TEXT_MUTED, size=16).pixmap(QSize(16, 16))
                 )
 
             btn.clicked.connect(_toggle)
             lay.addWidget(frame)
-            for w in widgets:
+            for w, _is_drawer in widgets:
                 lay.addWidget(w)
         lay.addStretch(1)
 
@@ -1436,6 +1444,7 @@ class DatasetDetailView(QWidget):
         frame.setObjectName("AutoCheckRow")
         frame.setProperty("meta_field", label)
         frame.setProperty("meta_block", str(result.get("block") or ""))
+        frame.setProperty("meta_rule_id", str(result.get("rule_id") or ""))
         from ui.icons import icon as _icon
         from ui.icons import icon_label as _icon_label
 
@@ -1520,6 +1529,7 @@ class DatasetDetailView(QWidget):
             entries = []
         if entries:
             drawer = self._meta_drawer(entries)
+            drawer.setProperty("drawer_open", False)
             drawer.hide()
             btn = QToolButton(frame)
             btn.setAutoRaise(True)
@@ -1532,6 +1542,9 @@ class DatasetDetailView(QWidget):
             def _toggle_drawer(_c=False, _d=drawer, _btn=btn):
                 opening = _d.isHidden()
                 _d.setVisible(opening)
+                # Section collapse/expand reads this to restore the drawer's
+                # own open state instead of forcing it open.
+                _d.setProperty("drawer_open", opening)
                 _btn.setIcon(
                     _icon("chevron-down" if opening else "chevron-right",
                           color=TEXT_MUTED, size=14)
@@ -2434,7 +2447,8 @@ class DatasetDetailView(QWidget):
     def _on_disposition_changed(self, key: str, token: str) -> None:
         """Combo change on an Auto-Checks row: keep the existing note."""
         current = self._dispositions_map().get(key, {})
-        self._set_disposition(key, str(token or ""), str(current.get("note") or ""))
+        self._set_disposition(key, str(token or ""), str(current.get("note") or ""),
+                              refresh=True)
 
     def _on_edit_disposition_note(self, key: str, token: str = "") -> None:
         """Edit (or add) the note stored with one finding's disposition."""
@@ -2442,6 +2456,11 @@ class DatasetDetailView(QWidget):
         existing = str(current.get("note") or "")
         if not token:
             token = str(current.get("disposition") or "")
+        if not token:
+            # A note implies the curator engaged with the finding; the
+            # mildest honest token is acknowledged. (storage issues a DELETE
+            # for an empty token, which would silently drop the note.)
+            token = "acknowledged"
         text, ok = QInputDialog.getMultiLineText(
             self,
             t("detail.disposition.note_title"),

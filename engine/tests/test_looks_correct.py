@@ -212,6 +212,42 @@ def test_every_failure_carries_a_bracketed_reason():
 # -- dotted paths -------------------------------------------------------------------
 
 
+def test_dotted_date_order_only_fails_closed():
+    """date_order is meaningless per leaf; it must not silently pass."""
+    ok, val = _run(
+        _meta([_f("author", [{"authorName": {"typeName": "text", "value": "Ada Lovelace"}}])]),
+        {"date_order": True}, field="author.authorName",
+    )
+    assert ok is False
+    assert "no entry checks configured" in val
+
+
+def test_invalid_min_length_fails_closed_not_silently():
+    ok, val = _run(_meta([_f("title", "Real title")]), {"min_length": "abc"})
+    assert ok is False
+    assert "rule error" in val
+    ok, val = _run(_meta([_f("title", "Real title")]), {"min_length": -5})
+    assert ok is False
+    assert "rule error" in val
+
+
+def test_partial_date_range_fails_closed():
+    meta = _meta([_f("timePeriodCovered", [{"startDate": {"value": "2001", "typeName": "text"}}])])
+    ok, val = _run(meta, {"date_order": True}, field="timePeriodCovered")
+    assert ok is False
+    assert "one-sided" in val
+
+
+def test_partial_pair_alongside_complete_pair_passes():
+    meta = _meta([_f("timePeriodCovered", [
+        {"startDate": {"value": "2001", "typeName": "text"},
+         "endDate": {"value": "2010", "typeName": "text"}},
+        {"startDate": {"value": "1999", "typeName": "text"}},
+    ])])
+    ok, _ = _run(meta, {"date_order": True}, field="timePeriodCovered")
+    assert ok is True
+
+
 def test_dotted_path_checks_each_leaf():
     fields = [_f("author", [
         {"authorName": {"value": "Ada Lovelace", "typeName": "text"},

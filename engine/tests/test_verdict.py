@@ -52,6 +52,32 @@ OPTIONAL_ROW = {
 }
 
 
+SKIPPED_ROW = {
+    "field": "Subject", "rule_id": "field:citation.subject",
+    "requirement": "off", "value": "—",
+    "status": "skipped", "level": "unchecked", "pending": False,
+}
+
+
+class TestSkippedRows:
+    def test_an_all_skipped_list_is_unreviewed_not_ready(self):
+        verdict = assess(None, [dict(SKIPPED_ROW)])
+        assert verdict.level == LEVEL_UNREVIEWED
+
+    def test_skipped_rows_never_count_as_findings(self):
+        verdict = assess(None, [dict(SKIPPED_ROW), dict(OPTIONAL_ROW)])
+        assert verdict.level == LEVEL_REVISIONS
+        reasons = {r.key: r.count for r in verdict.reasons}
+        assert reasons.get(REASON_OPTIONAL) == 1, (
+            "the skipped row must not add to the optional-missing count"
+        )
+        assert REASON_REQUIRED not in reasons
+
+    def test_a_complete_row_is_still_ready(self):
+        ok_row = {**OPTIONAL_ROW, "status": "complete"}
+        assert assess(None, [dict(SKIPPED_ROW), ok_row]).level == LEVEL_READY
+
+
 class TestLevels:
     def test_nothing_loaded_is_unreviewed(self):
         assert assess(None, None).level == LEVEL_UNREVIEWED
