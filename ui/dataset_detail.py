@@ -40,42 +40,8 @@ from sensitivity import (
     ruleset_requires,
     suggested_answers,
 )
-from storage import RESOLVED_DISPOSITIONS, finding_key
-from storage import read_ui_pref, write_ui_pref
+from storage import RESOLVED_DISPOSITIONS, finding_key, read_ui_pref, write_ui_pref
 from ui.check_titles import check_summary, check_title
-
-# Rail view preference (dv-sce): "mechanical" (default) or "curated".
-# Deliberately not catalogue-key shaped (it is a prefs key, not copy).
-RAIL_VIEW_PREF = "rail_view"
-
-# Where each CURATE(D) step navigates: a Review-page card attribute, or
-# the literal "respond" for the Response page. Navigation only, like the
-# mechanical rail — clicking a step never runs an action.
-_CURATED_TARGETS = {
-    "check": "_file_card",
-    "understand": "_auto_card",
-    "request": "_meta_card",
-    "augment": "_meta_card",
-    "transform": "_auto_card",
-    "evaluate": "_auto_card",
-    "document": "respond",
-}
-
-# Verdict reason/level keys (dv-6nv): stable engine tokens mapped to
-# catalogue copy. Module-level so the string guard sees the keys.
-_VERDICT_REASON_KEYS = {
-    "required-missing": "detail.verdict.reason_required",
-    "optional-missing": "detail.verdict.reason_optional",
-    "errors": "detail.verdict.reason_errors",
-    "warnings": "detail.verdict.reason_warnings",
-    "sensitivity": "detail.verdict.reason_sensitivity",
-}
-_VERDICT_LEVEL_KEYS = {
-    "ready": "detail.verdict.level_ready",
-    "revisions": "detail.verdict.level_revisions",
-    "blocked": "detail.verdict.level_blocked",
-    "unreviewed": "detail.verdict.level_unreviewed",
-}
 from ui.dialogs import confirm, describe_error, show_critical, show_info, show_warning
 from ui.download_dialog import DownloadApprovalDialog
 from ui.i18n import t
@@ -141,6 +107,40 @@ from ui.widgets import (
     set_badge_label,
 )
 from ui.workers import CheckWorker, DownloadWorker, MetadataWorker
+
+# Verdict reason/level keys (dv-6nv): stable engine tokens mapped to
+# catalogue copy. Module-level so the string guard sees the keys.
+_VERDICT_REASON_KEYS = {
+    "required-missing": "detail.verdict.reason_required",
+    "optional-missing": "detail.verdict.reason_optional",
+    "errors": "detail.verdict.reason_errors",
+    "warnings": "detail.verdict.reason_warnings",
+    "sensitivity": "detail.verdict.reason_sensitivity",
+}
+_VERDICT_LEVEL_KEYS = {
+    "ready": "detail.verdict.level_ready",
+    "revisions": "detail.verdict.level_revisions",
+    "blocked": "detail.verdict.level_blocked",
+    "unreviewed": "detail.verdict.level_unreviewed",
+}
+
+# Rail view preference (dv-sce): "mechanical" (default) or "curated".
+# Deliberately not catalogue-key shaped (it is a prefs key, not copy).
+RAIL_VIEW_PREF = "rail_view"
+
+# Where each CURATE(D) step navigates: a Review-page card attribute, or
+# the literal "respond" for the Response page. Navigation only, like the
+# mechanical rail — clicking a step never runs an action.
+_CURATED_TARGETS = {
+    "check": "_file_card",
+    "understand": "_auto_card",
+    "request": "_meta_card",
+    "augment": "_meta_card",
+    "transform": "_auto_card",
+    "evaluate": "_auto_card",
+    "document": "respond",
+}
+
 
 def _human_size(n: int) -> str:
     # Re-exported from the shared helper (dv-005): labels are decimal (KB/MB).
@@ -980,7 +980,7 @@ class DatasetDetailView(QWidget):
         self._refresh_follow_up()
 
     def _on_verdict_chip(self, target: str) -> None:
-        """A reason chip navigates to the card that owns the reason."""
+        """Navigate to the card that owns a selected reason chip."""
         try:
             if target == "respond":
                 self._show_response_page()
@@ -1364,9 +1364,9 @@ class DatasetDetailView(QWidget):
                         w.setVisible(opening and bool(w.property("drawer_open")))
                     else:
                         w.setVisible(opening)
-                from ui.icons import icon as _ic
-
                 from PySide6.QtCore import QSize
+
+                from ui.icons import icon as _ic
 
                 _chev.setPixmap(
                     _ic("chevron-down" if opening else "chevron-right",
@@ -1794,7 +1794,7 @@ class DatasetDetailView(QWidget):
     def _refresh_workflow(self) -> None:
         """Repaint the rail from flags/counts already in memory (no I/O)."""
         try:
-            from ui.workflow import WorkflowInput, derive_workflow, derive_curated
+            from ui.workflow import WorkflowInput, derive_curated, derive_workflow
 
             curated = (
                 read_ui_pref(self._config.app.workspace, RAIL_VIEW_PREF, "mechanical")
@@ -2538,7 +2538,7 @@ class DatasetDetailView(QWidget):
             return {}
 
     def _load_sensitivity_review(self) -> None:
-        """Stored answers, plus machine suggestions where nothing is stored."""
+        """Restore stored answers, plus machine suggestions where nothing is stored."""
         try:
             st = self._state()
             data = st.get_sensitivity_review(self._pid) if st is not None else None

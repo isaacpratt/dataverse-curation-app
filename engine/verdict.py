@@ -184,8 +184,10 @@ def assess(report: Any = None,
 
 
 def format_line(verdict: Verdict) -> str:
-    """Machine-facing verdict summary for headless stdout (no copy prefix:
-    the catalogue's ``app.cli.verdict_line`` supplies "Verdict: ...")."""
+    """Render a machine-facing verdict summary for headless stdout.
+
+    The catalogue's ``app.cli.verdict_line`` supplies "Verdict: ...".
+    """
     if not verdict.reasons:
         return verdict.level
     return verdict.level + " — " + "; ".join(

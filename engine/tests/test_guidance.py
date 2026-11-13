@@ -1,5 +1,4 @@
-"""Check guidance (dv-lfn): conformance, old-payload tolerance, and the
-render paths (Markdown report + response-draft {remediation})."""
+"""Check guidance (dv-lfn): conformance, old-payload tolerance, and the render paths (Markdown report + response-draft {remediation})."""
 
 import re
 from pathlib import Path

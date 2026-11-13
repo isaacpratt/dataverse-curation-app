@@ -1,6 +1,5 @@
 """Depositor follow-up tracking (dv-5eg) — pure logic + storage round-trip."""
 
-import pytest
 
 import follow_ups as fu
 from storage import open_state

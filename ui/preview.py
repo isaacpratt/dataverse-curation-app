@@ -20,6 +20,20 @@ import re
 from pathlib import Path
 from typing import Any
 
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
+
+from ui.i18n import t
+from ui.theme import FONT_CAPTION
+from ui.widgets import (
+    add_info_tip,
+    make_action_button,
+    make_caption_label,
+    make_card,
+    make_plain_text_view,
+)
+
 HEAD_BYTES = 256 * 1024
 MAX_PREVIEW_BYTES = 8 << 20  # 8 MiB
 TEXT_LINES = 40
@@ -52,7 +66,7 @@ def _have(module: str) -> bool:
 
 
 def _missing_library(lib: str) -> str:
-    """Same wording convention as engine.checks._util.missing_library."""
+    """Return missing-library text in the engine's wording convention."""
     import sys
 
     if getattr(sys, "frozen", False):
@@ -420,20 +434,6 @@ def _preview_hdf(path: Path, ext: str) -> dict[str, Any]:
 
 # ── Qt widget ──────────────────────────────────────────────────────────────
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
-
-from ui.i18n import t
-from ui.theme import FONT_CAPTION
-from ui.widgets import (
-    add_info_tip,
-    make_action_button,
-    make_card,
-    make_caption_label,
-    make_plain_text_view,
-)
-
 _COL_CLAMP = 24  # cell text is clamped so wide CSVs never widen the card
 
 
@@ -457,7 +457,7 @@ def render_tabular(result: dict[str, Any]) -> str:
         out.append(" | ".join(_clamp(c) for c in row))
     legend = " · ".join(
         f"{_clamp(c, 18)}: {_clamp(t, 18)}"
-        for c, t in zip(result.get("columns") or [], result.get("types") or [])
+        for c, t in zip(result.get("columns") or [], result.get("types") or [], strict=False)
         if c
     )
     if legend:
@@ -465,9 +465,9 @@ def render_tabular(result: dict[str, Any]) -> str:
         out.append(legend)
     labels = result.get("labels") or []
     label_bits = [
-        f"{_clamp(c, 18)}: {_clamp(l, 40)}"
-        for c, l in zip(result.get("columns") or [], labels)
-        if l
+        f"{_clamp(c, 18)}: {_clamp(lbl, 40)}"
+        for c, lbl in zip(result.get("columns") or [], labels, strict=False)
+        if lbl
     ]
     if label_bits:
         out.append("")

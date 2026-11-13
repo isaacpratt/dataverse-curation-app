@@ -128,7 +128,7 @@ class TestMissingLibraries:
 
 class TestImagesAndPdf:
     def test_png_preview_has_dimensions(self, tmp_path):
-        Image = pytest.importorskip("PIL.Image")
+        pytest.importorskip("PIL.Image")
         from PIL import Image as PILImage
 
         f = tmp_path / "img.png"

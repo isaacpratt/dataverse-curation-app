@@ -67,7 +67,7 @@ QUESTION_IDS = tuple(q["id"] for q in QUESTIONS)
 
 
 def is_complete(answers: dict[str, str] | None) -> bool:
-    """True when every question carries an explicit yes/no answer."""
+    """Return True when every question carries an explicit yes/no answer."""
     if not isinstance(answers, dict):
         return False
     return all(

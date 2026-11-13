@@ -1,12 +1,11 @@
-"""Record-export button (dv-vwt): the handler composes the record from
-the view's state and reports it in the log + status strip."""
+"""Record-export button (dv-vwt): the handler composes the record from the view's state and reports it in the log + status strip."""
 
 import pytest
 
 
 @pytest.fixture()
 def view(qapp, tmp_path):
-    """A bare DatasetDetailView with stubs for the export inputs."""
+    """Create a bare DatasetDetailView with stubs for the export inputs."""
     from config import Config
     from ui.dataset_detail import DatasetDetailView
 

@@ -1,12 +1,11 @@
-"""Sensitivity gate (dv-3c2): the card renders, suggestions prefill,
-answers persist, and the Approve gate follows the ruleset flag."""
+"""Sensitivity gate (dv-3c2): the card renders, suggestions prefill, answers persist, and the Approve gate follows the ruleset flag."""
 
 import pytest
 
 
 @pytest.fixture()
 def view(qapp, tmp_path):
-    """A bare DatasetDetailView wired to a throwaway workspace."""
+    """Create a bare DatasetDetailView wired to a throwaway workspace."""
     from config import Config
     from ui.dataset_detail import DatasetDetailView
 
@@ -58,7 +57,7 @@ def test_suggestions_prefill_with_data(view):
     view._inventory = [{"path": "a.csv"}]
     card = view._build_sensitivity_card()
     combos = card.findChildren(QComboBox)
-    by_qid = {qid: c for qid, c in view._sensitivity_combos.items()}
+    by_qid = dict(view._sensitivity_combos.items())
     # Machine-known answers prefill; the human ones stay unanswered.
     assert by_qid["identifiers"].currentData() == "no"
     assert by_qid["restricted-terms"].currentData() == "yes"
@@ -68,7 +67,6 @@ def test_suggestions_prefill_with_data(view):
 
 
 def test_answer_persists_and_logs(view, qapp):
-    from PySide6.QtWidgets import QComboBox
 
     card = view._build_sensitivity_card()
     qapp.processEvents()
@@ -100,6 +98,6 @@ class TestApproveGate:
         from sensitivity import QUESTION_IDS
 
         view._ruleset = {"requires_sensitivity": True}
-        view._sensitivity_answers = {qid: "no" for qid in QUESTION_IDS}
+        view._sensitivity_answers = dict.fromkeys(QUESTION_IDS, "no")
         blocked, _msg = view._sensitivity_blocks()
         assert blocked is False

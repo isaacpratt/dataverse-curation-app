@@ -1,5 +1,4 @@
-"""Verdict banner (dv-6nv): the card renders levels + reason chips and a
-chip routes to the card that owns the reason."""
+"""Verdict banner (dv-6nv): the card renders levels + reason chips and a chip routes to the card that owns the reason."""
 
 import pytest
 
@@ -8,7 +7,7 @@ from engine.verdict import Verdict
 
 @pytest.fixture()
 def view(qapp):
-    """A bare DatasetDetailView with just the verdict card wired."""
+    """Create a bare DatasetDetailView with just the verdict card wired."""
     from ui.dataset_detail import DatasetDetailView
 
     v = DatasetDetailView.__new__(DatasetDetailView)

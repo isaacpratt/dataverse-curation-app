@@ -35,7 +35,7 @@ def _pct(labeled: int, total: int) -> int:
 
 
 class VarCoverageCheck(Check):
-    """Dataset-level check — can a stranger tell what each variable means?"""
+    """Dataset-level check for whether a stranger can tell what each variable means."""
 
     check_id = "metadata.var_coverage"
     extensions = set()  # dataset-level

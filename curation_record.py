@@ -52,7 +52,7 @@ def _write_text(path: Path, text: str) -> None:
 
 
 def _log_markdown(actions: list[dict[str, Any]]) -> str:
-    """The curation timeline as readable Markdown (newest first)."""
+    """Render the curation timeline as readable Markdown (newest first)."""
     lines = ["# Curation log", ""]
     if not actions:
         lines.append("(no recorded actions)")

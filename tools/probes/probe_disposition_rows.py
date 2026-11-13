@@ -17,7 +17,7 @@ from _common import Report, boot
 
 def main() -> int:
     app, cfg = boot()
-    from storage import AppState, finding_key
+    from storage import finding_key
     from ui.dataset_detail import DatasetDetailView
     from ui.widgets import DISPOSITION_TOKENS, disposition_label
 

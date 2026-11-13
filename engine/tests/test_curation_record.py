@@ -1,5 +1,4 @@
-"""Curation record export (dv-vwt): folder structure, index binding,
-dated re-runs, and the headless wiring."""
+"""Curation record export (dv-vwt): folder structure, index binding, dated re-runs, and the headless wiring."""
 
 import hashlib
 import json

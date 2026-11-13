@@ -1,6 +1,6 @@
-"""Finding dispositions (dv-32x): finding_key stability, storage round-trip,
-and the response-draft exclusion of "Won't fix" findings."""
+"""Finding dispositions (dv-32x): finding_key stability, storage round-trip, and the response-draft exclusion of "Won't fix" findings."""
 
+import ui.widgets as widgets
 from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
 from response_draft import (
@@ -14,9 +14,6 @@ from storage import (
     AppState,
     finding_key,
 )
-
-import ui.widgets as widgets
-
 
 # ---------------------------------------------------------------- keys
 
@@ -40,7 +37,7 @@ class TestFindingKey:
         assert key == finding_key("authorAffiliation", "", "McMaster — Recommended ")
 
     def test_tokens_match_kit(self):
-        """storage and the widget kit must agree on the canonical tokens."""
+        """Storage and the widget kit must agree on the canonical tokens."""
         assert widgets.DISPOSITION_TOKENS == DISPOSITION_TOKENS
 
 

@@ -81,7 +81,7 @@ class TestAttachFollowUps:
 
 @pytest.fixture()
 def view(qapp, tmp_path):
-    """A bare detail view with a real workspace for the follow-up banner."""
+    """Create a bare detail view with a real workspace for the follow-up banner."""
     from config import Config
     from ui.dataset_detail import DatasetDetailView
 

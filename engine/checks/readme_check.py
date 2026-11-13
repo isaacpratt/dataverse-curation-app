@@ -97,7 +97,7 @@ def analyse(text: str, sections: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 class ReadmeSectionsCheck(Check):
-    """Dataset-level check — is the README any good, not just present?"""
+    """Dataset-level check for whether the README is any good, not just present."""
 
     check_id = "metadata.readme_sections"
     extensions = set()  # dataset-level

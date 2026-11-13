@@ -1,13 +1,11 @@
-"""The CURATE(D) practice view (dv-sce): derivation states/counts, rail
-rebuild across step sets, badge letters, and toggle persistence."""
+"""The CURATE(D) practice view (dv-sce): derivation states/counts, rail rebuild across step sets, badge letters, and toggle persistence."""
 
-import pytest
 
 from ui.workflow import (
     AVAILABLE,
     BLOCKED,
-    DONE,
     CURRENT,
+    DONE,
     WorkflowInput,
     derive_curated,
     derive_workflow,
@@ -15,7 +13,7 @@ from ui.workflow import (
 
 
 def _ready(**kw) -> WorkflowInput:
-    """A fully-loaded dataset baseline; tests override fields."""
+    """Build a fully-loaded dataset baseline; tests override fields."""
     for key, value in (
         ("staged", 3), ("total_files", 3), ("report_ready", True),
     ):

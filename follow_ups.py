@@ -22,7 +22,7 @@ STATE_UPDATED = "depositor_updated"
 
 
 def is_revision_decision(decision: str, revision_label: str = "") -> bool:
-    """True when ``decision`` asks the depositor for changes."""
+    """Return True when ``decision`` asks the depositor for changes."""
     text = str(decision or "").strip().lower()
     if not text:
         return False
@@ -55,7 +55,7 @@ def parse_ts(value: Any) -> datetime | None:
 
 
 def newer_than(last_update: Any, decision_ts: Any) -> bool:
-    """True when ``last_update`` is strictly after ``decision_ts``.
+    """Return True when ``last_update`` is strictly after ``decision_ts``.
 
     A missing or unparsable value on either side is not a change: the queue
     must never claim "depositor updated" on a tie or missing data.
@@ -68,5 +68,5 @@ def newer_than(last_update: Any, decision_ts: Any) -> bool:
 
 
 def state_for(opened_at: Any, last_update: Any = None) -> str:
-    """Derived follow-up state: depositor_updated when the draft moved on."""
+    """Derive the follow-up state: depositor_updated when the draft moved on."""
     return STATE_UPDATED if newer_than(last_update, opened_at) else STATE_AWAITING

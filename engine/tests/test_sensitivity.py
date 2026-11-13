@@ -1,5 +1,4 @@
-"""Sensitivity & ethics review (dv-3c2): schema, completion, suggestions,
-storage round-trip, and the Approve gate semantics."""
+"""Sensitivity & ethics review (dv-3c2): schema, completion, suggestions, storage round-trip, and the Approve gate semantics."""
 
 from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
@@ -38,17 +37,17 @@ class TestCompletion:
         assert not is_complete({"human-subjects": "yes"})
 
     def test_complete_when_all_answered(self):
-        answers = {qid: "no" for qid in QUESTION_IDS}
+        answers = dict.fromkeys(QUESTION_IDS, "no")
         assert is_complete(answers)
 
     def test_blank_is_not_an_answer(self):
-        answers = {qid: "no" for qid in QUESTION_IDS}
+        answers = dict.fromkeys(QUESTION_IDS, "no")
         answers["identifiers"] = ""
         assert not is_complete(answers)
 
     def test_answered_count(self):
         assert answered_count({}) == 0
-        assert answered_count({qid: "yes" for qid in QUESTION_IDS}) == 5
+        assert answered_count(dict.fromkeys(QUESTION_IDS, "yes")) == 5
 
 
 class TestSuggestions:
@@ -94,7 +93,7 @@ class TestStorage:
     def test_round_trip_and_reopen(self, tmp_path):
         st = AppState(tmp_path / "state.db")
         assert st.get_sensitivity_review("pid") is None
-        answers = {qid: "no" for qid in QUESTION_IDS}
+        answers = dict.fromkeys(QUESTION_IDS, "no")
         answers["human-subjects"] = "yes"
         st.set_sensitivity_review("pid", answers, note="checked with PI")
         got = st.get_sensitivity_review("pid")
