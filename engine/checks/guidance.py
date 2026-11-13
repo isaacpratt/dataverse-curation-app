@@ -369,10 +369,110 @@ GUIDANCE: dict[str, tuple[str, str]] = {
         "Variable documentation is the layer reuse depends on: without labels, coded columns are uninterpretable outside the original team.",
         "Provide a codebook or label the variables at the source; the Draft data dictionary action exports a CSV the depositor can fill in.",
     ),
+    "inventory.unchecked_types": (
+        "Files nothing inspected have unknown risk: corrupt, empty or sensitive content can reach users unnoticed.",
+        "Review the listed files manually (open them, check for personal data) and add a check or a note to the README.",
+    ),
     "metadata.readme_sections": (
         "A README that skips overview, files, methods, missing-data codes or access leaves reusers guessing — the deposit is technically open but practically undocumented.",
         "Add the missing sections (each as a heading) so the README answers what the data is, what each file holds, how it was produced, how missing values are coded, and how it may be reused.",
     ),
+}
+
+# Human-facing names (dv-r0z, dv-dcd): the manifest, the Auto-Checks card,
+# the Markdown report and docs/html/checks-reference.html all name a check
+# through this map, so a user never reads ``format.csv.openable``. The
+# conformance test requires one title per emitted id (and no stale ones);
+# names stay in sentence case like every other label in the app.
+TITLES: dict[str, str] = {
+    # -- format families --------------------------------------------------
+    "format.code": "Code Check",
+    "format.code.readable": "Code Readable",
+    "format.code.todo_markers": "TODO Markers",
+    "format.containers": "Archive Check",
+    "format.containers.valid": "Archive Readable",
+    "format.containers.unsafe_entry": "Unsafe Archive Entry",
+    "format.containers.encrypted": "Encrypted Archive Entry",
+    "format.csv": "CSV Check",
+    "format.csv.openable": "CSV Openable",
+    "format.csv.structure": "CSV Structure",
+    "format.csv.content": "CSV Content",
+    "format.csv.pii": "CSV PII Scan",
+    "format.fastq": "FASTQ Check",
+    "format.fastq.valid": "FASTQ Validity",
+    "format.fastq.metadata": "FASTQ Metadata",
+    "format.gpkg": "GeoPackage Check",
+    "format.gpkg.valid": "GeoPackage Validity",
+    "format.gpkg.layers": "GeoPackage Layers",
+    "format.gpkg.crs": "GeoPackage CRS",
+    "format.hdf5": "HDF5 Check",
+    "format.hdf5.openable": "HDF5 Openable",
+    "format.hdf5.external_links": "HDF5 External Links",
+    "format.images": "Image Check",
+    "format.images.valid": "Image Validity",
+    "format.ipynb": "Notebook Check",
+    "format.ipynb.valid": "Notebook Validity",
+    "format.ipynb.cells": "Notebook Cells",
+    "format.ipynb.executed": "Notebook Executed",
+    "format.json": "JSON Check",
+    "format.json.valid": "JSON Validity",
+    "format.netcdf": "NetCDF Check",
+    "format.netcdf.openable": "NetCDF Openable",
+    "format.netcdf.metadata": "NetCDF Metadata",
+    "format.netcdf.data_health": "NetCDF Data Health",
+    "format.netcdf.spatial": "NetCDF Spatial Coverage",
+    "format.pdf": "PDF Check",
+    "format.pdf.openable": "PDF Openable",
+    "format.pdf.text": "PDF Text Layer",
+    "format.sas": "SAS Check",
+    "format.sas.openable": "SAS Openable",
+    "format.sas.format_detected": "SAS File Format",
+    "format.sas.encoding": "SAS Encoding",
+    "format.sas.dictionary": "SAS Variable Dictionary",
+    "format.sas.labels": "SAS Variable Labels",
+    "format.secrets": "Secrets & Credentials",
+    "format.spss": "SPSS Check",
+    "format.spss.openable": "SPSS Openable",
+    "format.spss.encoding": "SPSS Encoding",
+    "format.spss.dictionary": "SPSS Variable Dictionary",
+    "format.spss.labels": "SPSS Variable Labels",
+    "format.sqlite": "SQLite Check",
+    "format.sqlite.valid": "SQLite Validity",
+    "format.sqlite.manifest": "SQLite Schema",
+    "format.stata": "Stata Check",
+    "format.stata.openable": "Stata Openable",
+    "format.stata.encoding": "Stata Encoding",
+    "format.stata.dictionary": "Stata Variable Dictionary",
+    "format.stata.labels": "Stata Variable Labels",
+    "format.stata.pii": "Stata PII Scan",
+    "format.text": "Text Check",
+    "format.text.readable": "Plain Text Readable",
+    "format.text.line_endings": "Line Endings",
+    "format.text.control_chars": "Control Characters",
+    "format.text.pii": "Plain Text PII Scan",
+    "format.tiff": "TIFF Check",
+    "format.tiff.valid": "TIFF Validity",
+    "format.xlsx": "Workbook Check",
+    "format.xlsx.openable": "Workbook Opens",
+    "format.xlsx.sheets": "Workbook Sheets",
+    "format.xlsx.hidden": "Hidden Cells & Sheets",
+    "format.xlsx.macros": "Macro Detection",
+    "format.xlsx.tabular": "Tabular Structure",
+    "format.xlsx.pii": "Workbook PII Scan",
+    "format.xml": "XML Check",
+    "format.xml.valid": "XML Validity",
+    # -- dataset-level inventory ------------------------------------------
+    "inventory.access": "Access Conditions",
+    "inventory.extensions": "File Types",
+    "inventory.zero_byte": "Zero-Byte Files",
+    "inventory.executables": "Executable Files",
+    "inventory.system_junk": "System Junk Files",
+    "inventory.restricted_files": "Restricted Files",
+    "inventory.embargoed_files": "Embargoed Files",
+    "inventory.unchecked_types": "Unknown File Types",
+    # -- dataset-level metadata -------------------------------------------
+    "metadata.var_coverage": "Variable Documentation",
+    "metadata.readme_sections": "README Sections",
 }
 
 
@@ -382,6 +482,11 @@ def for_check(check_id: str) -> tuple[str, str]:
     if not entry:
         return ("", "")
     return entry
+
+
+def title_for(check_id: str) -> str:
+    """Human-facing name for a check id; "" when the id is unknown."""
+    return TITLES.get(str(check_id or "").strip(), "")
 
 
 def for_result(result) -> tuple[str, str]:

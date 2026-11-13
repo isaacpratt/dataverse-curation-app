@@ -11,16 +11,25 @@ from engine.report_md import render_markdown
 from response_draft import collect_filecheck_sections
 
 CHECK_DIR = Path(__file__).resolve().parents[1] / "checks"
+_RUNNER = Path(__file__).resolve().parents[1] / "runner.py"
 _ID_RE = re.compile(r'"((?:format|inventory|dataset|metadata|advice)\.[a-z0-9_.]+)"')
 _SKIP_FILES = {"base.py", "_util.py", "guidance.py", "__init__.py"}
 
 
 def _module_literals() -> dict[str, str]:
-    """Every check-id-shaped literal in the check modules -> module name."""
+    """Every check-id-shaped literal in the check modules -> module name.
+
+    engine/runner.py is included because it synthesizes the dataset-level
+    ``inventory.unchecked_types`` result itself (no check class emits it),
+    so a conformance sweep of engine/checks alone would silently miss it.
+    """
     ids: dict[str, str] = {}
-    for path in sorted(CHECK_DIR.glob("*.py")):
-        if path.name in _SKIP_FILES:
-            continue
+    paths = [
+        path for path in sorted(CHECK_DIR.glob("*.py"))
+        if path.name not in _SKIP_FILES
+    ]
+    paths.append(_RUNNER)
+    for path in paths:
         text = path.read_text(encoding="utf-8")
         for m in _ID_RE.finditer(text):
             ids.setdefault(m.group(1), path.name)
@@ -46,6 +55,39 @@ class TestConformance:
     def test_guidance_has_no_stale_entries(self):
         stale = sorted(set(guidance.GUIDANCE) - set(_module_literals()))
         assert stale == [], f"GUIDANCE keys no module emits: {stale}"
+
+
+class TestTitles:
+    """dv-r0z/dv-dcd: every check has a human name, and only checks do."""
+
+    def test_every_emitted_check_id_has_a_title(self):
+        missing = {
+            cid: mod for cid, mod in _module_literals().items()
+            if cid not in guidance.TITLES
+        }
+        assert missing == {}, (
+            "check ids with no human title: "
+            + ", ".join(f"{cid} ({mod})" for cid, mod in sorted(missing.items()))
+        )
+
+    def test_titles_have_no_stale_entries(self):
+        stale = sorted(set(guidance.TITLES) - set(_module_literals()))
+        assert stale == [], f"TITLES keys no module emits: {stale}"
+
+    def test_titles_and_guidance_cover_the_same_checks(self):
+        assert set(guidance.TITLES) == set(guidance.GUIDANCE)
+
+    def test_titles_read_as_names_not_ids(self):
+        for cid, title in guidance.TITLES.items():
+            assert title.strip(), f"{cid}: empty title"
+            assert "." not in title, f"{cid}: title leaks a namespace: {title!r}"
+            assert title[0].isupper(), f"{cid}: title not sentence-cased: {title!r}"
+
+    def test_title_for_is_total(self):
+        assert guidance.title_for("format.csv.openable") == "CSV Openable"
+        assert guidance.title_for("inventory.zero_byte") == "Zero-Byte Files"
+        assert guidance.title_for("not.a.check") == ""
+        assert guidance.title_for("") == ""
 
 
 class TestCheckResultFields:

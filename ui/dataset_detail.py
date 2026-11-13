@@ -44,6 +44,7 @@ from sensitivity import (
 )
 from storage import RESOLVED_DISPOSITIONS, finding_key
 from storage import read_ui_pref, write_ui_pref
+from ui.check_titles import check_summary, check_title
 
 # Rail view preference (dv-sce): "mechanical" (default) or "curated".
 # Deliberately not catalogue-key shaped (it is a prefs key, not copy).
@@ -3446,8 +3447,12 @@ class DatasetDetailView(QWidget):
                                 if isinstance(s, dict)
                             ]
                     row = self._auto_row(
-                        c.check_id, c.message, c.passed, c.level,
-                        disposition_key=key, detail_lines=detail_lines,
+                        check_title(c.check_id),
+                        check_summary(c),
+                        c.passed,
+                        c.level,
+                        disposition_key=key,
+                        detail_lines=detail_lines,
                     )
                     try:
                         from ui.checks_tree import format_details_tooltip
@@ -3469,14 +3474,17 @@ class DatasetDetailView(QWidget):
                 ]
                 for f, c in file_findings:
                     kind = classify(c)
+                    # dv-dcd: the heading is the check's name and the caption
+                    # says what was found — never the check_id or the raw
+                    # "<filename>: <engine return>" message.
                     desc = t(
                         "detail.auto_checks.file_result_format",
                         path=f.path,
-                        message=c.message,
+                        message=check_summary(c, f.path),
                     )
                     if kind == "skipped":
                         row = self._auto_row(
-                            c.check_id,
+                            check_title(c.check_id),
                             desc,
                             True,
                             "warning",
@@ -3486,12 +3494,16 @@ class DatasetDetailView(QWidget):
                         key = finding_key(c.check_id, f.path, c.message)
                         finding_keys.append(key)
                         row = self._auto_row(
-                            c.check_id, desc, c.passed, c.level, disposition_key=key
+                            check_title(c.check_id),
+                            desc,
+                            c.passed,
+                            c.level,
+                            disposition_key=key,
                         )
                     try:
                         from ui.checks_tree import format_details_tooltip
 
-                        row.setToolTip(format_details_tooltip(c))
+                        row.setToolTip(format_details_tooltip(c, f.path))
                     except Exception:
                         pass
                     self._auto_body.addWidget(row)
@@ -3523,32 +3535,39 @@ class DatasetDetailView(QWidget):
                         "format.images": "Pillow", "format.pdf": "pypdf", "format.xml": "lxml", "format.xlsx": "openpyxl",
                     }
                     pip_pkg = lib_map.get(p["check_id"], "")
-                    missing = ""
+                    missing = False
                     if pip_pkg:
                         try:
                             __import__(pip_pkg if pip_pkg != "Pillow" else "PIL")
                         except ImportError:
-                            missing = t("detail.auto_checks.missing_pip", package=pip_pkg)
-                    status = missing or t("detail.auto_checks.will_run_badge")
-                    # Interpret for row styling: missing = warn, else pass tone
+                            missing = True
+                    applies = t(
+                        "detail.auto_checks.will_run_applies",
+                        file_types=p.get("file_types") or t("common.em_dash"),
+                    )
+                    # dv-dcd: name the check, explain what it will look at,
+                    # and say plainly when its optional library is absent.
                     if missing:
                         row = self._auto_row(
-                            p["check_id"],
-                            p["description"],
+                            check_title(p["check_id"]),
+                            t(
+                                "detail.auto_checks.missing_detail",
+                                applies=applies,
+                                package=pip_pkg,
+                            ),
                             False,
                             "warning",
                             badge=t("detail.auto_checks.badge_missing"),
                         )
                     else:
                         row = self._auto_row(
-                            p["check_id"],
-                            p["description"],
+                            check_title(p["check_id"]),
+                            applies,
                             True,
                             "info",
-                            badge=t("detail.auto_checks.badge_pass"),
+                            badge=t("detail.auto_checks.will_run_badge"),
                         )
-                    # Add subtitle with file_types + status
-                    row.setToolTip(f"{p['description']}\n\n{status}")
+                    row.setToolTip(applies)
                     self._auto_body.addWidget(row)
         except Exception:
             pass
@@ -3557,7 +3576,7 @@ class DatasetDetailView(QWidget):
         except Exception:
             pass
 
-    def _auto_row(self, check_id: str, desc: str, passed: bool, level: str, badge: str | None = None,
+    def _auto_row(self, title: str, desc: str, passed: bool, level: str, badge: str | None = None,
                   disposition_key: str = "",
                   detail_lines: list[tuple[str, bool]] | None = None) -> QFrame:
         frame = QFrame()
@@ -3617,7 +3636,7 @@ class DatasetDetailView(QWidget):
         lay.addWidget(_icon_label(icon_name, size=16, color=icon_color))
         txt = QVBoxLayout()
         txt.setSpacing(1)
-        cid = QLabel(check_id)
+        cid = QLabel(title)
         cid.setObjectName("LabelStrongSM")
         txt.addWidget(cid)
         d = make_caption_label(desc)
