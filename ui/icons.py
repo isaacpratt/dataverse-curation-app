@@ -104,28 +104,10 @@ def icon_label(name: str, size: int = 16, color: str | None = None) -> QLabel:
     return lbl
 
 
-def tree_branch_qss() -> str:
-    """QTreeView branch rules using Lucide chevrons (replaces text carets).
-
-    Also kills the dotted indent-guide lines Qt draws through child rows
-    (has-siblings/adjoins-item states) — clean indent, no vertical rules.
-    """
-    lines_off = (
-        "QTreeView::branch:has-siblings:!adjoins-item { border-image: none; }"
-        "QTreeView::branch:has-siblings:adjoins-item { border-image: none; }"
-        "QTreeView::branch:!has-siblings:adjoins-item { border-image: none; }"
-    )
-    right = asset_path("lucide/chevron-right-ink.svg")
-    down = asset_path("lucide/chevron-down-ink.svg")
-    if not right or not down:
-        return "QTreeView::branch { image: none; border-image: none; }" + lines_off
-    return (
-        "QTreeView::branch:closed:has-children { image: url(" + right + "); }"
-        "QTreeView::branch:open:has-children { image: url(" + down + "); }"
-        "QTreeView::branch:has-children { width: 16px; height: 16px; }"
-        "QTreeView::branch:!has-children { image: none; border-image: none; }"
-        + lines_off
-    )
+# Tree branch chevrons are painted by ui.widgets._BranchPainting, not by
+# a QTreeView::branch stylesheet: the Windows 11 style still painted its
+# own grey branch chip (with an accent chevron that read as a blue stripe
+# on the selected row) even with ``image: none`` set (dv-coj).
 
 
 _FILE_ICONS = {

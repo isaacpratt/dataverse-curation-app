@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QSizePolicy,
     QTableWidgetItem,
     QTabWidget,
     QVBoxLayout,
@@ -738,6 +739,10 @@ class SettingsPane(QWidget):
             cell = QWidget()
             cell.setObjectName("ExtActionCell")
             cell.setStyleSheet(transparent_surface_qss("ExtActionCell"))
+            # Preferred width covers Reinstall+Uninstall + cell margins;
+            # without it Qt lays the cell out at col minus item padding,
+            # clipping the buttons symmetrically (dv-dm3).
+            cell.setMinimumWidth(168)
             cell_lay = QHBoxLayout(cell)
             cell_lay.setContentsMargins(6, 3, 6, 3)
             cell_lay.setSpacing(6)
@@ -761,6 +766,10 @@ class SettingsPane(QWidget):
                 install_btn.setToolTip(tip)
                 uninstall_btn.setEnabled(False)
                 uninstall_btn.setToolTip(tip)
+            # Buttons keep their sizeHint width: a layout-driven shrink
+            # clips their labels symmetrically (see dv-dm3).
+            install_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            uninstall_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             cell_lay.addWidget(install_btn)
             cell_lay.addWidget(uninstall_btn)
             cell_lay.addStretch()
@@ -809,6 +818,7 @@ class SettingsPane(QWidget):
             tool_cell = QWidget()
             tool_cell.setObjectName("ToolActionCell")
             tool_cell.setStyleSheet(transparent_surface_qss("ToolActionCell"))
+            tool_cell.setMinimumWidth(168)
             tool_lay = QHBoxLayout(tool_cell)
             tool_lay.setContentsMargins(6, 3, 6, 3)
             tool_lay.setSpacing(6)
@@ -819,12 +829,15 @@ class SettingsPane(QWidget):
                 t("settings.extensions.locate_tip", label=label)
             )
             browse_btn.clicked.connect(lambda _checked, k=key: self._browse_tool(k))
+            browse_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             tool_lay.addWidget(browse_btn)
             tool_lay.addStretch()
             self.ext_table.setCellWidget(row, 4, tool_cell)
             self.ext_table.setRowHeight(row, 34)
         # Content-width columns (Used-for stays Stretch); no-op when a
-        # saved view was restored or the user already resized.
+        # saved view was restored or the user already resized. The action
+        # column's cell forces a 168px preferred width via sizeHint, so
+        # the fit never shrinks it below Reinstall+Uninstall.
         self.ext_table.fit_columns_to_content()
 
     def _browse_tool(self, key: str) -> None:

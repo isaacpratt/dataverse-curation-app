@@ -52,20 +52,3 @@ def test_metric_card_taps_apply_filters(win, monkeypatch):
     assert {d["persistent_id"] for d in dash._datasets} == {"p1", "p2"}
     dash._on_metric_clicked("primary")
     assert {d["persistent_id"] for d in dash._datasets} == {"p2"}
-
-
-def test_refine_toggle_collapses_under_1100(win, monkeypatch):
-    dash = win._dashboard
-    # isHidden() is independent of the ancestor chain (the dashboard may not
-    # be the current stack page), unlike isVisible().
-    monkeypatch.setattr(dash, "width", lambda: 900)
-    dash._update_refine_visibility()
-    assert not dash._refine_btn.isHidden()
-    dash._refine_btn.setChecked(False)
-    assert dash._filter_wrap.isHidden()
-    dash._refine_btn.setChecked(True)
-    assert not dash._filter_wrap.isHidden()
-    monkeypatch.setattr(dash, "width", lambda: 1400)
-    dash._update_refine_visibility()
-    assert dash._refine_btn.isHidden()
-    assert not dash._filter_wrap.isHidden()

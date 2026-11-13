@@ -1073,7 +1073,7 @@ class DatasetDetailView(QWidget):
         meta_tools_lay.addStretch()
         body.addWidget(meta_tools)
         # Every check with its status — an expandable tree
-        # (Check | Block | Value | Status). Requirement text lives in the
+        # (Check | Level | Block | Value | Status). Requirement text lives in the
         # Check cell's tooltip. A repeatable field expands into one child
         # per entry (Author 1, Author 2, …) and one grandchild per
         # subfield (Name, Affiliation, Identifier, …), so a compound value
@@ -1082,22 +1082,25 @@ class DatasetDetailView(QWidget):
         from PySide6.QtWidgets import QHeaderView as _QHV
 
         self._meta_check_tree = AppTree(row_height=30, flush=True)
-        self._meta_model = _QStandardItemModel(0, 4, self)
+        self._meta_model = _QStandardItemModel(0, 5, self)
         self._meta_model.setHorizontalHeaderLabels(
-            ["Check", "Block", "Value", "Status"]
+            ["Check", t("detail.metadata_check.level_header"), "Block", "Value", "Status"]
         )
         self._meta_check_tree.setModel(self._meta_model)
         _meta_hdr = self._meta_check_tree.header()
-        # Value absorbs the slack and elides long text; Status only needs
-        # its word + icon. Stretching the last section instead let a long
-        # value push Status off the (scrollbar-less) card.
+        # Every column is Interactive so each boundary drags - including
+        # Value|Status, whose Stretch/ResizeToContents pair used to ignore
+        # the mouse (dv-dmv). Value still absorbs the slack and elides
+        # long text, but it does so through _fit_meta_value_column, not a
+        # Stretch mode (a Stretch section cannot be resized by hand).
         _meta_hdr.setStretchLastSection(False)
-        _meta_hdr.setSectionResizeMode(0, _QHV.Interactive)
-        _meta_hdr.setSectionResizeMode(1, _QHV.Interactive)
-        _meta_hdr.setSectionResizeMode(2, _QHV.Stretch)
-        _meta_hdr.setSectionResizeMode(3, _QHV.ResizeToContents)
+        for col in range(5):
+            _meta_hdr.setSectionResizeMode(col, _QHV.Interactive)
         self._meta_check_tree.setColumnWidth(0, 170)
-        self._meta_check_tree.setColumnWidth(1, 120)
+        self._meta_check_tree.setColumnWidth(1, 110)
+        self._meta_check_tree.setColumnWidth(2, 120)
+        self._meta_check_tree.setColumnWidth(3, 260)
+        self._meta_check_tree.setColumnWidth(4, 120)
         self._meta_check_tree.expanded.connect(self._on_meta_tree_expansion_changed)
         self._meta_check_tree.collapsed.connect(self._on_meta_tree_expansion_changed)
         self._track_table_widths("dataset_meta", _meta_hdr)
@@ -1139,6 +1142,11 @@ class DatasetDetailView(QWidget):
     # Acronyms that survive the generic camel-case split ("ID number", not
     # "Id number"). Field labels come from the schema keys themselves, so a
     # new compound field needs no hand-maintained label table.
+    # Dataverse fields that are single compounds: they have children
+    # (dsDescriptionValue, dsDescriptionDate) but can never repeat, so the
+    # tree must not invent a "<noun> 1" layer. Keyed by (block, field),
+    # matched case-insensitively; lower-case.
+    _META_SINGLE_ENTRY_FIELDS = {("citation", "dsdescription")}
     _META_ACRONYMS = {"id", "url", "uri", "doi", "orcid", "api", "html", "pdf"}
     # Dataverse prefixes that read as noise once the entry is nested.
     _META_KEY_OVERRIDES = {
@@ -1219,6 +1227,13 @@ class DatasetDetailView(QWidget):
         name = str(result.get("name") or "")
         if not block or not name or self._metadata is None:
             return []
+        # The ORCID rule (author.authorIdentifier, handler "orcid") is a
+        # list of per-author identifier verdicts, not a second copy of the
+        # Author rule's tree. Its per-author list already lives in the
+        # Value cell; expanding an author tree here duplicated it.
+        rule_id = str(result.get("rule_id") or "")
+        if rule_id.endswith("orcid"):
+            return []
         try:
             from metadata_check import _field
 
@@ -1237,22 +1252,46 @@ class DatasetDetailView(QWidget):
         if not seq:
             return []
         noun = self._pretty_meta_key(name) or str(result.get("field") or "Entry")
+        single_entry = (str(block).lower(), str(name).lower()) in self._META_SINGLE_ENTRY_FIELDS
         entries: list[tuple[str, str, list]] = []
+        if single_entry and len(seq) == 1 and isinstance(seq[0], dict):
+            # Single-entry compound (dsDescription): no "Description 1"
+            # entry row — its children attach directly to the check row.
+            return [("", "", self._meta_subfields(seq[0], noun))]
         for i, item in enumerate(seq):
             label = f"{noun} {i + 1}"
             if isinstance(item, dict):
                 subs = self._meta_subfields(item, noun)
-                summary = next(
-                    (text for _lbl, text in subs if text and text != t("common.em_dash")),
-                    t("common.em_dash"),
-                )
+                summary = self._entry_identity_summary(item, subs)
                 entries.append((label, summary, subs))
             else:
                 entries.append((label, self._meta_display(item), []))
         return entries
 
+    # Compound entries expose a headline subfield: the author's identity is
+    # the author name, never an affiliation just because the API returned
+    # affiliation first. Falls back to the first non-em-dash subfield for
+    # compounds we do not know (publication, keyword, contributor, ...).
+    _META_ENTRY_IDENTITY_KEYS = (
+        "authorName", "contributorName", "publicationCitation", "keywordValue",
+    )
+
+    def _entry_identity_summary(self, item: dict, subs: list[tuple[str, str]]) -> str:
+        dash = t("common.em_dash")
+        for key in self._META_ENTRY_IDENTITY_KEYS:
+            raw_sub = item.get(key)
+            if raw_sub is None:
+                continue
+            text = self._meta_display(raw_sub)
+            if text and text != dash:
+                return text
+        return next(
+            (text for _lbl, text in subs if text and text != dash),
+            dash,
+        )
+
     def _build_meta_tree(self, results: list[dict]) -> None:
-        """Rebuild the Check | Block | Value | Status tree from results."""
+        """Rebuild the Check | Level | Block | Value | Status tree from results."""
         from PySide6.QtGui import QBrush, QStandardItem
 
         tree = self._meta_check_tree
@@ -1295,11 +1334,23 @@ class DatasetDetailView(QWidget):
             )
             requirement = str(result.get("requirement") or "")
             value_text = str(result.get("value", t("common.em_dash")))
+            required = str(result.get("level") or "required") == "required"
+            level_text = (
+                t("detail.metadata_check.level_required")
+                if required
+                else t("detail.metadata_check.level_optional")
+            )
             field_item = _item(
                 str(result.get("field") or ""),
                 tooltip=requirement,
                 bold=True,
                 color=TEXT_PRIMARY if ok else TEXT_DANGER,
+            )
+            level_item = _item(
+                level_text,
+                tooltip=t("detail.metadata_check.level_tip"),
+                bold=required,
+                color=TEXT_PRIMARY if required else TEXT_MUTED,
             )
             block_item = _item(
                 self._meta_block_label(str(result.get("block") or "")),
@@ -1323,30 +1374,43 @@ class DatasetDetailView(QWidget):
                 )
             except Exception:
                 pass
-            parent = [field_item, block_item, value_item, status_item]
-            for label, summary, subs in self._meta_value_entries(result):
-                child = [
-                    _item(label, color=TEXT_MUTED, bold=True),
+            parent = [field_item, level_item, block_item, value_item, status_item]
+
+            def _sub_row(sub_label, sub_value):
+                return [
+                    _item(sub_label, color=TEXT_MUTED),
                     _item(""),
-                    _item(summary, tooltip=summary),
+                    _item(""),
+                    _item(
+                        sub_value,
+                        tooltip=sub_value,
+                        italic=sub_value == t("common.em_dash"),
+                        color=TEXT_SUBTLE
+                        if sub_value == t("common.em_dash")
+                        else None,
+                    ),
                     _item(""),
                 ]
-                parent[0].appendRow(child)
-                for sub_label, sub_value in subs:
-                    grand = [
-                        _item(sub_label, color=TEXT_MUTED),
+
+            for label, summary, subs in self._meta_value_entries(result):
+                if label:
+                    child = [
+                        _item(label, color=TEXT_MUTED, bold=True),
                         _item(""),
-                        _item(
-                            sub_value,
-                            tooltip=sub_value,
-                            italic=sub_value == t("common.em_dash"),
-                            color=TEXT_SUBTLE
-                            if sub_value == t("common.em_dash")
-                            else None,
-                        ),
+                        _item(""),
+                        _item(summary, tooltip=summary),
                         _item(""),
                     ]
-                    child[0].appendRow(grand)
+                    parent[0].appendRow(child)
+                    for sub_label, sub_value in subs:
+                        child[0].appendRow(_sub_row(sub_label, sub_value))
+                else:
+                    # Single-compound children attach directly to the parent
+                    # row; a child equal to the parent Value is dropped.
+                    for sub_label, sub_value in subs:
+                        if sub_value and str(sub_value) == value_text:
+                            continue
+                        parent[0].appendRow(_sub_row(sub_label, sub_value))
             model.appendRow(parent)
 
         try:
@@ -1355,19 +1419,54 @@ class DatasetDetailView(QWidget):
         finally:
             tree.blockSignals(False)
         self._fit_meta_tree_height()
-        # Size the fixed columns to their content (with sane caps) and let
-        # the stretched Value column take the rest.
+        # Size the fixed columns to their content (with sane caps), then
+        # hand the leftover width to Value. Programmatic: wrapped in the
+        # layout's suppressed scope so a rebuild never overwrites the
+        # widths the user dragged (only their own gestures persist).
         try:
-            for col, floor, ceiling in ((0, 170, 320), (1, 100, 220), (3, 90, 160)):
-                tree.resizeColumnToContents(col)
-                tree.setColumnWidth(
-                    col, max(floor, min(ceiling, tree.columnWidth(col)))
-                )
+            layout = self._layout_for("dataset_meta", tree.header())
+            with layout.suppressed():
+                for col, floor, ceiling in ((0, 170, 320), (1, 88, 130), (2, 100, 220), (4, 90, 160)):
+                    tree.resizeColumnToContents(col)
+                    tree.setColumnWidth(
+                        col, max(floor, min(ceiling, tree.columnWidth(col)))
+                    )
         except Exception:
             pass
+        self._fit_meta_value_column()
 
     def _on_meta_tree_expansion_changed(self, _index=None) -> None:
         self._fit_meta_tree_height()
+
+    def _fit_meta_value_column(self) -> None:
+        """Give the metadata table's Value column the leftover width.
+
+        With every column Interactive (so the Value|Status boundary
+        drags - dv-dmv) no section stretches; this keeps the (scrollbar
+        -less) table filling its card instead of leaving a gap after
+        Status. Programmatic, so it never persists over a user's drag.
+        """
+        try:
+            tree = self._meta_check_tree
+        except AttributeError:
+            return
+        hdr = tree.header()
+        if hdr is None or hdr.count() < 5:
+            return
+        # Value column is at index 3 (Check | Level | Block | Value | Status).
+        others = sum(hdr.sectionSize(i) for i in range(hdr.count()) if i != 3)
+        target = max(48, tree.viewport().width() - others)
+        if hdr.sectionSize(3) == target:
+            return
+        try:
+            layout = self._layout_for("dataset_meta", hdr)
+            with layout.suppressed():
+                hdr.resizeSection(3, target)
+        except Exception:
+            try:
+                hdr.resizeSection(3, target)
+            except Exception:
+                pass
 
     def _fit_meta_tree_height(self) -> None:
         """Grow the checks tree to its visible rows (no inner scrollbar)."""
@@ -2089,6 +2188,8 @@ class DatasetDetailView(QWidget):
     def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
         super().resizeEvent(event)
         self._sync_sidebar()
+        # The metadata Value column tracks the card width (dv-dmv).
+        self._fit_meta_value_column()
 
     def _sync_sidebar(self) -> None:
         """Fold the sticky sidebar away on a narrow window.
@@ -2778,6 +2879,14 @@ class DatasetDetailView(QWidget):
         # Named not-loaded state, never "—" (2026-10-02 P2).
         self._version_summary = make_field_label(t("detail.version_log.not_loaded"))
         header_lay.addWidget(self._version_summary)
+        # The reset is a table tool, so it lives on the tools row under the
+        # title bar; the title row keeps title + (i) + summary only.
+        self._version_tools = QWidget()
+        self._version_tools.setObjectName("VersionLogTools")
+        self._version_tools.setStyleSheet(transparent_surface_qss("VersionLogTools"))
+        _version_tools_lay = QHBoxLayout(self._version_tools)
+        _version_tools_lay.setContentsMargins(16, 8, 16, 8)
+        _version_tools_lay.setSpacing(8)
         self._version_reset_btn = make_reset_columns_button(
             "",
             tip=t("detail.version_log.reset_columns_tip"),
@@ -2785,7 +2894,11 @@ class DatasetDetailView(QWidget):
             fallback_text=t("common.reset"),
         )
         self._version_reset_btn.clicked.connect(self._on_reset_version_view)
-        header_lay.addWidget(self._version_reset_btn)
+        _version_tools_lay.addWidget(self._version_reset_btn)
+        _version_tools_lay.addStretch()
+        # Sibling of the body (not inside it): _populate_version_diff clears
+        # the body on every refresh and must not take the tools with it.
+        card.layout().insertWidget(1, self._version_tools)
         self._version_body = _body_host
         return card
 
@@ -3026,24 +3139,21 @@ class DatasetDetailView(QWidget):
         )
         _body_unused.setContentsMargins(0, 0, 0, 0)
         _body_unused.setSpacing(0)
+        # Actions are tools: they live on the tools row under the title bar,
+        # never in the title bar (title + tooltip + summary only).
         self._open_folder_btn = make_action_button(t("detail.files.open_folder"), kind="secondary", size="md")
         self._open_folder_btn.setToolTip(t("detail.files.open_folder_tip"))
         self._open_folder_btn.clicked.connect(self._on_open_folder)
-        header_lay.addWidget(self._open_folder_btn)
         # Expand/Collapse all toggle for the folder > file > check tree.
         self._expand_btn = make_action_button(t("detail.files.expand_all"), kind="secondary", size="md")
         self._expand_btn.setToolTip(t("detail.files.expand_tip"))
         self._expand_btn.clicked.connect(self._on_toggle_expand_all)
-        header_lay.addWidget(self._expand_btn)
         lay = QVBoxLayout()
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
-        # The filters live on their own row under the card's title bar.
-        # Packed into the title row - title, tip, Open folder, Expand all,
-        # the filter box, the status combo and the reset button - the card
-        # needed 742px, wider than the column it sits in, so the page
-        # scrolled sideways at the app's own 960px minimum width.
+        # The title bar carries title + (i) only; every tool - search,
+        # status filter, reset, Open folder, Expand all - sits on this row.
         tools = QWidget()
         tools.setObjectName("FileManifestTools")
         tools.setStyleSheet(transparent_surface_qss("FileManifestTools"))
@@ -3088,6 +3198,8 @@ class DatasetDetailView(QWidget):
         )
         self._file_reset_btn.clicked.connect(self._on_reset_file_view)
         tools_lay.addWidget(self._file_reset_btn)
+        tools_lay.addWidget(self._open_folder_btn)
+        tools_lay.addWidget(self._expand_btn)
         lay.addWidget(tools)
         # NOTE: tree + footer live in a flush sub-layout so the header keeps
         # its top radius and the footer keeps its bottom radius.
@@ -4323,14 +4435,7 @@ class DatasetDetailView(QWidget):
             )
             self._completeness_full = full
             self._ruleset = ruleset
-            results = [
-                {"field": r["field"], "requirement": r["requirement"],
-                 "value": r.get("value", t("common.em_dash")), "status": r["status"],
-                 "block": r.get("block", "") or "",
-                 "name": r.get("name", "") or "",
-                 "rule_id": r.get("rule_id", "") or r["field"]}
-                for r in full
-            ]
+            results = [dict(r) for r in full]
         except Exception:
             from metadata_check import check_metadata_completeness
 
@@ -4363,8 +4468,8 @@ class DatasetDetailView(QWidget):
                     total=total,
                 )
             )
-        # Full per-check tree: Check | Block | Value | Status (requirement
-        # in the Check cell's tooltip). Repeatable fields grow child rows
+        # Full per-check tree: Check | Level | Block | Value | Status
+        # (requirement in the Check cell's tooltip). Repeatable fields grow child rows
         # per entry and grandchild rows per subfield.
         self._meta_results = results
         # Apply the active Complete/Incomplete filter; it rebuilds the tree

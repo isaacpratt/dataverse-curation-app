@@ -132,3 +132,45 @@ def test_fit_noop_on_empty_table(qapp):
     tbl.fit_columns_to_content()
     # rowCount == 0 → no fit yet (populate retries on the next call).
     assert tbl._fitted is False
+
+
+def test_show_refreshes_stale_cell_widget_geometry(qapp):
+    """Hidden-built cell widgets re-layout on first show (dv-dm3)."""
+    from PySide6.QtWidgets import QHBoxLayout, QPushButton, QWidget
+
+    from ui.widgets import AppTable
+
+    tbl = AppTable(["A", "Action"], sortable=False, stretch_last=False)
+    tbl.populate_guarded(1)
+    tbl.setItem(0, 0, _item("pyreadstat"))
+    cell = QWidget()
+    lay = QHBoxLayout(cell)
+    from PySide6.QtCore import QSize
+
+    btn = QPushButton("Reinstall")
+    btn.setFixedSize(QSize(90, 28))
+    lay.addWidget(btn)
+    tbl.setCellWidget(0, 1, cell)
+    tbl.setColumnWidth(1, 300)
+    tbl.resize(600, 120)
+    # Hide-then-show round trip: the first show must give the cell widget
+    # one full layout pass against the new column width.
+    tbl.hide()
+    tbl.setColumnWidth(1, 150)
+    tbl.show()
+    from PySide6.QtCore import QCoreApplication
+
+    QCoreApplication.processEvents()
+    QCoreApplication.processEvents()
+    cell = tbl.cellWidget(0, 1)
+    assert cell is not None and cell.width() > 0
+    assert cell.width() <= tbl.viewport().width() - 1
+    # The cell content (the button) must not overflow its client rect.
+    assert cell.layout().sizeHint().width() <= cell.width() + 1 or cell.sizeHint().width() <= cell.width() + 1
+
+
+def test_refresh_cell_geometry_is_idempotent(qapp):
+
+    tbl = _make_table(rows=2, cols=2)
+    tbl.refresh_cell_geometry()
+    tbl.refresh_cell_geometry()  # twice must not raise or shrink sections

@@ -1,0 +1,62 @@
+# https://pre-commit.com
+# Trimmed set for this Windows-first PyInstaller repo — see dv-ceh.5.
+# Check-only, matching CI; no auto-fixers except the whitespace/EOF fixers,
+# whose first-pass commit has landed. Not enabled: commitizen, ruff format,
+# ty (all deliberately deferred per the project's Substrate evaluation).
+# The ruff-check hook uses the lockfile's ruff (via uv run), not a fresh
+# virtualenv, and never mutates files (check-only, like CI's lint step).
+default_install_hook_types: [pre-commit]
+default_stages: [pre-commit, manual]
+fail_fast: true
+repos:
+  - repo: meta
+    hooks:
+      - id: check-useless-excludes
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-illegal-windows-names
+      - id: check-merge-conflict
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+      - id: debug-statements
+      - id: detect-private-key
+        # test_secrets_check.py embeds a truncated fake RSA key fixture
+        # ("MIIEpAIBAAKCAQ...") for the secret-scanner's own tests.
+        exclude: "^engine/tests/test_secrets_check\\.py$"
+      - id: end-of-file-fixer
+        types: [python]
+      - id: trailing-whitespace
+        types: [python]
+
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: text-unicode-replacement-char
+
+  # codespell: en-GB_to_en-US builtin deliberately NOT enabled — this is a
+  # Canadian project. Rare-word false positives are ignored in .codespellrc.
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        types_or: [markdown, python, pyi, toml, yaml]
+
+  - repo: local
+    hooks:
+      - id: uv-lock-check
+        name: uv lock --check
+        entry: uv lock --check
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --group dev ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: true

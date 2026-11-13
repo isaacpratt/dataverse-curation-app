@@ -102,20 +102,47 @@ def test_author_entries_expand_to_name_affiliation_and_identifier(detail):
         "Identifier scheme",
         "Identifier",
     ]
-    assert first.child(1, 2).text() == "Analytical Engine Lab"
+    assert first.child(1, 3).text() == "Analytical Engine Lab"
     missing = author.child(1, 0)
     assert missing.text() == "Author 2"
-    assert missing.child(1, 2).text() == "—", "an empty affiliation must be visible"
+    assert missing.child(1, 3).text() == "—", "an empty affiliation must be visible"
+
+
+def test_author_entry_headline_is_authorname_not_affiliation(detail):
+    """Identity summary must not depend on the API's key order."""
+    detail._metadata["latestVersion"]["metadataBlocks"]["citation"]["fields"][1]["value"][0] = {
+        "authorAffiliation": {"typeName": "text", "value": "Analytical Engine Lab"},
+        "authorName": {"typeName": "text", "value": "Ada Lovelace"},
+        "authorIdentifierScheme": {"typeName": "text", "value": "ORCID"},
+        "authorIdentifier": {"typeName": "text", "value": "0000-0002-1825-0097"},
+    }
+    detail._populate_completeness(detail._metadata)
+    author = _row(detail, "Author Name & Affiliation")
+    for i in range(author.rowCount()):
+        assert author.child(i, 3).text() in ("Ada Lovelace", "Grace Hopper"), (
+            "the entry headline must be the author name, never an affiliation"
+        )
+    # the deepest rows keep the values
+    assert author.child(0, 0).child(1, 3).text() == "Ada Lovelace"
+    assert author.child(0, 0).child(0, 3).text() == "Analytical Engine Lab"
+
+
+def test_orcid_rule_does_not_duplicate_the_author_tree(detail):
+    """The ORCiD check expands no children; identifiers live in the value."""
+    orcid = _row(detail, "ORCiD for authors")
+    assert orcid.rowCount() == 0, "the ORCID rule must not re-expand the author entries"
 
 
 def test_contact_description_and_subject_are_readable(detail):
     contact = _row(detail, "Dataset Contact").child(0, 0)
     assert _grandchild_labels(contact) == ["Name", "Affiliation", "Email"]
-    description = _row(detail, "Description").child(0, 0)
-    assert _grandchild_labels(description) == ["Description", "Date"]
+    description = _row(detail, "Description")
+    labels = [description.child(i, 0).text() for i in range(description.rowCount())]
+    assert "Description 1" not in labels, "single-entry fields never grow a numbered entry"
+    assert "Date" in labels, "children attach directly under the check row"
     subject = _row(detail, "Subject")
     assert subject.rowCount() == 1
-    assert subject.child(0, 2).text() == "Computer and Information Science"
+    assert subject.child(0, 3).text() == "Computer and Information Science"
 
 
 def test_complete_filter_rebuilds_the_tree(detail):

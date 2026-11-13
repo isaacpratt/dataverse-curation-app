@@ -242,12 +242,11 @@ def test_no_imports_of_deleted_modules():
 # -- pandas not a hard dependency --------------------------------------------
 
 def test_pandas_not_in_requirements():
+    # requirements.txt was deleted when uv adopted (dv-ceh.1); dependency
+    # declarations now live solely in pyproject.toml (project.dependencies +
+    # [dependency-groups]).
     root = Path(__file__).resolve().parents[2]
-    req_lines = [
-        line
-        for line in (root / "requirements.txt").read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.strip().startswith("#")
-    ]
+    assert not (root / "requirements.txt").exists()
     pyproj = (root / "pyproject.toml").read_text(encoding="utf-8")
-    assert not any("pandas" in line for line in req_lines)
     assert '"pandas' not in pyproj
+    assert '"pandas"' not in pyproj

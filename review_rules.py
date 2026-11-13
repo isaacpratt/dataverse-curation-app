@@ -139,7 +139,11 @@ DEFAULT_RULESET_KEY = "mcmaster-default"
 # (offline / no permission). The Review-config page prefers the live schema.
 FIELD_CATALOG: list[dict[str, str]] = [
     {"block": "citation", "field": "title", "label": "Title"},
-    {"block": "citation", "field": "author", "label": "Author Name & Affiliation"},
+    {"block": "citation", "field": "author", "label": "Author"},
+    {"block": "citation", "field": "author.authorName", "label": "Name", "parent": "author", "parent_label": "Author"},
+    {"block": "citation", "field": "author.authorAffiliation", "label": "Affiliation", "parent": "author", "parent_label": "Author"},
+    {"block": "citation", "field": "author.authorIdentifierScheme", "label": "Identifier Type", "parent": "author", "parent_label": "Author"},
+    {"block": "citation", "field": "author.authorIdentifier", "label": "Identifier", "parent": "author", "parent_label": "Author"},
     {"block": "citation", "field": "datasetContact", "label": "Dataset Contact"},
     {"block": "citation", "field": "dsDescription", "label": "Description"},
     {"block": "citation", "field": "subject", "label": "Subject"},
@@ -250,7 +254,7 @@ def _builtin_mcmaster() -> dict[str, Any]:
            _mc_req("McMaster — Required (Curation Log: Pub ID)"),
            "related_pub_id",
            "The related publication ID (e.g. DOI) is missing. Please add it so the dataset links to the article."),
-        fr("citation", "author", "ORCiD for authors", "optional",
+        fr("citation", "author.authorIdentifier", "ORCiD for authors", "optional",
            _mc_req("McMaster — Recommended (Checklist: Researcher ID; Curation Log: optional)"),
            "orcid",
            "Consider adding ORCiDs for the authors to improve attribution ({value})."),
@@ -390,6 +394,11 @@ def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
         if r.get("level") not in FIELD_LEVELS:
             r["level"] = "required"
         r.setdefault("block", "citation")
+        # ORCID migrated from the composite (handler="orcid" on citation.author)
+        # to the identifier subfield as of 2026-11-12 (dv-bhv).
+        if (str(r.get("handler") or "") == "orcid"
+                and str(r.get("field") or "").lower() == "author"):
+            r["field"] = "author.authorIdentifier"
         r.setdefault("label", str(r.get("field") or ""))
         r.setdefault("handler", "nonempty")
         r.setdefault("response_template", "")
@@ -535,11 +544,162 @@ def _blocks(metadata: dict[str, Any]) -> dict[str, Any]:
         return {}
 
 
+_WRAPPER_KEYS = ("typeName", "value", "multiple", "typeClass")
+
+
+def _is_wrapper(v: Any) -> bool:
+    """Return True for a leaf wrapper like {"value": "Ada", "typeName": "text", …}."""
+    return isinstance(v, dict) and "value" in v and set(v) <= set(_WRAPPER_KEYS)
+
+
+def _unwrap(v: Any) -> Any:
+    node = v
+    while isinstance(node, dict) and _is_wrapper(node):
+        node = node["value"]
+    return node
+
+
+def _leaf_text(node: Any) -> str:
+    node = _unwrap(node)
+    if node is None:
+        return ""
+    if isinstance(node, list):
+        return ""
+    if isinstance(node, bool):
+        return "true" if node else "false"
+    return str(node).strip()
+
+
+def _walk_path(node: Any, parts: list[str]) -> Any:
+    """Resolve a dotted path below *node*; returns a list of leaves or None."""
+    if not parts:
+        return node
+    part = parts[0]
+    if _is_wrapper(node):
+        return _walk_path(node["value"], parts)
+    if isinstance(node, list):
+        out: list[Any] = []
+        for item in node:
+            got = _walk_path(item, parts)
+            if isinstance(got, list):
+                if got:
+                    out.extend(got)
+                else:
+                    # The entry itself resolved to nothing (missing child).
+                    out.append(None)
+            elif got is None:
+                # Missing child in this item: keep a placeholder so per-entry
+                # rules still fail rather than silently passing.
+                out.append(None)
+            elif _is_wrapper(got):
+                lv = got["value"]
+                out.extend(lv if isinstance(lv, list) else [lv])
+            else:
+                out.append(got)
+        return out
+    if isinstance(node, dict):
+        if part not in node:
+            return None
+        return _walk_path(node[part], parts[1:])
+    return None
+
+
+def _field_path(blocks: dict[str, Any], block: str, field: str):
+    r"""Resolve a dotted field path ("author.authorIdentifier") to its leaves.
+
+    The first segment is the actual metadatablock field; the rest walk down
+    compound children. Never raises; returns [] when the path cannot resolve.
+    """
+    parts = [p for p in str(field or "").split(".") if p]
+    if len(parts) < 2:
+        return None
+    try:
+        raw = _mc()._field(blocks, block, parts[0])
+    except Exception:
+        return []
+    out = _walk_path(raw, parts[1:])
+    if out is None:
+        return []
+    return out if isinstance(out, list) else [out]
+
+
+def _leaf_list(v: Any) -> list[Any]:
+    if v is None:
+        return []
+    return v if isinstance(v, list) else [v]
+
+
+def _leaves_value(leaves: list[Any], max_len: int = 200) -> str:
+    parts = [_leaf_text(x) for x in leaves[:3]]
+    s = "; ".join(p for p in parts if p)
+    if len(leaves) > 3:
+        s += f" (+{len(leaves) - 3} more)"
+    return s[:max_len] or "—"
+
+
+def _orcid_dotted(m, blocks: dict[str, Any], block: str, field: str) -> tuple[bool, str]:
+    """ORCID rule on a dotted identifier path ("author.authorIdentifier").
+
+    Mirrors the composite ``orcid`` handler: every author needs a scheme of
+    ORCID and a value matching the ORCID pattern. A non-author dotted parent
+    treats bare identifiers with the regex instead.
+    """
+    parts = [p for p in str(field or "").split(".") if p]
+    if not parts:
+        return False, "—"
+    if parts[0] != "author":
+        leaves = _field_path(blocks, block, field) or []
+        if not leaves:
+            return False, "—"
+        matches = []
+        for x in leaves:
+            text = _leaf_text(x)
+            if text and m.ORCID_RE.match(text):
+                matches.append(text)
+        ok = bool(leaves) and len(matches) == len(leaves)
+        shown = "; ".join(matches[:3]) or "—"
+        if len(matches) > 3:
+            shown += f" (+{len(matches) - 3} more)"
+        return ok, shown
+    raw = m._field(blocks, block, "author") or []
+    authors = [a for a in raw if isinstance(a, dict)] if isinstance(raw, list) else []
+    if not authors:
+        return False, "—"
+    id_key = parts[-1]
+    found: list[str] = []
+    missing: list[str] = []
+    for i, author in enumerate(authors):
+        name = _leaf_text(_walk_path(author, ["authorName"])) or f"author {i + 1}"
+        scheme = _leaf_text(_walk_path(author, ["authorIdentifierScheme"]))
+        id_text = _leaf_text(_walk_path(author, [id_key]))
+        if "orcid" in scheme.lower() and id_text and m.ORCID_RE.match(id_text):
+            found.append(f"{name}: {id_text}")
+        else:
+            missing.append(name)
+    shown = "; ".join(found[:3]) or "—"
+    if len(found) > 3:
+        shown += f" (+{len(found) - 3} more)"
+    if missing and found:
+        shown += f" [missing: {', '.join(missing[:3])}]"
+    elif missing and not found:
+        shown = "—"
+    return (not missing), shown
+
+
 def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any],
                   block: str, field: str, rule: dict[str, Any] | None = None,
                   inventory: list[dict[str, Any]] | None = None) -> tuple[bool, str]:
     m = _mc()
     rule = rule if isinstance(rule, dict) else {}
+    # Dotted paths ("author.authorIdentifier") address compound children;
+    # if the path cannot be resolved, report the rule as incomplete rather
+    # than silently passing.
+    if "." in str(field or ""):
+        if handler == "orcid":
+            return _orcid_dotted(m, blocks, block, field)
+        leaves = _field_path(blocks, block, field) or []
+        ok = bool(leaves) and all(m._nonempty(_unwrap(x)) for x in leaves)
+        return ok, _leaves_value(leaves)
     if handler == "nonempty":
         raw = m._field(blocks, block, field)
         return m._nonempty(raw), m._display_value(raw)

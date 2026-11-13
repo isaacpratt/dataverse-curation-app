@@ -246,7 +246,7 @@ def test_no_orphan_catalog_entries():
 # date formats, regexes, key sequences, identifiers) is structural and is
 # recognised by shape or by the call it is passed to.
 _CSS = re.compile(
-    r"px\b|font-|border|background|color:|padding|letter-spacing|"
+    r"px\b|font-|border|background|color:|text-align|padding|letter-spacing|"
     r"QWidget|QFrame|QLabel|QPushButton|QTreeWidget|QPlainTextEdit|QScrollArea|"
     r"QProgressBar|QTable|QComboBox|QListWidget|QTab|::|#[0-9a-fA-F]{6}"
 )

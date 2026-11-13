@@ -110,7 +110,7 @@ def test_worker_cancel_before_start_never_touches_network(qapp, tmp_path):
     assert hits == ["cancelled"], f"expected cancelled only, got {hits}"
 
 
-def test_log_legend_chips_match_highlighter_colours(win, qapp):
+def test_log_legend_is_plain_text_in_highlighter_colours(win, qapp):
     from ui.theme import STATE_ERROR_GRAPHIC, STATE_WARNING_GRAPHIC
 
     win._on_log_toggled(True)
@@ -118,17 +118,23 @@ def test_log_legend_chips_match_highlighter_colours(win, qapp):
         for _ in range(20):
             qapp.processEvents()
         page = win._log_page
-        chips = {lbl.text(): lbl for lbl in page.findChildren(QLabel)}
-        assert "ERROR" in chips and "WARN" in chips, "severity legend missing"
-        err_css, warn_css = chips["ERROR"].styleSheet(), chips["WARN"].styleSheet()
-        # lnav-style: severity is the text colour, never a filled block.
-        assert "background: transparent" in err_css, "ERROR chip must be text-only"
-        assert STATE_ERROR_GRAPHIC in err_css, "ERROR chip ≠ highlighter colour"
-        assert "background: transparent" in warn_css, "WARN chip must be text-only"
-        assert STATE_WARNING_GRAPHIC in warn_css, "WARN chip ≠ highlighter colour"
-        assert chips["INFO · DEBUG plain"].toolTip(), "plain chip needs a tooltip"
-        # Inline in the header: chips sit left of the search box, not a footer.
-        assert chips["ERROR"].x() < page._search.x()
+        labels = {lbl.text(): lbl for lbl in page.findChildren(QLabel)}
+        # Ordinary text, not badge chrome (dv-wp1): sentence case, no
+        # uppercase transform, tracking, heavy weight or pill face.
+        assert "Error" in labels and "Warning" in labels, "severity legend missing"
+        err, warn = labels["Error"], labels["Warning"]
+        for lbl in (err, warn, labels["Info · Debug"]):
+            assert lbl.objectName() == "BodySM", "legend must use the body text token"
+            css = lbl.styleSheet()
+            assert "background" not in css, "no pill/badge background"
+            assert "text-transform" not in css and "letter-spacing" not in css
+            assert "font-weight" not in css, "normal text, not a badge"
+        # lnav-style: severity is the text colour.
+        assert STATE_ERROR_GRAPHIC in err.styleSheet() or "error" in err.styleSheet().lower()
+        assert STATE_WARNING_GRAPHIC in warn.styleSheet()
+        assert labels["Info · Debug"].toolTip(), "plain key needs a tooltip"
+        # Inline in the header: the key sits left of the search box.
+        assert err.x() < page._search.x()
     finally:
         win._on_log_toggled(False)
         for _ in range(10):

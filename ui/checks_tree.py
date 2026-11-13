@@ -13,9 +13,9 @@ Icons are Lucide (see ui/icons.py), set as item icons — never text glyphs:
 folder/folder-open track expanded state, file icons follow the extension
 (staged files ink, unstaged muted), check rows carry octagon-x (errors),
 octagon-alert (warnings), check (passes) or circle-dashed (skipped).
-Expand affordance itself comes from QTreeView branch images (Lucide
-chevrons via ui.icons.tree_branch_qss); update_carets() keeps folder
-icons in sync with live expanded state and must run after every
+Expand affordance itself is painted by the tree's own branch pass
+(Lucide chevrons via ui.widgets._BranchPainting); update_carets() keeps
+folder icons in sync with live expanded state and must run after every
 expand/collapse (see dataset_detail).
 
 Columns: Name | Size | Format | Scan. Folder rows aggregate children counts;

@@ -38,10 +38,10 @@ from ui.theme import (
 )
 from ui.widgets import (
     make_action_button,
-    make_badge,
     make_page_heading,
     make_plain_text_view,
     make_search_field,
+    make_text_label,
 )
 
 
@@ -64,34 +64,18 @@ class LogPage(QWidget):
 
         header = QHBoxLayout()
         header.setSpacing(8)
-        # Severity legend: text-only chips, matching the lnav-style log
-        # where colour lives in the words, never in a background block.
+        # Severity legend: ordinary text, not badges (dv-wp1). Colour is
+        # the only decoration - no uppercase, tracking, weight or pill -
+        # so the row reads as the key it is, matching the lnav-style log
+        # where severity lives in the words' colour alone.
         legend = QHBoxLayout()
-        legend.setSpacing(4)
-        err_chip = make_badge(
-            t("log.err_chip"),
-            background="transparent",
-            foreground=TEXT_DANGER,
-            border="transparent",
-        )
-        err_chip.setToolTip(t("log.err_tip"))
-        legend.addWidget(err_chip)
-        warn_chip = make_badge(
-            t("log.warn_chip"),
-            background="transparent",
-            foreground=STATE_WARNING_GRAPHIC,
-            border="transparent",
-        )
-        warn_chip.setToolTip(t("log.warn_tip"))
-        legend.addWidget(warn_chip)
-        plain_chip = make_badge(
-            t("log.plain_chip"),
-            background="transparent",
-            foreground=TEXT_MUTED,
-            border="transparent",
-        )
-        plain_chip.setToolTip(t("log.plain_tip"))
-        legend.addWidget(plain_chip)
+        legend.setSpacing(14)
+        for text, colour, tip in (
+            (t("log.err_chip"), TEXT_DANGER, t("log.err_tip")),
+            (t("log.warn_chip"), STATE_WARNING_GRAPHIC, t("log.warn_tip")),
+            (t("log.plain_chip"), TEXT_MUTED, t("log.plain_tip")),
+        ):
+            legend.addWidget(make_text_label(text, color=colour, tip=tip))
         header.addLayout(legend)
         header.addStretch(1)
         # Search box: filter visible lines (case-insensitive substring).
@@ -367,4 +351,3 @@ class LogHighlighter(QSyntaxHighlighter):
                 self._apply(m, self.line_warn_format)
             else:
                 self._apply(m, self.value_format)
-

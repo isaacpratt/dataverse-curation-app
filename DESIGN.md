@@ -139,7 +139,7 @@ A Material-3-like ramp: brand blue and violet accents on a lavender-neutral surf
 
 ## Layout
 
-A single-window desktop app with a top nav and stacked pages. Page margins are 24px; card header/body insets are 16px horizontal and 12px vertical; card bodies space children 8px apart with 12px header spacing. Toolbars are single rows of 36px fields and buttons with 8px gaps; tables fill their card edge-to-edge (flush corners, no inner frame). The dataset page splits into a main column and a right rail (Sections, Dataset log).
+A single-window desktop app with a top nav and stacked pages. Page margins are 24px; card header/body insets are 16px horizontal and 12px vertical; card bodies space children 8px apart with 12px header spacing. A card header is two rows: the title row carries only the title, its (i) tooltip and a summary (e.g. "4/13 fields complete"); every tool — search, filter combos, reset, actions — sits on one tools row below it, made of 36px fields and buttons with 8px gaps. Tables fill their card edge-to-edge (flush corners, no inner frame). The dataset page splits into a main column and a right rail (Sections, Dataset log).
 
 Window behaviour: the app is resize-safe from narrow to wide — columns fit to content with a minimum of 48px, headers elide with tooltips carrying the full title, and long labels elide rather than widening the layout.
 

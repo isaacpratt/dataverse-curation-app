@@ -27,6 +27,8 @@ downloads/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+# uv/pytest artifacts (CI coverage XMLs, junit)
+reports/
 *.egg-info/
 .env
 .env.*

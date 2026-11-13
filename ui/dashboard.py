@@ -162,13 +162,6 @@ def _system_datetime_text(mtime: float) -> str:
     return QLocale.system().toString(qdt, QLocale.FormatType.ShortFormat)
 
 
-def _now_datetime_text() -> str:
-    """Return current local time in the user's system date/time format (dv-bqk)."""
-    from PySide6.QtCore import QDateTime, QLocale
-
-    return QLocale.system().toString(QDateTime.currentDateTime(), QLocale.FormatType.ShortFormat)
-
-
 def _human_size(n: int) -> str:
     # Re-exported from the shared helper (dv-005): labels are decimal (KB/MB),
     # so the divisor is 1000. The shared helper lives in ui.widgets.
@@ -656,13 +649,8 @@ class DashboardView(QWidget):
         self._metrics_row = QHBoxLayout()
         self._metrics_row.setSpacing(16)
         self._metric_cards: list[QFrame] = []
-        self._metric_subs: list[str] = []
         self._metric_value_labels: list[QLabel] = []
         self._needs_action_only: bool = False
-        self._refine_expanded: bool = True
-        # When the numbers below were last measured ("never" pre-crawl) —
-        # carried in every card's tooltip so a 0 is never a mystery.
-        self._last_refresh = t("dashboard.metrics.never")
         for accent, label, sub_text in [
             (
                 "tertiary",
@@ -683,7 +671,6 @@ class DashboardView(QWidget):
             card, value_label = self._make_metric_card(accent, label, sub_text)
             self._metrics_row.addWidget(card, 1)
             self._metric_cards.append(card)
-            self._metric_subs.append(sub_text)
             self._metric_value_labels.append(value_label)
         outer.addLayout(self._metrics_row)
 
@@ -702,11 +689,11 @@ class DashboardView(QWidget):
         header.setStyleSheet(
             band_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#QueueHeaderBar")
         )
-        # Two rows, not one fixed-height band. The old single row needed
-        # 1529px (heading, search box, three filter combos, Columns and
-        # Refresh), so at 960px the right-hand filters were simply off
-        # screen. The heading row carries the title and the two right-hand
-        # actions; the filter row carries the search box and the filters.
+        # The queue header follows the card contract: the title row carries
+        # the title (and only the title - no tools), and every tool lives
+        # on the row below. The tools row fits at the 960px floor because
+        # the search field and the combos shrink to their minimum widths
+        # (the combo labels elide; their full text stays in the menu).
         hdr_layout = QVBoxLayout(header)
         hdr_layout.setContentsMargins(16, 12, 16, 12)
         hdr_layout.setSpacing(10)
@@ -718,47 +705,21 @@ class DashboardView(QWidget):
             t("dashboard.queue.title"), object_name="HeadlineMD"
         )
         title_row.addWidget(hdr_title, 1)
-
-        self._refine_btn = make_action_button(
-            t("dashboard.queue.refine"), kind="chip"
-        )
-        self._refine_btn.setCheckable(True)
-        self._refine_btn.setChecked(True)
-        self._refine_btn.toggled.connect(self._on_refine_toggled)
-        title_row.addWidget(self._refine_btn)
-
-        self._columns_btn = make_action_button(
-            t("dashboard.queue.columns"), kind="chip"
-        )
-        self._columns_btn.clicked.connect(self._show_columns_menu)
-        title_row.addWidget(self._columns_btn)
-
-        refresh = make_action_button(t("common.refresh"), kind="secondary")
-        refresh.clicked.connect(self.reload)
-        self._refresh_btn = refresh
-        title_row.addWidget(refresh)
         hdr_layout.addLayout(title_row)
 
         filter_row = QHBoxLayout()
         filter_row.setContentsMargins(0, 0, 0, 0)
         filter_row.setSpacing(8)
 
-        search_wrap = QWidget()
-        search_wrap.setObjectName("QueueSearchWrap")
-        search_wrap.setStyleSheet(transparent_surface_qss("QueueSearchWrap"))
-        search_layout = QHBoxLayout(search_wrap)
-        search_layout.setContentsMargins(0, 0, 0, 0)
-        search_layout.setSpacing(8)
-        # Visible label for the search field (accessible name + label text)
-        self._search_lbl = QLabel(t("dashboard.queue.search"))
-        self._search_lbl.setObjectName("LabelMD")
-        search_layout.addWidget(self._search_lbl)
+        # No visible label: the field's placeholder and accessible name
+        # carry the label (the visible one duplicated the placeholder and
+        # pushed the tools row past the window).
         self._filter_edit = make_search_field(
             t("dashboard.queue.search"), min_width=140
         )
+        self._filter_edit.setAccessibleName(t("dashboard.queue.search"))
         self._filter_edit.textChanged.connect(lambda _t: self._filter_timer.start())
-        search_layout.addWidget(self._filter_edit, 1)
-        filter_row.addWidget(search_wrap, 1)
+        filter_row.addWidget(self._filter_edit, 1)
 
         self._state_filter = make_combo(
             [
@@ -792,6 +753,18 @@ class DashboardView(QWidget):
         )
         self._collection_filter.currentTextChanged.connect(self._apply_filter)
         filter_row.addWidget(self._collection_filter)
+
+        self._columns_btn = make_action_button(
+            t("dashboard.queue.columns"), kind="chip"
+        )
+        self._columns_btn.clicked.connect(self._show_columns_menu)
+        filter_row.addWidget(self._columns_btn)
+
+        refresh = make_action_button(t("common.refresh"), kind="secondary")
+        refresh.clicked.connect(self.reload)
+        self._refresh_btn = refresh
+        filter_row.addWidget(refresh)
+
         self._filter_wrap = QWidget()
         self._filter_wrap.setObjectName("QueueFilterWrap")
         self._filter_wrap.setStyleSheet(transparent_surface_qss("QueueFilterWrap"))
@@ -934,7 +907,6 @@ class DashboardView(QWidget):
         outer.addLayout(foot)
         _sync_sep()
         self._sync_status_bar()
-        self._update_refine_visibility()
 
         self._apply_default_column_visibility()
         # Snapshot the construction view for the Columns-menu reset, then
@@ -1160,7 +1132,6 @@ class DashboardView(QWidget):
             except Exception:
                 pass
             saved = (entry.get("saved_at") or "")[:16].replace("T", " ")
-            self._last_refresh = saved or t("dashboard.metrics.earlier_session")
             self._sync_status_bar()
             self._progress.setText(
                 t(
@@ -1384,16 +1355,19 @@ class DashboardView(QWidget):
         # it. A local stylesheet would shadow the app sheet for the subtree
         # (dv-g98).
         card.setMinimumHeight(52)
-        card.setToolTip(sub)
+        # No tooltip (dv-1k4): the card is a filter control, not a mystery
+        # to explain. Hover feedback carries the affordance instead.
         lay = QHBoxLayout(card)
         lay.setContentsMargins(14, 8, 14, 8)
         lay.setSpacing(8)
         from ui.icons import icon_label as _metric_icon
 
         icon_map = {"tertiary": "clock", "primary": "eye", "error": "octagon-alert"}
-        lay.addWidget(
-            _metric_icon(icon_map.get(accent, "circle"), size=18, color=border_color), 0
-        )
+        icon = _metric_icon(icon_map.get(accent, "circle"), size=18, color=border_color)
+        # The whole chip must be the click target: mouse-transparent
+        # children let press/enter/leave reach the card's eventFilter.
+        icon.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        lay.addWidget(icon, 0)
         # The caption is the widest thing in the card ("PENDING · Datasets
         # waiting for a decision"), so it elides instead of pushing the
         # three cards past the window. The card tooltip keeps the full
@@ -1402,11 +1376,13 @@ class DashboardView(QWidget):
             t("dashboard.metrics.card_label", label=label.upper(), sub=sub),
             object_name="LabelMD",
         )
+        lbl.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         lay.addWidget(lbl, 1)
         v = QLabel("0")
         v.setProperty("metricToken", _METRIC_VALUE_TOKEN)
         _apply_metric_token(v)
         v.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        v.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         lay.addWidget(v, 0)
         # Tappable filter (dv-896): click or Enter/Space applies the card's
         # filter via eventFilter. Cursor + focus make it discoverable.
@@ -1438,19 +1414,6 @@ class DashboardView(QWidget):
             if idx != 1:
                 self._needs_action_only = False
         self._apply_filter()
-
-    def _on_refine_toggled(self, checked: bool) -> None:
-        self._refine_expanded = bool(checked)
-        self._update_refine_visibility()
-
-    def _update_refine_visibility(self) -> None:
-        """Collapse the filter row under 1100px unless Refine is on (dv-896)."""
-        try:
-            narrow = self.width() < 1100
-            self._refine_btn.setVisible(narrow)
-            self._filter_wrap.setVisible((not narrow) or bool(getattr(self, "_refine_expanded", True)))
-        except Exception:
-            pass
 
     def _on_columns_fitted(self) -> None:
         """Content fit changed the column widths: re-fit them.
@@ -1905,10 +1868,6 @@ class DashboardView(QWidget):
             self._apply_size_cache(datasets)
             self._all_datasets = datasets
             self._crawled = True
-            try:
-                self._last_refresh = _now_datetime_text()
-            except Exception:
-                self._last_refresh = t("dashboard.metrics.just_now")
             self._merge_row_labels()
             self._rebuild_collection_filter()
             # Persist this crawl so the next app open paints instantly.
@@ -1972,8 +1931,8 @@ class DashboardView(QWidget):
         Before the first crawl finishes each card states its condition in
         words ("Checking…" while the crawl runs, "Not fetched" when idle)
         instead of a bare "—", so a visible 0 can only ever mean a completed
-        check counted zero; every card's tooltip carries the last-refresh
-        time ("never" until something has been measured).
+        check counted zero. Cards carry no tooltip (dv-1k4): a hover state
+        shows they filter the queue.
         """
         loading = self._worker is not None and self._worker.isRunning()
         restoring = bool(getattr(self, "_restoring", False))
@@ -1983,30 +1942,11 @@ class DashboardView(QWidget):
                 if (loading or restoring)
                 else t("dashboard.metrics.not_fetched")
             )
-            if loading:
-                note = t("dashboard.metrics.note_loading")
-            elif restoring:
-                note = t("dashboard.metrics.note_restoring")
-            else:
-                note = t("dashboard.metrics.note_idle")
-            for card, sub, v_lbl in zip(
-                self._metric_cards,
-                self._metric_subs,
-                self._metric_value_labels,
-                strict=False,
-            ):
+            for v_lbl in self._metric_value_labels:
                 if v_lbl:
                     v_lbl.setText(state)
                     v_lbl.setProperty("metricToken", _METRIC_STATE_TOKEN)
                     _apply_metric_token(v_lbl)
-                card.setToolTip(
-                    t(
-                        "dashboard.metrics.tooltip",
-                        sub=sub,
-                        note=note,
-                        when=self._last_refresh,
-                    )
-                )
             self._update_empty_state()
             return
         in_review = sum(
@@ -2031,24 +1971,11 @@ class DashboardView(QWidget):
                 if (st == "DRAFT" or "REVIEW" in st) and d.get("persistent_id") not in decided:
                     needs_action += 1
         vals = [pending, in_review, needs_action]
-        for card, sub, val, v_lbl in zip(
-            self._metric_cards,
-            self._metric_subs,
-            vals,
-            self._metric_value_labels,
-            strict=False,
-        ):
+        for val, v_lbl in zip(vals, self._metric_value_labels, strict=False):
             if v_lbl:
                 v_lbl.setText(str(val))
                 v_lbl.setProperty("metricToken", _METRIC_VALUE_TOKEN)
                 _apply_metric_token(v_lbl)
-            card.setToolTip(
-                t(
-                    "dashboard.metrics.tooltip_refreshed",
-                    sub=sub,
-                    when=self._last_refresh,
-                )
-            )
         self._update_empty_state()
 
     def _cell_text(self, ds: dict, key: str) -> str:
@@ -2268,10 +2195,6 @@ class DashboardView(QWidget):
             retry=self.reload,
         )
         self._update_empty_state()
-
-    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
-        super().resizeEvent(event)
-        self._update_refine_visibility()
 
     def eventFilter(self, obj, event):
         """Keyboard parity for the queue table (P0).

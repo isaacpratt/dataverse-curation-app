@@ -114,9 +114,9 @@
     "title": "Dataverse Communication Log",
     "err_tip": "ERROR lines and failing responses (4xx/5xx) render in red text",
     "warn_tip": "WARN/WARNING lines render in amber text",
-    "err_chip": "ERROR",
-    "warn_chip": "WARN",
-    "plain_chip": "INFO · DEBUG plain",
+    "err_chip": "Error",
+    "warn_chip": "Warning",
+    "plain_chip": "Info · Debug",
     "plain_tip": "Everything else keeps the default text colour; base URLs, API paths, methods, status codes and DOIs keep their accents",
     "search": "Search log…",
     "live": "Live",
@@ -227,21 +227,12 @@
       },
       "checking": "Checking…",
       "not_fetched": "Not fetched",
-      "note_loading": "Crawl in progress — counts land when it finishes.",
-      "note_restoring": "Restoring the cached view — counts land once it paints.",
-      "note_idle": "No crawl has completed yet — add an API key in Settings, then press Refresh.",
-      "tooltip": "{sub}\n{note}\nLast refresh: {when}",
-      "tooltip_refreshed": "{sub}\nLast refresh: {when}",
-      "never": "never",
-      "just_now": "just now",
-      "earlier_session": "earlier session",
       "card_label": "{label}  ·  {sub}"
     },
     "queue": {
       "title": "Curation Queue",
       "search": "Search datasets, authors...",
-      "columns": "Columns…",
-      "refine": "Refine"
+      "columns": "Columns…"
     },
     "filters": {
       "all": "All Datasets",
@@ -585,7 +576,8 @@
       "live_catalog": " — live Dataverse catalog",
       "builtin_catalog": " — built-in catalog (press “Load fields from Dataverse”)",
       "missing_field_template": "The dataset is missing {label}. Please provide it.",
-      "field_rule_tip": "{block}.{field} — {handler}"
+      "field_rule_tip": "{block}.{field} — {handler}",
+      "group_tip": "Composite of {count} field(s) — it must be filled when required"
     },
     "dialogs": {
       "new_ruleset_title": "New ruleset",
@@ -743,6 +735,10 @@
       "reset_columns_tip": "Reset columns, sort and widths to default",
       "status_complete": "Complete",
       "status_incomplete": "Incomplete",
+      "level_required": "Required",
+      "level_optional": "Optional",
+      "level_tip": "Required — blocks approval per the active ruleset\nOptional — recommended; does not block approval",
+      "level_header": "Level",
       "fields_complete_html": "<span style='font-weight:700;color:{color}'>{complete}/{total} fields complete</span>",
       "fields_complete": "{complete}/{total} metadata fields",
       "value_tooltip": "\n\nValue: {value}"

@@ -54,7 +54,7 @@ def test_unchecked_field_is_skipped():
 def test_optional_missing_stays_incomplete_with_level():
     rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
     res = rr.evaluate_ruleset(_meta([]), rs, [])
-    orcid = next(r for r in res if r["rule_id"] == "field:citation.author:orcid")
+    orcid = next(r for r in res if r["rule_id"] == "field:citation.author.authorIdentifier:orcid")
     assert orcid["status"] == "incomplete" and orcid["level"] == "optional"
 
 
@@ -183,6 +183,81 @@ def test_orcid_handler_requires_every_author():
     res2 = rr.evaluate_ruleset(meta2, rs, [])
     orc2 = next(r for r in res2 if r["rule_id"].endswith(":orcid"))
     assert orc2["status"] == "complete"
+
+
+def test_orcid_dotted_identifier_rule_complete_and_incomplete():
+    """Builtin mcmaster ORCID rule now targets author.authorIdentifier."""
+    rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
+    orc_rules = [r for r in rs["field_rules"] if r.get("handler") == "orcid"]
+    assert orc_rules, "mcmaster must carry an ORCID rule"
+    assert orc_rules[0]["field"] == "author.authorIdentifier"
+    meta = _meta([
+        _f("author", [
+            {"authorName": {"value": "A"},
+             "authorIdentifierScheme": {"value": "ORCID"},
+             "authorIdentifier": {"value": "0000-0002-1825-0097"}},
+            {"authorName": {"value": "B"}},
+        ]),
+    ])
+    res = rr.evaluate_ruleset(meta, rs, [])
+    orc = next(r for r in res if r["rule_id"].endswith(":orcid"))
+    assert orc["status"] == "incomplete"
+    assert "B" in orc["value"]
+    assert orc["rule_id"] == "field:citation.author.authorIdentifier:orcid"
+    meta2 = _meta([
+        _f("author", [
+            {"authorName": {"value": "A"},
+             "authorIdentifierScheme": {"value": "ORCID"},
+             "authorIdentifier": {"value": "0000-0002-1825-0097"}},
+        ]),
+    ])
+    res2 = rr.evaluate_ruleset(meta2, rs, [])
+    orc2 = next(r for r in res2 if r["rule_id"].endswith(":orcid"))
+    assert orc2["status"] == "complete"
+
+
+def test_dotted_nonempty_rule_requires_every_identifier():
+    ruleset = {
+        "label": "t", "description": "", "dataverses": ["*"],
+        "field_rules": [
+            {"block": "citation", "field": "author.authorIdentifier",
+             "label": "Identifier", "handler": "nonempty", "level": "required",
+             "requirement": "", "response_template": ""},
+        ],
+        "content_rules": [], "filecheck_templates": {"*": "{check_id}: {message}"},
+        "response_header": "", "response_footer": "",
+    }
+    meta = _meta([
+        _f("author", [
+            {"authorName": {"value": "A"},
+             "authorIdentifier": {"value": "X"}},
+            {"authorName": {"value": "B"}},
+        ]),
+    ])
+    res = rr.evaluate_ruleset(meta, ruleset, [])
+    r = next(x for x in res if x["block"] == "citation")
+    assert r["status"] == "incomplete"
+    meta2 = _meta([
+        _f("author", [
+            {"authorName": {"value": "A"}, "authorIdentifier": {"value": "X"}},
+            {"authorName": {"value": "B"}, "authorIdentifier": {"value": "Y"}},
+        ]),
+    ])
+    res2 = rr.evaluate_ruleset(meta2, ruleset, [])
+    r2 = next(x for x in res2 if x["block"] == "citation")
+    assert r2["status"] == "complete"
+    assert "X" in r2["value"] and "Y" in r2["value"]
+
+
+def test_legacy_orcid_field_author_migrates_on_load():
+    merged = rr._normalize_ruleset(
+        "legacy",
+        {"field_rules": [
+            {"block": "citation", "field": "author", "label": "ORCiD for authors",
+             "handler": "orcid", "level": "optional", "requirement": "", "response_template": ""},
+        ]},
+    )
+    assert merged["field_rules"][0]["field"] == "author.authorIdentifier"
 
 
 def test_rulesets_for_dataverse_wildcard():
