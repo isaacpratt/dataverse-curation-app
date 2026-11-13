@@ -59,7 +59,7 @@ footer .wrap{padding:16px 24px}
 <div class="badges"><span class="badge ok">22 check modules</span><span class="badge ok">513 tests</span><span class="badge info">PySide6 desktop</span><span class="badge">Engine v0.1.0</span><span class="badge warn">Verified vs code 2026-11-12</span></div>
 </div></header>
 <nav class="top"><div class="wrap">
-<a href="index.html" aria-current="page">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a><a href="proposals.html">Proposals</a>
+<a href="index.html" aria-current="page">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="entry-correctness.html">Entry correctness</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a><a href="proposals.html">Proposals</a>
 </div></nav>
 <main><div class="wrap">
 
@@ -67,6 +67,7 @@ footer .wrap{padding:16px 24px}
 <div class="grid">
 <div class="card"><h3>🗺 Architecture</h3><p>Components, threading, data flow, storage, the UI layering contract (palette → role → component), the table contract, packaging, decision log.</p><a href="architecture.html">Read →</a></div>
 <div class="card"><h3>🔍 Checks reference</h3><p>What each of the 22 auto-checks examines, PASS semantics, issue taxonomy.</p><a href="checks-reference.html">Read →</a></div>
+<div class="card"><h3>🪪 Entry correctness</h3><p>The <code>looks_correct</code> rule handler: nine entry checks for depositor metadata (length, pattern, blocklist, vocabulary, dates, URLs), what ships enrolled (nothing), and how to enroll it in phases.</p><a href="entry-correctness.html">Read →</a></div>
 <div class="card"><h3>🔌 Dataverse integration</h3><p>Endpoints, auth, discovery, curation labels, download flow, retries.</p><a href="dataverse-integration.html">Read →</a></div>
 <div class="card"><h3>📄 Report contract</h3><p>The <code>DatasetReport</code> JSON shared by engine, GUI, and headless mode.</p><a href="report-contract.html">Read →</a></div>
 <div class="card"><h3>🔄 Engine port</h3><p>R → Python port matrix, divergences, go/no-go criteria.</p><a href="engine-port.html">Read →</a></div>
