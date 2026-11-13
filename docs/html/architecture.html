@@ -170,7 +170,7 @@ self._layout.reset()            # clears the saved entry, restores the snapshot<
 <div class="step"><b><span class="n">2</span>Inspect</b>Detail auto-loads (<code>QTimer.singleShot(100)</code>, <code>MetadataWorker</code>): metadata, inventory, curation, diff, versions, timestamps, review submission.</div><div class="arrow">→</div>
 <div class="step"><b><span class="n">3</span>Download</b><b>Download All</b> quotes (original size for tabular), skips fully-staged, streams bundle, fetches originals, drops <code>.tab</code>, verifies <code>(ok, problems, warnings)</code>; both stream loops poll an <code>is_cancelled</code> flag → <code>DownloadCancelled</code> → detail <b>Cancel</b>.</div><div class="arrow">→</div>
 <div class="step"><b><span class="n">4</span>Check</b><b>Run checks</b> (<code>CheckWorker → run_report</code>): dispatch per file + dataset-level <code>extensions</code>; exports to <code>workspace/downloads/&lt;pid&gt;/reports/</code>.</div><div class="arrow">→</div>
-<div class="step"><b><span class="n">5</span>Curate</b>Main column (completeness, manifest, auto-checks, version log) + sidebar (sections, timeline, assessment → pushes curation label). Header link is version-aware (<code>…&amp;version=DRAFT</code>).</div>
+<div class="step"><b><span class="n">5</span>Curate</b>Main column (completeness, manifest, auto-checks, version log) + sidebar (Preview head, timeline → assessment lives on the Response page and pushes the curation label). The workflow rail (mechanical or CURATE(D)) is the single jump-navigation; the sidebar is chrome. Header link is version-aware (<code>…&amp;version=DRAFT</code>).</div>
 </div>
 
 <h2>Local storage</h2>

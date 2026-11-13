@@ -56,11 +56,8 @@ def _missing_library(lib: str) -> str:
     import sys
 
     if getattr(sys, "frozen", False):
-        return (
-            f"Missing: {lib} is not in this lite build — "
-            "use dist/curation-app-full/curation-app-full.exe"
-        )
-    return f"Missing: pip install {lib}"
+        return t("detail.preview.missing_lite", lib=lib)
+    return t("detail.preview.missing_pip", lib=lib)
 
 
 def _read_head(path: Path, cap: int = HEAD_BYTES) -> bytes:
@@ -390,9 +387,16 @@ def _preview_hdf(path: Path, ext: str) -> dict[str, Any]:
 
             with Dataset(str(path)) as ds:
                 for name, dim in list(ds.dimensions.items())[:40]:
-                    lines.append(f"dimension {name}: {dim.size}")
+                    lines.append(t("detail.preview.structure_dim", name=name, size=dim.size))
                 for name, var in list(ds.variables.items())[:40]:
-                    lines.append(f"variable {name}: dimensions={var.dimensions} dtype={var.dtype}")
+                    lines.append(
+                        t(
+                            "detail.preview.structure_var",
+                            name=name,
+                            dimensions=var.dimensions,
+                            dtype=var.dtype,
+                        )
+                    )
         else:
             import h5py
 
@@ -470,12 +474,8 @@ def render_tabular(result: dict[str, Any]) -> str:
         out.append(" · ".join(label_bits))
     dims = result.get("dimensions")
     if dims:
-        try:
-            out.append("")
-            out.append(t("detail.preview.dimensions", rows=dims[0], cols=dims[1]))
-        except Exception:
-            out.append("")
-            out.append(f"{dims[0]} rows × {dims[1]} columns")
+        out.append("")
+        out.append(t("detail.preview.dimensions", rows=dims[0], cols=dims[1]))
     return "\n".join(out)
 
 
@@ -588,11 +588,11 @@ class PreviewCard(QFrame):
                 self._note.setText(t("detail.preview.unsupported", ext=ext))
                 self._note.setVisible(True)
             else:
-                reason = str(result.get("message", "unknown error"))
+                reason = str(result.get("message", t("detail.preview.unknown_error")))
                 self._note.setText(t("detail.preview.error", message=reason))
                 self._note.setVisible(True)
         except Exception:
-            self._note.setText(t("detail.preview.error", message="render failed"))
+            self._note.setText(t("detail.preview.error", message=t("detail.preview.render_failed")))
             self._note.setVisible(True)
         return kind
 
@@ -643,7 +643,13 @@ def _preview_archive(path: Path) -> dict[str, Any]:
             with tarfile.open(str(path)) as handle:
                 for idx, member in enumerate(handle):
                     if idx < ARCHIVE_CAP:
-                        entries.append(f"{member.name} ({member.size} bytes)")
+                        entries.append(
+                            t(
+                                "detail.preview.archive_entry",
+                                name=member.name,
+                                size=member.size,
+                            )
+                        )
                     total = idx + 1
                     if idx >= ARCHIVE_CAP * 10:
                         break
@@ -654,7 +660,13 @@ def _preview_archive(path: Path) -> dict[str, Any]:
                 infos = handle.infolist()
                 total = len(infos)
                 for info in infos[:ARCHIVE_CAP]:
-                    entries.append(f"{info.filename} ({info.file_size} bytes)")
+                    entries.append(
+                        t(
+                            "detail.preview.archive_entry",
+                            name=info.filename,
+                            size=info.file_size,
+                        )
+                    )
     except Exception as exc:
         return {"kind": "error", "message": str(exc)}
     return {

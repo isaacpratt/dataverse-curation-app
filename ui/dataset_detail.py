@@ -144,16 +144,6 @@ from ui.widgets import (
 )
 from ui.workers import CheckWorker, DownloadWorker, MetadataWorker
 
-# The sections the sidebar (and the folded sidebar's menu) can jump to.
-# The catalogue key is literal here so the string guard sees it.
-_SECTION_LINKS: tuple[tuple[str, str], ...] = (
-    ("detail.sections.metadata_check", "_meta_card"),
-    ("detail.sections.file_manifest", "_file_card"),
-    ("detail.sections.auto_checks", "_auto_card"),
-    ("detail.sections.version_log", "_version_card"),
-)
-
-
 def _human_size(n: int) -> str:
     # Re-exported from the shared helper (dv-005): labels are decimal (KB/MB).
     from ui.widgets import human_size as _shared
@@ -526,17 +516,21 @@ class DatasetDetailView(QWidget):
         self._load_meta_btn.setToolTip(t("detail.header.load_metadata_tip"))
         self._load_meta_btn.clicked.connect(self._on_load_metadata)
         actions_row.addWidget(self._load_meta_btn)
-        # Sections menu: the sidebar's navigation, reachable even when
-        # the sidebar itself is folded away on a narrow window.
-        self._sections_btn = make_action_button(
-            t("detail.sections.title"), kind="chip"
+        # Sidebar show/hide toggle — the one layout control for the sidebar;
+        # the rail is navigation, this is chrome (dv-6wb).
+        self._sidebar_toggle_btn = make_action_button(
+            "", kind="ghost", size="sm"
         )
-        self._sections_btn.setToolTip(t("detail.sidebar.sections_tip"))
-        self._sections_menu = QMenu(self._sections_btn)
-        self._sections_btn.setMenu(self._sections_menu)
-        self._sections_menu.aboutToShow.connect(self._fill_sections_menu)
-        self._sections_btn.setVisible(False)
-        actions_row.addWidget(self._sections_btn)
+        try:
+            from ui.icons import icon as _side_icon
+
+            self._sidebar_toggle_btn.setIcon(_side_icon("chevron-right"))
+        except Exception:
+            self._sidebar_toggle_btn.setText(t("detail.sidebar.collapse_a11y"))
+        self._sidebar_toggle_btn.setToolTip(t("detail.sidebar.collapse_tip"))
+        self._sidebar_toggle_btn.setAccessibleName(t("detail.sidebar.collapse_a11y"))
+        self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
+        actions_row.addWidget(self._sidebar_toggle_btn)
         actions_col.addLayout(actions_row)
         # Run checks as primary (always enabled; warns when nothing is staged)
         self._check_btn = make_action_button(t("detail.header.run_checks"), kind="primary", size="lg")
@@ -640,15 +634,13 @@ class DatasetDetailView(QWidget):
         main_container.setStyleSheet(transparent_surface_qss("DetailMainContainer"))
         canvas_lay.addWidget(main_container)
 
-        # SIDEBAR (right, sticky): navigation → dataset log
+        # SIDEBAR (right, sticky): the sticky rail is the navigation map;
+        # the sidebar keeps only chrome (preview, dataset log) + fold toggle.
         # (Assessment Action moved to the Response page.)
         side_wrap = QVBoxLayout()
         side_wrap.setSpacing(20)
         side_wrap.setContentsMargins(12, 12, 24, 24)
         self._side_wrap = side_wrap
-
-        self._nav_card = self._build_nav_card()
-        side_wrap.addWidget(self._nav_card)
 
         # In-app file preview (dv-koz): shows the head of the file the
         # curator clicked in the manifest; degrades to Missing-library
@@ -1450,40 +1442,6 @@ class DatasetDetailView(QWidget):
 
         return PreviewCard(on_open_folder=self._on_open_folder, parent=self)
 
-    def _build_nav_card(self) -> QFrame:
-        """Sidebar section navigation — jumps the main column to each box."""
-        from ui.icons import icon as _nav_icon
-
-        card, body, _title, header = make_card(t("detail.sections.title"))
-        body.setSpacing(6)
-        # Collapse the sidebar. On a narrow window the 280px it holds
-        # squeezes the main column (the File Manifest tree) below a
-        # usable width, so the sidebar folds away and its links move
-        # into the top bar's Sections menu.
-        self._sidebar_collapse_btn = make_action_button("", kind="ghost", size="sm")
-        try:
-            self._sidebar_collapse_btn.setIcon(
-                _nav_icon("chevron-right", color=ACCENT_PRIMARY)
-            )
-        except Exception:
-            pass
-        self._sidebar_collapse_btn.setToolTip(t("detail.sidebar.collapse_tip"))
-        self._sidebar_collapse_btn.setAccessibleName(t("detail.sidebar.collapse_a11y"))
-        self._sidebar_collapse_btn.clicked.connect(self._toggle_sidebar)
-        header.addWidget(self._sidebar_collapse_btn)
-        self._nav_buttons: list = []
-        for key, attr in _SECTION_LINKS:
-            label = t(key)
-            btn = make_action_button(label, kind="link", size=None)
-            try:
-                btn.setIcon(_nav_icon("arrow-right", color=ACCENT_PRIMARY))
-            except Exception:
-                pass
-            btn.clicked.connect(lambda _c, a=attr: self._goto_section(a))
-            body.addWidget(btn)
-            self._nav_buttons.append(btn)
-        return card
-
     # ---- Response page (second page per dataset) ---------------------------
     def _build_response_page(self) -> QWidget:
         # Scroll-wrapped so the page's own minimum stays small: the stacked
@@ -1600,6 +1558,18 @@ class DatasetDetailView(QWidget):
 
     def _on_workflow_step(self, key: str) -> None:
         """Navigate the rail only — never run a download, check or export."""
+        try:
+            view = read_ui_pref(self._config.app.workspace, RAIL_VIEW_PREF, "mechanical")
+        except Exception:
+            view = "mechanical"
+        try:
+            self._log_action(
+                "nav_jump",
+                f"{key} ({view})",
+                {"step": str(key), "view": str(view)},
+            )
+        except Exception:
+            pass
         try:
             if key == "respond":
                 self._show_response_page()
@@ -2137,7 +2107,14 @@ class DatasetDetailView(QWidget):
                 return
             self._sidebar_collapsed = collapsed
             self._side_scroll.setVisible(not collapsed)
-            self._sections_btn.setVisible(collapsed)
+            self._sidebar_toggle_btn.setToolTip(
+                t("detail.sidebar.collapse_tip") if not collapsed
+                else t("detail.sidebar.show_action")
+            )
+            self._sidebar_toggle_btn.setAccessibleName(
+                t("detail.sidebar.collapse_a11y") if not collapsed
+                else t("detail.sidebar.show_action")
+            )
             self._move_dataset_log(to_sidebar=not collapsed)
         except Exception:
             pass
@@ -2162,21 +2139,6 @@ class DatasetDetailView(QWidget):
             else:
                 self._side_wrap.removeWidget(card)
                 self._main_wrap.addWidget(card)
-        except Exception:
-            pass
-
-    def _fill_sections_menu(self) -> None:
-        """Rebuild the top bar's Sections menu (the folded sidebar's nav)."""
-        try:
-            self._sections_menu.clear()
-            show = self._sections_menu.addAction(t("detail.sidebar.show_action"))
-            show.triggered.connect(self._toggle_sidebar)
-            self._sections_menu.addSeparator()
-            for key, attr in _SECTION_LINKS:
-                action = self._sections_menu.addAction(t(key))
-                action.triggered.connect(
-                    lambda _checked=False, a=attr: self._goto_section(a)
-                )
         except Exception:
             pass
 
@@ -2750,6 +2712,7 @@ class DatasetDetailView(QWidget):
             "follow_up_opened": t("detail.dataset_log.action_follow_up_opened"),
             "follow_up_closed": t("detail.dataset_log.action_follow_up_closed"),
             "preview_rendered": t("detail.dataset_log.action_preview"),
+            "nav_jump": t("detail.dataset_log.action_nav"),
         }
         for a in actions:
             act = a.get("action") or ""

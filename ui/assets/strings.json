@@ -658,15 +658,13 @@
     "sidebar": {
       "collapse_tip": "Hide the sidebar — the main column gets the whole width",
       "collapse_a11y": "Hide the sidebar",
-      "show_action": "Show sidebar",
-      "sections_tip": "Jump to a section of this dataset"
+      "show_action": "Show sidebar"
     },
     "workflow": {
       "run_checks_first": "Run checks first — then Export reports… becomes available.",
       "export_hint": "Use Export reports… in the header to save the JSON + Markdown."
     },
     "sections": {
-      "title": "Sections",
       "auto_checks": "Auto-Checks",
       "metadata_check": "Metadata check",
       "assessment_action": "Assessment Action",
@@ -853,7 +851,14 @@
       "dims": "{width} × {height} {format}",
       "dimensions": "{rows} rows × {cols} columns",
       "truncated": "… (output truncated)",
-      "archive_more": "… and {extra} more entries ({total} total)"
+      "archive_more": "… and {extra} more entries ({total} total)",
+      "archive_entry": "{name} ({size} bytes)",
+      "missing_pip": "Missing: pip install {lib}",
+      "missing_lite": "Missing: {lib} is not in this lite build — use dist/curation-app-full/curation-app-full.exe",
+      "structure_dim": "dimension {name}: {size}",
+      "structure_var": "variable {name}: dimensions={dimensions} dtype={dtype}",
+      "unknown_error": "unknown error",
+      "render_failed": "render failed"
     },
     "verdict": {
       "banner_tip": "Live verdict from the checks and metadata below; click a reason to jump to it.",
@@ -894,6 +899,7 @@
       "action_follow_up_opened": "Follow-up opened (revisions requested)",
       "action_follow_up_closed": "Follow-up closed",
       "action_preview": "File preview opened",
+      "action_nav": "Jumped in the workflow rail",
       "action_record": "Curation record exported",
       "action_notes": ": {notes}",
       "unnamed_file": "(unnamed file)",
