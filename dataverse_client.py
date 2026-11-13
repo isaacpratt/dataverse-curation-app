@@ -2674,29 +2674,11 @@ class DataverseClient:
             )
         return dest
 
-    def get_tabular_ingest_status(self, file_id: str) -> dict[str, Any]:
-        """Tabular ingest status for one file (GET /api/files/{id}/ingestStatus).
-
-        Returns {"status": str, "error": str} with "" on unavailable/failed
-        calls — never raises (ingest status is advisory UI data).
-        """
-        try:
-            payload = self._get_json(f"/api/files/{file_id}/ingestStatus")
-        except Exception:
-            return {"status": "", "error": ""}
-        data = payload.get("data") if isinstance(payload, dict) else None
-        if not isinstance(data, dict):
-            return {"status": "", "error": ""}
-        status = str(
-            data.get("status") or data.get("ingestStatus") or data.get("state") or ""
-        )
-        error = str(
-            data.get("errorMessage")
-            or data.get("error")
-            or data.get("ingestError")
-            or ""
-        )
-        return {"status": status, "error": error}
+    # Note: there is deliberately no live ingest-status call here. The
+    # Dataverse Native API has no /files/{id}/ingestStatus endpoint (the
+    # ingest status ships inside the file-list payload, parsed in
+    # `records` above as ingest_status/ingest_error). The old advisory
+    # call had no valid target and 404ed on every invocation.
 
     def download_datafile_original(
         self,

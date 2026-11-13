@@ -857,32 +857,11 @@ class MetadataWorker(QThread):
             if not isinstance(inventory, list):
                 inventory = []
                 inventory_failed = True
-            # Enrich tabular inventory rows with live ingest status/errors
-            # (GET /api/files/{id}/ingestStatus) — best effort, never fails
-            # the metadata load.
-            try:
-                tab_rows = [
-                    e for e in inventory
-                    if isinstance(e, dict) and e.get("tabular") and e.get("id")
-                ]
-                if tab_rows:
-                    def _ingest(row):
-                        try:
-                            return client.get_tabular_ingest_status(str(row.get("id") or ""))
-                        except Exception:
-                            return None
-
-                    from concurrent.futures import ThreadPoolExecutor as _TPE
-
-                    with _TPE(max_workers=4) as pool:
-                        for row, st in zip(tab_rows, pool.map(_ingest, tab_rows), strict=True):
-                            if isinstance(st, dict):
-                                if st.get("status"):
-                                    row["ingest_status"] = str(st["status"])
-                                if st.get("error"):
-                                    row["ingest_error"] = str(st["error"])
-            except Exception:
-                pass
+            # No live ingest-status call: the API has no ingestStatus
+            # endpoint (the dataset file-list payload already carries
+            # ingestStatus/ingestErrorMessage, parsed into the inventory
+            # rows at ingest time). The old best-effort call here hit a
+            # nonexistent endpoint and 404ed once per tabular file.
             curation = results.get("curation")
             if not isinstance(curation, dict):
                 curation = {}
