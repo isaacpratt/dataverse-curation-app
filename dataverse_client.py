@@ -1259,7 +1259,7 @@ class DataverseClient:
                 if not response.ok:
                     get_app_log().error(f"GET {response.url} → {status}: {response.text[:300]}")
                 response.raise_for_status()
-                return response.text
+                return str(response.text)
             except requests.HTTPError as exc:
                 delay = _throttle_delay(exc)
                 if delay is not None and attempt < 2:

@@ -78,7 +78,7 @@ class VarCoverageCheck(Check):
         partial: list[str] = []
         covered = 0
         coverage_map: dict[str, dict[str, int]] = {}
-        variables_map: dict[str, dict[str, str]] = {}
+        variables_map: dict[str, dict[str, dict[str, str]]] = {}
         for entry in tabular:
             path = str(entry.get("path") or entry.get("label") or "")
             variables = (

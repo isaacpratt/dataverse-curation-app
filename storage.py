@@ -390,10 +390,11 @@ class AppState:
 
     def get_follow_up(self, dataset_id: str) -> dict[str, Any] | None:
         """One dataset's follow-up (with derived state), or None."""
+        _fu: Any = None
         try:
             import follow_ups as _fu
         except Exception:  # pragma: no cover - module is part of the app
-            _fu = None
+            pass
         cur = self._conn.execute(
             "SELECT dataset_id, opened_at, decision_label, last_update "
             "FROM follow_ups WHERE dataset_id = ?",
@@ -417,10 +418,11 @@ class AppState:
 
     def list_follow_ups(self) -> dict[str, dict[str, Any]]:
         """{persistent_id: follow-up} for every open follow-up."""
+        _fu: Any = None
         try:
             import follow_ups as _fu
         except Exception:  # pragma: no cover - module is part of the app
-            _fu = None
+            pass
         cur = self._conn.execute(
             "SELECT dataset_id, opened_at, decision_label, last_update FROM follow_ups"
         )
