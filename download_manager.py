@@ -14,6 +14,7 @@ import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from dataverse_client import DownloadCancelled
 
@@ -78,9 +79,10 @@ class DownloadManager:
 
     # -- workflow ------------------------------------------------------------
 
-    def inventory(self, persistent_id: str) -> list:
+    def inventory(self, persistent_id: str) -> list[Any]:
         """File inventory from Dataverse (single network call, shared)."""
-        return self._client.get_file_inventory(persistent_id)
+        items: list[Any] = self._client.get_file_inventory(persistent_id)
+        return items
 
     def quote(self, persistent_id: str) -> DownloadQuote:
         """File count and total size from the inventory - no download."""

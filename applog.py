@@ -52,7 +52,8 @@ def clear() -> None:
         _BUFFER.clear()
 
 
-def get_app_log() -> "AppLog":
+def get_app_log() -> type["AppLog"]:
+    """Return the AppLog namespace (a class of staticmethods, not an instance)."""
     return AppLog
 
 

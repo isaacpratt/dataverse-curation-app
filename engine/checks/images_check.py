@@ -17,6 +17,22 @@ from engine.checks.base import Check, CheckResult
 # Cap header reads: dimensions live in the first bytes; never slurp GBs.
 _STDLIB_HEADER_BYTES = 1 << 20
 
+# Truncated/corrupt rasters. Pillow <12 raised ImageFile.TruncatedFileError;
+# Pillow 12 removed that class, and truncated reads now raise plain OSError
+# while the PNG plugin signals broken chunks with SyntaxError. Resolve the
+# tuple once at import so the handler cannot itself raise AttributeError on a
+# Pillow that no longer exports the old name.
+try:  # pragma: no cover - depends on the installed Pillow version
+    from PIL import ImageFile as _PILImageFile
+
+    _DECODE_ERRORS: tuple[type[BaseException], ...] = (
+        _PILImageFile.TruncatedFileError,  # type: ignore[attr-defined]
+        OSError,
+        SyntaxError,
+    )
+except (ImportError, AttributeError):  # pragma: no cover
+    _DECODE_ERRORS = (OSError, SyntaxError)
+
 
 def _parse_png(data: bytes) -> tuple[int, int, str] | None:
     # 8-byte signature + IHDR chunk (width/height BE uint32).
@@ -264,12 +280,11 @@ class ImagesCheck(Check):
 
     def _run_one(self, path: Path) -> list[CheckResult]:
         try:
-            from PIL import Image, ImageFile  # type: ignore
+            from PIL import Image  # type: ignore
 
             _have_pil = True
         except ImportError:
             Image = None  # type: ignore
-            ImageFile = None  # type: ignore
             _have_pil = False
 
         name = path.name
@@ -298,14 +313,14 @@ class ImagesCheck(Check):
                     message=f"{name}: image too large to safely open ({exc})",
                 )
             ]
-        except ImageFile.TruncatedFileError:
+        except _DECODE_ERRORS:
             # Taxonomy (docs/html/checks-reference.html): unreadable image = error.
             return [
                 CheckResult(
                     check_id="format.images.valid",
                     level="error",
                     passed=False,
-                    message=f"{name}: truncated image data",
+                    message=f"{name}: unreadable or truncated image data",
                 )
             ]
 

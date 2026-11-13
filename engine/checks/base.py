@@ -5,6 +5,7 @@ returns one or more CheckResult objects, aggregated into a DatasetReport by
 engine.report. See docs/html/report-contract.html for the JSON contract.
 """
 
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -65,7 +66,9 @@ class CheckResult:
 
 class Check:
     check_id: str = "base.check"
-    extensions: set = frozenset()
+    # Checks declare a literal set; the base default is the empty frozenset,
+    # so the annotation must admit both (AbstractSet, not `set`).
+    extensions: AbstractSet[str] = frozenset()
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         raise NotImplementedError

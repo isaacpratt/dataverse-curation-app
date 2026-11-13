@@ -37,7 +37,8 @@ def guess_mime(path: Path) -> str:
 
 def _safe_run(check_cls, files: list[Path]) -> list[CheckResult]:
     try:
-        return check_cls().run(files)
+        result: list[CheckResult] = check_cls().run(files)
+        return result
     except Exception as exc:
         return [
             CheckResult(
@@ -54,7 +55,8 @@ def _safe_run_dataset(
 ) -> list[CheckResult]:
     """Run a dataset-level check, passing the inventory/metadata context."""
     try:
-        return check_cls().run_dataset(files, context)
+        result: list[CheckResult] = check_cls().run_dataset(files, context)
+        return result
     except Exception as exc:
         return [
             CheckResult(

@@ -46,6 +46,8 @@ jobs:
         run: uv run --group dev pre-commit run --all-files
       - name: Lint
         run: uv run --group dev python -m ruff check .
+      - name: Type check
+        run: uv run --group dev mypy
       - name: Tests
         run: uv run --group dev python -m pytest -q --cov=engine --cov-report=term-missing
       - name: Compile check

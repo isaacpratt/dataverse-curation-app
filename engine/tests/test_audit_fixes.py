@@ -122,6 +122,34 @@ def test_images_stdlib_fallback_without_pillow(tmp_path, monkeypatch):
     assert results[0].details.get("width") == 1
 
 
+def test_corrupt_png_reports_error_not_crash(tmp_path):
+    """Mypy dv-q9m catch: Pillow 12 removed ImageFile.TruncatedFileError.
+
+    Evaluating a stale `except ImageFile.TruncatedFileError` clause raises
+    AttributeError the moment it is needed, so a broken raster surfaced as
+    "inspection failed" (or crashed) instead of a clean error finding.
+    """
+    pytest.importorskip("PIL.Image")
+    import struct
+
+    bad = tmp_path / "truncated.png"
+    # Valid 8-byte PNG signature + IHDR for a 1x1 image, then a truncated
+    # IDAT chunk: decoders reject it, the handler must report it.
+    bad.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + bytes.fromhex("0000000d49484452")
+        + struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+        + bytes.fromhex("0000000a49444154789c6300010000050001")
+    )
+    results = ImagesCheck().run([bad])
+    assert len(results) == 1
+    assert results[0].check_id == "format.images.valid"
+    assert results[0].level == "error"
+    assert results[0].passed is False
+    assert "inspection failed" not in results[0].message
+    assert "truncated" in results[0].message or "unreadable" in results[0].message
+
+
 def test_images_stdlib_fallback_rejects_garbage(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "PIL", None)
     monkeypatch.setitem(sys.modules, "PIL.Image", None)
