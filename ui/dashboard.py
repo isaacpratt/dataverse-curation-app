@@ -99,6 +99,7 @@ COLUMNS: list[tuple[str, str, bool]] = [
     ("file_count", t("dashboard.columns.file_count"), True),
     ("total_size_bytes", t("dashboard.columns.total_size_bytes"), True),
     ("state", t("dashboard.columns.state"), True),
+    ("access", t("dashboard.columns.access"), True),
     ("curation_label", t("dashboard.columns.curation_label"), True),
     ("follow_up", t("dashboard.columns.follow_up"), True),
     ("downloaded_at", t("dashboard.columns.downloaded_at"), True),
@@ -121,9 +122,38 @@ _COLUMN_WIDTHS = {
     "file_count": 60,
     "total_size_bytes": 90,
     "state": 110,
+    "access": 130,
     "curation_label": 150,
     "follow_up": 170,
     "downloaded_at": 130,
+}
+
+# What the account could read for one dataset, in the queue's Access column.
+# The machine codes come from dataverse_client (the refusal classifier);
+# the wording comes from the catalogue. A row that was read fine shows
+# nothing — the column speaks only when there is something to say.
+_ACCESS_LABEL_KEYS = {
+    "draft_not_readable": "dashboard.access.draft_not_readable",
+    "versions_not_readable": "dashboard.access.not_readable",
+    "version_not_readable": "dashboard.access.not_readable",
+    "not_readable": "dashboard.access.not_readable",
+    "no_published_version": "dashboard.access.no_published_version",
+    "no_readable_version": "dashboard.access.no_readable_version",
+    "no_draft_version": "dashboard.access.no_readable_version",
+    "no_versions_to_compare": "dashboard.access.no_readable_version",
+    "not_under_curation": "dashboard.access.not_under_curation",
+}
+
+_ACCESS_TIP_KEYS = {
+    "draft_not_readable": "dashboard.access.tip_draft_not_readable",
+    "versions_not_readable": "dashboard.access.tip_not_readable",
+    "version_not_readable": "dashboard.access.tip_not_readable",
+    "not_readable": "dashboard.access.tip_not_readable",
+    "no_published_version": "dashboard.access.tip_no_published_version",
+    "no_readable_version": "dashboard.access.tip_no_readable_version",
+    "no_draft_version": "dashboard.access.tip_no_readable_version",
+    "no_versions_to_compare": "dashboard.access.tip_no_readable_version",
+    "not_under_curation": "dashboard.access.tip_not_under_curation",
 }
 
 
@@ -381,6 +411,53 @@ def _display_state(state: str) -> str:
     return s.title()
 
 
+def _access_facts(ds: dict) -> tuple[str, str]:
+    """(reason code, server detail) for what this account could read.
+
+    Empty when everything about the dataset could be read — the Access
+    column only speaks when the server refused something.
+    """
+    try:
+        access = ds.get("access")
+        if isinstance(access, dict):
+            state = str(access.get("state") or "")
+            if state and state != "readable":
+                return (
+                    str(access.get("reason") or "not_readable"),
+                    str(access.get("detail") or ""),
+                )
+        curation = ds.get("curation_access")
+        if isinstance(curation, dict) and str(curation.get("state") or "") == "unreadable":
+            return (
+                str(curation.get("reason") or "not_under_curation"),
+                str(curation.get("detail") or ""),
+            )
+    except Exception:
+        pass
+    return "", ""
+
+
+def _access_text(ds: dict) -> str:
+    """Return the Access cell: a short label, empty when there is nothing to say."""
+    reason, _detail = _access_facts(ds)
+    if not reason:
+        return ""
+    key = _ACCESS_LABEL_KEYS.get(reason)
+    return t(key) if key else t("dashboard.access.not_readable")
+
+
+def _access_tooltip(ds: dict) -> str:
+    """Why the account could not read everything (empty when it could)."""
+    reason, detail = _access_facts(ds)
+    if not reason:
+        return ""
+    key = _ACCESS_TIP_KEYS.get(reason)
+    text = t(key) if key else t("dashboard.access.tip_not_readable")
+    if detail:
+        text = f"{text}\n{t('dashboard.access.server_said', detail=detail)}"
+    return text
+
+
 _DASHBOARD_CACHE_NAME = "dashboard_cache.json"
 
 # Cache-slot token for "no collection selected". Internal and deliberately
@@ -487,6 +564,7 @@ def _merge_enriched_rows(existing: list[dict], batch: list[dict]) -> int:
                 for key in (
                     "total_size_bytes", "file_count", "depositor",
                     "state", "has_draft", "size_enriched", "draft_updated_at",
+                    "access", "curation_access",
                 ):
                     if key not in src:
                         continue
@@ -598,9 +676,11 @@ def save_dashboard_cache(workspace: Path, key: str, datasets: list[dict], labels
 
 
 class DashboardView(QWidget):
-    """Lists datasets. Emits openRequested(pid, title) on double-click."""
+    """Lists datasets. Emits openRequested(pid, title, row) on double-click."""
 
-    openRequested = Signal(str, str)
+    # The third argument is the queue row (a dict) — what the search
+    # payload already knows about the dataset travels with the request.
+    openRequested = Signal(str, str, object)
     # Empty-state CTA: "Open Settings" reaches the main window's pane switch.
     settingsRequested = Signal()
 
@@ -2151,6 +2231,8 @@ class DashboardView(QWidget):
             return _human_size(raw)
         if key == "state":
             return _display_state(ds.get("state") or "")
+        if key == "access":
+            return _access_text(ds)
         if key == "follow_up":
             fu = ds.get("follow_up")
             if not isinstance(fu, dict) or not fu:
@@ -2299,6 +2381,11 @@ class DashboardView(QWidget):
                     text_val = self._cell_text(ds, key)
                     item = _SortItem(text_val)
                     item.setToolTip(text_val)
+                    if key == "access":
+                        # The reason the server refused something, in full.
+                        tip = _access_tooltip(ds)
+                        if tip:
+                            item.setToolTip(tip)
                     if key == "total_size_bytes":
                         if text_val == t("dashboard.display_state.unknown"):
                             if ds.get("size_pending"):
@@ -2425,6 +2512,7 @@ class DashboardView(QWidget):
             title_item = self._table.item(row, title_col)
             pid = pid_item.text().strip() if pid_item else ""
             title = title_item.text().strip() if title_item else ""
+            row_data: dict = {}
             if not pid:
                 # Fallback: match by title (titles are unique enough here)
                 match = next(
@@ -2433,7 +2521,14 @@ class DashboardView(QWidget):
                 if match:
                     pid = match.get("persistent_id", "")
                     title = match.get("title", title)
+            for ds in self._datasets:
+                if pid and str(ds.get("persistent_id") or "") == pid:
+                    row_data = ds
+                    break
             if pid:
-                self.openRequested.emit(pid, title or pid)
+                # The row travels with the request: what the search payload
+                # already knows (draft or no draft) saves the detail view
+                # from asking for versions that cannot exist.
+                self.openRequested.emit(pid, title or pid, row_data)
         except Exception:
             pass

@@ -303,11 +303,16 @@ class DatasetDetailView(QWidget):
         title: str,
         cached_metadata: dict | None = None,
         cached_inventory: list | None = None,
+        dataset_hint: dict | None = None,
     ) -> None:
         super().__init__()
         self._config = config
         self._pid = persistent_id
         self._title = title or persistent_id
+        # What the dashboard already knew about this dataset (the search
+        # payload's state and access facts). It saves the detail view from
+        # asking for versions that cannot exist.
+        self._dataset_hint: dict = dataset_hint if isinstance(dataset_hint, dict) else {}
         self._report = None
         self._inventory: list[dict] = cached_inventory or []
         self._metadata: dict | None = cached_metadata
@@ -342,6 +347,14 @@ class DatasetDetailView(QWidget):
         self._response_dirty = False
         self._response_loading = False
         self._response_save_timer: QTimer | None = None
+        # The first metadata load is deferred by a beat (so the view is on
+        # screen before the network calls start). It must belong to THIS
+        # view: `QTimer.singleShot` keeps a functor, not a connection, so
+        # it would still fire after the view was destroyed — calling a
+        # method on a deleted QObject aborts the process (dv-n1d).
+        self._auto_load_timer = QTimer(self)
+        self._auto_load_timer.setSingleShot(True)
+        self._auto_load_timer.timeout.connect(self._on_load_metadata)
         # Sensitivity & ethics review (dv-3c2): answers load with the card.
         self._sensitivity_answers: dict = {}
 
@@ -714,11 +727,11 @@ class DatasetDetailView(QWidget):
             self._refresh_decision_options()
             self._refresh_dataset_log()
             if not session_cached:
-                QTimer.singleShot(100, self._on_load_metadata)
+                self._auto_load_timer.start(100)
         else:
             self._refresh_files_placeholder()
             self._refresh_dataset_log()
-            QTimer.singleShot(100, self._on_load_metadata)
+            self._auto_load_timer.start(100)
 
         if self._report is not None:
             # Cached checks report (auto-saved on every run): results are
@@ -4402,6 +4415,46 @@ class DatasetDetailView(QWidget):
             pass
 
     # -- metadata loading -------------------------------------------------
+    def cancel_pending_loads(self) -> None:
+        """Stop the deferred first load (the view is being replaced).
+
+        The auto-load timer is bound to this view, but the view may be
+        replaced before the timer fires: the pending callback would then
+        start a worker on a view that is about to be destroyed, and
+        destroying a view with a running QThread child aborts the
+        process (dv-n1d).
+        """
+        try:
+            self._auto_load_timer.stop()
+        except Exception:
+            pass
+
+    def _draft_hint(self) -> bool | None:
+        """Whether this dataset is under curation, as the queue row knew.
+
+        True/False when the dashboard row says so, None when it does not
+        (the detail view then asks for everything). A row whose access the
+        account does not have counts as "not under curation" for the
+        purpose of skipping reads: those reads would be refused anyway.
+        """
+        try:
+            hint = self._dataset_hint or {}
+            if not hint:
+                return None
+            access = hint.get("access")
+            if isinstance(access, dict):
+                state = str(access.get("state") or "")
+                if state and state != "readable":
+                    return False
+            if "has_draft" in hint:
+                return bool(hint.get("has_draft"))
+            state = str(hint.get("state") or "").upper()
+            if not state:
+                return None
+            return state == "DRAFT" or "REVIEW" in state
+        except Exception:
+            return None
+
     def _on_load_metadata(self) -> None:
         # The worker deletes itself (deleteLater) when it finishes or
         # errors, which can leave a stale Python reference to a dead C++
@@ -4427,7 +4480,14 @@ class DatasetDetailView(QWidget):
             )
         except Exception:
             _collection = ""
-        self._meta_worker = MetadataWorker(self._config.dataverse.base_url, self._config.dataverse.api_token, self._pid, self, collection=_collection)
+        self._meta_worker = MetadataWorker(
+            self._config.dataverse.base_url,
+            self._config.dataverse.api_token,
+            self._pid,
+            self,
+            collection=_collection,
+            draft_hint=self._draft_hint(),
+        )
         self._meta_worker.finished.connect(self._on_metadata_finished)
         self._meta_worker.error.connect(self._on_metadata_error)
         self._meta_worker.finished.connect(self._meta_worker.deleteLater)
@@ -4468,6 +4528,14 @@ class DatasetDetailView(QWidget):
         self._refresh_dataset_log()
         inv_failed = bool(extra.get("inventory_failed", False))
         self._inventory_ok = not inv_failed
+        refusal = {}
+        try:
+            refusals = extra.get("refusals")
+            if isinstance(refusals, dict):
+                refusal = refusals.get("inventory") or {}
+        except Exception:
+            refusal = {}
+        not_readable = str((refusal or {}).get("reason") or "") == "draft_not_readable"
         if not inv_failed:
             try:
                 from storage import write_size_entry
@@ -4490,7 +4558,11 @@ class DatasetDetailView(QWidget):
             "metadata_loaded" if not inv_failed else "metadata_failed",
             t("detail.status.inventory_count", count=len(self._inventory))
             if not inv_failed
-            else t("detail.status.file_list_failed_short"),
+            else (
+                t("detail.status.file_list_not_readable_short")
+                if not_readable
+                else t("detail.status.file_list_failed_short")
+            ),
             {"file_count": len(self._inventory)},
         )
         if inv_failed:
@@ -4498,11 +4570,23 @@ class DatasetDetailView(QWidget):
             # and offer the retry instead of implying zero files.
             from ui.checks_tree import build_tree_model as _btm
 
-            self._set_status(t("detail.status.file_list_failed"))
-            self._file_tree.setModel(_btm([], None))
-            self._all_file_rows = []
-            self._file_footer_left.setText(t("detail.status.file_list_failed_footer"))
-            self._file_footer_right.setText("")
+            if not_readable:
+                # The server refused because this account is not in the
+                # dataset's curation scope — an expected answer, not a
+                # broken load.
+                self._set_status(t("detail.status.file_list_not_readable"))
+                self._file_tree.setModel(_btm([], None))
+                self._all_file_rows = []
+                self._file_footer_left.setText(
+                    t("detail.status.file_list_not_readable_footer")
+                )
+                self._file_footer_right.setText("")
+            else:
+                self._set_status(t("detail.status.file_list_failed"))
+                self._file_tree.setModel(_btm([], None))
+                self._all_file_rows = []
+                self._file_footer_left.setText(t("detail.status.file_list_failed_footer"))
+                self._file_footer_right.setText("")
         elif self._inventory:
             self._populate_from_inventory()
             self._set_status(

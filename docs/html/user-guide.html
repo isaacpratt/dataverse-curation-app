@@ -40,7 +40,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 </ol>
 
 <h2>Dashboard (curation queue)</h2>
-<p>Lists every dataset in the collection, found by paginated Search (<code>per_page=1000</code>, driven by the server's total count — no dataset cap in practice). All <b>12 columns</b> are sortable (numeric/date-aware <code>_SortItem</code>, click header or press Space/Return on the focused section), draggable, resizable with visible edge dividers (hover/press highlight), and togglable via right-click header or <b>Columns…</b>. First paint auto-fits content (proportionally downscaled on overflow — the queue has no horizontal scrollbar); dragging any edge locks your widths; <b>Columns… → Reset columns &amp;&amp; sorting</b> restores defaults and re-enables auto-fit (saved widths always win across restarts). Status and Curation Label render as plain text.</p>
+<p>Lists every dataset in the collection, found by paginated Search (<code>per_page=1000</code>, driven by the server's total count — no dataset cap in practice). All <b>13 columns</b> are sortable (numeric/date-aware <code>_SortItem</code>, click header or press Space/Return on the focused section), draggable, resizable with visible edge dividers (hover/press highlight), and togglable via right-click header or <b>Columns…</b>. First paint auto-fits content (proportionally downscaled on overflow — the queue has no horizontal scrollbar); dragging any edge locks your widths; <b>Columns… → Reset columns &amp;&amp; sorting</b> restores defaults and re-enables auto-fit (saved widths always win across restarts). Status and Curation Label render as plain text.</p>
 <p>While a crawl runs, a small <b>circular progress ring</b> appears beside the status line: it fills as discovery, enrichment, lock checks and label reads complete, glides toward each new value instead of jumping, clears itself when the crawl finishes, and turns red if the crawl fails. Rows appear as they are found (cache-first paint), and the <b>Size</b> column fills in as each dataset's file inventory is fetched (drafts first, capped at 200 per refresh — rows past the cap show “—” until you open them). In a very large collection the table paints the first 2,000 matching rows and says how many are hidden; narrowing the filter shows the rest.</p>
 <table>
 <tr><th>Column</th><th>Source</th></tr>
@@ -54,6 +54,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td>Files</td><td><code>fileCount</code></td></tr>
 <tr><td>Size</td><td><code>total_size_bytes</code> humanized (B/KB/MB/GB; “—” when the search record carries no byte total — exact sizes come from the download quote)</td></tr>
 <tr><td>Status</td><td>Draft/review markers in <code>publicationStatuses</code> win over <code>versionState</code>; <code>In Review</code> confirmed via locks</td></tr>
+<tr><td>Access</td><td>What your account could read: <i>Draft not readable</i>, <i>Not readable</i>, <i>No published version</i> or <i>Curation state hidden</i> — empty when everything read. Hover for the reason and the server's own words</td></tr>
 <tr><td>Curation Label</td><td>Per-draft label (bulk report or <code>curationStatus</code>)</td></tr>
 <tr><td>Downloaded</td><td>Local staging date from <code>state.db</code> + staged-folder mtime</td></tr>
 </table>
@@ -105,10 +106,10 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 </ul>
 
 <h2>Log and troubleshooting</h2>
-<p>The <b>Log</b> stack page (nav <b>Log</b> button or <code>Ctrl+L</code>) shows an in-memory ring buffer (<code>applog.py</code>) of every Dataverse request (<code>GET &lt;url&gt; → &lt;status&gt; (&lt;ms&gt;) &lt;summary&gt;</code>) plus worker messages, stamped in local time. INAV-style highlighting colors <code>ERROR</code> red, <code>WARNING</code> yellow, IPs, SQL keywords, XML tags, Java backtraces, and quoted strings (lines with <code>ERROR</code>/<code>WARN</code> get higher priority). The header carries the <b>severity legend</b> (<b>ERROR</b>/<b>WARN</b> chips in the highlighter's exact fills plus a muted <i>INFO · DEBUG plain</i> key, so colour never explains itself), a <b>Search log…</b> box (case-insensitive substring; the Live tooltip shows match counts), a <b>● Live</b> toggle (pause to freeze — click again and buffered lines catch up), Clear, and hide. The panel polls every 800 ms (<code>QTimer</code>) while live; the full-page Log view and the Log dialog carry the same search box. All error dialogs (<code>ui/dialogs.py</code>) are selectable for pasting tracebacks.</p>
+<p>The <b>Log</b> stack page (nav <b>Log</b> button or <code>Ctrl+L</code>) shows an in-memory ring buffer (<code>applog.py</code>) of every Dataverse request (<code>GET &lt;url&gt; → &lt;status&gt; (&lt;ms&gt;) &lt;summary&gt;</code>) plus worker messages, stamped in local time. INAV-style highlighting colors <code>ERROR</code> red, <code>WARNING</code> yellow, IPs, SQL keywords, XML tags, Java backtraces, and quoted strings (lines with <code>ERROR</code>/<code>WARN</code> get higher priority). The header carries the <b>severity legend</b> (<b>ERROR</b>/<b>WARN</b>/<b>Expected</b> chips in the highlighter's exact fills plus a muted <i>INFO · DEBUG plain</i> key, so colour never explains itself), a <b>Search log…</b> box (case-insensitive substring; the Live tooltip shows match counts), a <b>● Live</b> toggle (pause to freeze — click again and buffered lines catch up), Clear, and hide. The panel polls every 800 ms (<code>QTimer</code>) while live; the full-page Log view and the Log dialog carry the same search box. All error dialogs (<code>ui/dialogs.py</code>) are selectable for pasting tracebacks.</p>
 <table>
 <tr><th>Symptom</th><th>Fix</th></tr>
-<tr><td><code>401</code></td><td>Token expired/insufficient → regenerate in Dataverse → Settings</td></tr>
+<tr><td><code>401</code></td><td>Token expired/insufficient → regenerate in Dataverse → Settings. (A <code>401</code> on one dataset's <i>draft</i> is expected, not a token problem — see <i>Expected</i> above and the queue's <b>Access</b> column.)</td></tr>
 <tr><td><code>ConnectionResetError 10054</code></td><td>Transient — auto-retried 3×; check VPN/proxy, then retry</td></tr>
 <tr><td><code>400</code> invalid collection alias</td><td>Try empty (whole repo); <code>dv</code> is the Borealis root, not <code>borealis</code></td></tr>
 <tr><td>Empty dashboard</td><td>No datasets for that <code>subtree</code>; widen the collection; without a token only published return</td></tr>
@@ -120,6 +121,8 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td>Checksum mismatch on <code>.tab</code></td><td>Expected (server-regenerated ingest product): compare the UNF in the message, or fetch the original format. Other formats mismatching = real corruption — re-download</td></tr>
 <tr><td><code>NameError: QWidget</code> in Settings</td><td>Fixed in 2026-08-26 build — re-unzip <code>curation-app-lite-win.zip</code></td></tr>
 </table>
+<p><b>Expected</b> lines are the server's documented answer for that request, not application failures — for example <code>401</code> on a draft your account may not read (Dataverse grants draft access only inside a dataset's curation scope), <code>404</code> for a dataset with no published version (deaccessioned versions are excluded by default), or <code>403</code> on a curation status that only exists for datasets under curation. The raw call and the raw response are kept verbatim; the line is tagged <code>EXPECTED</code> and painted in the muted tone, with the reason after the response. Anything the app cannot classify (a <code>500</code>, a bad request) stays <code>ERROR</code> in red.</p>
+<p>The queue's <b>Access</b> column carries the same facts per dataset: <i>Draft not readable</i>, <i>Not readable</i>, <i>No published version</i> or <i>Curation state hidden</i> — empty when everything could be read. Hover the cell for the reason and the server's own words. Opening such a dataset says the same thing where it matters: the file list is “not readable for this account”, not a failed load. The app also stops asking for what cannot exist: each dataset is read once (the read answers with the version your account may see — the draft for a dataset under curation, the published version otherwise), a deaccessioned dataset is never asked for a published version, and a dataset with no draft skips the curation status, the label history and the version comparison.</p>
 
 <h2>Headless mode</h2>
 <pre><code>python main.py --headless &lt;staged_dir&gt; --out report.json
@@ -128,6 +131,6 @@ python main.py --headless &lt;staged_dir&gt; --out report.json --format both --p
 <p>Same <code>engine/runner.py:run_report</code> without the GUI. <code>--format json|md|both</code> (default <code>json</code>) also writes the Markdown view. <code>--dataverse/--config</code> are GUI-only and rejected here. Exit codes: <b>0</b> clean, <b>1</b> error-level findings, <b>2</b> usage/IO failure.</p>
 
 </div></main>
-<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-11-12, verified against code.</div></footer>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-11-13, verified against code.</div></footer>
 </body>
 </html>

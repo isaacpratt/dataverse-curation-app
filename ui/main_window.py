@@ -857,7 +857,7 @@ class MainWindow(QMainWindow):
     def _on_settings_saved(self) -> None:
         self._show_pane(None)
 
-    def _open_dataset(self, persistent_id: str, title: str) -> None:
+    def _open_dataset(self, persistent_id: str, title: str, row: dict | None = None) -> None:
         # A dirty Settings pane must be resolved before the stack switches.
         if not self._can_leave_settings():
             self._refresh_nav_state()
@@ -873,6 +873,12 @@ class MainWindow(QMainWindow):
             # Their slots belong to the dying view, so late signals are
             # dropped safely; deleteLater reaps them on completion.
             self._adopt_running_workers(self._detail)
+            # Stop the deferred first load too: it must not start a worker
+            # on a view that is about to be destroyed (dv-n1d).
+            try:
+                self._detail.cancel_pending_loads()
+            except Exception:
+                pass
             self._stack.removeWidget(self._detail)
             self._detail.deleteLater()
             self._detail = None
@@ -890,7 +896,9 @@ class MainWindow(QMainWindow):
         cached = self._metadata_cache.get(persistent_id)
         cached_meta, cached_inv = (cached if cached else (None, None))
         self._detail = DatasetDetailView(
-            self._config, persistent_id, title, cached_metadata=cached_meta, cached_inventory=cached_inv
+            self._config, persistent_id, title,
+            cached_metadata=cached_meta, cached_inventory=cached_inv,
+            dataset_hint=row if isinstance(row, dict) else None,
         )
         self._detail.backRequested.connect(self._show_dashboard)
         self._detail.metadataLoaded.connect(self._cache_metadata)
@@ -1019,6 +1027,12 @@ class MainWindow(QMainWindow):
             # Same adoption as _open_dataset: closing mid-metadata/download/
             # checks must not destroy a running QThread.
             self._adopt_running_workers(self._detail)
+            # ... and the deferred first load must not start on a view
+            # that is about to go (dv-n1d).
+            try:
+                self._detail.cancel_pending_loads()
+            except Exception:
+                pass
             was_showing = self._stack.currentWidget() is self._detail
             try:
                 self._stack.removeWidget(self._detail)

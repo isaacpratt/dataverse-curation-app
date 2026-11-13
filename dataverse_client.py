@@ -81,6 +81,31 @@ def _error_message(response) -> str:
         return ""
 
 
+def _with_refusal(entry: tuple[Exception, str, int]) -> Exception:
+    """Attach the refusal code and the server's message to a refused read.
+
+    The exception keeps its original type and response; the two extra
+    attributes are what the dashboard shows ("not readable by this
+    account") and what the Log explains.
+    """
+    exc, path, status = entry
+    body = ""
+    detail = ""
+    try:
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            body = str(resp.text or "")
+            detail = _error_message(resp)
+    except Exception:
+        pass
+    try:
+        exc.refusal_code = refusal_code(path, status, body)  # type: ignore[attr-defined]
+        exc.refusal_detail = detail  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    return exc
+
+
 def _throttle_delay(exc: requests.HTTPError) -> float | None:
     """Retry-After seconds for a retryable HTTP error, else None.
 
@@ -423,6 +448,275 @@ def is_draft_dataset(ds: Any) -> bool:
         return state == "DRAFT" or "REVIEW" in state or bool(ds.get("has_draft"))
     except Exception:
         return False
+
+
+# -- expected refusals ------------------------------------------------------
+#
+# Dataverse answers some requests with a 4xx by design. The responses look
+# like failures in a log but they are the documented answer for the endpoint:
+#
+# - 401/403 on a draft version: Dataverse grants draft access only inside a
+#   dataset's curation scope, so an account (even a collection admin) that is
+#   not in that scope gets "not permitted" instead of an empty draft;
+# - 404 on :draft: the dataset simply has no draft version (the author is
+#   not working on an update);
+# - 404 on :latest / :latest-published: the dataset has no published
+#   version — deaccessioned versions are excluded unless
+#   includeDeaccessioned=true is asked for;
+# - 403 on curationStatus: curation state exists only for datasets under
+#   curation.
+#
+# `_refusal` turns (path, status, body) into a machine code plus a
+# one-line explanation. An empty result means the answer is NOT expected —
+# it stays an application ERROR (bad token, wrong path, server fault).
+
+_REFUSAL_VERSIONS = "/versions/"
+_REFUSAL_COMPARE = "/compare/"
+
+
+def _refusal(path: str, status: int, body: str = "") -> tuple[str, str]:
+    """Classify a 4xx answer: (machine code, explanation) or ("", "") when unexpected."""
+    p = str(path or "").lower()
+    text = str(body or "").lower()
+    if status not in (400, 401, 403, 404):
+        return "", ""
+    is_versions = _REFUSAL_VERSIONS in p
+    is_draft = "/versions/:draft" in p
+    is_published = "/versions/:latest" in p
+    is_compare = _REFUSAL_COMPARE in p
+    is_curation = "curationstatus" in p
+    is_labels = "allowedcurationlabels" in p
+    # The server's own words disambiguate: "not found" means the version
+    # does not exist, "not permitted" means this account may not read it.
+    says_missing = "not found" in text or "does not exist" in text
+
+    if status in (401, 403):
+        if says_missing and is_versions:
+            # The version is gone (not hidden): answer as the 404 case.
+            if is_draft:
+                return (
+                    "no_draft_version",
+                    "the dataset has no draft version — the author is not working on an update",
+                )
+            return (
+                "no_published_version",
+                "the dataset has no published version — deaccessioned versions are "
+                "excluded from the version endpoints by default",
+            )
+        if is_compare:
+            return (
+                "versions_not_readable",
+                "this account may not compare this dataset's versions",
+            )
+        if is_draft or (is_versions and not is_published):
+            return (
+                "draft_not_readable",
+                "this account may not read the draft version of this dataset "
+                "— Dataverse grants draft access only inside the dataset's "
+                "curation scope",
+            )
+        if is_published:
+            return (
+                "version_not_readable",
+                "this account may not read this dataset's published version",
+            )
+        if is_curation:
+            return (
+                "not_under_curation",
+                "curation status is readable only for datasets under curation "
+                "and for accounts in their curation scope",
+            )
+        if is_labels:
+            return (
+                "labels_not_readable",
+                "this account is not allowed to read curation labels for this collection",
+            )
+        return "", ""
+
+    if status == 400:
+        # A bad request is our mistake, not the server's answer.
+        return "", ""
+
+    # 404
+    if is_compare:
+        return (
+            "no_versions_to_compare",
+            "there is no published/draft version pair to compare",
+        )
+    if is_draft:
+        return (
+            "no_draft_version",
+            "the dataset has no draft version — the author is not working on an update",
+        )
+    if is_published:
+        return (
+            "no_published_version",
+            "the dataset has no published version — deaccessioned versions are "
+            "excluded from the version endpoints by default",
+        )
+    if is_versions:
+        return ("no_visible_versions", "the dataset has no visible versions")
+    if is_curation:
+        return ("not_under_curation", "the dataset is not under curation — it has no draft")
+    if is_labels:
+        return ("labels_unavailable", "this collection does not expose curation labels")
+    if "listcurationstates" in p:
+        return ("curation_states_unavailable", "this instance does not expose curation states")
+    if "timestamps" in p:
+        return ("timestamps_unavailable", "this instance does not expose dataset timestamps")
+    return "", ""
+
+
+def expected_api_reason(path: str, status: int, body: str = "") -> str:
+    """Why a refusal from this endpoint is the documented answer ("" = a bug)."""
+    try:
+        return _refusal(path, status, body)[1]
+    except Exception:
+        return ""
+
+
+def refusal_code(path: str, status: int, body: str = "") -> str:
+    """Machine code for an expected refusal ("" when the answer is unexpected)."""
+    try:
+        return _refusal(path, status, body)[0]
+    except Exception:
+        return ""
+
+
+# Version specifiers probed for one dataset, in the order the app asks.
+_VERSION_DRAFT = ":draft"
+_VERSION_PUBLISHED = ":latest-published"
+_VERSION_LATEST = ":latest"
+
+
+def version_probe_order(ds: Any) -> list[str]:
+    """Which version specifiers to probe for a crawl row (empty = read the dataset once).
+
+    The Native API's dataset read returns the version the account may see:
+    the draft for a dataset under curation, the published version for a
+    published dataset, and no version at all for a deaccessioned one. One
+    call therefore answers what the dashboard needs.
+
+    A version-specific probe is only worth sending when the search payload
+    says a draft exists — a :draft probe on a published dataset is refused
+    every time ("not permitted"), and :latest / :latest-published are 404
+    for a deaccessioned dataset.
+    """
+    try:
+        if not isinstance(ds, dict):
+            return []
+        if is_draft_dataset(ds):
+            return [_VERSION_DRAFT]
+        return []
+    except Exception:
+        return []
+
+
+def probe_skip_reason(ds: Any) -> str:
+    """Why a version probe was skipped for this row ("" when nothing was skipped)."""
+    try:
+        if not isinstance(ds, dict):
+            return ""
+        if is_draft_dataset(ds):
+            return ""
+        state = str(ds.get("state") or "").upper()
+        if state == "DEACCESSIONED":
+            return (
+                "the search payload lists this dataset as deaccessioned — its "
+                "record answers, but it has no version to ask for"
+            )
+        return (
+            "the search payload lists this dataset as published with no draft — "
+            "the dataset read answers with the published version in one call"
+        )
+    except Exception:
+        return ""
+
+
+# Row facts about what the account could read. Deliberately facts, not
+# interface copy: the dashboard renders them through ui/assets/strings.json.
+_ACCESS_STATE_READABLE = "readable"
+_ACCESS_STATE_RESTRICTED = "restricted"
+_ACCESS_STATE_METADATA_ONLY = "metadata_only"
+
+
+def _set_access(
+    ds: dict,
+    state: str,
+    reason: str = "",
+    detail: str = "",
+    status: int = 0,
+    version: str = "",
+) -> None:
+    """Record what the account could read for this dataset."""
+    try:
+        ds["access"] = {
+            "state": str(state or ""),
+            "reason": str(reason or ""),
+            "detail": str(detail or ""),
+            "status": int(status or 0),
+            "version": str(version or ""),
+        }
+    except Exception:
+        pass
+
+
+def _mark_readable(ds: dict, used_version: str, state: str = "") -> None:
+    """Record which version of a dataset the account could read."""
+    try:
+        version = str(used_version or "")
+        version_state = str(state or "").upper()
+        if version == "unversioned":
+            # The dataset read answers with the version the account may
+            # see: the draft for a dataset under curation, the published
+            # version otherwise.
+            if version_state == "DRAFT":
+                version = _VERSION_DRAFT
+            elif version_state in ("RELEASED", "PUBLISHED"):
+                version = _VERSION_PUBLISHED
+        if version == "unversioned":
+            # The dataset answered, but no version of it did. A
+            # deaccessioned dataset has no published version at all — that
+            # is a fact about the dataset, not about the account.
+            deaccessioned = str(state or "").upper() == "DEACCESSIONED"
+            _set_access(
+                ds,
+                _ACCESS_STATE_METADATA_ONLY,
+                reason=(
+                    "no_published_version"
+                    if deaccessioned
+                    else "no_readable_version"
+                ),
+                detail=(
+                    "the dataset is deaccessioned — it has no published version"
+                    if deaccessioned
+                    else "the dataset answered, but none of its versions did"
+                ),
+            )
+        else:
+            _set_access(ds, _ACCESS_STATE_READABLE, version=version)
+    except Exception:
+        pass
+
+
+def _mark_restricted(ds: dict, exc: BaseException) -> None:
+    """Record that the server refused every version of this dataset."""
+    try:
+        resp = getattr(exc, "response", None)
+        status = resp.status_code if resp is not None else 0
+        code = str(getattr(exc, "refusal_code", "") or "")
+        detail = str(getattr(exc, "refusal_detail", "") or "")
+        if not detail and resp is not None:
+            detail = _error_message(resp)
+        _set_access(
+            ds,
+            _ACCESS_STATE_RESTRICTED,
+            reason=code or "not_readable",
+            detail=detail,
+            status=int(status or 0),
+        )
+    except Exception:
+        pass
 
 
 def _version_files_data(data: Any) -> dict[str, Any]:
@@ -1191,9 +1485,27 @@ class DataverseClient:
                             n = 0
                         summary = f"{n} item(s)" if n else ""
                 status = response.status_code
-                log_response("GET", str(response.url), status, elapsed_ms, summary)
+                # Some endpoints answer 4xx by design (a draft this account
+                # may not read, a dataset with no published version). The
+                # call and the response are logged verbatim either way —
+                # only the severity and the added context differ.
+                reason = expected_api_reason(path, status, response.text)
+                log_response(
+                    "GET",
+                    str(response.url),
+                    status,
+                    elapsed_ms,
+                    summary,
+                    context=reason,
+                )
                 if not response.ok:
-                    get_app_log().error(f"GET {response.url} → {status}: {response.text[:300]}")
+                    body_text = response.text[:300]
+                    if reason:
+                        get_app_log().expected(
+                            f"GET {response.url} → {status}: {body_text} — {reason}"
+                        )
+                    else:
+                        get_app_log().error(f"GET {response.url} → {status}: {body_text}")
                 response.raise_for_status()
                 # Reuse already-parsed body when available.
                 if body is not None:
@@ -1255,9 +1567,23 @@ class DataverseClient:
                 if response.ok:
                     summary = f"{len(response.content)} byte(s)"
                 status = response.status_code
-                log_response("GET", str(response.url), status, elapsed_ms, summary)
+                reason = expected_api_reason(path, status, response.text)
+                log_response(
+                    "GET",
+                    str(response.url),
+                    status,
+                    elapsed_ms,
+                    summary,
+                    context=reason,
+                )
                 if not response.ok:
-                    get_app_log().error(f"GET {response.url} → {status}: {response.text[:300]}")
+                    body = response.text[:300]
+                    if reason:
+                        get_app_log().expected(
+                            f"GET {response.url} → {status}: {body} — {reason}"
+                        )
+                    else:
+                        get_app_log().error(f"GET {response.url} → {status}: {body}")
                 response.raise_for_status()
                 return str(response.text)
             except requests.HTTPError as exc:
@@ -1419,13 +1745,19 @@ class DataverseClient:
                 )
                 break
             new = 0
+            dupes = 0
             for d in batch:
                 pid = d["persistent_id"]
                 if pid not in seen:
                     seen[pid] = len(all_datasets)
                     all_datasets.append(d)
                     new += 1
-                elif d.get("has_draft") and not all_datasets[seen[pid]].get("has_draft"):
+                else:
+                    # The same dataset twice in the index (a published doc
+                    # and a draft doc for it). The search total counts
+                    # documents, not datasets — these are not missing rows.
+                    dupes += 1
+                if d.get("has_draft") and pid in seen and not all_datasets[seen[pid]].get("has_draft"):
                     # Same dataset surfaced twice (published doc shadows the
                     # draft doc): keep the draft row so in-progress versions
                     # stay visible to draft filtering.
@@ -1459,12 +1791,22 @@ class DataverseClient:
         if total_expected is not None and len(all_datasets) != total_expected:
             gap = total_expected - len(all_datasets)
             if gap > 0:
-                get_app_log().error(
-                    f"Search collected {len(all_datasets)} of {total_expected} "
-                    f"dataset(s) — {gap} missing (the index changed during the "
-                    "crawl, or the server clamps page size). Narrow the "
-                    "collection and refresh if rows are missing."
-                )
+                if dupes >= gap:
+                    # The search index counts documents, not datasets: one
+                    # dataset can be listed twice (its published doc and its
+                    # draft doc). Those were merged — nothing is missing.
+                    get_app_log().info(
+                        f"Search collected {len(all_datasets)} of {total_expected} "
+                        f"dataset(s) — {dupes} duplicate document(s) for the same "
+                        "dataset (published and draft) were merged; nothing is missing"
+                    )
+                else:
+                    get_app_log().error(
+                        f"Search collected {len(all_datasets)} of {total_expected} "
+                        f"dataset(s) — {gap} missing (the index changed during the "
+                        "crawl, or the server clamps page size). Narrow the "
+                        "collection and refresh if rows are missing."
+                    )
             else:
                 get_app_log().info(
                     f"Search collected {len(all_datasets)} dataset(s) — "
@@ -1654,9 +1996,18 @@ class DataverseClient:
         return f"/api/datasets/{identifier}/{endpoint}", None
 
     def get_curation_status(
-        self, identifier: str, include_history: bool = False
+        self,
+        identifier: str,
+        include_history: bool = False,
+        refusal: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
-        """Return the current curation label for a draft dataset, or None if unset/unavailable."""
+        """Return the current curation label for a draft dataset, or None if unset/unavailable.
+
+        `refusal` is an optional dict the caller passes in; when the server
+        refuses the read it is filled with {"status", "code", "detail"} so
+        the dashboard can say why a dataset has no curation state instead
+        of showing an empty column.
+        """
         path, base_params = self._curation_paths(identifier, "curationStatus")
         params = dict(base_params or {})
         if include_history:
@@ -1666,6 +2017,18 @@ class DataverseClient:
         except requests.HTTPError as exc:
             resp = getattr(exc, "response", None)
             if resp is not None and resp.status_code in (400, 401, 403, 404):
+                if refusal is not None:
+                    try:
+                        body = str(resp.text or "")
+                        refusal.update(
+                            {
+                                "status": int(resp.status_code),
+                                "code": refusal_code(path, resp.status_code, body),
+                                "detail": _error_message(resp),
+                            }
+                        )
+                    except Exception:
+                        pass
                 return None
             raise
         except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, ConnectionResetError):
@@ -2239,12 +2602,21 @@ class DataverseClient:
         identifier: str,
         version: str = "draft",
         fall_back_on_auth: bool = False,
+        order: list[str] | None = None,
     ) -> tuple[dict[str, Any], str, list[str]]:
         """Fetch the raw `data` payload for one dataset version.
 
         Tries `version` first (correct lowercase, e.g. `:draft`), then
         `:latest` / `:latest-published`, then an unversioned metadata read.
         Returns `(data, used_version, tried)`.
+
+        `order` overrides that sequence with an explicit list of version
+        specifiers — the dashboard enrichment passes the order derived from
+        the search payload, so the app never asks for a version the search
+        already ruled out (a :draft probe on a published dataset is always
+        answered "not permitted"). An empty list means "probe no version":
+        the unversioned dataset read answers with the version the account
+        may see, in one call. `None` keeps the default sequence.
 
         With `fall_back_on_auth=False` (the default, used for the actual
         check inventory) an auth failure (401/403) fails fast — retrying
@@ -2255,23 +2627,32 @@ class DataverseClient:
         failure on one version only means "you may not see that
         version" — a published dataset has no readable draft, and a
         guest token cannot see drafts at all. Enrichment then tries the
-        next version, and raises only if EVERY version was refused (which
-        does mean the token itself is bad).
+        next version. When EVERY version was refused, the unversioned
+        dataset read decides: if that answers, the account can see the
+        dataset but not its versions (an expected, version-scoped refusal);
+        only a refusal there too means the dataset is out of reach.
         """
         tried: list[str] = []
-        auth_errors: list[Exception] = []
-        for ver in (version, "latest", "latest-published"):
+        auth_errors: list[tuple[Exception, str, int]] = []
+        if order is not None:
+            candidates = list(order)
+        else:
+            candidates = [version, "latest", "latest-published"]
+        for ver in candidates:
             api_version = ver if ver.startswith(":") else f":{ver.lower()}"
+            vpath = (
+                f"/api/datasets/:persistentId/versions/{api_version}"
+                if ":" in identifier
+                else f"/api/datasets/{identifier}/versions/{api_version}"
+            )
             try:
                 if ":" in identifier:
                     payload = self._get_json(
-                        f"/api/datasets/:persistentId/versions/{api_version}",
+                        vpath,
                         params={"persistentId": identifier},
                     )
                 else:
-                    payload = self._get_json(
-                        f"/api/datasets/{identifier}/versions/{api_version}"
-                    )
+                    payload = self._get_json(vpath)
                 return payload.get("data", {}), api_version, tried
             except requests.HTTPError as exc:
                 resp = getattr(exc, "response", None)
@@ -2282,9 +2663,8 @@ class DataverseClient:
                         # Auth failure: do not silently try other versions.
                         raise
                     # "You may not see this version" — remember it and try
-                    # the next one. A refusal on EVERY version means the
-                    # token itself is bad, which the caller must know.
-                    auth_errors.append(exc)
+                    # the next one.
+                    auth_errors.append((exc, vpath, status))
                     get_app_log().info(
                         f"Version {api_version} not readable for {identifier} "
                         f"({status}), trying next version"
@@ -2294,10 +2674,25 @@ class DataverseClient:
                     get_app_log().info(f"Version {api_version} not available for {identifier} ({status}), trying next")
                     continue
                 raise
-        # Every version was refused (401/403) — the token cannot read this
-        # dataset at all. Surface it so the caller can abort the batch.
+        # Every version was refused (401/403). Before calling it a token
+        # failure, try the unversioned read: the account may see the
+        # dataset itself while every version of it stays out of reach —
+        # that is an expected refusal, not a broken token.
         if auth_errors:
-            raise auth_errors[-1]
+            try:
+                payload = self._get_json(
+                    "/api/datasets/:persistentId" if ":" in identifier else f"/api/datasets/{identifier}",
+                    params={"persistentId": identifier} if ":" in identifier else None,
+                )
+            except requests.HTTPError as exc:
+                resp = getattr(exc, "response", None)
+                status = resp.status_code if resp is not None else 0
+                if status not in (401, 403):
+                    raise
+                # The dataset itself is out of reach for this account.
+                raise _with_refusal(auth_errors[-1]) from None
+            data = payload.get("data", {})
+            return data, "unversioned", tried
         # fallback: try without version (latest published)
         payload = self._get_json(
             "/api/datasets/:persistentId" if ":" in identifier else f"/api/datasets/{identifier}",
@@ -2318,27 +2713,39 @@ class DataverseClient:
         """Patch thin search rows with live inventory sums + depositor + state.
 
         For each row lacking `total_size_bytes`, fetches one version doc
-        (`:draft`, falling back like `get_file_inventory`) and patches
-        `total_size_bytes` (summed), `file_count` (only when the search
-        value is falsy), `depositor` (only when the version carries one),
-        `state` (never clobbering an "In Review" lock confirmation), and
-        `has_draft` (set True when the `:draft` doc answers). Patched rows
-        get `size_enriched=True`; rows beyond `max_rows` keep thin data and
-        get `size_pending=True` so the UI can say so. Never embeds file
-        arrays — sums and counts only.
+        and patches `total_size_bytes` (summed), `file_count` (only when the
+        search value is falsy), `depositor` (only when the version carries
+        one), `state` (never clobbering an "In Review" lock confirmation),
+        and `has_draft` (set True when the `:draft` doc answers). Patched
+        rows get `size_enriched=True`; rows beyond `max_rows` keep thin
+        data and get `size_pending=True` so the UI can say so. Never
+        embeds file arrays — sums and counts only.
+
+        The version probed comes from the search payload (see
+        `version_probe_order`): the dataset read alone answers for a
+        published or deaccessioned row (one call), and a row under
+        curation is probed at `:draft` first, because that is the only
+        version a curator cares about. Rows the account may not read are
+        marked, not dropped: they carry an `access` fact with the machine
+        reason code and the server's own message, so the dashboard can
+        say why.
 
         Drafts go first so a capped run enriches curation candidates before
         published rows. Per-item isolation: one dataset's failure never
-        fails the batch. Auth failure (401/403) aborts the remaining
-        queue — every later item would fail the same way. Never raises;
-        returns {"attempted", "enriched", "pending", "auth_failed"}.
+        fails the batch, and a refusal on one dataset never stops the
+        others (the search call already proved the token works). Never
+        raises; returns {"attempted", "enriched", "pending", "auth_failed",
+        "restricted"}.
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         try:
             rows = [d for d in (datasets or []) if isinstance(d, dict)]
         except Exception:
-            return {"attempted": 0, "enriched": 0, "pending": 0, "auth_failed": 0}
+            return {
+                "attempted": 0, "enriched": 0, "pending": 0,
+                "auth_failed": 0, "restricted": 0,
+            }
         candidates = [
             ds for ds in rows
             if ds.get("total_size_bytes") is None and str(ds.get("persistent_id") or "")
@@ -2355,17 +2762,30 @@ class DataverseClient:
                     ds["size_pending"] = True
             except Exception:
                 pass
-        result = {"attempted": 0, "enriched": 0, "pending": len(candidates) - len(todo), "auth_failed": 0}
+        result = {
+            "attempted": 0, "enriched": 0,
+            "pending": len(candidates) - len(todo),
+            "auth_failed": 0, "restricted": 0,
+        }
         if not todo:
             return result
 
         def _fetch_one(ds: dict) -> tuple[dict, tuple]:
             pid = str(ds.get("persistent_id") or "")
+            # The search payload already says which versions can exist —
+            # probe only those (a :draft probe on a published dataset is
+            # always answered "not permitted").
+            order = version_probe_order(ds)
+            skip_reason = probe_skip_reason(ds)
+            if skip_reason:
+                get_app_log().info(
+                    f"Skipping version probes for {pid}: {skip_reason}"
+                )
             # fall_back_on_auth: a published dataset has no readable draft
             # and a guest token cannot see drafts at all — fall through to
             # the published version instead of failing the dataset.
             data, used_version, _tried = self._fetch_version_data(
-                pid, fall_back_on_auth=True
+                pid, fall_back_on_auth=True, order=order
             )
             files, depositor, state, files_known = _summarize_version_data(data)
             return ds, (
@@ -2400,10 +2820,12 @@ class DataverseClient:
                         _ds, summary = fut.result()
                     except Exception as exc:
                         if _auth_denied(exc):
-                            result["auth_failed"] = 1
-                            for f in futures:
-                                f.cancel()
-                            break
+                            # The dataset is out of reach for this account.
+                            # That is an expected answer, not a broken
+                            # token: mark the row and keep going.
+                            _mark_restricted(ds, exc)
+                            result["restricted"] += 1
+                            continue
                         continue
                     try:
                         (
@@ -2427,8 +2849,11 @@ class DataverseClient:
                             ds["depositor"] = depositor
                         if state and "REVIEW" not in str(ds.get("state") or "").upper():
                             ds["state"] = state
-                        if used_version == ":draft":
+                        if used_version == ":draft" or str(state or "").upper() == "DRAFT":
+                            # The dataset read answers with the draft when
+                            # the account may see it — that is a draft.
                             ds["has_draft"] = True
+                        _mark_readable(ds, used_version, str(ds.get("state") or ""))
                         result["enriched"] += 1
                     except Exception:
                         continue

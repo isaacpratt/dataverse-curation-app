@@ -408,11 +408,17 @@ class CrawlWorker(QThread):
                     pass
             else:
                 def _read_status(ds: dict) -> tuple:
+                    # The refusal (if any) is kept: a curation status this
+                    # account may not read is an expected answer, and the
+                    # dashboard says so instead of showing an empty column.
+                    refusal: dict = {}
                     try:
-                        status = client.get_curation_status(ds.get("persistent_id", ""))
+                        status = client.get_curation_status(
+                            ds.get("persistent_id", ""), refusal=refusal
+                        )
                     except Exception:
                         status = None
-                    return ds, status or {}
+                    return ds, status or {}, refusal
 
                 # Drafts only — non-drafts have no readable curation status.
                 drafts: list = []
@@ -434,10 +440,20 @@ class CrawlWorker(QThread):
                             for f in futures:
                                 f.cancel()
                             return
-                        ds, status = fut.result()
+                        ds, status, refusal = fut.result()
                         ds["curation_label"] = status.get("label", "")
                         ds["curation_time"] = status.get("time", "")
                         ds["curation_assigner"] = status.get("assigner", "")
+                        if refusal:
+                            # Curation state exists only for datasets under
+                            # curation, and only for accounts in their
+                            # curation scope — record why it is missing.
+                            ds["curation_access"] = {
+                                "state": "unreadable",
+                                "reason": str(refusal.get("code") or "not_under_curation"),
+                                "detail": str(refusal.get("detail") or ""),
+                                "status": int(refusal.get("status") or 0),
+                            }
                         done_n += 1
                         if done_n % 10 == 0 or done_n == total:
                             self.progress.emit(
@@ -882,13 +898,34 @@ class MetadataWorker(QThread):
     error = Signal(str)
 
     def __init__(self, base_url: str, api_token: str, persistent_id: str, parent=None,
-                 collection: str = ""):
+                 collection: str = "", draft_hint: bool | None = None):
         super().__init__(parent)
         register_worker(self)
         self._base_url = base_url
         self._api_token = api_token
         self._pid = persistent_id
         self._collection = collection or ""
+        # What the search payload already told us: False means the dataset
+        # is not under curation, so the curation status, the label history
+        # and the version comparison cannot exist — those calls are skipped
+        # instead of being sent to be refused. None = unknown, fetch them.
+        self._draft_hint = draft_hint
+
+    def _fetch_names(self) -> list[str]:
+        """Return the reads this dataset needs.
+
+        Curation state, label history and the version comparison exist
+        only for datasets under curation. When the queue row says this
+        dataset has no draft, those reads are skipped instead of being
+        sent to be refused.
+        """
+        names = [
+            "metadata", "inventory", "curation", "version_diff",
+            "versions", "history", "allowed", "in_review",
+        ]
+        if self._draft_hint is False:
+            return [n for n in names if n not in ("curation", "version_diff", "history")]
+        return names
 
     def run(self) -> None:
         import time as _time
@@ -900,6 +937,8 @@ class MetadataWorker(QThread):
 
             client = DataverseClient(self._base_url, self._api_token)
             # Parallel independent fetches (was serial sum of 8x RTT).
+            refusals: dict = {}
+
             def _fetch(name: str):
                 try:
                     if name == "metadata":
@@ -907,7 +946,11 @@ class MetadataWorker(QThread):
                     if name == "inventory":
                         return ("inventory", client.get_file_inventory(self._pid))
                     if name == "curation":
-                        return ("curation", client.get_curation_status(self._pid) or {})
+                        refusal: dict = {}
+                        status = client.get_curation_status(self._pid, refusal=refusal)
+                        if refusal:
+                            refusals["curation"] = refusal
+                        return ("curation", status or {})
                     if name == "version_diff":
                         return ("version_diff", client.compare_versions(self._pid) or {})
                     if name == "versions":
@@ -926,12 +969,27 @@ class MetadataWorker(QThread):
                         )
                     if name == "in_review":
                         return ("in_review", bool(client.dataset_in_review(self._pid)))
-                except Exception:
+                except Exception as exc:
+                    # Keep the refusal code: "this account may not read the
+                    # draft" is an expected answer, not a broken read.
+                    try:
+                        code = str(getattr(exc, "refusal_code", "") or "")
+                        if code:
+                            refusals[name] = {
+                                "state": "unreadable",
+                                "reason": code,
+                                "detail": str(getattr(exc, "refusal_detail", "") or ""),
+                                "status": int(
+                                    getattr(getattr(exc, "response", None), "status_code", 0) or 0
+                                ),
+                            }
+                    except Exception:
+                        pass
                     return (name, None)
                 return (name, None)
 
             results: dict = {}
-            names = ["metadata", "inventory", "curation", "version_diff", "versions", "history", "allowed", "in_review"]
+            names = self._fetch_names()
             with ThreadPoolExecutor(max_workers=5) as pool:
                 futures = {pool.submit(_fetch, n): n for n in names}
                 for fut in as_completed(futures):
@@ -1021,6 +1079,9 @@ class MetadataWorker(QThread):
                 "inventory_failed": inventory_failed,
                 "guestbook": guestbook,
                 "account": account,
+                # Expected refusals (a draft this account may not read, a
+                # curation status that does not exist) with their reason.
+                "refusals": refusals,
             }
             self.finished.emit(metadata, inventory, curation, version_diff, extra)
         except Exception as exc:

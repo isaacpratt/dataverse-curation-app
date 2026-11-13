@@ -73,6 +73,7 @@ class LogPage(QWidget):
         for text, colour, tip in (
             (t("log.err_chip"), TEXT_DANGER, t("log.err_tip")),
             (t("log.warn_chip"), STATE_WARNING_GRAPHIC, t("log.warn_tip")),
+            (t("log.expected_chip"), TEXT_MUTED, t("log.expected_tip")),
             (t("log.plain_chip"), TEXT_MUTED, t("log.plain_tip")),
         ):
             legend.addWidget(make_text_label(text, color=colour, tip=tip))
@@ -241,8 +242,12 @@ class LogHighlighter(QSyntaxHighlighter):
         # severity word itself.
         self.line_error_format = _format(STATE_ERROR_GRAPHIC)
         self.line_warn_format = _format(STATE_WARNING_GRAPHIC)
+        # An expected refusal is not a problem — it is the server's
+        # documented answer, so it stays in the muted tone.
+        self.line_expected_format = _format(TEXT_MUTED)
         self.error_format = _format(STATE_ERROR_GRAPHIC, bold=True)
         self.warn_format = _format(STATE_WARNING_GRAPHIC, bold=True)
+        self.expected_format = _format(TEXT_MUTED, bold=True)
         self.info_format = _format(ACCENT_PRIMARY, bold=True)
 
         # Token colours.
@@ -255,6 +260,7 @@ class LogHighlighter(QSyntaxHighlighter):
         self.value_format = _format(TEXT_SUCCESS)
         self.error_code_format = _format(STATE_ERROR_GRAPHIC, bold=True)
         self.warn_code_format = _format(STATE_WARNING_GRAPHIC, bold=True)
+        self.expected_code_format = _format(TEXT_MUTED, bold=True)
         self.ok_code_format = _format(TEXT_SUCCESS, bold=True)
 
         import re
@@ -264,8 +270,19 @@ class LogHighlighter(QSyntaxHighlighter):
             r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?"
         )
         self._re_level = re.compile(
-            r"\b(CRITICAL|ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE)\b"
+            r"\b(CRITICAL|ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE|EXPECTED)\b"
         )
+        # The severity word the app wrote for this line, right after the
+        # timestamp. A server body carries its own words (Dataverse says
+        # "status":"ERROR" in every error response) — those must not
+        # decide the line's colour.
+        self._re_marker = re.compile(
+            r"^(CRITICAL|ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE|EXPECTED)\b"
+        )
+        # The marker that tags an expected refusal, wherever it sits in
+        # the line (the app writes it at the start, and appends it to the
+        # raw call line as the context).
+        self._re_expected = re.compile(r"EXPECTED:")
         self._re_method = re.compile(
             r"\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b(?=\s+\S)"
         )
@@ -277,14 +294,36 @@ class LogHighlighter(QSyntaxHighlighter):
         self._re_string = re.compile(r'"(?:[^"\\]|\\.)*"')
 
     def _severity(self, text: str) -> str | None:
-        """Return "error", "warning" or None for a whole line."""
-        if self._regex.search(r"\b(ERROR|CRITICAL)\b", text, self._regex.IGNORECASE):
-            return "error"
+        """Return "error", "warning", "expected" or None for a whole line.
+
+        The app's own severity word decides: it is the first word of the
+        message, after the timestamp. A response body may contain words
+        of its own — Dataverse answers every error with
+        ``{"status":"ERROR",...}`` — and those are the response, not the
+        app's verdict.
+        """
+        body = text
+        try:
+            body = self._re_time.sub("", body, count=1).strip()
+        except Exception:
+            body = str(text or "").strip()
+        marker = self._re_marker.match(body)
+        if marker:
+            word = marker.group(1).upper()
+            if word == "EXPECTED":
+                # The server's documented answer, not a failure.
+                return "expected"
+            if word in ("ERROR", "CRITICAL"):
+                return "error"
+            if word.startswith("WARN"):
+                return "warning"
+        if self._re_expected.search(str(text or "")):
+            # The raw call line carries the appended context — it is the
+            # same expected refusal, so it wears the same muted tone.
+            return "expected"
         status = self._re_status.search(text)
         if status and int(status.group(1)) >= 400:
             return "error"
-        if self._regex.search(r"\bWARN(?:ING)?\b", text, self._regex.IGNORECASE):
-            return "warning"
         return None
 
     def _apply(self, match, fmt: QTextCharFormat) -> None:
@@ -298,6 +337,8 @@ class LogHighlighter(QSyntaxHighlighter):
             self.setFormat(0, len(text), self.line_error_format)
         elif severity == "warning":
             self.setFormat(0, len(text), self.line_warn_format)
+        elif severity == "expected":
+            self.setFormat(0, len(text), self.line_expected_format)
 
         stamp = self._re_time.match(text)
         if stamp:
@@ -306,9 +347,16 @@ class LogHighlighter(QSyntaxHighlighter):
         for m in self._re_level.finditer(text):
             word = m.group(1).upper()
             if word in ("ERROR", "CRITICAL"):
+                if severity == "expected":
+                    # The server's own body says "status":"ERROR" — that
+                    # is the response, not the app's verdict. Leave it in
+                    # the muted tone of the line.
+                    continue
                 self._apply(m, self.error_format)
             elif word.startswith("WARN"):
                 self._apply(m, self.warn_format)
+            elif word == "EXPECTED":
+                self._apply(m, self.expected_format)
             else:
                 self._apply(m, self.info_format)
 
@@ -328,11 +376,16 @@ class LogHighlighter(QSyntaxHighlighter):
 
         for m in self._re_status.finditer(text):
             code = int(m.group(1))
-            fmt = (
-                self.error_code_format
-                if code >= 400
-                else (self.warn_code_format if code >= 300 else self.ok_code_format)
-            )
+            if severity == "expected":
+                # The status is part of the raw call and response — it
+                # stays visible, but it is not painted as a failure.
+                fmt = self.expected_code_format
+            else:
+                fmt = (
+                    self.error_code_format
+                    if code >= 400
+                    else (self.warn_code_format if code >= 300 else self.ok_code_format)
+                )
             start = m.start(1)
             self.setFormat(start, m.end(1) - start, fmt)
 
