@@ -33,7 +33,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <pre><code>uv sync                                     # create/update .venv from uv.lock incl. dev group
 copy config.example.json config.json     # cmd; PowerShell: Copy-Item config.example.json config.json
                                           # Borealis demo preset is the default; edit base_url/api_token/collection
-uv run pytest                            # 513 tests (218 engine + 295 UI; run --collect-only -q for the live count)
+uv run pytest                            # 732 tests (347 engine + 385 UI; run --collect-only -q for the live count)
 uv run python main.py                    # GUI
 uv run python main.py --config path/to/config.json
 uv run python main.py --dataverse https://demo.borealisdata.ca

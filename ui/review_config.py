@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QListWidgetItem,
+    QSpinBox,
     QSplitter,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -57,6 +58,26 @@ from ui.widgets import (
 )
 
 _LEVELS = ["required", "optional", "unchecked"]
+
+# dv-5id: friendly names for the rule handlers that ship in the ruleset
+# JSON. The Check picker only offers nonempty/looks_correct; any other
+# handler a curator drops in via JSON is shown through this map.
+_HANDLER_LABEL_KEYS = {
+    "nonempty": "review.handler_nonempty",
+    "looks_correct": "review.handler_looks_correct",
+    "orcid": "review.handler_orcid",
+    "author_affiliation": "review.handler_author_affiliation",
+    "author_count": "review.handler_author_count",
+    "license": "review.handler_license",
+    "license_terms": "review.handler_license_terms",
+    "terms_of_use": "review.handler_terms_of_use",
+    "terms_of_access": "review.handler_terms_of_access",
+    "access_conditions": "review.handler_access_conditions",
+    "related_pub": "review.handler_related_pub",
+    "related_pub_id": "review.handler_related_pub_id",
+    "time_anyof": "review.handler_time_anyof",
+    "geo": "review.handler_geo",
+}
 
 
 class ContentRuleDialog(QDialog):
@@ -467,6 +488,83 @@ class ReviewConfigView(QWidget):
         self._sel_label.setWordWrap(True)
         self._sel_label.setObjectName("LabelStrongSM")
         body.addWidget(self._sel_label)
+        # Check picker (dv-5id): only field rules have one. The specialized
+        # checks ship in the ruleset JSON; this row is how a field moves
+        # from “non-empty” to the entry-correctness check, whose params
+        # panel appears right below it.
+        self._check_row = QWidget()
+        check_lay = QHBoxLayout(self._check_row)
+        check_lay.setContentsMargins(0, 0, 0, 0)
+        check_lay.setSpacing(8)
+        check_label = QLabel(t("review.check_label"))
+        check_label.setObjectName("LabelStrongSM")
+        check_lay.addWidget(check_label)
+        self._handler_combo = make_combo(
+            [
+                (t("review.handler_nonempty"), "nonempty"),
+                (t("review.handler_looks_correct"), "looks_correct"),
+            ],
+            height=32,
+            min_width=220,
+        )
+        self._handler_combo.currentIndexChanged.connect(self._on_handler_changed)
+        check_lay.addWidget(self._handler_combo, 1)
+        self._check_row.hide()
+        body.addWidget(self._check_row)
+        # Entry-check params (dv-5id): shown only while the “looks
+        # plausibly correct” check is picked. Every edit writes straight
+        # back into the rule's params dict.
+        self._params_panel = QWidget()
+        params_lay = QVBoxLayout(self._params_panel)
+        params_lay.setContentsMargins(0, 0, 0, 0)
+        params_lay.setSpacing(6)
+        params_title = QLabel(t("review.params_title"))
+        params_title.setObjectName("LabelStrongSM")
+        params_lay.addWidget(params_title)
+        form = QFormLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(6)
+        self._p_min = QSpinBox()
+        self._p_min.setRange(0, 10000)
+        self._p_min.setValue(0)
+        self._p_min.setFixedHeight(32)
+        self._p_min.valueChanged.connect(self._on_params_edited)
+        form.addRow(self._params_label(t("review.params_min_length")), self._p_min)
+        regex_row = QHBoxLayout()
+        regex_row.setContentsMargins(0, 0, 0, 0)
+        regex_row.setSpacing(8)
+        self._p_regex = make_line_edit(height=32)
+        self._p_regex.textChanged.connect(self._on_params_edited)
+        regex_row.addWidget(self._p_regex, 1)
+        self._p_regex_full = make_checkbox(t("review.params_regex_full"))
+        self._p_regex_full.toggled.connect(self._on_params_edited)
+        regex_row.addWidget(self._p_regex_full)
+        form.addRow(self._params_label(t("review.params_regex")), regex_row)
+        self._p_blocklist = make_multiline_input("", fixed=False, min_height=64)
+        self._p_blocklist.textChanged.connect(self._on_params_edited)
+        form.addRow(self._params_label(t("review.params_blocklist")), self._p_blocklist)
+        self._p_vocab = make_multiline_input("", fixed=False, min_height=64)
+        self._p_vocab.textChanged.connect(self._on_params_edited)
+        form.addRow(self._params_label(t("review.params_vocabulary")), self._p_vocab)
+        params_lay.addLayout(form)
+        for key, label_key in [
+            ("not_common_placeholders", "review.params_placeholders"),
+            ("not_all_caps", "review.params_all_caps"),
+            ("date", "review.params_date"),
+            ("date_order", "review.params_date_order"),
+            ("url", "review.params_url"),
+        ]:
+            box = make_checkbox(t(label_key))
+            box.toggled.connect(self._on_params_edited)
+            box.setProperty("param_key", key)
+            setattr(self, f"_p_{key}", box)
+            params_lay.addWidget(box)
+        hint = QLabel(t("review.params_hint"))
+        hint.setWordWrap(True)
+        hint.setObjectName("CaptionSM")
+        params_lay.addWidget(hint)
+        self._params_panel.hide()
+        body.addWidget(self._params_panel)
         self._template_edit = make_multiline_input(
             t("review.template_placeholder"),
             fixed=False,
@@ -487,6 +585,214 @@ class ReviewConfigView(QWidget):
         note.setObjectName("CaptionSM")
         body.addWidget(note)
         return card
+
+    # -- check picker + entry-check params (dv-5id) --------------------------
+
+    @staticmethod
+    def _params_label(text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("LabelStrongSM")
+        label.setWordWrap(True)
+        return label
+
+    @staticmethod
+    def _handler_label(handler: str) -> str:
+        key = _HANDLER_LABEL_KEYS.get(str(handler or ""))
+        return t(key) if key else t("review.check_other", handler=handler)
+
+    def _field_rule_for_selection(self):
+        """(fr, block, field, handler) for the current field selection."""
+        try:
+            parts = str(self._sel_key or "").split("\x1f")
+            if len(parts) == 3:
+                fr = self._find_field_rule(parts[0], parts[1], parts[2])
+                if fr is not None:
+                    return fr, parts[0], parts[1], str(fr.get("handler") or "nonempty")
+        except Exception:
+            pass
+        return None, "", "", ""
+
+    @staticmethod
+    def _params_lines(value) -> str:
+        if isinstance(value, list):
+            return "\n".join(str(v) for v in value)
+        if isinstance(value, str):
+            return value
+        return ""
+
+    def _sync_field_extras(self, fr, block: str, field: str, handler: str) -> None:
+        """Fill the Check picker; show the params panel for looks_correct."""
+        try:
+            self._check_row.show()
+        except Exception:
+            return
+        try:
+            items = [
+                (t("review.handler_nonempty"), "nonempty"),
+                (t("review.handler_looks_correct"), "looks_correct"),
+            ]
+            if handler not in ("nonempty", "looks_correct"):
+                items.append((self._handler_label(handler), handler))
+            self._handler_combo.blockSignals(True)
+            try:
+                self._handler_combo.clear()
+                for label, key in items:
+                    self._handler_combo.addItem(label, key)
+                idx = self._handler_combo.findData(handler)
+                self._handler_combo.setCurrentIndex(idx if idx >= 0 else 0)
+            finally:
+                self._handler_combo.blockSignals(False)
+            self._handler_combo.setProperty("block", block)
+            self._handler_combo.setProperty("field", field)
+            self._handler_combo.setProperty("handler", handler)
+            if handler == "looks_correct":
+                self._params_panel.show()
+                self._load_params(fr)
+            else:
+                self._params_panel.hide()
+        except Exception:
+            pass
+
+    def _hide_field_extras(self) -> None:
+        try:
+            self._check_row.hide()
+            self._params_panel.hide()
+        except Exception:
+            pass
+
+    def _load_params(self, fr) -> None:
+        p = fr.get("params") if isinstance(fr.get("params"), dict) else {}
+        widgets = (
+            self._p_min, self._p_regex, self._p_regex_full,
+            self._p_blocklist, self._p_vocab,
+            self._p_not_common_placeholders, self._p_not_all_caps,
+            self._p_date, self._p_date_order, self._p_url,
+        )
+        for w in widgets:
+            try:
+                w.blockSignals(True)
+            except Exception:
+                pass
+        try:
+            try:
+                self._p_min.setValue(int(p.get("min_length") or 0))
+            except (TypeError, ValueError):
+                self._p_min.setValue(0)
+            self._p_regex.setText(str(p.get("regex") or ""))
+            self._p_regex_full.setChecked(str(p.get("regex_mode") or "").strip().lower() == "full")
+            self._p_blocklist.setPlainText(self._params_lines(p.get("blocklist")))
+            self._p_vocab.setPlainText(self._params_lines(p.get("controlled_vocabulary")))
+            for key in ("not_common_placeholders", "not_all_caps", "date", "date_order", "url"):
+                getattr(self, f"_p_{key}").setChecked(bool(p.get(key)))
+        finally:
+            for w in widgets:
+                try:
+                    w.blockSignals(False)
+                except Exception:
+                    pass
+
+    def _on_params_edited(self, *_args) -> None:
+        if getattr(self, "_loading", False):
+            return
+        fr, _block, _field, handler = self._field_rule_for_selection()
+        if fr is None or handler != "looks_correct":
+            return
+        p: dict[str, Any] = {}
+        if self._p_min.value() > 0:
+            p["min_length"] = int(self._p_min.value())
+        rx = self._p_regex.text().strip()
+        if rx:
+            p["regex"] = rx
+        if self._p_regex_full.isChecked():
+            p["regex_mode"] = "full"
+        blocklist = [line.strip() for line in self._p_blocklist.toPlainText().splitlines() if line.strip()]
+        if blocklist:
+            p["blocklist"] = blocklist
+        vocab = [line.strip() for line in self._p_vocab.toPlainText().splitlines() if line.strip()]
+        if vocab:
+            p["controlled_vocabulary"] = vocab
+        for key in ("not_common_placeholders", "not_all_caps", "date", "date_order", "url"):
+            if getattr(self, f"_p_{key}").isChecked():
+                p[key] = True
+        if p:
+            fr["params"] = p
+        else:
+            fr.pop("params", None)
+        self._mark_dirty()
+
+    def _on_handler_changed(self, _i: int) -> None:
+        if getattr(self, "_loading", False):
+            return
+        combo = self._handler_combo
+        new_handler = combo.currentData()
+        if not new_handler:
+            return
+        block = str(combo.property("block") or "")
+        field = str(combo.property("field") or "")
+        old = str(combo.property("handler") or "nonempty")
+        new = str(new_handler)
+        if new == old:
+            return
+        fr = self._find_field_rule(block, field, old)
+        if fr is None:
+            # No rule exists yet (level is “unchecked”): revert the picker
+            # and point the curator at the level combo instead.
+            self._loading = True
+            try:
+                idx = combo.findData(old)
+                combo.setCurrentIndex(idx if idx >= 0 else 0)
+            finally:
+                self._loading = False
+            try:
+                self._status.setText(t("review.messages.set_level_first"))
+            except Exception:
+                pass
+            return
+        fr["handler"] = new
+        if new == "looks_correct" and not isinstance(fr.get("params"), dict):
+            # Sensible default: catch the obvious placeholder entries first.
+            fr["params"] = {"not_common_placeholders": True}
+        self._sel_key = self._rule_sel_key(block, field, new)
+        combo.setProperty("handler", new)
+        self._update_field_row_handler(block, field, old, new, str(fr.get("requirement") or ""))
+        self._mark_dirty()
+        self._show_template_for_selection()
+
+    def _update_field_row_handler(self, block: str, field: str,
+                                  old_handler: str, new_handler: str,
+                                  req: str = "") -> None:
+        """Re-point the tree row's level combo at the new handler (no rebuild)."""
+        tree = self._field_tree
+
+        def _tip() -> str:
+            return (
+                t(
+                    "review.messages.field_rule_tip",
+                    block=block,
+                    field=field,
+                    handler=new_handler,
+                )
+                + (f"\n{req}" if req else "")
+            )
+
+        def _fix(item) -> bool:
+            combo = tree.itemWidget(item, 1)
+            if isinstance(combo, QComboBox):
+                if (str(combo.property("block") or "") == block
+                        and str(combo.property("field") or "") == field
+                        and str(combo.property("handler") or "nonempty") == old_handler):
+                    combo.setProperty("handler", new_handler)
+                    item.setToolTip(0, _tip())
+                    return True
+                return False
+            for i in range(item.childCount()):
+                if _fix(item.child(i)):
+                    return True
+            return False
+
+        for i in range(tree.topLevelItemCount()):
+            if _fix(tree.topLevelItem(i)):
+                return
 
     # -- data -> ui --------------------------------------------------------
 
@@ -944,7 +1250,7 @@ class ReviewConfigView(QWidget):
 
     @staticmethod
     def _rule_sel_key(block: str, field: str, handler: str) -> str:
-        return f"{block}\x1ffield\x1f{handler}"
+        return f"{block}\x1f{field}\x1f{handler}"
 
     def _mark_dirty(self) -> None:
         """Surface that an edit landed in memory but not on disk."""
@@ -1062,6 +1368,7 @@ class ReviewConfigView(QWidget):
         self._template_edit.blockSignals(True)
         try:
             if self._sel_kind == "content":
+                self._hide_field_extras()
                 cr = next((c for c in (self._current_ruleset().get("content_rules") or [])
                            if isinstance(c, dict) and str(c.get("id")) == self._sel_key), None)
                 if cr is None:
@@ -1097,7 +1404,12 @@ class ReviewConfigView(QWidget):
                 if fr is None:
                     self._sel_label.setText(t("review.select_template"))
                     self._template_edit.setPlainText("")
+                    self._hide_field_extras()
                     return
+                handler = str(fr.get("handler") or "nonempty")
+                parts = str(self._sel_key or "").split("\x1f")
+                if len(parts) == 3:
+                    self._sync_field_extras(fr, parts[0], parts[1], handler)
                 self._sel_label.setText(
                     t(
                         "review.selection.field_rule",

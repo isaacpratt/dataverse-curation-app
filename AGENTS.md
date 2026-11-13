@@ -12,7 +12,7 @@ dataverse-curation-app/
 │   ├── report.py         # DatasetReport JSON contract
 │   ├── dispatcher.py     # extension -> check mapping
 │   ├── runner.py         # run_report / list_planned_checks
-│   └── tests/            # pytest suite (212 tests; see CI)
+│   └── tests/            # pytest suite (engine + UI; run --collect-only -q for the current count)
 ├── ui/                   # PySide6 views (main window, dashboard, detail, settings/about panes, log page, workers, dialogs, theme, widgets incl. AppTable content-fit, progress ring)
 │   ├── theme.py          # palette -> semantic roles -> contrast contract -> one button system
 │   ├── widgets.py        # the component kit (every view builds its controls through it)
@@ -33,7 +33,7 @@ dataverse-curation-app/
 ```bash
 uv sync                   # create .venv and install everything incl. dev group (from uv.lock; no pip needed)
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
-uv run pytest             # 513 tests (218 engine + 295 UI; run uv run pytest --collect-only -q for current count)
+uv run pytest             # 732 tests (347 engine + 385 UI; run uv run pytest --collect-only -q for current count)
 pre-commit run --all-files # optional local gate (CI runs it too); needs uv on PATH. core.hooksPath is beads-managed, so hooks are not auto-installed — run it manually or rely on CI
 uv run python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
 uv run python main.py --gallery      # the component gallery: every kit component on one page

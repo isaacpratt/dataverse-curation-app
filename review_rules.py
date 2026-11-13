@@ -42,6 +42,39 @@ Optional per-ruleset ``"section_rules"`` (dv-81q) overrides the README
 section list the depth check scores (see ``DEFAULT_README_SECTIONS``);
 when absent, the built-in five sections apply.
 
+Field rule handlers accept an optional ``"params"`` object (dv-5id). The
+general-purpose ``"looks_correct"`` handler checks that a value is not just
+present but plausibly correct. Supported params (all optional, all tolerant
+of sloppy JSON: numbers as strings, lists as comma/newline-separated text):
+
+  min_length            int   — plain fields: concatenated text shorter than
+                                this fails; dotted compound paths: every
+                                entry fails its own minimum
+  regex                 str   — value (or text leaf) must match; search mode
+                                unless ``"regex_mode": "full"`` (fullmatch)
+  regex_mode            str   — "search" (default) or "full"
+  blocklist             list  — case-insensitive substring phrases to reject
+  not_common_placeholders bool — built-in list of obvious placeholders
+                                (lorem ipsum, todo, tbd, no description, …)
+  not_all_caps          bool  — rejects values written entirely in caps
+  controlled_vocabulary list  — every nonempty text leaf must equal a token
+                                (case-insensitive); a vacuous payload with no
+                                checkable value fails closed
+  date                  bool  — every text leaf must be a parseable date
+                                (ISO: YYYY, YYYY-MM, YYYY-MM-DD, or ISO
+                                datetimes)
+  date_order            bool  — compound field: per item, the ``start``- and
+                                ``end``-named children must parse to dates in
+                                order (start <= end). Nothing to compare
+                                fails closed.
+  url                   bool  — http(s) scheme and a dotted hostname
+
+Every looks_correct failure carries a bracketed reason in the displayed
+value (e.g. ``"… [too short: 12 of 50 characters]"``) so a result is never a
+silent pass, and an empty value reports incomplete. An invalid ``regex``
+pattern fails the rule closed with ``[rule error: …]`` instead of raising;
+a looks_correct rule with no effective checks also fails closed.
+
 Built-ins (mcmaster-default, minimal) reproduce the legacy hard-coded
 McMaster/Minimal checks exactly (same labels + requirement strings), so a
 fresh install behaves identically until the curator edits rules.
@@ -52,6 +85,8 @@ from __future__ import annotations
 import fnmatch
 import json as _json
 import re
+from datetime import date as _date
+from datetime import datetime as _datetime
 from pathlib import Path as _Path
 from typing import Any
 
@@ -703,6 +738,267 @@ def _orcid_dotted(m, blocks: dict[str, Any], block: str, field: str) -> tuple[bo
     return (not missing), shown
 
 
+# -- dv-5id: entry-correctness validation ("looks_correct" handler) ----------
+
+# Built-in placeholder phrases for ``not_common_placeholders``. Deliberately
+# short and unambiguous: these are things a curator would never accept as a
+# real entry, not stylistic judgements.
+_LC_PLACEHOLDERS = (
+    "lorem ipsum", "lorem", "todo", "tbd", "no description", "no description yet",
+    "placeholder", "sample text", "sample data", "asdf", "xxx", "test test",
+    "enter description", "your description", "fill me in", "n/a (no",
+)
+
+
+def _lc_strlist(value: Any) -> list[str]:
+    """Normalise a token list param: list, or comma/semicolon/newline text."""
+    if isinstance(value, list):
+        parts = [str(x) for x in value]
+    elif isinstance(value, str):
+        parts = re.split(r"[\n,;]+", value)
+    else:
+        parts = []
+    return [p.strip() for p in parts if p and str(p).strip()]
+
+
+def _lc_params(rule: dict[str, Any]) -> dict[str, Any]:
+    """Tolerant params for a looks_correct rule; always a full dict."""
+    p = rule.get("params") if isinstance(rule, dict) else None
+    p = p if isinstance(p, dict) else {}
+    try:
+        min_length = int(p.get("min_length") or 0)
+    except (TypeError, ValueError):
+        min_length = 0
+    min_length = max(0, min_length)
+    regex = str(p.get("regex") or "").strip()
+    mode = str(p.get("regex_mode") or "search").strip().lower()
+    return {
+        "min_length": min_length,
+        "regex": regex,
+        "regex_mode": "full" if mode == "full" else "search",
+        "blocklist": [b.lower() for b in _lc_strlist(p.get("blocklist"))],
+        "controlled_vocabulary": _lc_strlist(p.get("controlled_vocabulary")),
+        "not_common_placeholders": bool(p.get("not_common_placeholders")),
+        "not_all_caps": bool(p.get("not_all_caps")),
+        "date": bool(p.get("date")),
+        "date_order": bool(p.get("date_order")),
+        "url": bool(p.get("url")),
+    }
+
+
+def _lc_clip(text: Any, limit: int = 60) -> str:
+    s = re.sub(r"\s+", " ", str(text if text is not None else "")).strip()
+    return s if len(s) <= limit else s[: limit - 1] + "…"
+
+
+def _lc_partial_date(text: str) -> _date | None:
+    """Parse ISO-ish dates: YYYY, YYYY-MM, YYYY-MM-DD, or ISO datetimes."""
+    s = " ".join(str(text or "").split()).strip()
+    if not s:
+        return None
+    head = s.split("T", 1)[0].split(" ", 1)[0].strip()
+    m = re.match(r"^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$", head)
+    try:
+        if m:
+            year = int(m.group(1))
+            month = int(m.group(2) or 1)
+            day = int(m.group(3) or 1)
+            return _date(year, month, day)
+        dt = _datetime.fromisoformat(s.replace("Z", "+00:00").replace("z", "+00:00"))
+        return dt.date()
+    except ValueError:
+        return None
+
+
+def _lc_url_ok(text: str) -> bool:
+    from urllib.parse import urlsplit
+
+    try:
+        u = urlsplit(str(text or "").strip())
+    except Exception:
+        return False
+    if u.scheme.lower() not in ("http", "https"):
+        return False
+    host = u.hostname or ""
+    return "." in host and not host.startswith(".") and not host.endswith(".")
+
+
+def _lc_texts_of(node: Any) -> list[str]:
+    """Every nonempty text leaf below a value, wrappers unwrapped."""
+    out: list[str] = []
+
+    def walk(v: Any) -> None:
+        v = _unwrap(v)
+        if v is None or isinstance(v, bool) or isinstance(v, (int, float)):
+            return
+        if isinstance(v, str):
+            s = v.strip()
+            if s:
+                out.append(s)
+            return
+        if isinstance(v, dict):
+            for vv in v.values():
+                walk(vv)
+            return
+        if isinstance(v, list):
+            for item in v:
+                walk(item)
+
+    walk(node)
+    return out
+
+
+def _lc_find_pair_key(item: dict[str, Any], pattern: str) -> str | None:
+    for key in item:
+        if re.search(pattern, str(key), flags=re.IGNORECASE):
+            return key
+    return None
+
+
+def _lc_text_checks(texts: list[str], p: dict[str, Any],
+                    per_leaf: bool = False) -> str:
+    """Per-leaf checks; returns the first bracketed reason or "".
+
+    ``per_leaf`` applies to dotted compound paths ("author.affiliation"):
+    every entry is its own unit (an affiliation of "W" fails its own
+    minimum). Plain multi-value fields measure the concatenated content,
+    which is what a description's "at least 50 characters" means.
+    """
+    if p["min_length"]:
+        if per_leaf:
+            for text in texts:
+                if len(text) < p["min_length"]:
+                    return f"too short: {len(text)} of {p['min_length']} characters"
+        else:
+            total = len(" ".join(texts).strip())
+            if total < p["min_length"]:
+                return f"too short: {total} of {p['min_length']} characters"
+    rx = p["regex"]
+    if rx:
+        try:
+            compiled = re.compile(rx)
+        except re.error:
+            return f"rule error: invalid regex {rx!r}"
+        for text in texts:
+            matched = compiled.fullmatch(text) if p["regex_mode"] == "full" else compiled.search(text)
+            if not matched:
+                return f"does not match {rx!r}"
+    for text in texts:
+        low = text.lower()
+        if p["not_common_placeholders"]:
+            for phrase in _LC_PLACEHOLDERS:
+                if phrase in low:
+                    return f"placeholder text: {phrase!r}"
+        if p["not_all_caps"]:
+            cased = [c for c in text if c.isalpha()]
+            if cased and all(c.isupper() for c in cased) and len(cased) >= 2:
+                return "all caps"
+        if p["blocklist"]:
+            for phrase in p["blocklist"]:
+                if phrase in low:
+                    return f"blocked phrase: {phrase!r}"
+        if p["controlled_vocabulary"]:
+            vocab = {v.strip().lower() for v in p["controlled_vocabulary"]}
+            if low not in vocab:
+                return f"not in vocabulary: {_lc_clip(text)}"
+        if p["date"] and _lc_partial_date(text) is None:
+            return f"date not parseable: {_lc_clip(text)}"
+        if p["url"] and not _lc_url_ok(text):
+            return f"not a plausible URL: {_lc_clip(text)}"
+    return ""
+
+
+def _looks_correct(m, blocks: dict[str, Any], block: str, field: str,
+                   rule: dict[str, Any]) -> tuple[bool, str]:
+    """Entry-correctness verdict for a field rule; never raises.
+
+    Empty value -> incomplete ("—"). Every failure carries a bracketed
+    reason so a finding is never a silent pass. A rule with no effective
+    check configured also fails closed with ``[no entry checks configured]``.
+    """
+    p = _lc_params(rule)
+    dotted = "." in str(field or "")
+    if dotted:
+        # Dotted paths ("author.authorIdentifier") address compound children;
+        # a missing/empty leaf fails the rule like the nonempty path does.
+        leaves = _field_path(blocks, block, field) or []
+        texts = [_leaf_text(x) for x in leaves]
+        if not texts or any(not t for t in texts):
+            return False, "—"
+        shown = _leaves_value(leaves)
+        raw = None
+    else:
+        raw = m._field(blocks, block, field)
+        texts = _lc_texts_of(raw)
+        if not texts:
+            return False, "—"
+        shown = m._display_value(raw)
+
+    if not any(_lc_effective(p)):
+        return False, f"{shown} [no entry checks configured]"
+
+    residual = p
+    if p["date_order"] and not dotted:
+        shown_pairs, reason = _lc_date_order(raw, p)
+        if reason:
+            return False, f"{shown_pairs or shown} [{reason}]"
+        shown = shown_pairs or shown
+        # The range check ran; do not charge the same dates twice.
+        residual = dict(p, date_order=False)
+
+    if any(_lc_effective(residual)):
+        reason = _lc_text_checks(
+            texts,
+            residual,
+            per_leaf=dotted,
+        )
+        if reason:
+            return False, f"{shown} [{reason}]"
+    return True, shown
+
+
+def _lc_effective(p: dict[str, Any]) -> list[bool]:
+    return [
+        bool(p["min_length"]), bool(p["regex"]), bool(p["blocklist"]),
+        bool(p["controlled_vocabulary"]), bool(p["not_common_placeholders"]),
+        bool(p["not_all_caps"]), bool(p["date"]), bool(p["url"]),
+        bool(p["date_order"]),
+    ]
+
+
+def _lc_date_order(raw: Any, p: dict[str, Any]) -> tuple[str, str]:
+    """Per item in a compound field: start-named <= end-named children."""
+    items = raw if isinstance(raw, list) else [raw]
+    pairs: list[tuple[str, str]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            item = _unwrap(item)
+        if not isinstance(item, dict):
+            continue
+        start_key = _lc_find_pair_key(item, r"start")
+        end_key = _lc_find_pair_key(item, r"end")
+        if not start_key or not end_key:
+            continue
+        st = _leaf_text(item.get(start_key))
+        en = _leaf_text(item.get(end_key))
+        if st and en:
+            pairs.append((st, en))
+    if not pairs:
+        return "", "no checkable value for date range"
+    shown = "; ".join(f"{st} → {en}" for st, en in pairs[:3])
+    if len(pairs) > 3:
+        shown += f" (+{len(pairs) - 3} more)"
+    for st, en in pairs:
+        d1, d2 = _lc_partial_date(st), _lc_partial_date(en)
+        if d1 is None:
+            return shown, f"date not parseable: {_lc_clip(st)}"
+        if d2 is None:
+            return shown, f"date not parseable: {_lc_clip(en)}"
+        if d1 > d2:
+            return shown, f"date range reversed: {_lc_clip(st)} is after {_lc_clip(en)}"
+    return shown, ""
+
+
 def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any],
                   block: str, field: str, rule: dict[str, Any] | None = None,
                   inventory: list[dict[str, Any]] | None = None) -> tuple[bool, str]:
@@ -714,9 +1010,13 @@ def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any]
     if "." in str(field or ""):
         if handler == "orcid":
             return _orcid_dotted(m, blocks, block, field)
+        if handler == "looks_correct":
+            return _looks_correct(m, blocks, block, field, rule)
         leaves = _field_path(blocks, block, field) or []
         ok = bool(leaves) and all(m._nonempty(_unwrap(x)) for x in leaves)
         return ok, _leaves_value(leaves)
+    if handler == "looks_correct":
+        return _looks_correct(m, blocks, block, field, rule)
     if handler == "nonempty":
         raw = m._field(blocks, block, field)
         return m._nonempty(raw), m._display_value(raw)
