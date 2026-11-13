@@ -1,10 +1,10 @@
 """Metadata checks render as Auto-Checks-style rows (dv-h70).
 
-One card per rule: icon reflecting the outcome, bold caption = the rule's
-label, a one-line verdict sentence, right-aligned badge and a small left
-bar on required rules. Compound fields expand into an inline drawer (one
-block per entry, each subfield as a caption line) instead of a 5-column
-tree. Two rules may share a field — the rows key off the result list.
+One row per rule: outcome icon, the rule's label as the bold caption, a
+one-line verdict sentence, a badge on the right and a left bar on required
+rules. Compound fields expand into an inline drawer (one block per entry;
+each subfield is a caption line). Two rules may share a field — rows key
+off the result list.
 """
 
 from pathlib import Path
