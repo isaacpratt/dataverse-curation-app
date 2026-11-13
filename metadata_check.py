@@ -482,6 +482,7 @@ def check_with_ruleset(
     inventory: list[dict[str, Any]] | None = None,
     staged_dir: Any = None,
     rulesets: dict[str, Any] | None = None,
+    include_unchecked: bool = False,
 ) -> tuple[list[dict], dict[str, Any]]:
     """Full rule evaluation (keeps rule_id/level/pending for the Response pane)."""
     import review_rules as _rr
@@ -490,7 +491,8 @@ def check_with_ruleset(
     # get_ruleset resolves legacy profile names ("McMaster"/"Minimal") and
     # falls back to the default for unknown keys.
     ruleset = _rr.get_ruleset(ruleset_key, pool)
-    return _rr.evaluate_ruleset(metadata or {}, ruleset, inventory, staged_dir), ruleset
+    return _rr.evaluate_ruleset(metadata or {}, ruleset, inventory, staged_dir,
+                                include_unchecked=include_unchecked), ruleset
 
 
 def refresh_profiles_from_rulesets() -> None:

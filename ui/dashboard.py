@@ -100,6 +100,7 @@ COLUMNS: list[tuple[str, str, bool]] = [
     ("total_size_bytes", t("dashboard.columns.total_size_bytes"), True),
     ("state", t("dashboard.columns.state"), True),
     ("curation_label", t("dashboard.columns.curation_label"), True),
+    ("follow_up", t("dashboard.columns.follow_up"), True),
     ("downloaded_at", t("dashboard.columns.downloaded_at"), True),
 ]
 
@@ -121,6 +122,7 @@ _COLUMN_WIDTHS = {
     "total_size_bytes": 90,
     "state": 110,
     "curation_label": 150,
+    "follow_up": 170,
     "downloaded_at": 130,
 }
 
@@ -269,6 +271,62 @@ def _local_downloaded(workspace: Path, persistent_id: str) -> str:
         return _local_downloaded_batch(workspace, [persistent_id]).get(persistent_id, "")
     except Exception:
         return ""
+
+
+def local_follow_ups(workspace: Path) -> dict[str, dict]:
+    """{persistent_id: follow-up} for every open depositor follow-up (dv-5eg).
+
+    One sqlite connect for the whole queue; never raises.
+    """
+    try:
+        from storage import open_state
+
+        if not (Path(workspace) / "state.db").exists():
+            return {}
+        st = open_state(Path(workspace))
+        try:
+            return st.list_follow_ups()
+        finally:
+            st.close()
+    except Exception:
+        return {}
+
+
+def attach_follow_ups(datasets: list, follow_ups: dict[str, dict] | None) -> None:
+    """Stamp each dataset with its follow-up state for the queue column.
+
+    The state is recomputed against the row's ``draft_updated_at`` (the
+    server draft lastUpdateTime enrichment attached), so a newer draft flips
+    an awaiting follow-up to "depositor updated" without another store read.
+    """
+    if not follow_ups:
+        for ds in datasets or []:
+            try:
+                ds.pop("follow_up", None)
+            except Exception:
+                continue
+        return
+    try:
+        import follow_ups as _fu
+    except Exception:  # pragma: no cover - module is part of the app
+        _fu = None
+    for ds in datasets or []:
+        try:
+            pid = str(ds.get("persistent_id") or "")
+            row = follow_ups.get(pid)
+            if not row:
+                ds.pop("follow_up", None)
+                continue
+            state = str(row.get("state") or "")
+            if _fu is not None:
+                state = _fu.state_for(row.get("opened_at"), ds.get("draft_updated_at"))
+            ds["follow_up"] = {
+                "opened_at": str(row.get("opened_at") or ""),
+                "decision_label": str(row.get("decision_label") or ""),
+                "state": state,
+            }
+        except Exception:
+            continue
 
 
 def _decided_ids(workspace: Path) -> set[str]:
@@ -428,7 +486,7 @@ def _merge_enriched_rows(existing: list[dict], batch: list[dict]) -> int:
             try:
                 for key in (
                     "total_size_bytes", "file_count", "depositor",
-                    "state", "has_draft", "size_enriched",
+                    "state", "has_draft", "size_enriched", "draft_updated_at",
                 ):
                     if key not in src:
                         continue
@@ -1060,6 +1118,7 @@ class DashboardView(QWidget):
                         ds["downloaded_at"] = stamps.get(ds.get("persistent_id", ""), "")
                     except Exception:
                         pass
+                attach_follow_ups(self._all_datasets, local_follow_ups(Path(ws)))
                 self._decided_cache = _decided_ids(Path(ws))
             except Exception:
                 pass
@@ -1711,6 +1770,7 @@ class DashboardView(QWidget):
                     ds["downloaded_at"] = stamps.get(ds.get("persistent_id", ""), "")
                 except Exception:
                     pass
+            attach_follow_ups(self._all_datasets, local_follow_ups(Path(ws)))
             self._decided_cache = _decided_ids(Path(ws))
             self._apply_size_cache(self._all_datasets)
             self._apply_filter()
@@ -1800,6 +1860,7 @@ class DashboardView(QWidget):
                     ds["downloaded_at"] = stamps.get(ds.get("persistent_id", ""), "")
                 except Exception:
                     pass
+            attach_follow_ups(datasets, local_follow_ups(Path(ws)))
             try:
                 self._decided_cache = _decided_ids(Path(ws))
             except Exception:
@@ -1925,6 +1986,16 @@ class DashboardView(QWidget):
             return _human_size(raw)
         if key == "state":
             return _display_state(ds.get("state") or "")
+        if key == "follow_up":
+            fu = ds.get("follow_up")
+            if not isinstance(fu, dict) or not fu:
+                return ""
+            if str(fu.get("state") or "") == "depositor_updated":
+                return t("dashboard.follow_up.updated")
+            return t(
+                "dashboard.follow_up.awaiting",
+                date=str(fu.get("opened_at") or "")[:10],
+            )
         v = ds.get(key, "")
         return "" if v is None else str(v)
 
@@ -1944,6 +2015,13 @@ class DashboardView(QWidget):
             except Exception:
                 pass
             return epoch
+        if key == "follow_up":
+            fu = ds.get("follow_up")
+            if not isinstance(fu, dict) or not fu:
+                return 0.0
+            if str(fu.get("state") or "") == "depositor_updated":
+                return 2.0
+            return 1.0
         raw = ds.get(key, "")
         if key in ("file_count", "total_size_bytes"):
             if raw is None or raw == "":

@@ -25,7 +25,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <body>
 <header class="hero"><div class="wrap"><h1>Development</h1><p>Setup, layout, adding a check, parity verification, packaging, conventions. Prerequisites: Python 3.10+ on Windows; R 4.x only for parity verification (optional).</p></div></header>
 <nav class="top"><div class="wrap">
-<a href="index.html">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html" aria-current="page">Development</a><a href="proposals.html">Proposals</a>
+<a href="index.html">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="entry-correctness.html">Entry correctness</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html" aria-current="page">Development</a><a href="proposals.html">Proposals</a>
 </div></nav>
 <main><div class="wrap">
 
@@ -33,7 +33,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <pre><code>uv sync                                     # create/update .venv from uv.lock incl. dev group
 copy config.example.json config.json     # cmd; PowerShell: Copy-Item config.example.json config.json
                                           # Borealis demo preset is the default; edit base_url/api_token/collection
-uv run pytest                            # 513 tests (218 engine + 295 UI; run --collect-only -q for the live count)
+uv run pytest                            # 747 tests (358 engine + 389 UI; run --collect-only -q for the live count)
 uv run python main.py                    # GUI
 uv run python main.py --config path/to/config.json
 uv run python main.py --dataverse https://demo.borealisdata.ca

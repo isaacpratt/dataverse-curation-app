@@ -641,7 +641,7 @@ class CheckWorker(QThread):
 
     def __init__(self, dataset_dir: Path, persistent_id: str, label: str,
                  inventory: list | None = None, metadata: dict | None = None,
-                 parent=None):
+                 client=None, ruleset: dict | None = None, parent=None):
         super().__init__(parent)
         register_worker(self)
         self._dataset_dir = dataset_dir
@@ -649,6 +649,12 @@ class CheckWorker(QThread):
         self._label = label
         self._inventory = inventory
         self._metadata = metadata
+        # Optional Dataverse client (dv-tfy): used to fetch per-file DDI
+        # variable metadata for the coverage check. Never required.
+        self._client = client
+        # Optional ruleset (dv-81q): a dataset-level check honours its
+        # README section rules. None falls back to the built-in defaults.
+        self._ruleset = ruleset
         self._cancel_requested = False
 
     def cancel(self) -> None:
@@ -683,6 +689,26 @@ class CheckWorker(QThread):
                     pass
 
             workers = max(1, min(8, (os.cpu_count() or 4)))
+            # Variable metadata for tabular files (dv-tfy): best-effort DDI
+            # fetch, capped so a large deposit never stalls the check pass.
+            variable_metadata: dict | None = None
+            if self._client is not None and isinstance(self._inventory, list):
+                variable_metadata = {}
+                tabular = [
+                    e for e in self._inventory
+                    if isinstance(e, dict) and e.get("tabular") and e.get("id")
+                ][:50]
+                for entry in tabular:
+                    if self._stop_requested():
+                        break
+                    try:
+                        meta = self._client.get_variable_metadata(str(entry["id"]))
+                    except Exception:
+                        meta = None
+                    if meta:
+                        variable_metadata[
+                            str(entry.get("path") or entry.get("label") or "")
+                        ] = meta
             report = run_report(
                 self._dataset_dir,
                 persistent_id=self._pid,
@@ -693,6 +719,8 @@ class CheckWorker(QThread):
                 is_cancelled=self._stop_requested,
                 inventory=self._inventory,
                 metadata=self._metadata,
+                variable_metadata=variable_metadata,
+                ruleset=self._ruleset,
             )
             if self._stop_requested():
                 self.cancelled.emit()
@@ -829,32 +857,11 @@ class MetadataWorker(QThread):
             if not isinstance(inventory, list):
                 inventory = []
                 inventory_failed = True
-            # Enrich tabular inventory rows with live ingest status/errors
-            # (GET /api/files/{id}/ingestStatus) — best effort, never fails
-            # the metadata load.
-            try:
-                tab_rows = [
-                    e for e in inventory
-                    if isinstance(e, dict) and e.get("tabular") and e.get("id")
-                ]
-                if tab_rows:
-                    def _ingest(row):
-                        try:
-                            return client.get_tabular_ingest_status(str(row.get("id") or ""))
-                        except Exception:
-                            return None
-
-                    from concurrent.futures import ThreadPoolExecutor as _TPE
-
-                    with _TPE(max_workers=4) as pool:
-                        for row, st in zip(tab_rows, pool.map(_ingest, tab_rows), strict=True):
-                            if isinstance(st, dict):
-                                if st.get("status"):
-                                    row["ingest_status"] = str(st["status"])
-                                if st.get("error"):
-                                    row["ingest_error"] = str(st["error"])
-            except Exception:
-                pass
+            # No live ingest-status call: the API has no ingestStatus
+            # endpoint (the dataset file-list payload already carries
+            # ingestStatus/ingestErrorMessage, parsed into the inventory
+            # rows at ingest time). The old best-effort call here hit a
+            # nonexistent endpoint and 404ed once per tabular file.
             curation = results.get("curation")
             if not isinstance(curation, dict):
                 curation = {}

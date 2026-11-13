@@ -53,6 +53,21 @@ def _details_lines(details: dict) -> list[str]:
     return lines
 
 
+def _guidance_lines(result) -> list[str]:
+    """Why-this-matters / how-to-fix block for a failed result (dv-lfn)."""
+    if classify(result) not in ("failed-error", "failed-warning"):
+        return []
+    from engine.checks.guidance import for_result
+
+    rationale, remediation = for_result(result)
+    lines: list[str] = []
+    if rationale:
+        lines.append(f"  - Why this matters: {rationale}")
+    if remediation:
+        lines.append(f"  - How to fix: {remediation}")
+    return lines
+
+
 def render_markdown(report: DatasetReport) -> str:
     lines: list[str] = []
     lines.append(f"# Curation report — {report.label}")
@@ -88,10 +103,12 @@ def render_markdown(report: DatasetReport) -> str:
         lines.append("")
         for result in report.dataset_checks:
             sub = _details_lines(result.details or {})
-            if sub:
+            guide = _guidance_lines(result)
+            if sub or guide:
                 lines.append(f"### `{result.check_id}` details")
                 lines.append("")
                 lines.extend(sub)
+                lines.extend(guide)
                 lines.append("")
     else:
         lines.append("No dataset-level checks ran.")
@@ -139,10 +156,14 @@ def render_markdown(report: DatasetReport) -> str:
             lines.append("")
             for result in entry.checks:
                 sub = _details_lines(result.details or {})
-                if sub:
+                guide = _guidance_lines(result)
+                if sub or guide:
                     lines.append(f"- `{result.check_id}`:")
                     lines.extend(sub)
-            if any((c.details or {}) for c in entry.checks):
+                    lines.extend(guide)
+            if any((c.details or {}) for c in entry.checks) or any(
+                classify(c) in ("failed-error", "failed-warning") for c in entry.checks
+            ):
                 lines.append("")
 
     missing = [

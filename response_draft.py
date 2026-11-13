@@ -5,12 +5,23 @@ every metadata load / check run, and `render_response` whenever the curator
 toggles findings in/out. Placeholders supported in every template:
 
   {field} {rule_label} {value} {message} {path} {check_id}
+  {remediation} {readme_sections}
   {dataset_title} {persistent_id}
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+try:
+    from storage import finding_key as _finding_key
+except Exception:  # pragma: no cover - storage is stdlib-only
+    import hashlib
+
+    def _finding_key(check_id, path="", message=""):  # type: ignore[misc]
+        normalized = " ".join(str(message or "").split())
+        raw = "\x1f".join([str(check_id or ""), str(path or ""), normalized])
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
 def _fmt(template: str, ctx: dict[str, Any]) -> str:
@@ -38,12 +49,22 @@ def _is_skipped(result: Any) -> bool:
 def collect_metadata_sections(ruleset: dict[str, Any],
                                completeness: list[dict[str, Any]],
                                dataset_title: str = "",
-                               persistent_id: str = "") -> list[dict[str, Any]]:
-    """One section per incomplete, non-pending rule finding."""
+                               persistent_id: str = "",
+                               dispositions: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """One section per incomplete, non-pending rule finding.
+
+    ``dispositions`` maps storage.finding_key -> {disposition, note};
+    sections carry their ``finding_key`` plus the recorded ``disposition``,
+    and a "wontfix" finding ships with ``included=False`` so it stays out
+    of the generated letter until the curator re-includes it by hand.
+    """
     sections: list[dict[str, Any]] = []
     for r in completeness or []:
         try:
             if not isinstance(r, dict):
+                continue
+            # Synthesized "skipped" rows (unchecked rules) carry no verdict.
+            if r.get("status") == "skipped":
                 continue
             if r.get("status") == "complete" or r.get("pending"):
                 continue
@@ -57,23 +78,38 @@ def collect_metadata_sections(ruleset: dict[str, Any],
                 "message": str(r.get("value") or "—"),
                 "dataset_title": dataset_title, "persistent_id": persistent_id,
             }
+            rule_id = str(r.get("rule_id") or label)
+            requirement = str(r.get("requirement") or "")
+            fkey = _finding_key(rule_id, "", requirement or label)
+            token = ""
+            try:
+                token = str((dispositions or {}).get(fkey, {}) .get("disposition") or "")
+            except Exception:
+                token = ""
             sections.append({
-                "id": str(r.get("rule_id") or label),
+                "id": rule_id,
                 "kind": "metadata",
                 "label": label,
                 "level": str(r.get("level") or "required"),
-                "requirement": str(r.get("requirement") or ""),
+                "requirement": requirement,
                 "message": _fmt(template, ctx),
                 "template": template,
-                "included": True,
+                "finding_key": fkey,
+                "disposition": token,
+                "included": token != "wontfix",
             })
         except Exception:
             continue
     return sections
 
 
-def collect_filecheck_sections(ruleset: dict[str, Any], report: Any) -> list[dict[str, Any]]:
-    """One section per failed warning/error file or dataset check."""
+def collect_filecheck_sections(ruleset: dict[str, Any], report: Any,
+                               dispositions: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """One section per failed warning/error file or dataset check.
+
+    ``dispositions`` works as in collect_metadata_sections: sections carry
+    ``finding_key`` + ``disposition`` and "wontfix" ships unincluded.
+    """
     sections: list[dict[str, Any]] = []
     if report is None:
         return sections
@@ -84,12 +120,37 @@ def collect_filecheck_sections(ruleset: dict[str, Any], report: Any) -> list[dic
         templates = {}
     fallback = str(templates.get("*") or "{check_id}: {message}")
 
-    def _one(check_id: str, level: str, message: str, path: str) -> None:
+    def _one(check_id: str, level: str, message: str, path: str,
+             details: dict[str, Any] | None = None) -> None:
         template = str(templates.get(check_id) or fallback)
-        ctx = {"check_id": check_id, "message": message, "path": path or "dataset"}
+        try:
+            from engine.checks.guidance import for_check
+
+            remediation = for_check(check_id)[1]
+        except Exception:
+            remediation = ""
+        # {readme_sections} (dv-81q): the README depth check lists exactly
+        # which standard sections are missing; empty for every other check.
+        readme_missing = ""
+        try:
+            missing = (details or {}).get("missing")
+            if isinstance(missing, list):
+                readme_missing = ", ".join(str(m) for m in missing if str(m).strip())
+        except Exception:
+            readme_missing = ""
+        ctx = {
+            "check_id": check_id, "message": message, "path": path or "dataset",
+            "remediation": remediation, "readme_sections": readme_missing,
+        }
         rendered = _fmt(template, ctx)
         if "{path}" not in template and path:
             rendered = f"{rendered} (file: {path})" if not rendered.endswith(f"({path})") else rendered
+        fkey = _finding_key(check_id, path, message)
+        token = ""
+        try:
+            token = str((dispositions or {}).get(fkey, {}).get("disposition") or "")
+        except Exception:
+            token = ""
         sections.append({
             "id": f"filecheck:{check_id}:{path}",
             "kind": "filecheck",
@@ -98,7 +159,9 @@ def collect_filecheck_sections(ruleset: dict[str, Any], report: Any) -> list[dic
             "requirement": f"Automated check {check_id} ({level})",
             "message": rendered,
             "template": template,
-            "included": True,
+            "finding_key": fkey,
+            "disposition": token,
+            "included": token != "wontfix",
         })
 
     try:
@@ -108,7 +171,8 @@ def collect_filecheck_sections(ruleset: dict[str, Any], report: Any) -> list[dic
                     continue
                 if str(getattr(c, "level", "")) not in ("warning", "error"):
                     continue
-                _one(str(c.check_id), str(c.level), str(c.message), "")
+                _one(str(c.check_id), str(c.level), str(c.message), "",
+                     getattr(c, "details", None))
             except Exception:
                 continue
         for f in list(getattr(report, "files", None) or []):
@@ -185,12 +249,15 @@ def build_response(ruleset: dict[str, Any],
                    completeness: list[dict[str, Any]] | None,
                    report: Any = None,
                    dataset_title: str = "",
-                   persistent_id: str = "") -> tuple[str, list[dict[str, Any]]]:
+                   persistent_id: str = "",
+                   dispositions: dict[str, Any] | None = None) -> tuple[str, list[dict[str, Any]]]:
     """Assemble sections + rendered markdown. Never raises."""
     try:
         sections = collect_metadata_sections(ruleset or {}, completeness or [],
-                                             dataset_title, persistent_id)
-        sections += collect_filecheck_sections(ruleset or {}, report)
+                                             dataset_title, persistent_id,
+                                             dispositions=dispositions)
+        sections += collect_filecheck_sections(ruleset or {}, report,
+                                               dispositions=dispositions)
         return render_response(ruleset or {}, sections, dataset_title, persistent_id), sections
     except Exception:
         return "", []

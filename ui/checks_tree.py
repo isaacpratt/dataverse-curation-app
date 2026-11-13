@@ -28,9 +28,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 from engine.status import classify
+from storage import finding_key
+from ui.check_titles import check_summary, check_title
 from ui.i18n import t
 from ui.icons import file_icon, icon, status_icon
-from ui.status_text import badge_text, status_text
+from ui.status_text import status_text
+from ui.widgets import disposition_label
 
 COLUMNS = [
     t("checks.columns.name"),
@@ -113,28 +116,13 @@ def update_carets(model, is_expanded) -> None:
         pass
 
 
-def check_badge_text(result) -> str:
-    return badge_text(result)
+def format_details_tooltip(result, path: str = "") -> str:
+    """Prose tooltip for a check result (dv-r0z); see ui.check_titles."""
+    from ui.check_titles import format_details_tooltip as _tooltip
 
-
-def format_details_tooltip(result) -> str:
-    parts = [
-        f"{result.check_id} [{result.level}]",
-        result.message,
-    ]
-    details = result.details or {}
-    shown = {k: v for k, v in details.items() if k != "skipped"}
-    if details.get("skipped"):
-        reason = details.get("reason") or details.get("required", "")
-        parts.append(t("checks.skipped_reason", reason=reason) if reason else t("checks.skipped"))
-    if shown:
-        import json as _json
-
-        try:
-            parts.append(_json.dumps(shown, indent=1)[:2000])
-        except Exception:
-            parts.append(str(shown)[:2000])
-    return "\n".join(parts)
+    if not path:
+        path = str(getattr(result, "path", "") or "")
+    return _tooltip(result, path)
 
 
 def _human_size(n: int) -> str:
@@ -142,6 +130,35 @@ def _human_size(n: int) -> str:
     from ui.widgets import human_size as _shared
 
     return _shared(n)
+
+
+def variable_coverage(report) -> dict[str, dict[str, int]]:
+    """Per-file ``{labeled, total}`` from the report's var-coverage check.
+
+    The check (dv-tfy) rides its coverage map on the first result's details;
+    returns {} when the check did not run or carried no map.
+    """
+    if report is None:
+        return {}
+    try:
+        results = list(getattr(report, "dataset_checks", []) or [])
+    except Exception:
+        return {}
+    for result in results:
+        if getattr(result, "check_id", "") != "metadata.var_coverage":
+            continue
+        details = getattr(result, "details", None)
+        if not isinstance(details, dict):
+            return {}
+        coverage = details.get("coverage")
+        if isinstance(coverage, dict):
+            return {
+                str(path): dict(cov)
+                for path, cov in coverage.items()
+                if isinstance(cov, dict)
+            }
+        return {}
+    return {}
 
 
 def _new_item(text: str, tooltip: str = "") -> QStandardItem:
@@ -153,13 +170,16 @@ def _new_item(text: str, tooltip: str = "") -> QStandardItem:
 
 
 def build_tree_model(rows, report=None, is_staged=None, human_size=None,
-                     inventory=None) -> QStandardItemModel:
+                     inventory=None, dispositions=None) -> QStandardItemModel:
     """Build the folder>file>check model.
 
     rows: list of (path, size_bytes, fmt, original) like _all_file_rows.
     report: DatasetReport or None (pre-run: file nodes only, no checks).
     is_staged: callable(path) -> bool (staged files render ink, others muted).
     inventory: optional raw inventory list (adds restricted/embargo/ingest notes).
+    dispositions: optional {finding_key: {disposition, note}} (dv-32x) —
+    check nodes with a recorded disposition carry its label in the Scan
+    column and tooltip, and the context menu in dataset_detail edits them.
     """
     model = QStandardItemModel()
     # Titles stay in sentence case, like every other table in the app.
@@ -167,6 +187,7 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
     # text it paints and a narrow column elides instead of clipping.
     model.setHorizontalHeaderLabels([str(c) for c in COLUMNS])
     hs = human_size or _human_size
+    coverage = variable_coverage(report)
     by_path = {}
     if report is not None:
         by_path = {f.path: f for f in report.files}
@@ -257,6 +278,24 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
             # Append restriction/ingest notes to the Scan tooltip too.
             if note:
                 tip = tip + note
+            # Variable-metadata coverage (dv-tfy): a short suffix on the Scan
+            # column plus the exact counts in the tooltip.
+            cov = coverage.get(path)
+            if isinstance(cov, dict):
+                try:
+                    labeled = int(cov.get("labeled") or 0)
+                    total = int(cov.get("total") or 0)
+                except (TypeError, ValueError):
+                    # A stale/hand-written report may carry non-numeric
+                    # coverage; never take down the manifest-tree build.
+                    labeled = total = 0
+                if total or labeled:
+                    scan = scan + t(
+                        "checks.var_coverage_suffix", labeled=labeled, total=total
+                    )
+                    tip = tip + "\n" + t(
+                        "checks.var_coverage_tip", labeled=labeled, total=total
+                    )
             base = path.split("/")[-1]
             name_item = _new_item(base, tip)
             try:
@@ -269,27 +308,49 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
             scan_item = _new_item(scan, tip)
             file_row = [name_item, size_item, fmt_item, scan_item]
             for check in checks:
-                badge = check_badge_text(check)
                 kind = {"passed": "pass", "failed-warning": "warn",
                         "failed-error": "fail", "skipped": "skip"}.get(
                             classify(check), "pass")
+                # Disposition reflection (dv-32x): the label joins the Scan
+                # text so a resolved finding reads as dealt-with at a glance.
+                token = ""
+                try:
+                    token = str(
+                        (dispositions or {})
+                        .get(finding_key(check.check_id, path, check.message), {})
+                        .get("disposition")
+                        or ""
+                    )
+                except Exception:
+                    token = ""
+                # dv-r0z: the row is named for a person ("CSV Openable"), and
+                # the Scan column is a sentence about what was verified — no
+                # check_id, no PASS/WARN badge, no filename the row already
+                # shows. The status still rides on the name cell's icon.
+                scan_text = check_summary(check, path)
+                tip = format_details_tooltip(check, path)
+                if token:
+                    label = disposition_label(token)
+                    scan_text += t("common.separator") + label
+                    tip += "\n" + t("detail.disposition.tree_note", label=label)
                 c_name = _new_item(
-                    check.check_id,
-                    format_details_tooltip(check),
+                    check_title(check.check_id),
+                    tip,
                 )
                 try:
                     c_name.setIcon(status_icon(kind))
                 except Exception:
                     pass
                 c_name.setData(
-                    {"kind": "check", "path": path, "check_id": check.check_id},
+                    {"kind": "check", "path": path, "check_id": check.check_id,
+                     "msg": check.message},
                     _KIND_ROLE,
                 )
                 c_size = _new_item("")
                 c_fmt = _new_item("")
                 c_scan = _new_item(
-                    f"{badge}{t('common.separator')}{check.message}",
-                    format_details_tooltip(check),
+                    scan_text,
+                    tip,
                 )
                 name_item.appendRow([c_name, c_size, c_fmt, c_scan])
             if parent_item is not None:

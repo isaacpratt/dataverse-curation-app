@@ -1667,6 +1667,49 @@ def make_combo(items=None, parent: QWidget | None = None, *, height: int = 36,
     return combo
 
 
+# -- finding dispositions (dv-32x) ----------------------------------------
+# Canonical tokens mirror storage.DISPOSITION_TOKENS; the tuple is
+# duplicated (not imported) so the kit stays free of the storage layer,
+# and a test asserts the two stay identical.
+
+DISPOSITION_TOKENS = ("", "acknowledged", "fix-requested", "wontfix", "blocked")
+
+_DISPOSITION_LABEL_KEYS = {
+    "": "detail.disposition.unset",
+    "acknowledged": "detail.disposition.acknowledged",
+    "fix-requested": "detail.disposition.fix_requested",
+    "wontfix": "detail.disposition.wontfix",
+    "blocked": "detail.disposition.blocked",
+}
+
+
+def disposition_label(token: str) -> str:
+    """Human label for a disposition token (the unset label when unknown)."""
+    return t(_DISPOSITION_LABEL_KEYS.get(str(token or ""), "detail.disposition.unset"))
+
+
+def make_disposition_combo(current: str = "", on_change=None,
+                           parent: QWidget | None = None) -> QComboBox:
+    """Compact disposition dropdown for one finding row.
+
+    current: the stored token ("" = none recorded). on_change(token) fires
+    when the curator picks a different disposition. The initial index is
+    set before the signal is connected, so building a row never fires.
+    """
+    combo = make_combo(
+        [(disposition_label(token), token) for token in DISPOSITION_TOKENS],
+        parent,
+        height=28,
+        min_width=118,
+        tip=t("detail.disposition.combo_tip"),
+    )
+    tokens = list(DISPOSITION_TOKENS)
+    combo.setCurrentIndex(tokens.index(current if current in tokens else ""))
+    if on_change is not None:
+        combo.currentIndexChanged.connect(lambda _i: on_change(combo.currentData()))
+    return combo
+
+
 class PaneFooter(QFrame):
     """Shared Save/Revert footer for stack pages.
 
@@ -1743,6 +1786,9 @@ class WorkflowRail(QWidget):
     """
 
     stepClicked = Signal(str)
+    # The mechanical/practice toggle (dv-sce): the owner persists the
+    # choice and re-derives the steps; the rail just re-renders.
+    viewToggled = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -1752,28 +1798,63 @@ class WorkflowRail(QWidget):
         layout.setSpacing(4)
         self.buttons: dict[str, QPushButton] = {}
         self._indexes: dict[str, int] = {}
-        for i, key in enumerate(STEP_ORDER):
+        self.hint = QLabel("")
+        self.hint.setObjectName("CaptionSM")
+        self.hint.setWordWrap(False)
+        self.hint.setMinimumWidth(0)
+        self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self._toggle = QPushButton("")
+        self._toggle.setObjectName("WorkflowStep")
+        self._toggle.setFlat(True)
+        self._toggle.setCursor(Qt.PointingHandCursor)
+        self._toggle.setMinimumWidth(0)
+        self._toggle.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self._toggle.setToolTip(t("workflow.curated.toggle_tip"))
+        self._toggle.setAccessibleName(t("workflow.curated.toggle_tip"))
+        self._toggle.clicked.connect(lambda _c: self.viewToggled.emit())
+        self._rebuild_steps(list(STEP_ORDER))
+        layout.addWidget(self.hint)
+        layout.addWidget(self._toggle)
+
+    def _rebuild_steps(self, keys: list[str]) -> None:
+        """Rebuild the step buttons for a step set (mechanical or CURATE(D))."""
+        if keys == list(self.buttons):
+            return
+        lay = self.layout()
+        for w in (self.hint, self._toggle):
+            lay.removeWidget(w)
+        while lay.count():
+            item = lay.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.setParent(None)
+                w.deleteLater()
+        self.buttons = {}
+        self._indexes = {}
+        for i, key in enumerate(keys):
             self._indexes[key] = i + 1
             btn = QPushButton("")
             btn.setObjectName("WorkflowStep")
             btn.setFlat(True)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setMinimumWidth(0)
+            # Ignored horizontally: seven CURATE(D) steps must compress
+            # inside the app's 960px floor instead of forcing the window.
+            btn.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
             btn.clicked.connect(lambda _c, k=key: self.stepClicked.emit(k))
-            layout.addWidget(btn)
+            lay.addWidget(btn)
             self.buttons[key] = btn
-            if i < len(STEP_ORDER) - 1:
+            if i < len(keys) - 1:
                 connector = QLabel("\u203a")
                 connector.setObjectName("WorkflowSeparator")
-                layout.addWidget(connector)
-        layout.addStretch(1)
-        self.hint = QLabel("")
-        self.hint.setObjectName("WorkflowHint")
-        self.hint.setWordWrap(False)
-        self.hint.setMinimumWidth(0)
-        self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.hint.setObjectName("CaptionSM")
-        layout.addWidget(self.hint)
+                lay.addWidget(connector)
+        lay.addStretch(1)
+        lay.addWidget(self.hint)
+        lay.addWidget(self._toggle)
+
+    def set_toggle_label(self, text: str) -> None:
+        """Show the name of the view the toggle switches TO."""
+        self._toggle.setText(text)
 
     @staticmethod
     def _style_for(state: str) -> str:
@@ -1782,11 +1863,12 @@ class WorkflowRail(QWidget):
 
     def set_workflow(self, workflow: Workflow) -> None:
         """Paint each step and the next-step hint; never disables a step."""
+        self._rebuild_steps([step.key for step in workflow.steps])
         for step in workflow.steps:
             btn = self.buttons.get(step.key)
             if btn is None:
                 continue
-            number = str(self._indexes.get(step.key, 0))
+            number = step.badge or str(self._indexes.get(step.key, 0))
             done = step.state == "done"
             # Done steps lead with the app's Lucide check, not a text
             # glyph; the number stays for every other state.

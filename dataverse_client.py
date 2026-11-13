@@ -467,6 +467,25 @@ def _version_files_data(data: Any) -> dict[str, Any]:
         return {}
 
 
+def _version_last_update(data: Any) -> str:
+    """Best-effort version ``lastUpdateTime`` from a version payload (dv-5eg).
+
+    Used to tell whether the depositor touched the draft since a
+    revisions-requested decision; "" when the server did not say.
+    """
+    try:
+        version_data = _version_files_data(data)
+        if isinstance(version_data, dict):
+            ts = str(version_data.get("lastUpdateTime") or "")
+            if ts:
+                return ts
+        if isinstance(data, dict):
+            return str(data.get("lastUpdateTime") or "")
+    except Exception:
+        pass
+    return ""
+
+
 def _summarize_version_data(data: Any) -> tuple[list[dict[str, Any]], str, str, bool]:
     """Best-effort (files, depositor, versionState, files_known) from a payload.
 
@@ -1240,7 +1259,7 @@ class DataverseClient:
                 if not response.ok:
                     get_app_log().error(f"GET {response.url} → {status}: {response.text[:300]}")
                 response.raise_for_status()
-                return response.text
+                return str(response.text)
             except requests.HTTPError as exc:
                 delay = _throttle_delay(exc)
                 if delay is not None and attempt < 2:
@@ -2141,6 +2160,40 @@ class DataverseClient:
         data: dict[str, Any] = payload.get("data", {})
         return data
 
+    def get_variable_metadata(self, file_id: str) -> dict[str, dict[str, str]] | None:
+        """Variable-level metadata for one tabular file, from its DDI.
+
+        Returns ``{variable name: {"label": str, "type": str}}`` (label may
+        be empty), or None when the fetch/parse fails — callers treat None
+        as "unknown coverage", never as "no documentation".
+        """
+        try:
+            text = self._get_text(f"/api/access/datafile/{file_id}/metadata/ddi")
+            import xml.etree.ElementTree as ET
+
+            root = ET.fromstring(text)
+        except Exception:
+            return None
+        out: dict[str, dict[str, str]] = {}
+        try:
+            for var in root.iter():
+                tag = var.tag.rsplit("}", 1)[-1]
+                if tag != "var":
+                    continue
+                name = str(var.get("name") or "").strip()
+                if not name:
+                    continue
+                label = ""
+                intrvl = str(var.get("intrvl") or "")
+                for child in var:
+                    ctag = child.tag.rsplit("}", 1)[-1]
+                    if ctag == "labl":
+                        label = (child.text or "").strip()
+                out[name] = {"label": label, "type": intrvl}
+        except Exception:
+            return None
+        return out or None
+
     def get_guestbook(self, guestbook_id: int | str) -> dict[str, Any]:
         """Fetch one guestbook definition (required fields + custom questions).
 
@@ -2315,7 +2368,10 @@ class DataverseClient:
                 pid, fall_back_on_auth=True
             )
             files, depositor, state, files_known = _summarize_version_data(data)
-            return ds, (files, depositor, state, used_version, files_known)
+            return ds, (
+                files, depositor, state, used_version, files_known,
+                _version_last_update(data),
+            )
 
         def _auth_denied(exc: BaseException) -> bool:
             try:
@@ -2350,7 +2406,12 @@ class DataverseClient:
                             break
                         continue
                     try:
-                        files, depositor, state, used_version, files_known = summary
+                        (
+                            files, depositor, state, used_version, files_known,
+                            last_update,
+                        ) = summary
+                        if last_update:
+                            ds["draft_updated_at"] = last_update
                         if files_known:
                             ds["total_size_bytes"] = sum(
                                 int(f.get("size_bytes") or 0) for f in files
@@ -2613,29 +2674,11 @@ class DataverseClient:
             )
         return dest
 
-    def get_tabular_ingest_status(self, file_id: str) -> dict[str, Any]:
-        """Tabular ingest status for one file (GET /api/files/{id}/ingestStatus).
-
-        Returns {"status": str, "error": str} with "" on unavailable/failed
-        calls — never raises (ingest status is advisory UI data).
-        """
-        try:
-            payload = self._get_json(f"/api/files/{file_id}/ingestStatus")
-        except Exception:
-            return {"status": "", "error": ""}
-        data = payload.get("data") if isinstance(payload, dict) else None
-        if not isinstance(data, dict):
-            return {"status": "", "error": ""}
-        status = str(
-            data.get("status") or data.get("ingestStatus") or data.get("state") or ""
-        )
-        error = str(
-            data.get("errorMessage")
-            or data.get("error")
-            or data.get("ingestError")
-            or ""
-        )
-        return {"status": status, "error": error}
+    # Note: there is deliberately no live ingest-status call here. The
+    # Dataverse Native API has no /files/{id}/ingestStatus endpoint (the
+    # ingest status ships inside the file-list payload, parsed in
+    # `records` above as ingest_status/ingest_error). The old advisory
+    # call had no valid target and 404ed on every invocation.
 
     def download_datafile_original(
         self,

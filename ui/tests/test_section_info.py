@@ -55,6 +55,6 @@ def test_dataset_sections_get_info_tips_and_no_legend(qapp):
         assert "per-file passes live in File Manifest" in auto_help
         assert "✓ pass · ✕ issue" in auto_help
         assert not hasattr(view, "_auto_legend"), "the inline legend moved to the tooltip"
-        assert len(_tips(view._response_page)) == 3
+        assert len(_tips(view._response_page)) == 4
     finally:
         view.deleteLater()
