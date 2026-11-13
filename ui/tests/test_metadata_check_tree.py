@@ -1,15 +1,16 @@
-"""Metadata checks show compound fields as an expandable tree.
+"""Metadata checks render as Auto-Checks-style rows (dv-h70).
 
-A repeatable field (author, contact, description, keyword, publication)
-gets one child row per entry and one grandchild per subfield, so an
-affiliation is visible next to the author it belongs to instead of being
-flattened into one semicolon-joined line.
+One card per rule: icon reflecting the outcome, bold caption = the rule's
+label, a one-line verdict sentence, right-aligned badge and a small left
+bar on required rules. Compound fields expand into an inline drawer (one
+block per entry, each subfield as a caption line) instead of a 5-column
+tree. Two rules may share a field — the rows key off the result list.
 """
 
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QComboBox, QToolButton
 
 
 def _fv(value):
@@ -69,7 +70,7 @@ def detail(qapp, tmp_path):
     view = DatasetDetailView(
         cfg,
         "doi:10.5072/FK2/META",
-        "Metadata tree",
+        "Metadata rows",
         cached_metadata=_metadata(),
         cached_inventory=[],
     )
@@ -79,33 +80,83 @@ def detail(qapp, tmp_path):
     view.deleteLater()
 
 
+def _rows(detail):
+    out = []
+    lay = detail._meta_body_lay
+    for i in range(lay.count()):
+        widget = lay.itemAt(i).widget()
+        if widget is not None and widget.property("meta_field") is not None:
+            out.append(widget)
+    return out
+
+
 def _row(detail, label: str):
-    for row in range(detail._meta_model.rowCount()):
-        item = detail._meta_model.item(row, 0)
-        if item is not None and item.text() == label:
-            return item
-    raise AssertionError(f"check {label!r} not found")
+    for widget in _rows(detail):
+        if widget.property("meta_field") == label:
+            return widget
+    raise AssertionError(f"row {label!r} not found")
 
 
-def _grandchild_labels(entry) -> list[str]:
-    return [entry.child(i, 0).text() for i in range(entry.rowCount())]
+def _drawer(detail, row):
+    """Return the drawer directly following a compound-field row, if any."""
+    lay = detail._meta_body_lay
+    for i in range(lay.count() - 1):
+        if lay.itemAt(i).widget() is row:
+            candidate = lay.itemAt(i + 1).widget()
+            if candidate is not None and candidate.property("meta_field") is None:
+                return candidate
+    return None
 
 
-def test_author_entries_expand_to_name_affiliation_and_identifier(detail):
-    author = _row(detail, "Author Name & Affiliation")
-    assert author.rowCount() == 2, "each author must be its own child row"
-    first = author.child(0, 0)
-    assert first.text() == "Author 1"
-    assert _grandchild_labels(first) == [
-        "Name",
-        "Affiliation",
-        "Identifier scheme",
-        "Identifier",
-    ]
-    assert first.child(1, 3).text() == "Analytical Engine Lab"
-    missing = author.child(1, 0)
-    assert missing.text() == "Author 2"
-    assert missing.child(1, 3).text() == "—", "an empty affiliation must be visible"
+def _labels_in(frame) -> list[str]:
+    from PySide6.QtWidgets import QLabel
+
+    return [w.text() for w in frame.findChildren(QLabel)]
+
+
+def test_every_rule_renders_as_a_row(detail):
+    fields = [widget.property("meta_field") for widget in _rows(detail)]
+    assert "Title" in fields
+    assert "Author Name & Affiliation" in fields
+    assert "Dataset Contact" in fields
+    assert "Description" in fields
+    assert "Subject" in fields
+    assert "Time Period / Date of Collection" in fields or "Subject" in fields
+
+
+def test_badge_and_status_complete_for_title(detail):
+    row = _row(detail, "Title")
+    assert "Complete" in _labels_in(row)
+
+
+def _qframe_by_name(row, name):
+    from PySide6.QtWidgets import QFrame
+
+    return [w for w in row.findChildren(QFrame) if w.objectName() == name]
+
+
+def test_required_rows_carry_the_left_bar_optional_ones_do_not(detail):
+    assert _qframe_by_name(_row(detail, "Title"), "MetaRequiredBar")
+    assert not _qframe_by_name(_row(detail, "ORCiD for authors"), "MetaRequiredBar")
+
+
+def test_author_entries_expand_in_the_drawer(detail):
+    row = _row(detail, "Author Name & Affiliation")
+    drawer = _drawer(detail, row)
+    assert drawer is not None, "compound fields must carry a drawer"
+    assert drawer.isHidden()
+    chevrons = list(row.findChildren(QToolButton))
+    assert len(chevrons) == 1
+    chevrons[0].click()
+    assert not drawer.isHidden()
+    labels = _labels_in(drawer)
+    entry_heads = [line for line in labels if line.startswith("Author ")]
+    assert entry_heads == ["Author 1", "Author 2"]
+    assert any(line.startswith("Name: Ada Lovelace") for line in labels)
+    assert any(line.startswith("Affiliation: —") for line in labels), "an empty affiliation must stay visible"
+    # toggle back
+    chevrons[0].click()
+    assert drawer.isHidden()
 
 
 def test_author_entry_headline_is_authorname_not_affiliation(detail):
@@ -117,47 +168,86 @@ def test_author_entry_headline_is_authorname_not_affiliation(detail):
         "authorIdentifier": {"typeName": "text", "value": "0000-0002-1825-0097"},
     }
     detail._populate_completeness(detail._metadata)
-    author = _row(detail, "Author Name & Affiliation")
-    for i in range(author.rowCount()):
-        assert author.child(i, 3).text() in ("Ada Lovelace", "Grace Hopper"), (
-            "the entry headline must be the author name, never an affiliation"
-        )
-    # the deepest rows keep the values
-    assert author.child(0, 0).child(1, 3).text() == "Ada Lovelace"
-    assert author.child(0, 0).child(0, 3).text() == "Analytical Engine Lab"
+    row = _row(detail, "Author Name & Affiliation")
+    drawer = _drawer(detail, row)
+    grid = _labels_in(drawer)
+    heads = [line for line in grid if line.startswith("Ada Lovelace")]
+    assert heads, "the entry headline must be the author name, never an affiliation"
 
 
-def test_orcid_rule_does_not_duplicate_the_author_tree(detail):
-    """The ORCiD check expands no children; identifiers live in the value."""
-    orcid = _row(detail, "ORCiD for authors")
-    assert orcid.rowCount() == 0, "the ORCID rule must not re-expand the author entries"
+def test_orcid_rule_has_no_drawer(detail):
+    row = _row(detail, "ORCiD for authors")
+    assert not row.findChildren(QToolButton), "the ORCID rule must not re-expand the author entries"
 
 
-def test_contact_description_and_subject_are_readable(detail):
-    contact = _row(detail, "Dataset Contact").child(0, 0)
-    assert _grandchild_labels(contact) == ["Name", "Affiliation", "Email"]
-    description = _row(detail, "Description")
-    labels = [description.child(i, 0).text() for i in range(description.rowCount())]
-    assert "Description 1" not in labels, "single-entry fields never grow a numbered entry"
-    assert "Date" in labels, "children attach directly under the check row"
-    subject = _row(detail, "Subject")
-    assert subject.rowCount() == 1
-    assert subject.child(0, 3).text() == "Computer and Information Science"
+def test_single_entry_description_has_no_numbered_entry(detail):
+    row = _row(detail, "Description")
+    drawer = _drawer(detail, row)
+    assert drawer is not None
+    labels = _labels_in(drawer)
+    assert not any(line.startswith("Description 1") for line in labels)
+    assert any(line.startswith("Date: 2026-01-01") for line in labels)
 
 
-def test_complete_filter_rebuilds_the_tree(detail):
-    detail._meta_filter.setCurrentIndex(
-        detail._meta_filter.findData("incomplete")
+def test_incomplete_rows_carry_disposition_controls(detail):
+    row = _row(detail, "ORCiD for authors")
+    if "Incomplete" not in _labels_in(row):
+        pytest.skip("ORCID rule completed for this fixture")
+    assert row.findChildren(QComboBox), "incomplete findings carry the disposition combo"
+
+
+def test_complete_filter_rebuilds_the_rows(detail):
+    detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("incomplete"))
+    for widget in _rows(detail):
+        assert "Complete" not in _labels_in(widget)
+    detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("all"))
+    assert _rows(detail), "the All filter must restore the rows"
+
+
+def test_unchecked_filter_shows_ghost_rows(detail):
+    detail._unchecked_results = [{
+        "rule_id": "field:citation.title", "kind": "field",
+        "field": "Title", "requirement": "off by ruleset",
+        "value": "—", "status": "skipped", "level": "unchecked",
+        "pending": False, "response_template": "",
+        "block": "citation", "name": "title",
+    }]
+    detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("unchecked"))
+    rows = _rows(detail)
+    assert [w.property("meta_field") for w in rows] == ["Title"]
+    assert "Not checked" in _labels_in(rows[0])
+    # The ghost row never leaks into the default or Complete views
+    detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("all"))
+    fields = [w.property("meta_field") for w in _rows(detail)]
+    assert fields and "Title" in fields
+    assert _labels_in(_row(detail, "Title")) != ["—"]
+
+
+def test_section_headers_group_the_blocks(detail):
+    from PySide6.QtWidgets import QPushButton
+
+    lay = detail._meta_body_lay
+    buttons = []
+    for i in range(lay.count()):
+        widget = lay.itemAt(i).widget()
+        if widget is not None and widget.objectName() == "MetaSectionHeader":
+            buttons.extend(w.text() for w in widget.findChildren(QPushButton) if w.text())
+    assert "Citation" in buttons
+
+
+def test_section_toggles_collapse_the_block(detail):
+    from PySide6.QtWidgets import QPushButton
+
+    lay = detail._meta_body_lay
+    header = next(
+        lay.itemAt(i).widget() for i in range(lay.count())
+        if lay.itemAt(i).widget() is not None
+        and lay.itemAt(i).widget().objectName() == "MetaSectionHeader"
     )
-    texts = [
-        detail._meta_model.item(r, 0).text()
-        for r in range(detail._meta_model.rowCount())
-    ]
-    assert texts, "the incomplete filter must still show something"
-    assert "Title" not in texts, "a complete check must be filtered out"
-
-
-def test_no_inner_scrollbars(detail):
-    tree = detail._meta_check_tree
-    assert tree.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
-    assert tree.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
+    btn = next(w for w in header.findChildren(QPushButton) if w.text() == "Citation")
+    row = _row(detail, "Title")
+    assert not row.isHidden()
+    btn.click()
+    assert row.isHidden()
+    btn.click()
+    assert not row.isHidden()

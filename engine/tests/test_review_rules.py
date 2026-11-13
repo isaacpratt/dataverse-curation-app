@@ -51,6 +51,21 @@ def test_unchecked_field_is_skipped():
     assert not any(r["field"] == "Subject" for r in res)
 
 
+def test_include_unchecked_synthesizes_skipped_rows():
+    rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
+    for fr in rs["field_rules"]:
+        if fr["field"] == "subject":
+            fr["level"] = "unchecked"
+    res = rr.evaluate_ruleset(_meta([_f("title", "T")]), rs, [], include_unchecked=True)
+    row = next(r for r in res if r["field"] == "Subject")
+    assert row["status"] == "skipped"
+    assert row["level"] == "unchecked"
+    assert row["value"] == "—"
+    # And they never leak in by default
+    res = rr.evaluate_ruleset(_meta([_f("title", "T")]), rs, [])
+    assert not any(r["field"] == "Subject" for r in res)
+
+
 def test_optional_missing_stays_incomplete_with_level():
     rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
     res = rr.evaluate_ruleset(_meta([]), rs, [])

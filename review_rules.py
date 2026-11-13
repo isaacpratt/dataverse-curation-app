@@ -1471,8 +1471,16 @@ def evaluate_content_rule(rule: dict[str, Any], metadata: dict[str, Any],
 
 def evaluate_ruleset(metadata: dict[str, Any], ruleset: dict[str, Any],
                       inventory: list[dict[str, Any]] | None = None,
-                      staged_dir: Any = None) -> list[dict[str, Any]]:
-    """Run every enabled rule. 'unchecked' field rules are skipped. Never raises."""
+                      staged_dir: Any = None,
+                      include_unchecked: bool = False) -> list[dict[str, Any]]:
+    """Run every enabled rule. Never raises.
+
+    ``'unchecked'`` field rules are skipped by default — no rule runs on a
+    field the curator said not to check. With ``include_unchecked=True`` a
+    display-only ``status="skipped"`` row is synthesized for each unchecked
+    rule (level ``unchecked``, value ``—``) so the UI can offer a "not
+    checked" view; they carry no verdict and no disposition key.
+    """
     results: list[dict[str, Any]] = []
     try:
         blocks = _blocks(metadata or {})
@@ -1492,6 +1500,22 @@ def evaluate_ruleset(metadata: dict[str, Any], ruleset: dict[str, Any],
             if not isinstance(fr, dict):
                 continue
             if (fr.get("level") or "required") == "unchecked":
+                if include_unchecked:
+                    block = str(fr.get("block") or "citation")
+                    field = str(fr.get("field") or "")
+                    handler = str(fr.get("handler") or "nonempty")
+                    rule_id = f"field:{block}.{field}"
+                    if handler != "nonempty":
+                        rule_id += f":{handler}"
+                    results.append({
+                        "rule_id": rule_id,
+                        "kind": "field", "field": str(fr.get("label") or field),
+                        "requirement": str(fr.get("requirement") or ""),
+                        "value": "—", "status": "skipped",
+                        "level": "unchecked", "pending": False,
+                        "response_template": str(fr.get("response_template") or ""),
+                        "block": block, "name": field,
+                    })
                 continue
             block = str(fr.get("block") or "citation")
             field = str(fr.get("field") or "")
