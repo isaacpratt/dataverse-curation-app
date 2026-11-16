@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+# Tag-only workflow. It builds both artefacts, smokes them, and attaches
+# the windows build to a GitHub Release. ci.yml is untouched (read-only).
+permissions:
+  contents: read
+
+# Concurrency: never cancel a release build midway.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write   # this job creates the GitHub Release
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Lockfile check
+        run: uv lock --check
+      - name: Install
+        run: uv sync --locked --group dev
+      - name: Tag must match pyproject version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches.Groups[1].Value
+          if ("v$version" -ne $tag) {
+            throw "Tag $tag does not match pyproject version v$version"
+          }
+
+      - name: Build both artefacts
+        run: uv run --group dev poe build
+      - name: Smoke the lite exe
+        run: uv run --group dev poe smoke
+      - name: License inventory
+        run: uv run --group dev poe license-report
+        continue-on-error: true
+      - name: SBOM (CycloneDX)
+        run: uv run --group dev poe sbom
+
+      - name: Zip release artefacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist_release | Out-Null
+          Compress-Archive -Path dist/curation-app-lite -DestinationPath dist_release/curation-app-lite.zip -Force
+          Compress-Archive -Path dist/curation-app-full -DestinationPath dist_release/curation-app-full.zip -Force
+          Copy-Item dist/sbom.cdx.json dist_release/sbom.cdx.json -Force
+          Copy-Item dist/licenses.md dist_release/licenses.md -Force
+          $checksums = Get-ChildItem dist_release -File | ForEach-Object {
+            $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower()
+            "$hash  $($_.Name)"
+          }
+          $checksums | Set-Content -Encoding ASCII dist_release/SHA256SUMS.txt
+          Get-Content dist_release/SHA256SUMS.txt
+
+      - name: Release notes from CHANGELOG
+        id: notes
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $changelog = Get-Content CHANGELOG.md -Raw
+          $pattern = "(?ms)## \[$([regex]::Escape($tag.TrimStart('v')))\].*?(?=^## \[|\z)"
+          $match = [regex]::Match($changelog, $pattern)
+          if ($match.Success) {
+            $body = $match.Value.Trim()
+          } else {
+            $body = "Release $tag. See CHANGELOG.md for details."
+          }
+          $body | Out-File -FilePath dist_release/RELEASE_NOTES.md -Encoding utf8
+          Write-Host "notes ready ($($body.Length) chars)"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release create $tag `
+            dist_release/curation-app-lite.zip `
+            dist_release/curation-app-full.zip `
+            dist_release/sbom.cdx.json `
+            dist_release/licenses.md `
+            dist_release/SHA256SUMS.txt `
+            --title "Dataverse Docent $tag" `
+            --notes-file dist_release/RELEASE_NOTES.md
