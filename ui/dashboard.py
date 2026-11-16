@@ -1642,7 +1642,7 @@ class DashboardView(QWidget):
         return jobs
 
     def _build_queue_context_menu(self) -> QMenu:
-        """The queue's right-click menu (dv-9m2).
+        """Build the queue's right-click menu (dv-9m2).
 
         One item while idle: bulk-run file checks for the visible rows
         (the painting window, never beyond). While a bulk run is in

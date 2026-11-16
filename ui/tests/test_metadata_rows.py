@@ -181,7 +181,7 @@ def test_orcid_rule_has_no_drawer(detail):
 
 @pytest.fixture
 def pending_detail(qapp, tmp_path, monkeypatch):
-    """A view whose ruleset includes a file-content rule with nothing staged.
+    """Yield a view whose ruleset includes a file-content rule with nothing staged.
 
     That rule cannot be evaluated (no staged dir), so the engine returns a
     pending row — a real gap, not a finding; the row must not read as one.
