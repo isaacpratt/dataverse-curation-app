@@ -27,21 +27,29 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
-      # checkout v5 and setup-python v6 run on Node 24; the v4/v5 pair
-      # targeted Node 20, which GitHub now forces onto a newer runtime and
-      # reports as a deprecation warning on every run.
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      # checkout v5, setup-python v6 and setup-uv v10.3.3 are pinned to
+      # commit SHAs (with the tag they moved to recorded) — tags are
+      # mutable, SHAs are not. Note: the bare `v10` tag no longer exists
+      # on astral-sh/setup-uv; v10.3.3 is the current v10 release.
+      # checkout v5 and setup-python v6 run on Node 24; earlier pairs
+      # targeted Node 20, which GitHub now forces onto a newer runtime
+      # and reports as a deprecation warning on every run.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - name: Lockfile check
         run: uv lock --check
       - name: Install
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
+      - name: Workflow lint (actionlint)
+        run: uv run --group dev actionlint
+      - name: Dependency vulnerability scan (uv.lock via OSV)
+        run: uv run --group dev python tools/audit_deps.py
       - name: Commit hygiene (pre-commit)
         run: uv run --group dev pre-commit run --all-files
       - name: Lint
@@ -65,18 +73,18 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
-      # Same action versions as the test job (Node 24).
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      # Same pinned actions as the test job (Node 24).
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - name: Lockfile check
         run: uv lock --check
       - name: Install
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
       - name: UI probes
         run: uv run --group dev python tools/probes/run_all.py
