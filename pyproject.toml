@@ -77,7 +77,10 @@ source = ["engine", "ui", "storage", "config", "applog", "download_manager", "da
 branch = true
 
 [tool.coverage.report]
-fail_under = 60
+# Floor locked at 65 to prevent regression from the measured 68.9%
+# (engine subset 77.3%, gated at 75 in CI). Raise toward 75 as UI
+# coverage improves - see dv-hcg.7 for the path.
+fail_under = 65
 show_missing = true
 
 [tool.poe.executor]

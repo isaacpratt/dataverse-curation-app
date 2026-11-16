@@ -57,7 +57,7 @@ jobs:
       - name: Type check
         run: uv run --group dev mypy
       - name: Tests
-        run: uv run --group dev python -m pytest -q --cov=engine --cov-report=term-missing
+        run: uv run --group dev python -m pytest -q --cov=engine --cov-report=term-missing --cov-fail-under=75
       - name: Compile check
         run: uv run --group dev python -m compileall -q engine dataverse_client.py download_manager.py storage.py config.py main.py
       - name: Headless smoke
