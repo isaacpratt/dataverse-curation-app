@@ -66,10 +66,13 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["engine/tests", "ui/tests"]
-addopts = "-q"
+addopts = "-q --strict-markers"
 qt_api = "pyside6"
+xfail_strict = true
+# RuntimeWarning is no longer silenced repo-wide: numerical oddities in a
+# file-format checker should be visible. Narrow exceptions belong to the
+# specific test that needs them, added on sight with a reason.
 filterwarnings = [
-    "ignore::RuntimeWarning",
 ]
 
 [tool.coverage.run]
