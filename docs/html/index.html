@@ -136,7 +136,8 @@ uv run python main.py --headless &lt;staged_dir&gt; --out report.json --format j
 │   ├── runner.py         # run_report / run_report_to_file / list_planned_checks
 │   └── tests/            # pytest suite (212 tests)
 ├── ui/                   # PySide6 views (21 modules, 242 tests)
-├── dataverse_client.py   # Native/Search API client
+├── client/                # client package: constants, errors, http, parsers, caches, downloads, DataverseClient
+├── dataverse_client.py  # thin shim re-exporting client/ (existing imports keep working)
 ├── download_manager.py   # approval-gated downloads + verify
 ├── metadata_check.py     # citation-block completeness (McMaster / Minimal)
 ├── review_rules.py       # versioned review rulesets (v2)

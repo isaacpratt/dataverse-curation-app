@@ -19,7 +19,8 @@ dataverse-curation-app/
 │   ├── gallery.py        # the component gallery: every kit component on one page
 │   └── table_layout.py   # one layout controller per table header (persists user gestures only)
 ├── tools/probes/         # offscreen UI probes (queue columns, manifest columns, page headings, card corner, buttons, gallery)
-├── dataverse_client.py   # Native/Search API client (total-driven paginated search + pooled inventory enrichment, versions/compare/timestamps/notifications/curation labels)
+├── client/               # Native/Search API client (constants/errors/http/parsers/caches/downloads/DataverseClient; total-driven paginated search + pooled inventory enrichment, versions/compare/timestamps/notifications/curation labels)
+├── dataverse_client.py   # compatibility shim re-exporting client/ (existing imports keep working)
 ├── download_manager.py   # approval-gated downloads, originals, skip-if-staged, verify (ok/problems/warnings)
 ├── metadata_check.py     # citation-block completeness (McMaster / Minimal profiles)
 ├── applog.py             # in-memory request log (Log page)

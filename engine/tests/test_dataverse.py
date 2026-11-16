@@ -661,7 +661,7 @@ def test_top_level_collection():
 
 
 def test_allowed_labels_shared_cache_isolation(monkeypatch):
-    import dataverse_client as _dc
+    import client.caches as _dc
 
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
     set_cached_allowed_labels("https://demo.test", "mcmaster", ["A", "B"])
@@ -682,7 +682,7 @@ def test_allowed_labels_shared_cache_isolation(monkeypatch):
 
 
 def test_fetch_allowed_labels_shared_single_call(monkeypatch):
-    import dataverse_client as _dc
+    import client.caches as _dc
 
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
     calls: list[str] = []
@@ -702,7 +702,7 @@ def test_fetch_allowed_labels_shared_single_call(monkeypatch):
 
 
 def test_fetch_allowed_labels_shared_bounds_attempts(monkeypatch):
-    import dataverse_client as _dc
+    import client.caches as _dc
 
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
     calls: list[str] = []
@@ -720,7 +720,7 @@ def test_fetch_allowed_labels_shared_bounds_attempts(monkeypatch):
 
 
 def test_allowed_labels_disk_cache_roundtrip(tmp_path):
-    import dataverse_client as _dc
+    import client.caches as _dc
 
     _dc._ALLOWED_LABELS_CACHE.pop(("https://demo.test", "mcmaster"), None)
     write_allowed_labels_cache(tmp_path, "https://demo.test", "mcmaster", ["A", "B"])
@@ -771,7 +771,7 @@ def test_allowed_labels_disk_cache_roundtrip(tmp_path):
 
 def test_allowed_probe_answered_tracks_server_answers(monkeypatch):
     """Only HTTP-200 rounds count as answered (stamp-worthy)."""
-    import dataverse_client as _dc
+    import client.caches as _dc
 
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
 
@@ -931,7 +931,7 @@ def test_is_draft_dataset():
 
 
 def test_get_me_returns_profile_and_caches(monkeypatch):
-    import dataverse_client as _dc
+    import client.caches as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
     calls: list[str] = []
@@ -961,7 +961,7 @@ def test_get_me_returns_profile_and_caches(monkeypatch):
 def test_get_me_denied_is_none_without_caching(monkeypatch):
     import requests
 
-    import dataverse_client as _dc
+    import client.caches as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
 
@@ -978,7 +978,7 @@ def test_get_me_denied_is_none_without_caching(monkeypatch):
 
 
 def test_get_collection_roles_matches_me_identifier(monkeypatch):
-    import dataverse_client as _dc
+    import client.caches as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
     monkeypatch.setattr(_dc, "_ROLE_CACHE", {})
@@ -1012,7 +1012,7 @@ def test_get_collection_roles_matches_me_identifier(monkeypatch):
 def test_get_collection_roles_denied_or_empty(monkeypatch):
     import requests
 
-    import dataverse_client as _dc
+    import client.caches as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
     monkeypatch.setattr(_dc, "_ROLE_CACHE", {})

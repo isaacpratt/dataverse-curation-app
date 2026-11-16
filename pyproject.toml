@@ -256,7 +256,7 @@ files = [
     "applog.py",
     "metadata_check.py",
     "review_rules.py",
-    "dataverse_client.py",
+    "client",
     "download_manager.py",
     "storage.py",
 ]
