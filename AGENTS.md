@@ -46,11 +46,14 @@ Requirements: Python 3.10+ (Windows recommended); builds pin Python 3.11 via `.p
 ## Packaging (portable)
 
 ```bash
-poe build          # both: lite onedir + full onedir folder in dist/
-poe build-lite     # lite folder only; incremental, keeps dist/curation-app-full/
-poe build-full     # onedir folder only
+poe build          # the shipped artefact: full onedir + example config (~55 s)
+poe build-all      # both artefacts (lite + full + example config, ~110 s)
+poe build-lite     # lite folder only (~50 s; the portable zip artefact)
+poe build-full     # full folder only (~55 s; the installer payload)
 poe smoke          # lite smoke test: --headless --help + frozen CSV/PII probe
 ```
+
+PyInstaller flags (hidden imports, excludes, icon, assets) live in `tools/build_app.py`, one list for both variants; it prints the wall time and artefact size. Do not rebuild for ordinary development - `uv run python main.py` starts in ~1.7 s and runs the same code; freeze only to verify frozen behaviour. `--clean` is deliberately absent: analysis re-runs anyway (~55 s of a ~85 s build) and wiping `.pyi-cache` only adds work.
 
 All build commands also work identically from bare cmd/PowerShell (no Git Bash); `make` and `build-lite.ps1` were removed when poe was adopted. poe is in the dev dependency group; run it as `uv run poe …`.
 

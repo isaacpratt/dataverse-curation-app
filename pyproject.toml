@@ -116,25 +116,29 @@ type = "simple"
   help = "Remove build/, dist/, .pyi-cache/ and stray .spec files"
   cmd = "python tools/clean_tree.py"
 
-  # PyInstaller lite build: common formats bundled (JPG/PNG/GIF/BMP/WEBP,
-  # PDF/XML/XLSX/TIFF, PIL, pypdf, tifffile, chardet), heavy binary libs
-  # excluded. No --clean so the Analysis cache is reused (fast rebuilds).
+  # PyInstaller flags live in tools/build_app.py (one list, both variants,
+  # shared safe excludes). That script prints wall time + artefact size.
   [tool.poe.tasks.build-lite]
-  help = "Build dist/curation-app-lite (lite onedir; incremental)"
-  cmd = 'python -m PyInstaller --noconfirm --name curation-app-lite --windowed --onedir --exclude-module pyreadstat --exclude-module netCDF4 --exclude-module h5py --exclude-module scipy --exclude-module tkinter --exclude-module turtle --exclude-module PIL.ImageTk --exclude-module PIL.SpiderImagePlugin --exclude-module PIL._avif --hidden-import hush --hidden-import hush.scanner --hidden-import hush.rules --hidden-import hush.entropy --collect-all piigex --hidden-import stdnum --add-data "ui/assets;ui/assets" --icon ui/assets/docent-mark.ico --workpath .pyi-cache main.py'
+  help = "Build dist/curation-app-lite (lite onedir; all format libs excluded)"
+  cmd = "python tools/build_app.py --variant lite"
 
-  # PyInstaller full build: heavy libs (pyreadstat/netCDF4/h5py/scipy) stay
-  # in the same folder; run its exe directly for SPSS/SAS/Stata/NetCDF/HDF5.
   [tool.poe.tasks.build-full]
-  help = "Build dist/curation-app-full (full onedir)"
-  cmd = 'python -m PyInstaller --noconfirm --clean --name curation-app-full --windowed --onedir --hidden-import hush --hidden-import hush.scanner --hidden-import hush.rules --hidden-import hush.entropy --collect-all piigex --hidden-import stdnum --add-data "ui/assets;ui/assets" --icon ui/assets/docent-mark.ico --workpath .pyi-cache main.py'
+  help = "Build dist/curation-app-full (full onedir; the installer payload)"
+  cmd = "python tools/build_app.py --variant full"
 
   [tool.poe.tasks.copy-example-config]
   help = "Copy config.example.json into dist/curation-app-full/ (no-op if absent)"
   cmd = "python tools/copy_example_config.py"
 
+  # `build` is the loop you run while developing: only the artefact you
+  # actually ship (the full onedir that becomes the installer), plus the
+  # example config. `build-all` adds the lite portable folder (~60 s more).
   [tool.poe.tasks.build]
-  help = "Build both artefacts (lite + full + example config copy)"
+  help = "Build the shipped artefact (full) + example config"
+  sequence = ["build-full", "copy-example-config"]
+
+  [tool.poe.tasks.build-all]
+  help = "Build both artefacts (lite + full + example config)"
   sequence = ["build-lite", "build-full", "copy-example-config"]
 
   [tool.poe.tasks.smoke]
