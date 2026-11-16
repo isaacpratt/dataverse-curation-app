@@ -5,6 +5,14 @@ CLI flags in headless mode). The selected base URL, API token and
 collection alias are persisted to config.json — resolved for frozen
 builds by `resolve_config_path` (CWD, next to the exe, then the folder
 holding the build), for dev runs in the working directory.
+
+Token at rest: by default the API token is stored in the OS credential
+store (Windows Credential Manager) keyed by base URL, via `keyring`;
+config.json keeps only an empty `api_token` plus `api_token_source`. If
+the credential store is unavailable the save falls back to a plaintext
+token with owner-only ACLs, as it always has. Load precedence is always
+env (DATAVERSE_API_TOKEN) > keyring > config.json plaintext; plaintext
+tokens found in older configs migrate into the store on next save.
 """
 
 from __future__ import annotations
@@ -14,6 +22,13 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+
+try:  # optional, hard-imported but never fatal to the app at runtime
+    import keyring as _keyring
+except Exception:  # pragma: no cover - keyring absent entirely
+    _keyring = None
+
+KEYRING_SERVICE = "Dataverse Docent"
 
 PRESETS: dict[str, str] = {
     "Borealis Demo — demo.borealisdata.ca": "https://demo.borealisdata.ca",
@@ -54,6 +69,9 @@ class DataverseConfig:
     base_url: str = "https://demo.borealisdata.ca"
     api_token: str = ""
     collection: str = ""
+    # where the persisted token lives at rest: "keyring" | "config" | "env"
+    # (absent in older configs - treated as "config")
+    api_token_source: str = "config"
 
     # backward-compat alias for older configs / docs
     @property
@@ -78,7 +96,7 @@ class Config:
     app: AppConfig = field(default_factory=AppConfig)
 
     @classmethod
-    def load(cls, path: Path | None = None) -> Config:
+    def load(cls, path: Path | None = None) -> Config:  # noqa: C901 - grandfathered; complexity burns down as config schema validation lands (dv-hcg.10)
         cfg_path = resolve_config_path(path)
         # Env overrides win over file (CI / headless secrets without
         # persisting tokens to disk).
@@ -91,6 +109,7 @@ class Config:
                 cfg.dataverse.base_url = env_url.rstrip("/")
             if env_token:
                 cfg.dataverse.api_token = env_token
+                cfg.dataverse.api_token_source = "env"
             if env_collection:
                 cfg.dataverse.collection = env_collection
             return cfg
@@ -125,6 +144,7 @@ class Config:
                 ),
                 api_token=str(dv.get("api_token", "") or ""),
                 collection=str(collection or ""),
+                api_token_source=str(dv.get("api_token_source", "config") or "config"),
             ),
             app=AppConfig(
                 workspace=Path(
@@ -137,11 +157,31 @@ class Config:
                 exiftool=str(engine_raw.get("exiftool", app_raw.get("exiftool", "")) or ""),
             ),
         )
+        # Keyring holds the token when the config says so (or when a stale
+        # source marker names it); a stored plaintext token wins whenever
+        # the store is empty/unreadable (pre-migration or fallback case).
+        if cfg.dataverse.api_token_source == "keyring" and _keyring is not None:
+            try:
+                kr = _keyring.get_password(
+                    KEYRING_SERVICE, cfg.dataverse.base_url.rstrip("/") or "token"
+                )
+            except Exception:
+                kr = None
+                try:
+                    from applog import get_app_log
+
+                    get_app_log().warn("keyring read failed; falling back to token in config.json")
+                except Exception:
+                    pass
+            if kr:
+                cfg.dataverse.api_token = kr
+                cfg.dataverse.api_token_source = "keyring"
         # Env overrides apply on top of file.
         if env_url:
             cfg.dataverse.base_url = env_url.rstrip("/")
         if env_token:
             cfg.dataverse.api_token = env_token
+            cfg.dataverse.api_token_source = "env"
         if env_collection:
             cfg.dataverse.collection = env_collection
         return cfg
@@ -150,10 +190,39 @@ class Config:
         import tempfile
 
         cfg_path = resolve_config_path(path)
+        # Credential-store persistence: the in-memory token never lands on
+        # disk when the store can hold it (migration path for legacy
+        # plaintext configs: they become keyring-backed on first save).
+        token = self.dataverse.api_token
+        persisted = token
+        source = self.dataverse.api_token_source or "config"
+        kr_key = self.dataverse.base_url.rstrip("/") or "token"
+        if token and _keyring is not None:
+            try:
+                _keyring.set_password(KEYRING_SERVICE, kr_key, token)
+                persisted = ""
+                source = "keyring"
+            except Exception:
+                source = "config"
+                try:
+                    from applog import get_app_log
+
+                    get_app_log().warn(
+                        "keyring unavailable; API token remains in config.json (owner-only ACL)"
+                    )
+                except Exception:
+                    pass
+        elif not token and _keyring is not None:
+            # Token cleared in Settings: drop the stale credential too.
+            try:
+                _keyring.delete_password(KEYRING_SERVICE, kr_key)
+            except Exception:
+                pass
         payload = {
             "dataverse": {
                 "base_url": self.dataverse.base_url,
-                "api_token": self.dataverse.api_token,
+                "api_token": persisted,
+                "api_token_source": source,
                 "collection": self.dataverse.collection,
                 "subtree": self.dataverse.collection,  # compat
                 "collection_alias": self.dataverse.collection,  # explicit alias for user

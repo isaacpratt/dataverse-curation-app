@@ -31,7 +31,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <h2>Authentication</h2>
 <ul>
 <li>Header <code>X-Dataverse-key: &lt;api_token&gt;</code>. Search <b>with</b> a token returns drafts; without, only published.</li>
-<li>Token lives in <code>config.json</code> / Settings. Presets include <code>Borealis Demo — demo.borealisdata.ca → https://demo.borealisdata.ca</code>. On <code>401</code> a selectable dialog points at Settings; the token is never stored in SQLite and never leaves in diagnostics copies.</li>
+<li>Token lives in the OS credential store by default (Windows Credential Manager via <code>keyring</code>, keyed by base URL; <code>api_token_source</code> in <code>config.json</code> names it, <code>api_token</code> there stays blank). Set or change it in Settings (Ctrl+,) or via <code>DATAVERSE_API_TOKEN</code>. If the credential store is unavailable, the token is written to <code>config.json</code> with owner-only ACLs instead (source <code>"config"</code>). Presets include <code>Borealis Demo — demo.borealisdata.ca → https://demo.borealisdata.ca</code>. On <code>401</code> a selectable dialog points at Settings; the token is never stored in SQLite and never leaves in diagnostics copies. Legacy plaintext tokens migrate into the store on the next save.</li>
 </ul>
 
 <h2>Endpoints used</h2>

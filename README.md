@@ -13,7 +13,7 @@ uv sync --group dev                  # .venv from uv.lock incl. dev tools
 copy config.example.json config.json # PowerShell: Copy-Item config.example.json config.json
 ```
 
-Set `api_token` (and optionally `collection`) in `config.json`, or use the environment instead (good for CI/headless): `DATAVERSE_BASE_URL`, `DATAVERSE_API_TOKEN`, `DATAVERSE_COLLECTION` — env wins over the file; tokens on disk get owner-only ACLs on Windows and 0600 elsewhere.
+Set the token in `config.json` **or** use the environment instead (good for CI/headless): `DATAVERSE_BASE_URL`, `DATAVERSE_API_TOKEN`, `DATAVERSE_COLLECTION` — env wins over the file. At rest the token is stored in the OS credential store (Windows Credential Manager via keyring, keyed by base URL) and `config.json` keeps only a blank `api_token` with `api_token_source: "keyring"`; if the credential store is unavailable the save falls back to a plaintext token with owner-only ACLs on the file.
 
 ```bash
 uv run poe run           # launch the desktop GUI

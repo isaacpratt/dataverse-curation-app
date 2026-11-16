@@ -10,7 +10,34 @@ import sys
 from pathlib import Path
 
 import applog
+import config as _config_module
 from config import AppConfig, Config, DataverseConfig
+
+
+class _DictKeyring:
+    def __init__(self):
+        self.store = {}
+
+    def get_password(self, service, username):
+        return self.store.get((service, username))
+
+    def set_password(self, service, username, password):
+        self.store[(service, username)] = password
+
+    def delete_password(self, service, username):
+        self.store.pop((service, username), None)
+
+
+class _BrokenKeyring:
+    def get_password(self, *a):
+        raise RuntimeError("no store available")
+
+    def set_password(self, *a):
+        raise RuntimeError("no store available")
+
+    def delete_password(self, *a, **kw):
+        raise RuntimeError("no store available")
+
 
 # -- log redaction -----------------------------------------------------------
 
@@ -37,7 +64,11 @@ def test_applog_redact_standalone():
 # -- config save -------------------------------------------------------------
 
 
-def test_config_save_writes_and_restricts(tmp_path):
+def test_config_save_writes_and_restricts(tmp_path, monkeypatch):
+    # keyring unavailable -> save falls back to plaintext + ACLs (the
+    # POSIX-friendly path this test pins). The keyring-happy path is
+    # covered in test_config.py.
+    monkeypatch.setattr(_config_module, "_keyring", _BrokenKeyring())
     cfg_path = tmp_path / "config.json"
     cfg = Config(
         dataverse=DataverseConfig(
@@ -58,7 +89,8 @@ def test_config_save_writes_and_restricts(tmp_path):
         assert mode == 0o600
 
 
-def test_config_load_roundtrip(tmp_path):
+def test_config_load_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setattr(_config_module, "_keyring", _DictKeyring())
     cfg_path = tmp_path / "config.json"
     cfg = Config(
         dataverse=DataverseConfig(base_url="https://x.example", api_token="t"),
