@@ -20,26 +20,30 @@ def _f(name, value):
 
 
 def test_mcmaster_set_parity_with_legacy():
-    meta = _meta([
-        _f("title", "T"),
-        _f("author", [{"authorName": {"value": "J"}, "authorAffiliation": {"value": "M"}}]),
-        _f("datasetContact", [{"datasetContactName": {"value": "J"}}]),
-        _f("subject", ["Math"]),
-        _f("dsDescription", [{"dsDescriptionValue": {"value": "d"}}]),
-        _f("depositor", "J"),
-        _f("dateOfDeposit", "2026-01-01"),
-    ])
+    meta = _meta(
+        [
+            _f("title", "T"),
+            _f("author", [{"authorName": {"value": "J"}, "authorAffiliation": {"value": "M"}}]),
+            _f("datasetContact", [{"datasetContactName": {"value": "J"}}]),
+            _f("subject", ["Math"]),
+            _f("dsDescription", [{"dsDescriptionValue": {"value": "d"}}]),
+            _f("depositor", "J"),
+            _f("dateOfDeposit", "2026-01-01"),
+        ]
+    )
     inv = [{"path": "README.md"}]
     new = mc.check_metadata_completeness(meta, "McMaster", inv)
     old = mc._check_mcmaster(meta, meta["latestVersion"]["metadataBlocks"], inv)
-    assert sorted((r["field"], r["requirement"], r["value"], r["status"]) for r in new) == \
-        sorted((r["field"], r["requirement"], r["value"], r["status"]) for r in old)
+    assert sorted((r["field"], r["requirement"], r["value"], r["status"]) for r in new) == sorted(
+        (r["field"], r["requirement"], r["value"], r["status"]) for r in old
+    )
 
 
 def test_minimal_exact_parity_with_legacy():
     meta = _meta([_f("title", "T")])
-    assert mc.check_metadata_completeness(meta, "Minimal", []) == \
-        mc._check_minimal(meta, meta["latestVersion"]["metadataBlocks"], [])
+    assert mc.check_metadata_completeness(meta, "Minimal", []) == mc._check_minimal(
+        meta, meta["latestVersion"]["metadataBlocks"], []
+    )
 
 
 def test_unchecked_field_is_skipped():
@@ -59,19 +63,40 @@ def test_optional_missing_stays_incomplete_with_level():
 
 
 def test_content_rule_filename_glob():
-    rule = {"id": "readme-present", "label": "README file", "level": "required",
-            "requirement": "R", "scope": ["filenames"], "match": "filename-glob",
-            "pattern": "readme*", "case_sensitive": False, "response_template": ""}
+    rule = {
+        "id": "readme-present",
+        "label": "README file",
+        "level": "required",
+        "requirement": "R",
+        "scope": ["filenames"],
+        "match": "filename-glob",
+        "pattern": "readme*",
+        "case_sensitive": False,
+        "response_template": "",
+    }
     assert rr.evaluate_content_rule(rule, {}, None)["pending"] is True
-    assert rr.evaluate_content_rule(rule, {}, [])["status"] == "complete"  # no files: not applicable
+    assert (
+        rr.evaluate_content_rule(rule, {}, [])["status"] == "complete"
+    )  # no files: not applicable
     assert rr.evaluate_content_rule(rule, {}, [{"path": "data/README.md"}])["status"] == "complete"
-    assert rr.evaluate_content_rule(rule, {}, [{"path": "data/myreadme_data.csv"}])["status"] == "incomplete"
+    assert (
+        rr.evaluate_content_rule(rule, {}, [{"path": "data/myreadme_data.csv"}])["status"]
+        == "incomplete"
+    )
 
 
 def test_filename_glob_case_sensitive_skips_legacy_fallback():
-    rule = {"id": "r", "label": "R", "level": "required", "requirement": "R",
-            "scope": ["filenames"], "match": "filename-glob",
-            "pattern": "readme*", "case_sensitive": True, "response_template": ""}
+    rule = {
+        "id": "r",
+        "label": "R",
+        "level": "required",
+        "requirement": "R",
+        "scope": ["filenames"],
+        "match": "filename-glob",
+        "pattern": "readme*",
+        "case_sensitive": True,
+        "response_template": "",
+    }
     # "README.md" does not match case-sensitive "readme*", and the legacy
     # case-insensitive basename fallback must not rescue it.
     assert rr.evaluate_content_rule(rule, {}, [{"path": "README.md"}])["status"] == "incomplete"
@@ -79,34 +104,70 @@ def test_filename_glob_case_sensitive_skips_legacy_fallback():
 
 
 def test_filename_glob_with_slash_matches_full_path():
-    rule = {"id": "r", "label": "R", "level": "required", "requirement": "R",
-            "scope": ["filenames"], "match": "filename-glob",
-            "pattern": "docs/*.md", "case_sensitive": False, "response_template": ""}
+    rule = {
+        "id": "r",
+        "label": "R",
+        "level": "required",
+        "requirement": "R",
+        "scope": ["filenames"],
+        "match": "filename-glob",
+        "pattern": "docs/*.md",
+        "case_sensitive": False,
+        "response_template": "",
+    }
     assert rr.evaluate_content_rule(rule, {}, [{"path": "docs/guide.md"}])["status"] == "complete"
-    assert rr.evaluate_content_rule(rule, {}, [{"path": "other/guide.md"}])["status"] == "incomplete"
+    assert (
+        rr.evaluate_content_rule(rule, {}, [{"path": "other/guide.md"}])["status"] == "incomplete"
+    )
 
 
 def test_content_rule_metadata_scope():
-    rule = {"id": "x", "label": "X", "level": "required", "requirement": "R",
-            "scope": ["metadata"], "match": "substring", "pattern": "funding",
-            "case_sensitive": False, "response_template": ""}
+    rule = {
+        "id": "x",
+        "label": "X",
+        "level": "required",
+        "requirement": "R",
+        "scope": ["metadata"],
+        "match": "substring",
+        "pattern": "funding",
+        "case_sensitive": False,
+        "response_template": "",
+    }
     meta = _meta([_f("notesText", "Funding acknowledgement: NSF grant")])
     assert rr.evaluate_content_rule(rule, meta, [])["status"] == "complete"
     assert rr.evaluate_content_rule(rule, _meta([]), [])["status"] == "incomplete"
 
 
 def test_content_rule_file_content_pending_without_staged(tmp_path):
-    rule = {"id": "x", "label": "X", "level": "required", "requirement": "R",
-            "scope": ["file-content"], "match": "substring", "pattern": "hello",
-            "case_sensitive": False, "response_template": ""}
-    assert rr.evaluate_content_rule(rule, {}, [], staged_dir=tmp_path / "missing")["pending"] is True
+    rule = {
+        "id": "x",
+        "label": "X",
+        "level": "required",
+        "requirement": "R",
+        "scope": ["file-content"],
+        "match": "substring",
+        "pattern": "hello",
+        "case_sensitive": False,
+        "response_template": "",
+    }
+    assert (
+        rr.evaluate_content_rule(rule, {}, [], staged_dir=tmp_path / "missing")["pending"] is True
+    )
 
 
 def test_content_rule_file_content_match(tmp_path):
     (tmp_path / "notes.txt").write_text("hello world", encoding="utf-8")
-    rule = {"id": "x", "label": "X", "level": "required", "requirement": "R",
-            "scope": ["file-content"], "match": "substring", "pattern": "hello",
-            "case_sensitive": False, "response_template": ""}
+    rule = {
+        "id": "x",
+        "label": "X",
+        "level": "required",
+        "requirement": "R",
+        "scope": ["file-content"],
+        "match": "substring",
+        "pattern": "hello",
+        "case_sensitive": False,
+        "response_template": "",
+    }
     assert rr.evaluate_content_rule(rule, {}, [], staged_dir=tmp_path)["status"] == "complete"
 
 
@@ -124,12 +185,17 @@ def test_author_count_handler_bounds_and_display():
         if fr.get("handler") == "author_count":
             fr["min"] = 2
             fr["max"] = 5
-    meta = _meta([
-        _f("author", [
-            {"authorName": {"value": "A"}},
-            {"authorName": {"value": "B"}},
-        ]),
-    ])
+    meta = _meta(
+        [
+            _f(
+                "author",
+                [
+                    {"authorName": {"value": "A"}},
+                    {"authorName": {"value": "B"}},
+                ],
+            ),
+        ]
+    )
     res = rr.evaluate_ruleset(meta, rs, [])
     ac = next(r for r in res if r["rule_id"].endswith(":author_count"))
     assert ac["status"] == "complete"
@@ -157,29 +223,45 @@ def test_license_terms_handler_reads_version_surface():
 
 def test_orcid_handler_requires_every_author():
     rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
-    meta = _meta([
-        _f("author", [
-            {"authorName": {"value": "A"},
-             "authorIdentifierScheme": {"value": "ORCID"},
-             "authorIdentifier": {"value": "0000-0002-1825-0097"}},
-            {"authorName": {"value": "B"}},
-        ]),
-    ])
+    meta = _meta(
+        [
+            _f(
+                "author",
+                [
+                    {
+                        "authorName": {"value": "A"},
+                        "authorIdentifierScheme": {"value": "ORCID"},
+                        "authorIdentifier": {"value": "0000-0002-1825-0097"},
+                    },
+                    {"authorName": {"value": "B"}},
+                ],
+            ),
+        ]
+    )
     res = rr.evaluate_ruleset(meta, rs, [])
     orc = next(r for r in res if r["rule_id"].endswith(":orcid"))
     assert orc["status"] == "incomplete"
     assert "B" in orc["value"]  # missing author named
     # Both valid → complete.
-    meta2 = _meta([
-        _f("author", [
-            {"authorName": {"value": "A"},
-             "authorIdentifierScheme": {"value": "ORCID"},
-             "authorIdentifier": {"value": "0000-0002-1825-0097"}},
-            {"authorName": {"value": "B"},
-             "authorIdentifierScheme": {"value": "ORCID"},
-             "authorIdentifier": {"value": "0000-0001-5109-3700"}},
-        ]),
-    ])
+    meta2 = _meta(
+        [
+            _f(
+                "author",
+                [
+                    {
+                        "authorName": {"value": "A"},
+                        "authorIdentifierScheme": {"value": "ORCID"},
+                        "authorIdentifier": {"value": "0000-0002-1825-0097"},
+                    },
+                    {
+                        "authorName": {"value": "B"},
+                        "authorIdentifierScheme": {"value": "ORCID"},
+                        "authorIdentifier": {"value": "0000-0001-5109-3700"},
+                    },
+                ],
+            ),
+        ]
+    )
     res2 = rr.evaluate_ruleset(meta2, rs, [])
     orc2 = next(r for r in res2 if r["rule_id"].endswith(":orcid"))
     assert orc2["status"] == "complete"
@@ -191,26 +273,40 @@ def test_orcid_dotted_identifier_rule_complete_and_incomplete():
     orc_rules = [r for r in rs["field_rules"] if r.get("handler") == "orcid"]
     assert orc_rules, "mcmaster must carry an ORCID rule"
     assert orc_rules[0]["field"] == "author.authorIdentifier"
-    meta = _meta([
-        _f("author", [
-            {"authorName": {"value": "A"},
-             "authorIdentifierScheme": {"value": "ORCID"},
-             "authorIdentifier": {"value": "0000-0002-1825-0097"}},
-            {"authorName": {"value": "B"}},
-        ]),
-    ])
+    meta = _meta(
+        [
+            _f(
+                "author",
+                [
+                    {
+                        "authorName": {"value": "A"},
+                        "authorIdentifierScheme": {"value": "ORCID"},
+                        "authorIdentifier": {"value": "0000-0002-1825-0097"},
+                    },
+                    {"authorName": {"value": "B"}},
+                ],
+            ),
+        ]
+    )
     res = rr.evaluate_ruleset(meta, rs, [])
     orc = next(r for r in res if r["rule_id"].endswith(":orcid"))
     assert orc["status"] == "incomplete"
     assert "B" in orc["value"]
     assert orc["rule_id"] == "field:citation.author.authorIdentifier:orcid"
-    meta2 = _meta([
-        _f("author", [
-            {"authorName": {"value": "A"},
-             "authorIdentifierScheme": {"value": "ORCID"},
-             "authorIdentifier": {"value": "0000-0002-1825-0097"}},
-        ]),
-    ])
+    meta2 = _meta(
+        [
+            _f(
+                "author",
+                [
+                    {
+                        "authorName": {"value": "A"},
+                        "authorIdentifierScheme": {"value": "ORCID"},
+                        "authorIdentifier": {"value": "0000-0002-1825-0097"},
+                    },
+                ],
+            ),
+        ]
+    )
     res2 = rr.evaluate_ruleset(meta2, rs, [])
     orc2 = next(r for r in res2 if r["rule_id"].endswith(":orcid"))
     assert orc2["status"] == "complete"
@@ -218,31 +314,50 @@ def test_orcid_dotted_identifier_rule_complete_and_incomplete():
 
 def test_dotted_nonempty_rule_requires_every_identifier():
     ruleset = {
-        "label": "t", "description": "", "dataverses": ["*"],
+        "label": "t",
+        "description": "",
+        "dataverses": ["*"],
         "field_rules": [
-            {"block": "citation", "field": "author.authorIdentifier",
-             "label": "Identifier", "handler": "nonempty", "level": "required",
-             "requirement": "", "response_template": ""},
+            {
+                "block": "citation",
+                "field": "author.authorIdentifier",
+                "label": "Identifier",
+                "handler": "nonempty",
+                "level": "required",
+                "requirement": "",
+                "response_template": "",
+            },
         ],
-        "content_rules": [], "filecheck_templates": {"*": "{check_id}: {message}"},
-        "response_header": "", "response_footer": "",
+        "content_rules": [],
+        "filecheck_templates": {"*": "{check_id}: {message}"},
+        "response_header": "",
+        "response_footer": "",
     }
-    meta = _meta([
-        _f("author", [
-            {"authorName": {"value": "A"},
-             "authorIdentifier": {"value": "X"}},
-            {"authorName": {"value": "B"}},
-        ]),
-    ])
+    meta = _meta(
+        [
+            _f(
+                "author",
+                [
+                    {"authorName": {"value": "A"}, "authorIdentifier": {"value": "X"}},
+                    {"authorName": {"value": "B"}},
+                ],
+            ),
+        ]
+    )
     res = rr.evaluate_ruleset(meta, ruleset, [])
     r = next(x for x in res if x["block"] == "citation")
     assert r["status"] == "incomplete"
-    meta2 = _meta([
-        _f("author", [
-            {"authorName": {"value": "A"}, "authorIdentifier": {"value": "X"}},
-            {"authorName": {"value": "B"}, "authorIdentifier": {"value": "Y"}},
-        ]),
-    ])
+    meta2 = _meta(
+        [
+            _f(
+                "author",
+                [
+                    {"authorName": {"value": "A"}, "authorIdentifier": {"value": "X"}},
+                    {"authorName": {"value": "B"}, "authorIdentifier": {"value": "Y"}},
+                ],
+            ),
+        ]
+    )
     res2 = rr.evaluate_ruleset(meta2, ruleset, [])
     r2 = next(x for x in res2 if x["block"] == "citation")
     assert r2["status"] == "complete"
@@ -252,17 +367,29 @@ def test_dotted_nonempty_rule_requires_every_identifier():
 def test_legacy_orcid_field_author_migrates_on_load():
     merged = rr._normalize_ruleset(
         "legacy",
-        {"field_rules": [
-            {"block": "citation", "field": "author", "label": "ORCiD for authors",
-             "handler": "orcid", "level": "optional", "requirement": "", "response_template": ""},
-        ]},
+        {
+            "field_rules": [
+                {
+                    "block": "citation",
+                    "field": "author",
+                    "label": "ORCiD for authors",
+                    "handler": "orcid",
+                    "level": "optional",
+                    "requirement": "",
+                    "response_template": "",
+                },
+            ]
+        },
     )
     assert merged["field_rules"][0]["field"] == "author.authorIdentifier"
 
 
 def test_rulesets_for_dataverse_wildcard():
     pool = rr.load_rulesets()
-    assert any(k == "mcmaster-default" for k, _ in rr.rulesets_for_dataverse("https://demo.borealisdata.ca", pool))
+    assert any(
+        k == "mcmaster-default"
+        for k, _ in rr.rulesets_for_dataverse("https://demo.borealisdata.ca", pool)
+    )
 
 
 def test_save_load_roundtrip(tmp_path, monkeypatch):

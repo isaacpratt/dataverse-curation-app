@@ -79,9 +79,7 @@ def _atomic_write_json(path: Path, payload: object) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     data = json.dumps(payload, indent=2, ensure_ascii=False)
-    fd, tmp_name = tempfile.mkstemp(
-        dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
-    )
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(data)
@@ -378,8 +376,7 @@ def snapshot_table_view(header) -> dict:
     call right after construction (before restore) so reset reproduces the
     fresh-start view exactly.
     """
-    snap: dict = {"widths": [], "hidden": [], "order": [],
-                  "sort": None, "sort_shown": False}
+    snap: dict = {"widths": [], "hidden": [], "order": [], "sort": None, "sort_shown": False}
     try:
         count = header.count()
         snap["widths"] = [header.sectionSize(i) for i in range(count)]
@@ -439,9 +436,7 @@ def apply_table_view(header, snap) -> None:
                 # order[logical] = visual index wanted; move into place one
                 # target slot at a time (moveSection works in visual slots).
                 for target in range(count):
-                    logical = next(
-                        (i for i in range(count) if order[i] == target), None
-                    )
+                    logical = next((i for i in range(count) if order[i] == target), None)
                     if logical is None:
                         continue
                     try:
@@ -470,9 +465,7 @@ def apply_table_view(header, snap) -> None:
                     # Real Qt headers want the enum; duck-typed headers
                     # accept the plain int (first call falls back).
                     try:
-                        header.setSortIndicator(
-                            column, _sort_order_value(sort[1])
-                        )
+                        header.setSortIndicator(column, _sort_order_value(sort[1]))
                     except Exception:
                         header.setSortIndicator(column, int(sort[1]))
                     if snap.get("sort_shown"):

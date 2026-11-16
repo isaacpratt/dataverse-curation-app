@@ -28,8 +28,12 @@ def test_childfields_surface_as_dotted_rows():
     assert by["author.authorAffiliation"]["label"] == "Affiliation"
     assert by["author.authorIdentifierScheme"]["label"] == "Identifier Type"
     assert by["author.authorIdentifier"]["label"] == "Identifier"
-    for row in ("author.authorName", "author.authorAffiliation",
-                "author.authorIdentifierScheme", "author.authorIdentifier"):
+    for row in (
+        "author.authorName",
+        "author.authorAffiliation",
+        "author.authorIdentifierScheme",
+        "author.authorIdentifier",
+    ):
         assert by[row]["parent"] == "author"
         assert by[row]["block"] == "citation"
     # dsDescription children follow the same pattern.
@@ -44,7 +48,10 @@ def test_childfields_order_is_borealis_display_order():
     author_children = [r for r in rows if r.get("parent") == "author"]
     # displayOrder: Name 8, Affiliation 9, Identifier Type 10, Identifier 11.
     assert [r["label"] for r in author_children] == [
-        "Name", "Affiliation", "Identifier Type", "Identifier",
+        "Name",
+        "Affiliation",
+        "Identifier Type",
+        "Identifier",
     ]
 
 
@@ -54,10 +61,18 @@ def test_subfield_rows_survive_the_review_config_union(monkeypatch):
 
     normalized = rr._normalize_ruleset(
         "x",
-        {"field_rules": [
-            {"block": "citation", "field": "author.authorIdentifier",
-             "label": "Identifier", "handler": "nonempty", "level": "optional",
-             "requirement": "", "response_template": ""},
-        ]},
+        {
+            "field_rules": [
+                {
+                    "block": "citation",
+                    "field": "author.authorIdentifier",
+                    "label": "Identifier",
+                    "handler": "nonempty",
+                    "level": "optional",
+                    "requirement": "",
+                    "response_template": "",
+                },
+            ]
+        },
     )
     assert normalized["field_rules"][0]["field"] == "author.authorIdentifier"

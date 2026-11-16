@@ -58,9 +58,7 @@ def test_truncation_message_when_over_cap(tmp_path, monkeypatch):
     import engine.checks.secret_check as sc
 
     monkeypatch.setattr(sc, "_MAX_LISTED", 2)
-    lines = [
-        f"key{i} = '{i}AbCdEfGhIjKlMnOpQrStUvWxYz0123456789'" for i in range(10)
-    ]
+    lines = [f"key{i} = '{i}AbCdEfGhIjKlMnOpQrStUvWxYz0123456789'" for i in range(10)]
     results = _run(tmp_path, "\n".join(lines) + "\n")
     r = results[0]
     assert r.passed is False

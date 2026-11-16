@@ -96,7 +96,11 @@ try:
     _profiles_path = profiles_path()
     if _profiles_path.exists():
         _loaded = _json.loads(_profiles_path.read_text(encoding="utf-8"))
-        if isinstance(_loaded, dict) and _loaded.get("version") == 2 and isinstance(_loaded.get("rulesets"), dict):
+        if (
+            isinstance(_loaded, dict)
+            and _loaded.get("version") == 2
+            and isinstance(_loaded.get("rulesets"), dict)
+        ):
             pass  # v2 file: profiles come from review_rules (see below)
         elif isinstance(_loaded, dict):
             for k, v in _loaded.items():
@@ -145,7 +149,9 @@ def _nonempty(value: Any) -> bool:
     if isinstance(value, list):
         for item in value:
             if isinstance(item, dict):
-                if any(_nonempty(v.get("value") if isinstance(v, dict) else v) for v in item.values()):
+                if any(
+                    _nonempty(v.get("value") if isinstance(v, dict) else v) for v in item.values()
+                ):
                     return True
             elif _nonempty(item):
                 return True
@@ -167,18 +173,29 @@ def _display_value(value: Any, max_len: int = 120) -> str:
         if value and isinstance(value[0], dict) and "dsDescriptionValue" in value[0]:
             vals = []
             for item in value[:3]:
-                v = item.get("dsDescriptionValue", {}).get("value", "") if isinstance(item.get("dsDescriptionValue"), dict) else ""
+                v = (
+                    item.get("dsDescriptionValue", {}).get("value", "")
+                    if isinstance(item.get("dsDescriptionValue"), dict)
+                    else ""
+                )
                 if v:
                     vals.append(str(v))
             s = "; ".join(vals)
             if len(value) > 3:
-                s += f" (+{len(value)-3} more)"
+                s += f" (+{len(value) - 3} more)"
             return s[:max_len] or "—"
         parts = []
         for item in value[:3]:
             if isinstance(item, dict):
                 # Try known subfields in priority order
-                for k in ("value", "datasetContactName", "authorName", "publicationCitation", "title", "subject"):
+                for k in (
+                    "value",
+                    "datasetContactName",
+                    "authorName",
+                    "publicationCitation",
+                    "title",
+                    "subject",
+                ):
                     v = item.get(k)
                     if isinstance(v, dict) and "value" in v:
                         parts.append(str(v["value"]))
@@ -200,7 +217,7 @@ def _display_value(value: Any, max_len: int = 120) -> str:
                 parts.append(item)
         s = "; ".join(parts)
         if len(value) > 3:
-            s += f" (+{len(value)-3} more)"
+            s += f" (+{len(value) - 3} more)"
         return s[:max_len] or "—"
     if isinstance(value, dict):
         if "value" in value:
@@ -232,7 +249,9 @@ def _extract_orcid_value(metadata_blocks: dict[str, Any]) -> str:
     return fallback
 
 
-def _check_mcmaster(metadata: dict, blocks: dict[str, Any], inventory: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def _check_mcmaster(
+    metadata: dict, blocks: dict[str, Any], inventory: list[dict[str, Any]] | None
+) -> list[dict[str, Any]]:
     def has(block: str, name: str) -> bool:
         return _nonempty(_field(blocks, block, name))
 
@@ -243,7 +262,11 @@ def _check_mcmaster(metadata: dict, blocks: dict[str, Any], inventory: list[dict
     latest = metadata.get("latestVersion") or {}
     license_obj = latest.get("license") or metadata.get("license")
     license_ok = isinstance(license_obj, dict) and bool(license_obj.get("name"))
-    license_val = license_obj.get("name", "") if isinstance(license_obj, dict) else _display_value(license_obj)
+    license_val = (
+        license_obj.get("name", "")
+        if isinstance(license_obj, dict)
+        else _display_value(license_obj)
+    )
 
     # README presence from file inventory.
     # inventory=None → file list not loaded yet; inventory==[] → dataset truly has no files.
@@ -273,38 +296,97 @@ def _check_mcmaster(metadata: dict, blocks: dict[str, Any], inventory: list[dict
     results: list[dict[str, Any]] = []
 
     def add(field: str, requirement: str, value: str, ok: bool) -> None:
-        results.append({"field": field, "requirement": requirement, "value": value or "—", "status": "complete" if ok else "incomplete"})
+        results.append(
+            {
+                "field": field,
+                "requirement": requirement,
+                "value": value or "—",
+                "status": "complete" if ok else "incomplete",
+            }
+        )
 
-    add("Title", "McMaster — Required (Depositor Checklist: Basic Metadata; Curation Log: Full Citation)", val("citation", "title"), has("citation", "title"))
+    add(
+        "Title",
+        "McMaster — Required (Depositor Checklist: Basic Metadata; Curation Log: Full Citation)",
+        val("citation", "title"),
+        has("citation", "title"),
+    )
     # Description: special handling for dsDescriptionValue
     desc_raw = _field(blocks, "citation", "dsDescription")
     desc_val = _display_value(desc_raw)
-    add("Description", "McMaster — Required (Curation Log: Full Citation; Checklist: Basic Metadata)", desc_val, has("citation", "dsDescription"))
+    add(
+        "Description",
+        "McMaster — Required (Curation Log: Full Citation; Checklist: Basic Metadata)",
+        desc_val,
+        has("citation", "dsDescription"),
+    )
     _authors_raw = _field(blocks, "citation", "author") or []
-    _authors = [a for a in _authors_raw if isinstance(a, dict)] if isinstance(_authors_raw, list) else []
-    authors_ok = has("citation", "author") and bool(_authors) and all(
-        _nonempty((a or {}).get("authorName", {})) for a in _authors
+    _authors = (
+        [a for a in _authors_raw if isinstance(a, dict)] if isinstance(_authors_raw, list) else []
+    )
+    authors_ok = (
+        has("citation", "author")
+        and bool(_authors)
+        and all(_nonempty((a or {}).get("authorName", {})) for a in _authors)
     )
     # Affiliation: require every listed author to carry one (curation log
     # asks for full citation). Report which authors are missing it.
     _missing_affil = [
-        str((a.get("authorName", {}) or {}).get("value", "") if isinstance(a.get("authorName", {}), dict) else a.get("authorName", "") or f"author {i+1}")
+        str(
+            (a.get("authorName", {}) or {}).get("value", "")
+            if isinstance(a.get("authorName", {}), dict)
+            else a.get("authorName", "") or f"author {i + 1}"
+        )
         for i, a in enumerate(_authors)
         if not _nonempty((a or {}).get("authorAffiliation", {}))
     ]
     affil_ok = bool(_authors) and not _missing_affil
     _author_val = val("citation", "author")
     if _missing_affil:
-        _author_val = (_author_val + f" [missing affiliation: {', '.join(_missing_affil[:3])}]"[:200]) if _author_val != "—" else f"missing affiliation: {', '.join(_missing_affil[:3])}"
-    add("Author Name & Affiliation", "McMaster — Required (Curation Log: Full Citation)", _author_val, authors_ok and affil_ok)
-    add("Dataset Contact", "McMaster — Required (Curation Log + Checklist)", val("citation", "datasetContact"), has("citation", "datasetContact"))
-    add("Subject", "McMaster — Required (Checklist: Basic Metadata)", val("citation", "subject"), has("citation", "subject"))
+        _author_val = (
+            (_author_val + f" [missing affiliation: {', '.join(_missing_affil[:3])}]"[:200])
+            if _author_val != "—"
+            else f"missing affiliation: {', '.join(_missing_affil[:3])}"
+        )
+    add(
+        "Author Name & Affiliation",
+        "McMaster — Required (Curation Log: Full Citation)",
+        _author_val,
+        authors_ok and affil_ok,
+    )
+    add(
+        "Dataset Contact",
+        "McMaster — Required (Curation Log + Checklist)",
+        val("citation", "datasetContact"),
+        has("citation", "datasetContact"),
+    )
+    add(
+        "Subject",
+        "McMaster — Required (Checklist: Basic Metadata)",
+        val("citation", "subject"),
+        has("citation", "subject"),
+    )
     add("License", "McMaster — Required (Checklist: Data License)", license_val or "—", license_ok)
     # Split depositor and date
-    add("Depositor", "McMaster — Required (Checklist: During Deposit)", val("citation", "depositor"), has("citation", "depositor"))
-    add("Deposit Date", "McMaster — Required (Checklist: During Deposit)", val("citation", "dateOfDeposit"), has("citation", "dateOfDeposit"))
+    add(
+        "Depositor",
+        "McMaster — Required (Checklist: During Deposit)",
+        val("citation", "depositor"),
+        has("citation", "depositor"),
+    )
+    add(
+        "Deposit Date",
+        "McMaster — Required (Checklist: During Deposit)",
+        val("citation", "dateOfDeposit"),
+        has("citation", "dateOfDeposit"),
+    )
     # README
-    add("README file", "McMaster — Required (Curation Log: Documentation; Checklist: Before Deposit)", readme_val, readme_ok)
+    add(
+        "README file",
+        "McMaster — Required (Curation Log: Documentation; Checklist: Before Deposit)",
+        readme_val,
+        readme_ok,
+    )
 
     rel_pub = _field(blocks, "citation", "publication") or []
     rel_list = rel_pub if isinstance(rel_pub, list) else ([rel_pub] if rel_pub else [])
@@ -318,16 +400,30 @@ def _check_mcmaster(metadata: dict, blocks: dict[str, Any], inventory: list[dict
         # Pass when ANY related publication is complete (not just first).
         displays: list[str] = []
         for entry in rel_list:
-            cit = entry.get("publicationCitation", {}).get("value", "") if isinstance(entry.get("publicationCitation"), dict) else str(entry.get("publicationCitation") or "")
-            jour = entry.get("journal", {}).get("value", "") if isinstance(entry.get("journal"), dict) else ""
-            id_val = entry.get("publicationIDNumber", {}).get("value", "") if isinstance(entry.get("publicationIDNumber"), dict) else str(entry.get("publicationIDNumber") or "")
+            cit = (
+                entry.get("publicationCitation", {}).get("value", "")
+                if isinstance(entry.get("publicationCitation"), dict)
+                else str(entry.get("publicationCitation") or "")
+            )
+            jour = (
+                entry.get("journal", {}).get("value", "")
+                if isinstance(entry.get("journal"), dict)
+                else ""
+            )
+            id_val = (
+                entry.get("publicationIDNumber", {}).get("value", "")
+                if isinstance(entry.get("publicationIDNumber"), dict)
+                else str(entry.get("publicationIDNumber") or "")
+            )
             if cit or jour:
                 displays.append(f"{cit} — {jour}".strip(" —") if cit and jour else (cit or jour))
             elif id_val:
                 displays.append(id_val)
             else:
                 displays.append(_display_value(entry))
-            title_ok = _nonempty(entry.get("publicationCitation", {})) or _nonempty(entry.get("title", {}))
+            title_ok = _nonempty(entry.get("publicationCitation", {})) or _nonempty(
+                entry.get("title", {})
+            )
             journal_ok = _nonempty(entry.get("journal", {}))
             if title_ok and journal_ok:
                 pub_complete = True
@@ -337,9 +433,19 @@ def _check_mcmaster(metadata: dict, blocks: dict[str, Any], inventory: list[dict
                     pub_id_val = str(id_val)
         pub_val = displays[0] if displays else "—"
         if len(displays) > 1:
-            pub_val += f" (+{len(displays)-1} more)"
-    add("Related Publication (title + journal)", "McMaster — Required (Curation Log + Checklist: *Publication)", pub_val, pub_complete)
-    add("Related Publication ID", "McMaster — Required (Curation Log: Pub ID)", pub_id_val, pub_id_ok)
+            pub_val += f" (+{len(displays) - 1} more)"
+    add(
+        "Related Publication (title + journal)",
+        "McMaster — Required (Curation Log + Checklist: *Publication)",
+        pub_val,
+        pub_complete,
+    )
+    add(
+        "Related Publication ID",
+        "McMaster — Required (Curation Log: Pub ID)",
+        pub_id_val,
+        pub_id_ok,
+    )
 
     orcid_val = _extract_orcid_value(blocks)
     orcid_ok = bool(ORCID_RE.match(orcid_val)) if orcid_val else False
@@ -347,15 +453,22 @@ def _check_mcmaster(metadata: dict, blocks: dict[str, Any], inventory: list[dict
     # must carry a valid ORCID; display mirrors the rule engine (first valid
     # IDs + missing names, or "—" when none found).
     _orcid_authors = _field(blocks, "citation", "author") or []
-    _orcid_list = [a for a in _orcid_authors if isinstance(a, dict)] if isinstance(_orcid_authors, list) else []
+    _orcid_list = (
+        [a for a in _orcid_authors if isinstance(a, dict)]
+        if isinstance(_orcid_authors, list)
+        else []
+    )
     _orcid_found: list[str] = []
     _orcid_missing: list[str] = []
     for _i, _oa in enumerate(_orcid_list):
-        _on = str(
-            (_oa.get("authorName") or {}).get("value", "")
-            if isinstance(_oa.get("authorName"), dict)
-            else _oa.get("authorName") or ""
-        ).strip() or f"author {_i + 1}"
+        _on = (
+            str(
+                (_oa.get("authorName") or {}).get("value", "")
+                if isinstance(_oa.get("authorName"), dict)
+                else _oa.get("authorName") or ""
+            ).strip()
+            or f"author {_i + 1}"
+        )
         _oid = _oa.get("authorIdentifier", {})
         _osch = _oa.get("authorIdentifierScheme", {})
         _oid_s = _oid.get("value", "") if isinstance(_oid, dict) else str(_oid or "")
@@ -374,22 +487,38 @@ def _check_mcmaster(metadata: dict, blocks: dict[str, Any], inventory: list[dict
                 orcid_val += f" [missing: {', '.join(_orcid_missing[:3])}]"
         else:
             orcid_val = ""
-    add("ORCiD for authors", "McMaster — Recommended (Checklist: Researcher ID; Curation Log: optional)", orcid_val or "—", orcid_ok)
+    add(
+        "ORCiD for authors",
+        "McMaster — Recommended (Checklist: Researcher ID; Curation Log: optional)",
+        orcid_val or "—",
+        orcid_ok,
+    )
 
     # Author count (optional): mirrors the review_rules author_count handler.
     _raw_authors = _field(blocks, "citation", "author") or []
-    _author_list = [a for a in _raw_authors if isinstance(a, dict)] if isinstance(_raw_authors, list) else []
+    _author_list = (
+        [a for a in _raw_authors if isinstance(a, dict)] if isinstance(_raw_authors, list) else []
+    )
     _n_auth = len(_author_list)
     _auth_names = []
     for _a in _author_list[:3]:
         _nm = _a.get("authorName", {})
-        _auth_names.append(str(_nm.get("value", "") if isinstance(_nm, dict) else _nm or "").strip())
+        _auth_names.append(
+            str(_nm.get("value", "") if isinstance(_nm, dict) else _nm or "").strip()
+        )
     _auth_names = [x for x in _auth_names if x]
     if _n_auth <= 3:
         _count_val = f"{_n_auth} author(s)" + (f": {'; '.join(_auth_names)}" if _auth_names else "")
     else:
-        _count_val = f"{_n_auth} authors: {'; '.join(_auth_names)} (+{_n_auth - len(_auth_names)} more)"
-    add("Author count", "McMaster — Recommended (check the number of authors)", _count_val or "—", _n_auth > 0)
+        _count_val = (
+            f"{_n_auth} authors: {'; '.join(_auth_names)} (+{_n_auth - len(_auth_names)} more)"
+        )
+    add(
+        "Author count",
+        "McMaster — Recommended (check the number of authors)",
+        _count_val or "—",
+        _n_auth > 0,
+    )
 
     # License + Terms of Use / Access (optional): latestVersion surface.
     _tou = latest.get("termsOfUse") or metadata.get("termsOfUse") or ""
@@ -398,24 +527,51 @@ def _check_mcmaster(metadata: dict, blocks: dict[str, Any], inventory: list[dict
     _toa_s = _toa.get("value", "") if isinstance(_toa, dict) else str(_toa or "")
     _lt_parts = [p for p in (license_val, _tou_s, _toa_s) if p]
     _lt_val = " · ".join(_lt_parts) if _lt_parts else "—"
-    add("License and Terms of Use", "McMaster — Recommended (Checklist: Data License)", _lt_val, bool(license_val))
+    add(
+        "License and Terms of Use",
+        "McMaster — Recommended (Checklist: Data License)",
+        _lt_val,
+        bool(license_val),
+    )
 
     # Access restrictions / embargo (same handler as the ruleset engine so
     # the legacy fallback and the default ruleset stay in parity).
     from engine.checks.access_check import access_conditions
 
     _access_ok, _access_val = access_conditions(metadata, inventory)
-    add("Access, Embargo & Terms of Access", "McMaster — Recommended (Checklist: Data License / Access)", _access_val, _access_ok)
+    add(
+        "Access, Embargo & Terms of Access",
+        "McMaster — Recommended (Checklist: Data License / Access)",
+        _access_val,
+        _access_ok,
+    )
 
     time_ok = has("citation", "timePeriodCovered") or has("citation", "dateOfCollection")
-    add("Time Period / Date of Collection", "McMaster — Recommended (Checklist: More Metadata — Time)", f"{val('citation','timePeriodCovered')} / {val('citation','dateOfCollection')}".strip(" /") or "—", time_ok)
-    geo = _field(blocks, "geospatial", "geographicCoverage") or _field(blocks, "citation", "geographicCoverage")
-    add("Geographic Coverage", "McMaster — Recommended (Checklist: More Metadata — Place)", _display_value(geo), _nonempty(geo))
+    add(
+        "Time Period / Date of Collection",
+        "McMaster — Recommended (Checklist: More Metadata — Time)",
+        f"{val('citation', 'timePeriodCovered')} / {val('citation', 'dateOfCollection')}".strip(
+            " /"
+        )
+        or "—",
+        time_ok,
+    )
+    geo = _field(blocks, "geospatial", "geographicCoverage") or _field(
+        blocks, "citation", "geographicCoverage"
+    )
+    add(
+        "Geographic Coverage",
+        "McMaster — Recommended (Checklist: More Metadata — Place)",
+        _display_value(geo),
+        _nonempty(geo),
+    )
 
     return results
 
 
-def _check_minimal(metadata: dict, blocks: dict[str, Any], inventory: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def _check_minimal(
+    metadata: dict, blocks: dict[str, Any], inventory: list[dict[str, Any]] | None
+) -> list[dict[str, Any]]:
     def has(block: str, name: str) -> bool:
         return _nonempty(_field(blocks, block, name))
 
@@ -430,7 +586,14 @@ def _check_minimal(metadata: dict, blocks: dict[str, Any], inventory: list[dict[
         ("dsDescription", "Minimal — Required: Description"),
         ("subject", "Minimal — Required: Subject"),
     ]:
-        results.append({"field": field, "requirement": req, "value": val("citation", field), "status": "complete" if has("citation", field) else "incomplete"})
+        results.append(
+            {
+                "field": field,
+                "requirement": req,
+                "value": val("citation", field),
+                "status": "complete" if has("citation", field) else "incomplete",
+            }
+        )
     return results
 
 
@@ -459,8 +622,12 @@ def check_metadata_completeness(
             # value, status} contract (callers that need rule ids use
             # check_with_ruleset below).
             return [
-                {"field": r["field"], "requirement": r["requirement"],
-                 "value": r.get("value", "—"), "status": r["status"]}
+                {
+                    "field": r["field"],
+                    "requirement": r["requirement"],
+                    "value": r.get("value", "—"),
+                    "status": r["status"],
+                }
                 for r in evaluated
             ]
     except Exception as exc:

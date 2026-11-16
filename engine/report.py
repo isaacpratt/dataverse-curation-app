@@ -56,9 +56,7 @@ class DatasetReport:
     persistent_id: str
     label: str
     engine_version: str
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     dataset_checks: list[CheckResult] = field(default_factory=list)
     files: list[FileEntry] = field(default_factory=list)
 
@@ -110,9 +108,7 @@ class DatasetReport:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         data = render_markdown(self)
-        fd, tmp_name = tempfile.mkstemp(
-            dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
-        )
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(data)
@@ -136,9 +132,7 @@ class DatasetReport:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         data = json.dumps(self.to_dict(), indent=2)
-        fd, tmp_name = tempfile.mkstemp(
-            dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
-        )
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(data)
@@ -157,6 +151,4 @@ class DatasetReport:
 
     @classmethod
     def load(cls, path: Path) -> "DatasetReport":
-        return cls.from_dict(
-            json.loads(path.read_text(encoding="utf-8"))
-        )
+        return cls.from_dict(json.loads(path.read_text(encoding="utf-8")))

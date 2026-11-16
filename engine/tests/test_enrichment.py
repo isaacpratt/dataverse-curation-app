@@ -83,11 +83,7 @@ def _http_error(status):
 
 def test_enrich_sums_and_patches():
     pid = "doi:10.5072/FK2/A"
-    docs = {
-        pid: _version_doc(
-            [_entry("a.csv", 100), _entry("b.csv", 50)], depositor="Carol C."
-        )
-    }
+    docs = {pid: _version_doc([_entry("a.csv", 100), _entry("b.csv", 50)], depositor="Carol C.")}
     client = _StubClient(docs)
     rows = [_thin(pid)]
     stats = client.enrich_datasets_with_inventory(rows, max_workers=1)

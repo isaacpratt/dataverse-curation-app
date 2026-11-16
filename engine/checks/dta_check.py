@@ -138,8 +138,7 @@ class DtaCheck(Check):
             level="info",
             passed=True,
             message=(
-                f"{name}: {len(frame.columns)} variables "
-                f"({len(value_labels)} with value labels)"
+                f"{name}: {len(frame.columns)} variables ({len(value_labels)} with value labels)"
             ),
             details={"variables": variables[:_MAX_VARIABLES_LISTED]},
         )

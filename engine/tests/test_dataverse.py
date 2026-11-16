@@ -96,7 +96,11 @@ def test_parse_allowed_labels():
 def test_parse_curation_status_object():
     payload = {
         "status": "OK",
-        "data": {"label": "Author contacted", "createTime": "2026-09-01T10:00:00Z", "assigner": "curator1"},
+        "data": {
+            "label": "Author contacted",
+            "createTime": "2026-09-01T10:00:00Z",
+            "assigner": "curator1",
+        },
     }
     assert parse_curation_status(payload) == {
         "label": "Author contacted",
@@ -181,7 +185,10 @@ def _compare_payload() -> dict:
             "filesAdded": [{"fileName": "new.csv", "filePath": "data", "fileId": 11}],
             "filesRemoved": [{"fileName": "old.sav", "fileId": 9}],
             "filesReplaced": [
-                {"oldFile": {"fileName": "r.pdf", "fileId": 5}, "newFile": {"fileName": "r_v2.pdf", "fileId": 12}}
+                {
+                    "oldFile": {"fileName": "r.pdf", "fileId": 5},
+                    "newFile": {"fileName": "r_v2.pdf", "fileId": 12},
+                }
             ],
             "fileChanges": [
                 {
@@ -225,8 +232,13 @@ def test_parse_version_compare_empty():
 
 
 def test_search_item_state_plain_cases():
-    assert search_item_state({"versionState": "DRAFT", "publicationStatuses": ["Draft"]}) == ("DRAFT", True)
-    assert search_item_state({"versionState": "RELEASED", "publicationStatuses": ["Published"]}) == ("RELEASED", False)
+    assert search_item_state({"versionState": "DRAFT", "publicationStatuses": ["Draft"]}) == (
+        "DRAFT",
+        True,
+    )
+    assert search_item_state(
+        {"versionState": "RELEASED", "publicationStatuses": ["Published"]}
+    ) == ("RELEASED", False)
     assert search_item_state({}) == ("", False)
 
 
@@ -249,10 +261,20 @@ def test_search_item_state_in_review_status():
 
 def test_parse_dataset_versions():
     data = [
-        {"versionNumber": 1, "versionMinorNumber": 0, "versionState": "RELEASED",
-         "createTime": "2024-01-01T10:00:00Z", "releaseTime": "2024-02-01T10:00:00Z"},
-        {"versionNumber": 2, "versionMinorNumber": 0, "versionState": "DRAFT",
-         "createTime": "2026-09-01T10:00:00Z", "lastUpdateTime": "2026-09-08T10:00:00Z"},
+        {
+            "versionNumber": 1,
+            "versionMinorNumber": 0,
+            "versionState": "RELEASED",
+            "createTime": "2024-01-01T10:00:00Z",
+            "releaseTime": "2024-02-01T10:00:00Z",
+        },
+        {
+            "versionNumber": 2,
+            "versionMinorNumber": 0,
+            "versionState": "DRAFT",
+            "createTime": "2026-09-01T10:00:00Z",
+            "lastUpdateTime": "2026-09-08T10:00:00Z",
+        },
         {"versionState": "DEACCESSIONED", "createTime": "2023-01-01", "releaseTime": "2023-06-01"},
     ]
     versions = parse_dataset_versions(data)
@@ -295,9 +317,7 @@ def test_extract_file_restrictions():
     assert nested == {"embargo_date": "2027-06-01", "retention": ""}
     flat = extract_file_restrictions({"dateAvailable": "2028-01-15"}, {})
     assert flat["embargo_date"] == "2028-01-15"
-    retention = extract_file_restrictions(
-        {}, {"retention": {"retentionPeriod": "2029-03-01"}}
-    )
+    retention = extract_file_restrictions({}, {"retention": {"retentionPeriod": "2029-03-01"}})
     assert retention["retention"] == "2029-03-01"
     # unrelated dates are never mislabeled as embargo/retention
     plain = extract_file_restrictions(
@@ -398,9 +418,7 @@ def test_quote_and_verify_with_fake_client(tmp_path):
 
 
 def test_verify_detects_missing_file(tmp_path):
-    inventory = [
-        {"path": "gone.csv", "size_bytes": 10, "checksum_type": "", "checksum_value": ""}
-    ]
+    inventory = [{"path": "gone.csv", "size_bytes": 10, "checksum_type": "", "checksum_value": ""}]
     manager = DownloadManager(FakeClient(inventory), tmp_path / "ws")
     ok, problems, warnings = manager.verify("any")
     assert not ok
@@ -460,9 +478,7 @@ def test_normalize_files_tabular_unf():
     assert plain["tabular"] is False
     assert plain["unf"] == ""
     # lowercase unf fallback
-    lower = normalize_files(
-        {"files": [{"filename": "x.tab", "dataFile": {"unf": "UNF:6:z=="}}]}
-    )
+    lower = normalize_files({"files": [{"filename": "x.tab", "dataFile": {"unf": "UNF:6:z=="}}]})
     assert lower[0]["unf"] == "UNF:6:z=="
 
 
@@ -540,12 +556,27 @@ def test_download_originals_skips_staged_and_nontabular(tmp_path):
             return dest
 
     inventory = [
-        {"path": "eco.tab", "id": "9", "tabular": True,
-         "original_name": "eco.sav", "original_size": 12},
-        {"path": "plain.csv", "id": "10", "tabular": False,
-         "original_name": "", "original_size": 0},
-        {"path": "new.tab", "id": "11", "tabular": True,
-         "original_name": "new.sav", "original_size": 10},
+        {
+            "path": "eco.tab",
+            "id": "9",
+            "tabular": True,
+            "original_name": "eco.sav",
+            "original_size": 12,
+        },
+        {
+            "path": "plain.csv",
+            "id": "10",
+            "tabular": False,
+            "original_name": "",
+            "original_size": 0,
+        },
+        {
+            "path": "new.tab",
+            "id": "11",
+            "tabular": True,
+            "original_name": "new.sav",
+            "original_size": 10,
+        },
     ]
     client = OrigClient(inventory)
     manager = DownloadManager(client, tmp_path / "ws")
@@ -563,8 +594,13 @@ def test_quote_prefers_original_size_for_tabular():
     from download_manager import DownloadManager as DM
 
     inv = [
-        {"path": "a.tab", "tabular": True, "original_name": "a.sav",
-         "original_size": 100, "size_bytes": 999},
+        {
+            "path": "a.tab",
+            "tabular": True,
+            "original_name": "a.sav",
+            "original_size": 100,
+            "size_bytes": 999,
+        },
         {"path": "b.csv", "tabular": False, "size_bytes": 50},
     ]
     q = DM.quote_from(inv, "pid")
@@ -577,8 +613,13 @@ def test_missing_files_uses_original_path_for_tabular(tmp_path):
     staged.mkdir(parents=True)
     (staged / "eco.sav").write_bytes(b"x" * 12)
     inventory = [
-        {"path": "eco.tab", "tabular": True, "original_name": "eco.sav",
-         "original_size": 12, "size_bytes": 99},
+        {
+            "path": "eco.tab",
+            "tabular": True,
+            "original_name": "eco.sav",
+            "original_size": 12,
+            "size_bytes": 99,
+        },
     ]
     manager = DownloadManager(FakeClient(inventory), tmp_path / "ws")
     assert manager.missing_files("pid", inventory) == []
@@ -665,7 +706,8 @@ def test_fetch_allowed_labels_shared_bounds_attempts(monkeypatch):
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
     calls: list[str] = []
     monkeypatch.setattr(
-        DataverseClient, "get_allowed_curation_labels",
+        DataverseClient,
+        "get_allowed_curation_labels",
         lambda self, pid: calls.append(pid) or [],
     )
     client = DataverseClient("https://demo.test", "tok")
@@ -695,7 +737,16 @@ def test_allowed_labels_disk_cache_roundtrip(tmp_path):
     assert slot.get("v") == 2
     # legacy bare-instance key is adopted when stamped at v2 …
     (tmp_path / "curation_labels.json").write_text(
-        _json.dumps({"https://legacy.test": {"labels": ["L"], "collection": "mcmaster", "probed": True, "v": 2}})
+        _json.dumps(
+            {
+                "https://legacy.test": {
+                    "labels": ["L"],
+                    "collection": "mcmaster",
+                    "probed": True,
+                    "v": 2,
+                }
+            }
+        )
     )
     _dc._ALLOWED_LABELS_CACHE.pop(("https://legacy.test", "mcmaster"), None)
     assert read_allowed_labels_cache(tmp_path, "https://legacy.test", "mcmaster") == ["L"]
@@ -709,7 +760,9 @@ def test_allowed_labels_disk_cache_roundtrip(tmp_path):
     # … and so does a v1 stamp written from the filter union rather than
     # a probe (probed without v2 carries no discovery guarantee)
     (tmp_path / "curation_labels.json").write_text(
-        _json.dumps({"https://legacy.test": {"labels": ["L"], "collection": "mcmaster", "probed": True}})
+        _json.dumps(
+            {"https://legacy.test": {"labels": ["L"], "collection": "mcmaster", "probed": True}}
+        )
     )
     _dc._ALLOWED_LABELS_CACHE.pop(("https://legacy.test", "mcmaster"), None)
     assert read_allowed_labels_cache(tmp_path, "https://legacy.test", "mcmaster") is None
@@ -935,11 +988,14 @@ def test_get_collection_roles_matches_me_identifier(monkeypatch):
         if path == "/api/users/:me":
             return {"status": "OK", "data": {"identifier": "@u", "superuser": False}}
         assert path == "/api/dataverses/mcmaster/assignments"
-        return {"status": "OK", "data": [
-            {"assignee": "@other", "roleName": "Admin", "_roleAlias": "admin"},
-            {"assignee": "@u", "roleName": "Curator", "_roleAlias": "curator"},
-            {"assignee": "@u", "roleName": "Curator", "_roleAlias": "curator"},
-        ]}
+        return {
+            "status": "OK",
+            "data": [
+                {"assignee": "@other", "roleName": "Admin", "_roleAlias": "admin"},
+                {"assignee": "@u", "roleName": "Curator", "_roleAlias": "curator"},
+                {"assignee": "@u", "roleName": "Curator", "_roleAlias": "curator"},
+            ],
+        }
 
     monkeypatch.setattr(DataverseClient, "_get_json", fake_get_json)
     client = DataverseClient("https://demo.test", "tok")
@@ -975,9 +1031,12 @@ def test_get_collection_roles_denied_or_empty(monkeypatch):
     def fake_no_match(self, path, params=None):
         if path == "/api/users/:me":
             return {"status": "OK", "data": {"identifier": "@nobody"}}
-        return {"status": "OK", "data": [
-            {"assignee": "@someone", "roleName": "Admin"},
-        ]}
+        return {
+            "status": "OK",
+            "data": [
+                {"assignee": "@someone", "roleName": "Admin"},
+            ],
+        }
 
     monkeypatch.setattr(DataverseClient, "_get_json", fake_no_match)
     client2 = DataverseClient("https://demo.test", "tok2")

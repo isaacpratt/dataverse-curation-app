@@ -129,9 +129,7 @@ def test_guestbook_response_is_posted_then_signed_url_streamed(tmp_path):
 
 
 def test_rejected_guestbook_reports_the_server_reason(tmp_path):
-    session = _FakeSession(
-        _ErrorResponse(400, "Missing required fields: Position"), _ZipResponse()
-    )
+    session = _FakeSession(_ErrorResponse(400, "Missing required fields: Position"), _ZipResponse())
     client = _client_with(session)
 
     try:

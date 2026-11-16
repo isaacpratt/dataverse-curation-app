@@ -19,7 +19,10 @@ def main() -> int:
     DIST.mkdir(exist_ok=True)
     rc = subprocess.run(
         [
-            "uv", "run", "--with", "pip-licenses",
+            "uv",
+            "run",
+            "--with",
+            "pip-licenses",
             "pip-licenses",
             "--format=markdown",
             f"--output-file={DIST / 'licenses.md'}",

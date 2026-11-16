@@ -68,7 +68,7 @@ class PdfCheck(Check):
                 if sampled >= _MAX_PAGES_SAMPLED:
                     break
                 sampled += 1
-                if ((page.extract_text() or "").strip()):
+                if (page.extract_text() or "").strip():
                     text_pages += 1
         finally:
             try:
@@ -93,8 +93,7 @@ class PdfCheck(Check):
                     level="info",
                     passed=True,
                     message=(
-                        f"{name}: digital text present "
-                        f"({text_pages}/{sampled} sampled page(s))"
+                        f"{name}: digital text present ({text_pages}/{sampled} sampled page(s))"
                     ),
                 )
             )

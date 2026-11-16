@@ -13,7 +13,8 @@ from dataverse_client import (
 
 def test_parse_block_names():
     assert parse_metadatablock_names({"data": [{"name": "citation"}, {"name": "geospatial"}]}) == [
-        "citation", "geospatial",
+        "citation",
+        "geospatial",
     ]
     assert parse_metadatablock_names({}) == []
     assert parse_metadatablock_names({"data": "nope"}) == []
@@ -21,10 +22,15 @@ def test_parse_block_names():
 
 def test_parse_block_fields_dict_shape():
     out = parse_metadatablock_fields(
-        {"data": {"name": "citation", "metadataFields": {
-            "title": {"displayName": "Title"},
-            "author": {"displayName": "Author"},
-        }}}
+        {
+            "data": {
+                "name": "citation",
+                "metadataFields": {
+                    "title": {"displayName": "Title"},
+                    "author": {"displayName": "Author"},
+                },
+            }
+        }
     )
     assert {"block": "citation", "field": "title", "label": "Title"} in out
     assert len(out) == 2
@@ -32,9 +38,14 @@ def test_parse_block_fields_dict_shape():
 
 def test_parse_block_fields_list_shape():
     out = parse_metadatablock_fields(
-        {"data": {"name": "citation", "metadataFields": [
-            {"name": "title", "displayName": "Title"},
-        ]}}
+        {
+            "data": {
+                "name": "citation",
+                "metadataFields": [
+                    {"name": "title", "displayName": "Title"},
+                ],
+            }
+        }
     )
     assert out == [{"block": "citation", "field": "title", "label": "Title"}]
 
@@ -42,19 +53,35 @@ def test_parse_block_fields_list_shape():
 def test_parse_block_fields_newer_fields_shape():
     """Dataverse 6.8 answers data.fields (dict keyed by field name)."""
     out = parse_metadatablock_fields(
-        {"data": {"name": "geospatial", "fields": {
-            "geographicCoverage": {"name": "geographicCoverage", "displayName": "Geographic Coverage"},
-            "geographicUnit": {"name": "geographicUnit"},
-        }}}
+        {
+            "data": {
+                "name": "geospatial",
+                "fields": {
+                    "geographicCoverage": {
+                        "name": "geographicCoverage",
+                        "displayName": "Geographic Coverage",
+                    },
+                    "geographicUnit": {"name": "geographicUnit"},
+                },
+            }
+        }
     )
-    assert {"block": "geospatial", "field": "geographicCoverage", "label": "Geographic Coverage"} in out
+    assert {
+        "block": "geospatial",
+        "field": "geographicCoverage",
+        "label": "Geographic Coverage",
+    } in out
     assert {"block": "geospatial", "field": "geographicUnit", "label": "geographicUnit"} in out
     assert len(out) == 2
     # metadataFields still wins when both keys are present
     out2 = parse_metadatablock_fields(
-        {"data": {"name": "citation",
-                  "metadataFields": {"title": {"displayName": "Title"}},
-                  "fields": {"other": {"displayName": "Other"}}}}
+        {
+            "data": {
+                "name": "citation",
+                "metadataFields": {"title": {"displayName": "Title"}},
+                "fields": {"other": {"displayName": "Other"}},
+            }
+        }
     )
     assert out2 == [{"block": "citation", "field": "title", "label": "Title"}]
 
@@ -76,12 +103,14 @@ def test_memory_cache_roundtrip():
 
 def test_parse_block_display_names():
     out = parse_metadatablock_display_names(
-        {"data": [
-            {"name": "citation", "displayName": "Citation Metadata"},
-            {"name": "geospatial"},
-            {"name": ""},
-            "nope",
-        ]}
+        {
+            "data": [
+                {"name": "citation", "displayName": "Citation Metadata"},
+                {"name": "geospatial"},
+                {"name": ""},
+                "nope",
+            ]
+        }
     )
     assert out == {"citation": "Citation Metadata", "geospatial": "geospatial"}
     assert parse_metadatablock_display_names({}) == {}
@@ -99,15 +128,20 @@ def test_fetch_skips_empty_memory_cache(monkeypatch):
         calls.append(path)
         if path == "/api/metadatablocks":
             return {"data": [{"name": "citation", "displayName": "Citation Metadata"}]}
-        return {"data": {"name": "citation",
-                         "fields": {"title": {"displayName": "Title"}}}}
+        return {"data": {"name": "citation", "fields": {"title": {"displayName": "Title"}}}}
 
     monkeypatch.setattr(_dc.DataverseClient, "_get_json", fake_json)
     client = _dc.DataverseClient("https://empty.invalid", "tok")
     fields = client.fetch_metadata_field_catalog()
     assert calls, "empty memory cache must trigger a refetch"
-    assert fields == [{"block": "citation", "field": "title",
-                       "label": "Title", "block_label": "Citation Metadata"}]
+    assert fields == [
+        {
+            "block": "citation",
+            "field": "title",
+            "label": "Title",
+            "block_label": "Citation Metadata",
+        }
+    ]
 
 
 def test_fetch_attaches_block_labels(monkeypatch):
@@ -118,8 +152,7 @@ def test_fetch_attaches_block_labels(monkeypatch):
     def fake_json(self, path, params=None):
         if path == "/api/metadatablocks":
             return {"data": [{"name": "citation", "displayName": "Citation Metadata"}]}
-        return {"data": {"name": "citation",
-                         "metadataFields": {"title": {"displayName": "Title"}}}}
+        return {"data": {"name": "citation", "metadataFields": {"title": {"displayName": "Title"}}}}
 
     monkeypatch.setattr(_dc.DataverseClient, "_get_json", fake_json)
     client = _dc.DataverseClient("https://lbl.invalid", "tok")

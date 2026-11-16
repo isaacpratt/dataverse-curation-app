@@ -26,8 +26,16 @@ def run(cmd: list[str], **kw) -> subprocess.CompletedProcess[str]:
 
 def main() -> int:
     export = run(
-        ["uv", "export", "--locked", "--all-groups", "--format", "requirements-txt",
-         "--no-emit-project", "--no-hashes"],
+        [
+            "uv",
+            "export",
+            "--locked",
+            "--all-groups",
+            "--format",
+            "requirements-txt",
+            "--no-emit-project",
+            "--no-hashes",
+        ],
         cwd=ROOT,
     )
     if export.returncode != 0:
@@ -43,8 +51,18 @@ def main() -> int:
         req = Path(fh.name)
 
     audit = run(
-        ["uvx", "--from", "pip-audit", "pip-audit", "-s", "osv",
-         "--progress-spinner", "off", "-r", str(req)],
+        [
+            "uvx",
+            "--from",
+            "pip-audit",
+            "pip-audit",
+            "-s",
+            "osv",
+            "--progress-spinner",
+            "off",
+            "-r",
+            str(req),
+        ],
         cwd=ROOT,
     )
     print(audit.stdout.rstrip())

@@ -54,6 +54,7 @@ class DataverseConfig:
     base_url: str = "https://demo.borealisdata.ca"
     api_token: str = ""
     collection: str = ""
+
     # backward-compat alias for older configs / docs
     @property
     def subtree(self) -> str:
@@ -104,7 +105,11 @@ class Config:
         dv = raw.get("dataverse", {}) if isinstance(raw.get("dataverse", {}), dict) else {}
         app_raw = raw.get("app", {}) if isinstance(raw.get("app", {}), dict) else {}
         engine_block = raw.get("engine", {}) if isinstance(raw.get("engine", {}), dict) else {}
-        engine_raw = engine_block.get("optional_tools", {}) if isinstance(engine_block.get("optional_tools", {}), dict) else {}
+        engine_raw = (
+            engine_block.get("optional_tools", {})
+            if isinstance(engine_block.get("optional_tools", {}), dict)
+            else {}
+        )
         collection = (
             dv.get("collection")
             if "collection" in dv
@@ -114,12 +119,20 @@ class Config:
         )
         cfg = cls(
             dataverse=DataverseConfig(
-                base_url=str(dv.get("base_url", "https://demo.borealisdata.ca") or "https://demo.borealisdata.ca"),
+                base_url=str(
+                    dv.get("base_url", "https://demo.borealisdata.ca")
+                    or "https://demo.borealisdata.ca"
+                ),
                 api_token=str(dv.get("api_token", "") or ""),
                 collection=str(collection or ""),
             ),
             app=AppConfig(
-                workspace=Path(str(app_raw.get("workspace", str(default_workspace())) or str(default_workspace()))),
+                workspace=Path(
+                    str(
+                        app_raw.get("workspace", str(default_workspace()))
+                        or str(default_workspace())
+                    )
+                ),
                 tesseract=str(engine_raw.get("tesseract", app_raw.get("tesseract", "")) or ""),
                 exiftool=str(engine_raw.get("exiftool", app_raw.get("exiftool", "")) or ""),
             ),

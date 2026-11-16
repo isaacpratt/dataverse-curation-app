@@ -31,6 +31,7 @@ from engine.runner import collect_files, list_planned_checks, run_report
 
 # -- dispatcher -----------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "name,expected",
     [
@@ -60,6 +61,7 @@ def test_planned_matches_dispatch(tmp_path):
 
 
 # -- missing-library contract ----------------------------------------------
+
 
 def test_missing_library_contract():
     result = missing_library("format.xlsx.openable", "openpyxl")
@@ -110,9 +112,7 @@ def test_images_stdlib_fallback_without_pillow(tmp_path, monkeypatch):
     png = tmp_path / "tiny.png"
     ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
     png.write_bytes(
-        b"\x89PNG\r\n\x1a\n"
-        + struct.pack(">I", 13) + b"IHDR" + ihdr
-        + b"\x00\x00\x00\x00"
+        b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + ihdr + b"\x00\x00\x00\x00"
     )
     results = ImagesCheck().run([png])
     assert len(results) == 1
@@ -171,6 +171,7 @@ def test_chardet_fallback(tmp_path, monkeypatch):
 
 # -- containers guards ------------------------------------------------------
 
+
 def test_zip_unsafe_entry_flagged(tmp_path):
     bundle = tmp_path / "evil.zip"
     with zipfile.ZipFile(bundle, "w") as archive:
@@ -213,6 +214,7 @@ def test_zip_member_cap(tmp_path, monkeypatch):
 
 # -- download hardening ------------------------------------------------------
 
+
 def test_contained_blocks_traversal(tmp_path):
     root = tmp_path / "files"
     root.mkdir()
@@ -239,8 +241,12 @@ def test_verify_rejects_unsafe_and_malformed(tmp_path):
     class FakeClient:
         def get_file_inventory(self, pid):
             return [
-                {"path": "../escape.csv", "size_bytes": 1,
-                 "checksum_type": "md5", "checksum_value": "0" * 32},
+                {
+                    "path": "../escape.csv",
+                    "size_bytes": 1,
+                    "checksum_type": "md5",
+                    "checksum_value": "0" * 32,
+                },
                 {"size_bytes": 1},
             ]
 
@@ -264,6 +270,7 @@ def test_collect_files_skips_symlinks(tmp_path):
 
 # -- caps, taxonomy, inventory -----------------------------------------------
 
+
 def test_csv_scan_cap(tmp_path, monkeypatch):
     import engine.checks.csv_check as csv_mod
 
@@ -281,10 +288,7 @@ def test_empty_files_are_errors(tmp_path):
     csv_empty.write_bytes(b"")
     (tmp_path / "t.txt").write_bytes(b"")
     csv_res = CsvCheck().run([csv_empty])[0]
-    txt_res = next(
-        r for r in TextCheck().run([tmp_path / "t.txt"])
-        if "empty" in r.message
-    )
+    txt_res = next(r for r in TextCheck().run([tmp_path / "t.txt"]) if "empty" in r.message)
     assert (csv_res.level, csv_res.passed) == ("error", False)
     assert (txt_res.level, txt_res.passed) == ("error", False)
 
@@ -309,7 +313,7 @@ def test_netcdf_name_patterns():
     from engine.checks.nc_check import _LAT, _LON
 
     for good in ("lat", "latitude", "grid_lat", "XLAT", "lon", "longitude", "xlong"):
-        assert (_LAT.search(good) or _LON.search(good)), good
+        assert _LAT.search(good) or _LON.search(good), good
     for bad in ("relative", "flat", "dilatation", "clone", "alone"):
         assert not _LAT.search(bad), bad
         assert not _LON.search(bad), bad
@@ -333,8 +337,6 @@ def test_runner_unchecked_types_hint(tmp_path):
     (staged / "model.mat").write_bytes(b"\x00" * 16)
     (staged / "note.csv").write_text("a\n1\n")
     report = run_report(staged, persistent_id="doi:10/x")
-    hint = next(
-        c for c in report.dataset_checks if c.check_id == "inventory.unchecked_types"
-    )
+    hint = next(c for c in report.dataset_checks if c.check_id == "inventory.unchecked_types")
     assert hint.level == "warning"
     assert ".mat" in hint.message

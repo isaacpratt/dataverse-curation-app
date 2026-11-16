@@ -77,8 +77,12 @@ def test_ruleset_access_rule_presents_embargo_and_terms():
     assert rule["field"] == "termsOfAccess"
     assert rule["level"] == "optional"
 
-    meta = {"latestVersion": {"metadataBlocks": {"citation": {"fields": []}},
-                              "termsOfAccess": {"value": "Contact the curator"}}}
+    meta = {
+        "latestVersion": {
+            "metadataBlocks": {"citation": {"fields": []}},
+            "termsOfAccess": {"value": "Contact the curator"},
+        }
+    }
     evaluated = rr.evaluate_ruleset(meta, rs, _inventory())
     found = next(r for r in evaluated if r["rule_id"].endswith(":access_conditions"))
     assert found["status"] == "complete"
@@ -91,9 +95,7 @@ def test_response_draft_uses_access_templates():
     from engine.report import DatasetReport
     from response_draft import build_response
 
-    results = AccessCheck().run_dataset(
-        [], {"inventory": _inventory(), "metadata": _metadata()}
-    )
+    results = AccessCheck().run_dataset([], {"inventory": _inventory(), "metadata": _metadata()})
     report = DatasetReport(
         persistent_id="doi:1", label="x", engine_version="t", dataset_checks=results
     )

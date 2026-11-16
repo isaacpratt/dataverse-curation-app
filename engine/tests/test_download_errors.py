@@ -67,8 +67,7 @@ def _client_with(session):
 
 def test_guestbook_blocked_bundle_raises_actionable_error(tmp_path):
     message = (
-        "You may not download this file without the required Guestbook "
-        "response for guestbookID 24."
+        "You may not download this file without the required Guestbook response for guestbookID 24."
     )
     session = _FakeSession(_ErrorResponse(400, message))
     client = _client_with(session)

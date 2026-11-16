@@ -157,8 +157,8 @@ type = "simple"
   cmd = "python tools/probes/run_all.py"
 
   [tool.poe.tasks.check]
-  help = "Lint + typecheck + tests"
-  sequence = ["lint", "typecheck", "test"]
+  help = "Lint + format-check + typecheck + tests"
+  sequence = ["lint", "format-check", "typecheck", "test"]
 
   [tool.poe.tasks.clean]
   help = "Remove build/, dist/, .pyi-cache/ and stray .spec files"
@@ -201,6 +201,8 @@ select = ["E", "F", "I", "B", "C4", "UP", "D"]
 # D203/D213 are the incompatible halves of the D211/D212 pairs ruff selects;
 # naming them keeps the style the codebase already uses and silences the
 # "incompatible rules" warning ruff prints on every run.
+# E501 stays ignored on purpose: line length is enforced by ruff format
+# (100 cols) at the formatter; E501 would double-report wrapped lines.
 ignore = [
     "D100",
     "D101",

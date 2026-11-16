@@ -6,9 +6,7 @@ import pytest
 
 from engine.runner import run_report, run_report_to_file
 
-CUR_DATA = (
-    Path(__file__).resolve().parents[3] / "CUR_Res_CurationTools" / "data"
-)
+CUR_DATA = Path(__file__).resolve().parents[3] / "CUR_Res_CurationTools" / "data"
 
 
 def _make_staged(tmp_path: Path) -> Path:
@@ -45,9 +43,7 @@ def test_run_report_on_synthetic(tmp_path):
     assert bin_entry.checks == []
     assert bin_entry.mime_type
 
-    inventory = next(
-        c for c in report.dataset_checks if c.check_id == "inventory.extensions"
-    )
+    inventory = next(c for c in report.dataset_checks if c.check_id == "inventory.extensions")
     assert inventory.passed
 
 

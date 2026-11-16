@@ -66,7 +66,9 @@ def test_diff_ignores_local_enrichment():
 def test_diff_flags_state_label_and_file_changes():
     old = [_row("doi:1")]
     assert diff_dashboard_datasets(old, [_row("doi:1", state="In Review")])["changed"] == ["doi:1"]
-    assert diff_dashboard_datasets(old, [_row("doi:1", curation_label="Approve")])["changed"] == ["doi:1"]
+    assert diff_dashboard_datasets(old, [_row("doi:1", curation_label="Approve")])["changed"] == [
+        "doi:1"
+    ]
     assert diff_dashboard_datasets(old, [_row("doi:1", file_count=5)])["changed"] == ["doi:1"]
     assert diff_dashboard_datasets([], []) == {"added": [], "removed": [], "changed": []}
 

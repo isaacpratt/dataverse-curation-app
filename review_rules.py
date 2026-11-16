@@ -66,6 +66,7 @@ def _rule_scopes(rule: dict[str, Any]) -> list[str]:
             return scopes
     return ["filenames"]
 
+
 DEFAULT_RULESET_KEY = "mcmaster-default"
 
 # Fallback catalog used when the live metadatablocks schema is unavailable
@@ -73,10 +74,34 @@ DEFAULT_RULESET_KEY = "mcmaster-default"
 FIELD_CATALOG: list[dict[str, str]] = [
     {"block": "citation", "field": "title", "label": "Title"},
     {"block": "citation", "field": "author", "label": "Author"},
-    {"block": "citation", "field": "author.authorName", "label": "Name", "parent": "author", "parent_label": "Author"},
-    {"block": "citation", "field": "author.authorAffiliation", "label": "Affiliation", "parent": "author", "parent_label": "Author"},
-    {"block": "citation", "field": "author.authorIdentifierScheme", "label": "Identifier Type", "parent": "author", "parent_label": "Author"},
-    {"block": "citation", "field": "author.authorIdentifier", "label": "Identifier", "parent": "author", "parent_label": "Author"},
+    {
+        "block": "citation",
+        "field": "author.authorName",
+        "label": "Name",
+        "parent": "author",
+        "parent_label": "Author",
+    },
+    {
+        "block": "citation",
+        "field": "author.authorAffiliation",
+        "label": "Affiliation",
+        "parent": "author",
+        "parent_label": "Author",
+    },
+    {
+        "block": "citation",
+        "field": "author.authorIdentifierScheme",
+        "label": "Identifier Type",
+        "parent": "author",
+        "parent_label": "Author",
+    },
+    {
+        "block": "citation",
+        "field": "author.authorIdentifier",
+        "label": "Identifier",
+        "parent": "author",
+        "parent_label": "Author",
+    },
     {"block": "citation", "field": "datasetContact", "label": "Dataset Contact"},
     {"block": "citation", "field": "dsDescription", "label": "Description"},
     {"block": "citation", "field": "subject", "label": "Subject"},
@@ -138,79 +163,172 @@ def _mc_req(text: str) -> str:
 
 
 def _builtin_mcmaster() -> dict[str, Any]:
-    def fr(block: str, field: str, label: str, level: str, req: str,
-           handler: str = "nonempty", template: str = "") -> dict[str, Any]:
+    def fr(
+        block: str,
+        field: str,
+        label: str,
+        level: str,
+        req: str,
+        handler: str = "nonempty",
+        template: str = "",
+    ) -> dict[str, Any]:
         return {
-            "block": block, "field": field, "label": label, "level": level,
-            "requirement": req, "handler": handler,
+            "block": block,
+            "field": field,
+            "label": label,
+            "level": level,
+            "requirement": req,
+            "handler": handler,
             "response_template": template,
         }
 
     field_rules = [
-        fr("citation", "title", "Title", "required",
-           _mc_req("McMaster — Required (Depositor Checklist: Basic Metadata; Curation Log: Full Citation)"),
-           "nonempty",
-           "The dataset is missing a Title. Please provide a clear, descriptive title."),
-        fr("citation", "dsDescription", "Description", "required",
-           _mc_req("McMaster — Required (Curation Log: Full Citation; Checklist: Basic Metadata)"),
-           "nonempty",
-           "The dataset is missing a Description. Please add a brief summary of the data, methods, and contents."),
-        fr("citation", "author", "Author Name & Affiliation", "required",
-           _mc_req("McMaster — Required (Curation Log: Full Citation)"),
-           "author_affiliation",
-           "Author information is incomplete ({value}). Please ensure every author has a name and affiliation."),
-        fr("citation", "datasetContact", "Dataset Contact", "required",
-           _mc_req("McMaster — Required (Curation Log + Checklist)"),
-           "nonempty",
-           "The dataset is missing a Dataset Contact. Please add a contact name and email."),
-        fr("citation", "subject", "Subject", "required",
-           _mc_req("McMaster — Required (Checklist: Basic Metadata)"),
-           "nonempty",
-           "The dataset is missing a Subject classification. Please select at least one subject area."),
-        fr("dataset", "license", "License", "required",
-           _mc_req("McMaster — Required (Checklist: Data License)"),
-           "license",
-           "No data license is set. Please choose an appropriate license for the dataset."),
-        fr("citation", "depositor", "Depositor", "required",
-           _mc_req("McMaster — Required (Checklist: During Deposit)"),
-           "nonempty",
-           "The Depositor field is empty. Please confirm who deposited the dataset."),
-        fr("citation", "dateOfDeposit", "Deposit Date", "required",
-           _mc_req("McMaster — Required (Checklist: During Deposit)"),
-           "nonempty",
-           "The Deposit Date is missing. Please provide the date of deposit."),
-        fr("citation", "publication", "Related Publication (title + journal)", "required",
-           _mc_req("McMaster — Required (Curation Log + Checklist: *Publication)"),
-           "related_pub",
-           "Related publication details are incomplete ({value}). Please add the publication title and journal."),
-        fr("citation", "publication", "Related Publication ID", "required",
-           _mc_req("McMaster — Required (Curation Log: Pub ID)"),
-           "related_pub_id",
-           "The related publication ID (e.g. DOI) is missing. Please add it so the dataset links to the article."),
-        fr("citation", "author.authorIdentifier", "ORCiD for authors", "optional",
-           _mc_req("McMaster — Recommended (Checklist: Researcher ID; Curation Log: optional)"),
-           "orcid",
-           "Consider adding ORCiDs for the authors to improve attribution ({value})."),
-        fr("citation", "author", "Author count", "optional",
-           _mc_req("McMaster — Recommended (check the number of authors)"),
-           "author_count",
-           "The dataset has {value} authors — confirm this is the expected list."),
-        fr("license", "license", "License and Terms of Use", "optional",
-           _mc_req("McMaster — Recommended (Checklist: Data License)"),
-           "license_terms",
-           "No data license is set. Please choose an appropriate license for the dataset."),
-        fr("license", "termsOfAccess", "Access, Embargo & Terms of Access", "optional",
-           _mc_req("McMaster — Recommended (Checklist: Data License / Access)"),
-           "access_conditions",
-           "Please confirm the access conditions for this dataset, including any embargo date and terms of access."),
-        fr("citation", "timePeriodCovered", "Time Period / Date of Collection", "optional",
-           _mc_req("McMaster — Recommended (Checklist: More Metadata — Time)"),
-           "time_anyof",
-           "Consider adding the time period covered or the date of collection."),
-        fr("geospatial", "geographicCoverage", "Geographic Coverage", "optional",
-           _mc_req("McMaster — Recommended (Checklist: More Metadata — Place)"),
-           "geo",
-           "Consider adding geographic coverage information for the dataset."),
+        fr(
+            "citation",
+            "title",
+            "Title",
+            "required",
+            _mc_req(
+                "McMaster — Required (Depositor Checklist: Basic Metadata; Curation Log: Full Citation)"
+            ),
+            "nonempty",
+            "The dataset is missing a Title. Please provide a clear, descriptive title.",
+        ),
+        fr(
+            "citation",
+            "dsDescription",
+            "Description",
+            "required",
+            _mc_req("McMaster — Required (Curation Log: Full Citation; Checklist: Basic Metadata)"),
+            "nonempty",
+            "The dataset is missing a Description. Please add a brief summary of the data, methods, and contents.",
+        ),
+        fr(
+            "citation",
+            "author",
+            "Author Name & Affiliation",
+            "required",
+            _mc_req("McMaster — Required (Curation Log: Full Citation)"),
+            "author_affiliation",
+            "Author information is incomplete ({value}). Please ensure every author has a name and affiliation.",
+        ),
+        fr(
+            "citation",
+            "datasetContact",
+            "Dataset Contact",
+            "required",
+            _mc_req("McMaster — Required (Curation Log + Checklist)"),
+            "nonempty",
+            "The dataset is missing a Dataset Contact. Please add a contact name and email.",
+        ),
+        fr(
+            "citation",
+            "subject",
+            "Subject",
+            "required",
+            _mc_req("McMaster — Required (Checklist: Basic Metadata)"),
+            "nonempty",
+            "The dataset is missing a Subject classification. Please select at least one subject area.",
+        ),
+        fr(
+            "dataset",
+            "license",
+            "License",
+            "required",
+            _mc_req("McMaster — Required (Checklist: Data License)"),
+            "license",
+            "No data license is set. Please choose an appropriate license for the dataset.",
+        ),
+        fr(
+            "citation",
+            "depositor",
+            "Depositor",
+            "required",
+            _mc_req("McMaster — Required (Checklist: During Deposit)"),
+            "nonempty",
+            "The Depositor field is empty. Please confirm who deposited the dataset.",
+        ),
+        fr(
+            "citation",
+            "dateOfDeposit",
+            "Deposit Date",
+            "required",
+            _mc_req("McMaster — Required (Checklist: During Deposit)"),
+            "nonempty",
+            "The Deposit Date is missing. Please provide the date of deposit.",
+        ),
+        fr(
+            "citation",
+            "publication",
+            "Related Publication (title + journal)",
+            "required",
+            _mc_req("McMaster — Required (Curation Log + Checklist: *Publication)"),
+            "related_pub",
+            "Related publication details are incomplete ({value}). Please add the publication title and journal.",
+        ),
+        fr(
+            "citation",
+            "publication",
+            "Related Publication ID",
+            "required",
+            _mc_req("McMaster — Required (Curation Log: Pub ID)"),
+            "related_pub_id",
+            "The related publication ID (e.g. DOI) is missing. Please add it so the dataset links to the article.",
+        ),
+        fr(
+            "citation",
+            "author.authorIdentifier",
+            "ORCiD for authors",
+            "optional",
+            _mc_req("McMaster — Recommended (Checklist: Researcher ID; Curation Log: optional)"),
+            "orcid",
+            "Consider adding ORCiDs for the authors to improve attribution ({value}).",
+        ),
+        fr(
+            "citation",
+            "author",
+            "Author count",
+            "optional",
+            _mc_req("McMaster — Recommended (check the number of authors)"),
+            "author_count",
+            "The dataset has {value} authors — confirm this is the expected list.",
+        ),
+        fr(
+            "license",
+            "license",
+            "License and Terms of Use",
+            "optional",
+            _mc_req("McMaster — Recommended (Checklist: Data License)"),
+            "license_terms",
+            "No data license is set. Please choose an appropriate license for the dataset.",
+        ),
+        fr(
+            "license",
+            "termsOfAccess",
+            "Access, Embargo & Terms of Access",
+            "optional",
+            _mc_req("McMaster — Recommended (Checklist: Data License / Access)"),
+            "access_conditions",
+            "Please confirm the access conditions for this dataset, including any embargo date and terms of access.",
+        ),
+        fr(
+            "citation",
+            "timePeriodCovered",
+            "Time Period / Date of Collection",
+            "optional",
+            _mc_req("McMaster — Recommended (Checklist: More Metadata — Time)"),
+            "time_anyof",
+            "Consider adding the time period covered or the date of collection.",
+        ),
+        fr(
+            "geospatial",
+            "geographicCoverage",
+            "Geographic Coverage",
+            "optional",
+            _mc_req("McMaster — Recommended (Checklist: More Metadata — Place)"),
+            "geo",
+            "Consider adding geographic coverage information for the dataset.",
+        ),
     ]
     content_rules = [
         {
@@ -259,9 +377,15 @@ def _builtin_minimal() -> dict[str, Any]:
         ("citation", "subject", "subject", "Minimal — Required: Subject"),
     ]
     field_rules = [
-        {"block": b, "field": f, "label": lbl, "level": "required",
-         "requirement": req, "handler": "nonempty",
-         "response_template": f"The dataset is missing {lbl}. Please provide it."}
+        {
+            "block": b,
+            "field": f,
+            "label": lbl,
+            "level": "required",
+            "requirement": req,
+            "handler": "nonempty",
+            "response_template": f"The dataset is missing {lbl}. Please provide it.",
+        }
         for b, f, lbl, req in specs
     ]
 
@@ -295,7 +419,9 @@ def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
         "dataverses": raw.get("dataverses", builtin.get("dataverses", ["*"])),
         "field_rules": raw.get("field_rules", builtin.get("field_rules", [])),
         "content_rules": raw.get("content_rules", builtin.get("content_rules", [])),
-        "filecheck_templates": raw.get("filecheck_templates", builtin.get("filecheck_templates", {})),
+        "filecheck_templates": raw.get(
+            "filecheck_templates", builtin.get("filecheck_templates", {})
+        ),
         "response_header": str(raw.get("response_header") or builtin.get("response_header") or ""),
         "response_footer": str(raw.get("response_footer") or builtin.get("response_footer") or ""),
     }
@@ -309,8 +435,12 @@ def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
         out["filecheck_templates"] = {}
     # Copy rule dicts: normalization fills defaults in place and must never
     # mutate the caller's structures (or the built-in singletons).
-    out["field_rules"] = [dict(r) for r in out["field_rules"] if isinstance(r, dict) and r.get("field")]
-    out["content_rules"] = [dict(r) for r in out["content_rules"] if isinstance(r, dict) and r.get("id")]
+    out["field_rules"] = [
+        dict(r) for r in out["field_rules"] if isinstance(r, dict) and r.get("field")
+    ]
+    out["content_rules"] = [
+        dict(r) for r in out["content_rules"] if isinstance(r, dict) and r.get("id")
+    ]
     out["filecheck_templates"] = dict(out["filecheck_templates"])
     out["dataverses"] = list(out["dataverses"])
     for r in out["field_rules"]:
@@ -319,8 +449,7 @@ def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
         r.setdefault("block", "citation")
         # ORCID migrated from the composite (handler="orcid" on citation.author)
         # to the identifier subfield as of 2026-11-12 (dv-bhv).
-        if (str(r.get("handler") or "") == "orcid"
-                and str(r.get("field") or "").lower() == "author"):
+        if str(r.get("handler") or "") == "orcid" and str(r.get("field") or "").lower() == "author":
             r["field"] = "author.authorIdentifier"
         r.setdefault("label", str(r.get("field") or ""))
         r.setdefault("handler", "nonempty")
@@ -364,7 +493,11 @@ def load_rulesets() -> dict[str, dict[str, Any]]:
             _RULESETS_MEMO["pool"] = base
             return base
         raw = _json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(raw, dict) and isinstance(raw.get("rulesets"), dict) and raw.get("version") == 2:
+        if (
+            isinstance(raw, dict)
+            and isinstance(raw.get("rulesets"), dict)
+            and raw.get("version") == 2
+        ):
             for key, val in raw["rulesets"].items():
                 norm = _normalize_ruleset(str(key), val)
                 if norm is not None:
@@ -425,8 +558,9 @@ def _norm_base(url: str) -> str:
         return ""
 
 
-def rulesets_for_dataverse(base_url: str,
-                            rulesets: dict[str, dict[str, Any]] | None = None) -> list[tuple[str, dict[str, Any]]]:
+def rulesets_for_dataverse(
+    base_url: str, rulesets: dict[str, dict[str, Any]] | None = None
+) -> list[tuple[str, dict[str, Any]]]:
     """(key, ruleset) usable for an instance: '*' matches all. Never raises."""
     try:
         pool = rulesets if isinstance(rulesets, dict) else load_rulesets()
@@ -603,9 +737,15 @@ def _orcid_dotted(m, blocks: dict[str, Any], block: str, field: str) -> tuple[bo
     return (not missing), shown
 
 
-def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any],
-                  block: str, field: str, rule: dict[str, Any] | None = None,
-                  inventory: list[dict[str, Any]] | None = None) -> tuple[bool, str]:
+def _eval_handler(
+    handler: str,
+    metadata: dict[str, Any],
+    blocks: dict[str, Any],
+    block: str,
+    field: str,
+    rule: dict[str, Any] | None = None,
+    inventory: list[dict[str, Any]] | None = None,
+) -> tuple[bool, str]:
     m = _mc()
     rule = rule if isinstance(rule, dict) else {}
     # Dotted paths ("author.authorIdentifier") address compound children;
@@ -629,13 +769,17 @@ def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any]
     if handler == "author_affiliation":
         raw = m._field(blocks, "citation", "author") or []
         authors = [a for a in raw if isinstance(a, dict)] if isinstance(raw, list) else []
-        ok_names = m._nonempty(m._field(blocks, "citation", "author")) and bool(authors) and all(
-            m._nonempty((a or {}).get("authorName", {})) for a in authors
+        ok_names = (
+            m._nonempty(m._field(blocks, "citation", "author"))
+            and bool(authors)
+            and all(m._nonempty((a or {}).get("authorName", {})) for a in authors)
         )
         missing = [
-            str((a.get("authorName", {}) or {}).get("value", "")
-                if isinstance(a.get("authorName", {}), dict) else a.get("authorName", "")
-                or f"author {i+1}")
+            str(
+                (a.get("authorName", {}) or {}).get("value", "")
+                if isinstance(a.get("authorName", {}), dict)
+                else a.get("authorName", "") or f"author {i + 1}"
+            )
             for i, a in enumerate(authors)
             if not m._nonempty((a or {}).get("authorAffiliation", {}))
         ]
@@ -654,30 +798,45 @@ def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any]
         complete = False
         displays: list[str] = []
         for entry in rel_list:
-            cit = entry.get("publicationCitation", {}).get("value", "") \
-                if isinstance(entry.get("publicationCitation"), dict) else str(entry.get("publicationCitation") or "")
-            jour = entry.get("journal", {}).get("value", "") if isinstance(entry.get("journal"), dict) else ""
-            idv = entry.get("publicationIDNumber", {}).get("value", "") \
-                if isinstance(entry.get("publicationIDNumber"), dict) else str(entry.get("publicationIDNumber") or "")
+            cit = (
+                entry.get("publicationCitation", {}).get("value", "")
+                if isinstance(entry.get("publicationCitation"), dict)
+                else str(entry.get("publicationCitation") or "")
+            )
+            jour = (
+                entry.get("journal", {}).get("value", "")
+                if isinstance(entry.get("journal"), dict)
+                else ""
+            )
+            idv = (
+                entry.get("publicationIDNumber", {}).get("value", "")
+                if isinstance(entry.get("publicationIDNumber"), dict)
+                else str(entry.get("publicationIDNumber") or "")
+            )
             if cit or jour:
                 displays.append(f"{cit} — {jour}".strip(" —") if cit and jour else (cit or jour))
             elif idv:
                 displays.append(idv)
             else:
                 displays.append(m._display_value(entry))
-            if (m._nonempty(entry.get("publicationCitation", {})) or m._nonempty(entry.get("title", {}))) \
-                    and m._nonempty(entry.get("journal", {})):
+            if (
+                m._nonempty(entry.get("publicationCitation", {}))
+                or m._nonempty(entry.get("title", {}))
+            ) and m._nonempty(entry.get("journal", {})):
                 complete = True
         val = displays[0] if displays else "—"
         if len(displays) > 1:
-            val += f" (+{len(displays)-1} more)"
+            val += f" (+{len(displays) - 1} more)"
         return complete, val
     if handler == "related_pub_id":
         rel = m._field(blocks, "citation", "publication") or []
         rel_list = rel if isinstance(rel, list) else ([rel] if rel else [])
-        for entry in ([r for r in rel_list if isinstance(r, dict)]):
-            idv = entry.get("publicationIDNumber", {}).get("value", "") \
-                if isinstance(entry.get("publicationIDNumber"), dict) else str(entry.get("publicationIDNumber") or "")
+        for entry in [r for r in rel_list if isinstance(r, dict)]:
+            idv = (
+                entry.get("publicationIDNumber", {}).get("value", "")
+                if isinstance(entry.get("publicationIDNumber"), dict)
+                else str(entry.get("publicationIDNumber") or "")
+            )
             if idv and str(idv).strip():
                 return True, str(idv)
         return False, "—"
@@ -691,16 +850,23 @@ def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any]
         missing_orcid: list[str] = []
         found: list[str] = []
         for i, author in enumerate(authors):
-            name = str(
-                (author.get("authorName") or {}).get("value", "")
-                if isinstance(author.get("authorName"), dict)
-                else author.get("authorName") or ""
-            ).strip() or f"author {i + 1}"
+            name = (
+                str(
+                    (author.get("authorName") or {}).get("value", "")
+                    if isinstance(author.get("authorName"), dict)
+                    else author.get("authorName") or ""
+                ).strip()
+                or f"author {i + 1}"
+            )
             id_val = author.get("authorIdentifier", {})
             scheme = author.get("authorIdentifierScheme", {})
             id_str = id_val.get("value", "") if isinstance(id_val, dict) else str(id_val or "")
             scheme_str = scheme.get("value", "") if isinstance(scheme, dict) else str(scheme or "")
-            if "orcid" in str(scheme_str).lower() and id_str.strip() and m.ORCID_RE.match(id_str.strip()):
+            if (
+                "orcid" in str(scheme_str).lower()
+                and id_str.strip()
+                and m.ORCID_RE.match(id_str.strip())
+            ):
                 found.append(f"{name}: {id_str.strip()}")
             else:
                 missing_orcid.append(name)
@@ -721,9 +887,7 @@ def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any]
         names: list[str] = []
         for a in authors[:3]:
             nm = a.get("authorName", {})
-            names.append(
-                str(nm.get("value", "") if isinstance(nm, dict) else nm or "").strip()
-            )
+            names.append(str(nm.get("value", "") if isinstance(nm, dict) else nm or "").strip())
         names = [x for x in names if x]
         if n <= 3:
             val = f"{n} author(s)" + (f": {'; '.join(names)}" if names else "")
@@ -777,14 +941,19 @@ def _eval_handler(handler: str, metadata: dict[str, Any], blocks: dict[str, Any]
 
         return access_conditions(metadata, inventory)
     if handler == "time_anyof":
-        has = m._nonempty(m._field(blocks, "citation", "timePeriodCovered")) or \
-            m._nonempty(m._field(blocks, "citation", "dateOfCollection"))
-        val = f"{m._display_value(m._field(blocks, 'citation', 'timePeriodCovered'))} / " \
-              f"{m._display_value(m._field(blocks, 'citation', 'dateOfCollection'))}".strip(" /") or "—"
+        has = m._nonempty(m._field(blocks, "citation", "timePeriodCovered")) or m._nonempty(
+            m._field(blocks, "citation", "dateOfCollection")
+        )
+        val = (
+            f"{m._display_value(m._field(blocks, 'citation', 'timePeriodCovered'))} / "
+            f"{m._display_value(m._field(blocks, 'citation', 'dateOfCollection'))}".strip(" /")
+            or "—"
+        )
         return has, val
     if handler == "geo":
-        geo = m._field(blocks, "geospatial", "geographicCoverage") or \
-            m._field(blocks, "citation", "geographicCoverage")
+        geo = m._field(blocks, "geospatial", "geographicCoverage") or m._field(
+            blocks, "citation", "geographicCoverage"
+        )
         return m._nonempty(geo), m._display_value(geo)
     # Unknown handler: plain nonempty on the configured block/field.
     raw = m._field(blocks, block, field)
@@ -812,7 +981,9 @@ def _iter_metadata_strings(metadata: dict[str, Any]) -> list[str]:
     return out
 
 
-def _match_filenames(rule: dict[str, Any], inventory: list[dict[str, Any]] | None) -> tuple[bool | None, str]:
+def _match_filenames(
+    rule: dict[str, Any], inventory: list[dict[str, Any]] | None
+) -> tuple[bool | None, str]:
     """(found | None=pending, evidence). None when the file list is not loaded."""
     if inventory is None:
         return None, "— (load file list to check)"
@@ -846,8 +1017,10 @@ def _match_filenames(rule: dict[str, Any], inventory: list[dict[str, Any]] | Non
                 return True, f.get("path") or f.get("label") or "found"
             # Legacy README behavior: readme, readme.*, readme_* all count
             # (case-insensitive by nature, like the original check).
-            if not case and "readme" in pat and (
-                hay == "readme" or hay.startswith(("readme.", "readme_", "readme-"))
+            if (
+                not case
+                and "readme" in pat
+                and (hay == "readme" or hay.startswith(("readme.", "readme_", "readme-")))
             ):
                 return True, f.get("path") or f.get("label") or "found"
         elif match == "regex":
@@ -864,8 +1037,9 @@ def _match_filenames(rule: dict[str, Any], inventory: list[dict[str, Any]] | Non
     return False, "No matching file found"
 
 
-def _match_metadata(rule: dict[str, Any], metadata: dict[str, Any],
-                    _strings: list[str] | None = None) -> tuple[bool, str]:
+def _match_metadata(
+    rule: dict[str, Any], metadata: dict[str, Any], _strings: list[str] | None = None
+) -> tuple[bool, str]:
     pattern = str(rule.get("pattern") or "")
     if not pattern:
         return False, "—"
@@ -928,14 +1102,56 @@ def _match_file_content(rule: dict[str, Any], staged_dir: Any) -> tuple[bool | N
 
 # Suffixes never worth decoding as text (checked by byte search instead of
 # burning time on decoded binary mush that also risks false positives).
-_BINARY_SUFFIXES = frozenset({
-    ".sav", ".dta", ".sas7bdat", ".por", ".nc", ".h5", ".hdf5", ".h5ad",
-    ".xlsx", ".xls", ".xlsm", ".pdf", ".png", ".jpg", ".jpeg", ".tif",
-    ".tiff", ".gif", ".bmp", ".webp", ".zip", ".tar", ".gz", ".bz2",
-    ".xz", ".7z", ".rar", ".exe", ".dll", ".so", ".bin", ".o", ".class",
-    ".mp3", ".mp4", ".avi", ".mov", ".wav", ".ogg", ".rds", ".rdata",
-    ".pyc", ".sqlite", ".db", ".gpkg", ".shp",
-})
+_BINARY_SUFFIXES = frozenset(
+    {
+        ".sav",
+        ".dta",
+        ".sas7bdat",
+        ".por",
+        ".nc",
+        ".h5",
+        ".hdf5",
+        ".h5ad",
+        ".xlsx",
+        ".xls",
+        ".xlsm",
+        ".pdf",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".tif",
+        ".tiff",
+        ".gif",
+        ".bmp",
+        ".webp",
+        ".zip",
+        ".tar",
+        ".gz",
+        ".bz2",
+        ".xz",
+        ".7z",
+        ".rar",
+        ".exe",
+        ".dll",
+        ".so",
+        ".bin",
+        ".o",
+        ".class",
+        ".mp3",
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".wav",
+        ".ogg",
+        ".rds",
+        ".rdata",
+        ".pyc",
+        ".sqlite",
+        ".db",
+        ".gpkg",
+        ".shp",
+    }
+)
 
 _MAX_CONTENT_FILES = 100
 _MAX_CONTENT_BYTES = 1 << 20
@@ -1013,10 +1229,13 @@ def _scan_staged_files(root: Any, pattern: str, match: str, case: bool) -> tuple
     return False, f"No matching text in {checked} staged file(s)"
 
 
-def evaluate_content_rule(rule: dict[str, Any], metadata: dict[str, Any],
-                           inventory: list[dict[str, Any]] | None,
-                           staged_dir: Any = None,
-                           _metadata_strings: list[str] | None = None) -> dict[str, Any]:
+def evaluate_content_rule(
+    rule: dict[str, Any],
+    metadata: dict[str, Any],
+    inventory: list[dict[str, Any]] | None,
+    staged_dir: Any = None,
+    _metadata_strings: list[str] | None = None,
+) -> dict[str, Any]:
     """Evaluate one content rule across its chosen scopes (OR semantics)."""
     scope = _rule_scopes(rule)
     label = str(rule.get("label") or rule.get("id") or "Content check")
@@ -1038,10 +1257,17 @@ def evaluate_content_rule(rule: dict[str, Any], metadata: dict[str, Any],
         except Exception:
             found, ev = False, "—"
         if found is True:
-            return {"rule_id": str(rule.get("id") or label), "kind": "content",
-                    "field": label, "requirement": req, "value": ev or "found",
-                    "status": "complete", "level": level, "pending": False,
-                    "response_template": str(rule.get("response_template") or "")}
+            return {
+                "rule_id": str(rule.get("id") or label),
+                "kind": "content",
+                "field": label,
+                "requirement": req,
+                "value": ev or "found",
+                "status": "complete",
+                "level": level,
+                "pending": False,
+                "response_template": str(rule.get("response_template") or ""),
+            }
         if found is None:
             pending_bits.append(ev)
         elif ev and ev not in ("No matching file found", "No matching text in metadata"):
@@ -1050,28 +1276,50 @@ def evaluate_content_rule(rule: dict[str, Any], metadata: dict[str, Any],
         # Nothing searchable yet (e.g. file list not loaded): surface the
         # pending note like the legacy README row did. The Response assembler
         # skips pending findings so no draft text is generated for them.
-        return {"rule_id": str(rule.get("id") or label), "kind": "content",
-                "field": label, "requirement": req,
-                "value": pending_bits[0], "status": "incomplete",
-                "level": level, "pending": True,
-                "response_template": str(rule.get("response_template") or "")}
+        return {
+            "rule_id": str(rule.get("id") or label),
+            "kind": "content",
+            "field": label,
+            "requirement": req,
+            "value": pending_bits[0],
+            "status": "incomplete",
+            "level": level,
+            "pending": True,
+            "response_template": str(rule.get("response_template") or ""),
+        }
     # Special-case the legacy no-files README row: not applicable, not a failure.
     for ev in evidences:
         if "not applicable" in ev.lower():
-            return {"rule_id": str(rule.get("id") or label), "kind": "content",
-                    "field": label, "requirement": req, "value": ev,
-                    "status": "complete", "level": level, "pending": False,
-                    "response_template": str(rule.get("response_template") or "")}
-    return {"rule_id": str(rule.get("id") or label), "kind": "content",
-            "field": label, "requirement": req,
-            "value": evidences[0] if evidences else "No match found",
-            "status": "incomplete", "level": level, "pending": False,
-            "response_template": str(rule.get("response_template") or "")}
+            return {
+                "rule_id": str(rule.get("id") or label),
+                "kind": "content",
+                "field": label,
+                "requirement": req,
+                "value": ev,
+                "status": "complete",
+                "level": level,
+                "pending": False,
+                "response_template": str(rule.get("response_template") or ""),
+            }
+    return {
+        "rule_id": str(rule.get("id") or label),
+        "kind": "content",
+        "field": label,
+        "requirement": req,
+        "value": evidences[0] if evidences else "No match found",
+        "status": "incomplete",
+        "level": level,
+        "pending": False,
+        "response_template": str(rule.get("response_template") or ""),
+    }
 
 
-def evaluate_ruleset(metadata: dict[str, Any], ruleset: dict[str, Any],
-                      inventory: list[dict[str, Any]] | None = None,
-                      staged_dir: Any = None) -> list[dict[str, Any]]:
+def evaluate_ruleset(
+    metadata: dict[str, Any],
+    ruleset: dict[str, Any],
+    inventory: list[dict[str, Any]] | None = None,
+    staged_dir: Any = None,
+) -> list[dict[str, Any]]:
     """Run every enabled rule. 'unchecked' field rules are skipped. Never raises."""
     results: list[dict[str, Any]] = []
     try:
@@ -1080,11 +1328,14 @@ def evaluate_ruleset(metadata: dict[str, Any], ruleset: dict[str, Any],
         blocks = {}
     # One metadata-string walk shared by every content rule with that scope.
     try:
-        content_rules = [cr for cr in ((ruleset or {}).get("content_rules") or []) if isinstance(cr, dict)]
-        metadata_strings = _iter_metadata_strings(metadata or {}) if any(
-            "metadata" in _rule_scopes(cr)
-            for cr in content_rules
-        ) else []
+        content_rules = [
+            cr for cr in ((ruleset or {}).get("content_rules") or []) if isinstance(cr, dict)
+        ]
+        metadata_strings = (
+            _iter_metadata_strings(metadata or {})
+            if any("metadata" in _rule_scopes(cr) for cr in content_rules)
+            else []
+        )
     except Exception:
         metadata_strings = []
     for fr in (ruleset or {}).get("field_rules") or []:
@@ -1108,22 +1359,32 @@ def evaluate_ruleset(metadata: dict[str, Any], ruleset: dict[str, Any],
             rule_id = f"field:{block}.{field}"
             if handler != "nonempty":
                 rule_id += f":{handler}"
-            results.append({
-                "rule_id": rule_id,
-                "kind": "field", "field": label, "requirement": req,
-                "value": val or "—", "status": "complete" if ok else "incomplete",
-                "level": level, "pending": False,
-                "response_template": str(fr.get("response_template") or ""),
-                "block": block, "name": field,
-            })
+            results.append(
+                {
+                    "rule_id": rule_id,
+                    "kind": "field",
+                    "field": label,
+                    "requirement": req,
+                    "value": val or "—",
+                    "status": "complete" if ok else "incomplete",
+                    "level": level,
+                    "pending": False,
+                    "response_template": str(fr.get("response_template") or ""),
+                    "block": block,
+                    "name": field,
+                }
+            )
         except Exception:
             continue
     for cr in (ruleset or {}).get("content_rules") or []:
         try:
             if not isinstance(cr, dict):
                 continue
-            results.append(evaluate_content_rule(cr, metadata or {}, inventory, staged_dir,
-                                                 _metadata_strings=metadata_strings))
+            results.append(
+                evaluate_content_rule(
+                    cr, metadata or {}, inventory, staged_dir, _metadata_strings=metadata_strings
+                )
+            )
         except Exception:
             continue
     return results

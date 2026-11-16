@@ -27,7 +27,7 @@ class _SafeDict(dict):
 
 def _is_skipped(result: Any) -> bool:
     try:
-        return bool((getattr(result, "details", None) or {}) .get("skipped"))
+        return bool((getattr(result, "details", None) or {}).get("skipped"))
     except Exception:
         try:
             return bool((result.get("details") or {}).get("skipped"))
@@ -35,10 +35,12 @@ def _is_skipped(result: Any) -> bool:
             return False
 
 
-def collect_metadata_sections(ruleset: dict[str, Any],
-                               completeness: list[dict[str, Any]],
-                               dataset_title: str = "",
-                               persistent_id: str = "") -> list[dict[str, Any]]:
+def collect_metadata_sections(
+    ruleset: dict[str, Any],
+    completeness: list[dict[str, Any]],
+    dataset_title: str = "",
+    persistent_id: str = "",
+) -> list[dict[str, Any]]:
     """One section per incomplete, non-pending rule finding."""
     sections: list[dict[str, Any]] = []
     for r in completeness or []:
@@ -52,21 +54,25 @@ def collect_metadata_sections(ruleset: dict[str, Any],
             if not template:
                 template = "Please address {field}: current value is '{value}'."
             ctx = {
-                "field": label, "rule_label": label,
+                "field": label,
+                "rule_label": label,
                 "value": str(r.get("value") or "—"),
                 "message": str(r.get("value") or "—"),
-                "dataset_title": dataset_title, "persistent_id": persistent_id,
+                "dataset_title": dataset_title,
+                "persistent_id": persistent_id,
             }
-            sections.append({
-                "id": str(r.get("rule_id") or label),
-                "kind": "metadata",
-                "label": label,
-                "level": str(r.get("level") or "required"),
-                "requirement": str(r.get("requirement") or ""),
-                "message": _fmt(template, ctx),
-                "template": template,
-                "included": True,
-            })
+            sections.append(
+                {
+                    "id": str(r.get("rule_id") or label),
+                    "kind": "metadata",
+                    "label": label,
+                    "level": str(r.get("level") or "required"),
+                    "requirement": str(r.get("requirement") or ""),
+                    "message": _fmt(template, ctx),
+                    "template": template,
+                    "included": True,
+                }
+            )
         except Exception:
             continue
     return sections
@@ -89,17 +95,21 @@ def collect_filecheck_sections(ruleset: dict[str, Any], report: Any) -> list[dic
         ctx = {"check_id": check_id, "message": message, "path": path or "dataset"}
         rendered = _fmt(template, ctx)
         if "{path}" not in template and path:
-            rendered = f"{rendered} (file: {path})" if not rendered.endswith(f"({path})") else rendered
-        sections.append({
-            "id": f"filecheck:{check_id}:{path}",
-            "kind": "filecheck",
-            "label": f"{check_id} — {path or 'dataset'}",
-            "level": "error" if level == "error" else "warning",
-            "requirement": f"Automated check {check_id} ({level})",
-            "message": rendered,
-            "template": template,
-            "included": True,
-        })
+            rendered = (
+                f"{rendered} (file: {path})" if not rendered.endswith(f"({path})") else rendered
+            )
+        sections.append(
+            {
+                "id": f"filecheck:{check_id}:{path}",
+                "kind": "filecheck",
+                "label": f"{check_id} — {path or 'dataset'}",
+                "level": "error" if level == "error" else "warning",
+                "requirement": f"Automated check {check_id} ({level})",
+                "message": rendered,
+                "template": template,
+                "included": True,
+            }
+        )
 
     try:
         for c in list(getattr(report, "dataset_checks", None) or []):
@@ -144,10 +154,12 @@ def _severity_tag(level: str) -> str:
     return ""
 
 
-def render_response(ruleset: dict[str, Any],
-                    sections: list[dict[str, Any]],
-                    dataset_title: str = "",
-                    persistent_id: str = "") -> str:
+def render_response(
+    ruleset: dict[str, Any],
+    sections: list[dict[str, Any]],
+    dataset_title: str = "",
+    persistent_id: str = "",
+) -> str:
     """Markdown draft from header + included sections + footer.
 
     Every included item carries its severity up front (e.g. **Warning:**)
@@ -155,10 +167,14 @@ def render_response(ruleset: dict[str, Any],
     the run, metadata severities from the active ruleset.
     """
     try:
-        header = _fmt(str((ruleset or {}).get("response_header") or ""),
-                      {"dataset_title": dataset_title, "persistent_id": persistent_id})
-        footer = _fmt(str((ruleset or {}).get("response_footer") or ""),
-                      {"dataset_title": dataset_title, "persistent_id": persistent_id})
+        header = _fmt(
+            str((ruleset or {}).get("response_header") or ""),
+            {"dataset_title": dataset_title, "persistent_id": persistent_id},
+        )
+        footer = _fmt(
+            str((ruleset or {}).get("response_footer") or ""),
+            {"dataset_title": dataset_title, "persistent_id": persistent_id},
+        )
     except Exception:
         header, footer = "", ""
     lines: list[str] = []
@@ -181,15 +197,18 @@ def render_response(ruleset: dict[str, Any],
     return "\n".join(lines).strip() + "\n"
 
 
-def build_response(ruleset: dict[str, Any],
-                   completeness: list[dict[str, Any]] | None,
-                   report: Any = None,
-                   dataset_title: str = "",
-                   persistent_id: str = "") -> tuple[str, list[dict[str, Any]]]:
+def build_response(
+    ruleset: dict[str, Any],
+    completeness: list[dict[str, Any]] | None,
+    report: Any = None,
+    dataset_title: str = "",
+    persistent_id: str = "",
+) -> tuple[str, list[dict[str, Any]]]:
     """Assemble sections + rendered markdown. Never raises."""
     try:
-        sections = collect_metadata_sections(ruleset or {}, completeness or [],
-                                             dataset_title, persistent_id)
+        sections = collect_metadata_sections(
+            ruleset or {}, completeness or [], dataset_title, persistent_id
+        )
         sections += collect_filecheck_sections(ruleset or {}, report)
         return render_response(ruleset or {}, sections, dataset_title, persistent_id), sections
     except Exception:

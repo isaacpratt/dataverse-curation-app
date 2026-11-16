@@ -16,9 +16,7 @@ def _sheet_headers(workbook, sheet_name: str, max_cols: int = 5) -> tuple[list[s
     headers: list[str] = []
     for row in worksheet.iter_rows(min_row=1, max_row=1, max_col=max_cols, values_only=True):
         headers = [str(c) if c is not None else "" for c in row]
-    messy = len(headers) <= 1 or any(
-        h == "" or h.startswith("Unnamed") for h in headers
-    )
+    messy = len(headers) <= 1 or any(h == "" or h.startswith("Unnamed") for h in headers)
     return headers, messy
 
 
@@ -50,8 +48,7 @@ class XlsxCheck(Check):
                     level="warning",
                     passed=False,
                     message=(
-                        f"{name}: legacy binary .xls - convert to .xlsx "
-                        "for long-term preservation"
+                        f"{name}: legacy binary .xls - convert to .xlsx for long-term preservation"
                     ),
                 ),
                 _skipped(
@@ -133,9 +130,7 @@ class XlsxCheck(Check):
                 if messy:
                     messy_sheets.append(sheet_name)
                 # PII sample: first pii_sample_rows data rows (header skipped).
-                for row_idx, row in enumerate(
-                    ws.iter_rows(min_row=2, values_only=True), start=2
-                ):
+                for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
                     if row_idx - 1 > _PII_ROWS:
                         break
                     cells = [str(c) for c in row if c is not None]

@@ -25,9 +25,7 @@ from engine.checks.tiff_check import TiffCheck
 from engine.checks.xlsx_check import XlsxCheck
 from engine.checks.xml_check import XmlCheck
 
-CUR_DATA = (
-    Path(__file__).resolve().parents[3] / "CUR_Res_CurationTools" / "data"
-)
+CUR_DATA = Path(__file__).resolve().parents[3] / "CUR_Res_CurationTools" / "data"
 
 requires_samples = pytest.mark.skipif(
     not CUR_DATA.exists(), reason="CUR_Res_CurationTools sample data not found"
@@ -74,18 +72,13 @@ def test_format_check_on_samples(label, check, subdirectory):
         assert result.message
 
     assert any(r.passed for r in results), (
-        f"{label}: expected at least one passing finding; got "
-        f"{[r.message for r in results]}"
+        f"{label}: expected at least one passing finding; got {[r.message for r in results]}"
     )
 
 
 @requires_samples
 def test_extensions_inventory_flags():
-    files = sorted(
-        path
-        for path in (CUR_DATA / "Inspect_Extensions").rglob("*")
-        if path.is_file()
-    )
+    files = sorted(path for path in (CUR_DATA / "Inspect_Extensions").rglob("*") if path.is_file())
     results = ExtensionsCheck().run(files)
     distribution = next(r for r in results if r.check_id == "inventory.extensions")
     assert distribution.passed

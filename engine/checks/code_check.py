@@ -20,9 +20,28 @@ class CodeCheck(Check):
 
     check_id = "format.code"
     extensions = {
-        ".r", ".py", ".qmd", ".rmd", ".jl", ".m", ".f90", ".f",
-        ".cpp", ".cxx", ".cc", ".c", ".h", ".sh", ".bat", ".sql",
-        ".cs", ".java", ".tex", ".do", ".sas", ".ps1",
+        ".r",
+        ".py",
+        ".qmd",
+        ".rmd",
+        ".jl",
+        ".m",
+        ".f90",
+        ".f",
+        ".cpp",
+        ".cxx",
+        ".cc",
+        ".c",
+        ".h",
+        ".sh",
+        ".bat",
+        ".sql",
+        ".cs",
+        ".java",
+        ".tex",
+        ".do",
+        ".sas",
+        ".ps1",
     }
 
     def run(self, files: list[Path]) -> list[CheckResult]:

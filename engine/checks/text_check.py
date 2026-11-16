@@ -65,8 +65,7 @@ class TextCheck(Check):
         mixed = (crlf > 0) + (lone_lf > 0) + (lone_cr > 0) > 1
 
         control_chars = sum(
-            1 for byte in raw
-            if (byte < 32 and byte not in _ALLOWED_CONTROLS) or byte == 127
+            1 for byte in raw if (byte < 32 and byte not in _ALLOWED_CONTROLS) or byte == 127
         )
 
         pii_findings = find_pii(text)
@@ -87,8 +86,7 @@ class TextCheck(Check):
                     level="warning",
                     passed=False,
                     message=(
-                        f"{name}: mixed line endings "
-                        f"(CRLF={crlf}, LF={lone_lf}, CR={lone_cr})"
+                        f"{name}: mixed line endings (CRLF={crlf}, LF={lone_lf}, CR={lone_cr})"
                     ),
                     details={"CRLF": crlf, "LF": lone_lf, "CR": lone_cr},
                 )
@@ -129,9 +127,7 @@ class TextCheck(Check):
                 "format.text.pii",
                 name,
                 pii_findings,
-                scope=(
-                    "(sampled first 1 MiB)" if sampled else "(full file)"
-                ),
+                scope=("(sampled first 1 MiB)" if sampled else "(full file)"),
                 extra_details={"sampled": sampled},
             )
         )

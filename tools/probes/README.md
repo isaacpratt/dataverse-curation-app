@@ -36,10 +36,11 @@ probe goes through it — a new probe must do the same.
 ```python
 from _common import Report, boot
 
+
 def main() -> int:
-    app, cfg = boot()          # temp workspace + themed app
+    app, cfg = boot()  # temp workspace + themed app
     ...
-    return report.finish()      # 0 when every check passed
+    return report.finish()  # 0 when every check passed
 ```
 
 Stub out anything that would reach the network. The manifest probe

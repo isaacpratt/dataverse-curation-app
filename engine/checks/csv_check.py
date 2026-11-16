@@ -127,8 +127,7 @@ class CsvCheck(Check):
                 level="warning" if len(widths) > 1 else "info",
                 passed=len(widths) <= 1,
                 message=(
-                    f"{name}: ragged rows detected "
-                    f"(row widths: {sorted(widths)})"
+                    f"{name}: ragged rows detected (row widths: {sorted(widths)})"
                     if len(widths) > 1
                     else f"{name}: consistent {width} columns"
                 ),

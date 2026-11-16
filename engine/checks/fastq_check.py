@@ -119,10 +119,7 @@ class FastqCheck(Check):
                 check_id="format.fastq.metadata",
                 level="info",
                 passed=True,
-                message=(
-                    f"{name}: avg read length {avg_length:.1f}, "
-                    f"GC {gc_content:.2%}"
-                ),
+                message=(f"{name}: avg read length {avg_length:.1f}, GC {gc_content:.2%}"),
                 details={
                     "reads_sampled": reads,
                     "avg_length": round(avg_length, 1),

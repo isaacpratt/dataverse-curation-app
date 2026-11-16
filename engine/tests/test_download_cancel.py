@@ -98,8 +98,15 @@ def test_datafile_original_cancel_mid_chunk_never_retries(tmp_path):
 
 def test_bundle_cancel_unlinks_partial_part(tmp_path):
     class _CancelBundle:
-        def download_dataset_zip(self, identifier, dest, version="draft", progress=None,
-                                 is_cancelled=None, guestbook_response=None):
+        def download_dataset_zip(
+            self,
+            identifier,
+            dest,
+            version="draft",
+            progress=None,
+            is_cancelled=None,
+            guestbook_response=None,
+        ):
             dest = Path(dest)
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(b"partial-zip")
@@ -120,10 +127,15 @@ def test_originals_cancel_propagates_and_removes_partial(tmp_path):
             Path(dest).write_bytes(b"partial-bytes")
             raise DownloadCancelled(f"datafile {file_id}")
 
-    inv = [{
-        "tabular": True, "id": "7", "original_name": "a.sav",
-        "path": "a.sav", "original_size": 100,
-    }]
+    inv = [
+        {
+            "tabular": True,
+            "id": "7",
+            "original_name": "a.sav",
+            "path": "a.sav",
+            "original_size": 100,
+        }
+    ]
     mgr = DownloadManager(_CancelOriginals(), tmp_path)
     with pytest.raises(DownloadCancelled):
         mgr.download_originals(PID, inventory=inv, max_workers=1)
@@ -136,10 +148,15 @@ def test_originals_real_failure_still_swallowed(tmp_path):
         def download_datafile_original(self, file_id, dest, progress=None, is_cancelled=None):
             raise RuntimeError("server exploded")
 
-    inv = [{
-        "tabular": True, "id": "7", "original_name": "a.sav",
-        "path": "a.sav", "original_size": 100,
-    }]
+    inv = [
+        {
+            "tabular": True,
+            "id": "7",
+            "original_name": "a.sav",
+            "path": "a.sav",
+            "original_size": 100,
+        }
+    ]
     mgr = DownloadManager(_Boom(), tmp_path)
     staged = mgr.download_originals(PID, inventory=inv, max_workers=1)
     assert staged == [], "ordinary per-file failures stay non-fatal"
@@ -147,8 +164,15 @@ def test_originals_real_failure_still_swallowed(tmp_path):
 
 def test_happy_path_unaffected_by_live_stop_flag(tmp_path):
     class _OkClient:
-        def download_dataset_zip(self, identifier, dest, version="draft", progress=None,
-                                 is_cancelled=None, guestbook_response=None):
+        def download_dataset_zip(
+            self,
+            identifier,
+            dest,
+            version="draft",
+            progress=None,
+            is_cancelled=None,
+            guestbook_response=None,
+        ):
             buf = io.BytesIO()
             with zipfile.ZipFile(buf, "w") as zf:
                 zf.writestr("data.txt", "hello")

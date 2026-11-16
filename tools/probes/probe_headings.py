@@ -50,11 +50,7 @@ def main() -> int:
     pages.append(("Review configuration", win._review_config))
 
     for name, page in pages:
-        labels = [
-            lbl
-            for lbl in page.findChildren(QLabel)
-            if lbl.objectName() == "HeadlineLG"
-        ]
+        labels = [lbl for lbl in page.findChildren(QLabel) if lbl.objectName() == "HeadlineLG"]
         report.check(
             len(labels) == 1,
             f"{name}: exactly one HeadlineLG heading",

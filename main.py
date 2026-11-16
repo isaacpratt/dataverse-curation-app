@@ -100,9 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=t("app.cli.gallery_help"),
     )
-    parser.add_argument(
-        "dataset_dir", nargs="?", help=t("app.cli.dataset_dir_help")
-    )
+    parser.add_argument("dataset_dir", nargs="?", help=t("app.cli.dataset_dir_help"))
     parser.add_argument("--out", default="curation_report.json", help=t("app.cli.out_help"))
     parser.add_argument(
         "--format",
@@ -110,9 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=("json", "md", "both"),
         help=t("app.cli.format_help"),
     )
-    parser.add_argument(
-        "--persistent-id", default="", help=t("app.cli.persistent_id_help")
-    )
+    parser.add_argument("--persistent-id", default="", help=t("app.cli.persistent_id_help"))
     parser.add_argument(
         "--config",
         default="config.json",
@@ -161,20 +157,11 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:
             print(t("app.cli.run_failed", exc=exc), file=sys.stderr)
             return 2
-        errors = sum(
-            1
-            for r in report.dataset_checks
-            if r.level == "error" and not r.passed
-        ) + sum(
-            1
-            for f in report.files
-            for r in f.checks
-            if r.level == "error" and not r.passed
+        errors = sum(1 for r in report.dataset_checks if r.level == "error" and not r.passed) + sum(
+            1 for f in report.files for r in f.checks if r.level == "error" and not r.passed
         )
         warnings = sum(
-            1
-            for r in report.dataset_checks
-            if r.level in {"warning", "error"} and not r.passed
+            1 for r in report.dataset_checks if r.level in {"warning", "error"} and not r.passed
         ) + sum(
             1
             for f in report.files
@@ -232,6 +219,7 @@ def main(argv: list[str] | None = None) -> int:
         pass
     try:
         from ui.theme import apply_theme
+
         apply_theme(app)
     except Exception:
         pass

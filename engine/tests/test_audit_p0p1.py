@@ -14,6 +14,7 @@ from config import AppConfig, Config, DataverseConfig
 
 # -- log redaction -----------------------------------------------------------
 
+
 def test_applog_redacts_api_key_and_token():
     applog.clear()
     applog.log("GET https://example/api with API_KEY=supersecret123")
@@ -34,6 +35,7 @@ def test_applog_redact_standalone():
 
 
 # -- config save -------------------------------------------------------------
+
 
 def test_config_save_writes_and_restricts(tmp_path):
     cfg_path = tmp_path / "config.json"
@@ -69,6 +71,7 @@ def test_config_load_roundtrip(tmp_path):
 
 
 # -- storage -----------------------------------------------------------------
+
 
 def test_storage_table_state_roundtrip(tmp_path):
     from storage import clear_table_state, save_table_state
@@ -168,6 +171,7 @@ def test_storage_size_cache(tmp_path):
 
 # -- headless ----------------------------------------------------------------
 
+
 def test_headless_writes_report(tmp_path):
     import subprocess
 
@@ -190,6 +194,7 @@ def test_headless_writes_report(tmp_path):
 
 # -- human size --------------------------------------------------------------
 
+
 def test_human_size_gb_and_tb():
     from ui.checks_tree import _human_size as checks_size
     from ui.dashboard import _human_size as dash_size
@@ -211,6 +216,7 @@ def test_human_size_gb_and_tb():
 
 # -- dead modules removed ----------------------------------------------------
 
+
 def test_dead_modules_removed():
     root = Path(__file__).resolve().parents[2]
     assert not (root / "ui" / "log_dialog.py").exists()
@@ -226,9 +232,15 @@ def test_dead_modules_removed():
 
 # -- no stale imports of deleted modules -------------------------------------
 
+
 def test_no_imports_of_deleted_modules():
     root = Path(__file__).resolve().parents[2]
-    bad = ("from ui.log_dialog", "from ui.requirements_dialog", "import log_dialog", "import requirements_dialog")
+    bad = (
+        "from ui.log_dialog",
+        "from ui.requirements_dialog",
+        "import log_dialog",
+        "import requirements_dialog",
+    )
     for py in root.rglob("*.py"):
         if ".venv" in py.parts or "dist" in py.parts or "build" in py.parts:
             continue
@@ -240,6 +252,7 @@ def test_no_imports_of_deleted_modules():
 
 
 # -- pandas not a hard dependency --------------------------------------------
+
 
 def test_pandas_not_in_requirements():
     # requirements.txt was deleted when uv adopted (dv-ceh.1); dependency

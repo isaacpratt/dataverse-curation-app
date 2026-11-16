@@ -135,18 +135,14 @@ class IpynbCheck(Check):
             ),
         ]
 
-        unexecuted = [
-            c for c in code_cells if c.get("execution_count") is None
-        ]
+        unexecuted = [c for c in code_cells if c.get("execution_count") is None]
         if unexecuted:
             results.append(
                 CheckResult(
                     check_id="format.ipynb.executed",
                     level="warning",
                     passed=False,
-                    message=(
-                        f"{name}: {len(unexecuted)} code cell(s) never executed"
-                    ),
+                    message=(f"{name}: {len(unexecuted)} code cell(s) never executed"),
                     details={"unexecuted": len(unexecuted), "code_cells": len(code_cells)},
                 )
             )

@@ -1,4 +1,4 @@
-﻿"""SAS dataset inspection (.sas7bdat and .xpt transport files).
+"""SAS dataset inspection (.sas7bdat and .xpt transport files).
 
 Port of CUR_Res_CurationTools Scripts/Inspect_sas7bdat_Script.R: header-based
 format detection, data dictionary extraction (variable names, labels, types,
@@ -158,10 +158,7 @@ class Sas7bdatCheck(Check):
             check_id="format.sas.dictionary",
             level="info",
             passed=True,
-            message=(
-                f"{name}: {len(columns)} variables "
-                f"({len(value_labels)} with value labels)"
-            ),
+            message=(f"{name}: {len(columns)} variables ({len(value_labels)} with value labels)"),
             details={"variables": variables[:_MAX_VARIABLES_LISTED]},
         )
         labels_check = CheckResult(

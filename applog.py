@@ -23,8 +23,15 @@ def _redact(message: str) -> str:
 
         text = str(message or "")
         # X-Dataverse-key header values, API_KEY=..., key=..., token=...
-        text = re.sub(r"(X-Dataverse-key['\":\s=]+)([^\s'\"&]+)", r"\1***", text, flags=re.IGNORECASE)
-        text = re.sub(r"((?:API[_-]?KEY|api_token|token)['\":\s=]+)([^\s'\"&]+)", r"\1***", text, flags=re.IGNORECASE)
+        text = re.sub(
+            r"(X-Dataverse-key['\":\s=]+)([^\s'\"&]+)", r"\1***", text, flags=re.IGNORECASE
+        )
+        text = re.sub(
+            r"((?:API[_-]?KEY|api_token|token)['\":\s=]+)([^\s'\"&]+)",
+            r"\1***",
+            text,
+            flags=re.IGNORECASE,
+        )
         text = re.sub(r"(persistentId=[^\s&]*key=[^\s&]*)", "***", text, flags=re.IGNORECASE)
         return text
     except Exception:
@@ -86,7 +93,9 @@ def log_response(method: str, url: str, status: int, elapsed_ms: int, summary: s
     try:
         import re
 
-        safe_url = re.sub(r"([?&](?:key|token|api_key)=)[^&]*", r"\1***", str(url or ""), flags=re.IGNORECASE)
+        safe_url = re.sub(
+            r"([?&](?:key|token|api_key)=)[^&]*", r"\1***", str(url or ""), flags=re.IGNORECASE
+        )
     except Exception:
         safe_url = url
     msg = f"{method} {safe_url} → {status} ({elapsed_ms} ms)"

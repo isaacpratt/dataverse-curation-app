@@ -31,12 +31,9 @@ class ExtensionsCheck(Check):
                 )
             ]
 
-        extensions = Counter(
-            path.suffix.lower() or "(no extension)" for path in files
-        )
+        extensions = Counter(path.suffix.lower() or "(no extension)" for path in files)
         distribution = ", ".join(
-            f"{ext}: {count}"
-            for ext, count in extensions.most_common(_MAX_EXTENSIONS_LISTED)
+            f"{ext}: {count}" for ext, count in extensions.most_common(_MAX_EXTENSIONS_LISTED)
         )
 
         def _size_or_none(p: Path) -> int | None:
@@ -46,19 +43,14 @@ class ExtensionsCheck(Check):
                 return None
 
         zero_byte = [p.name for p in files if _size_or_none(p) == 0]
-        executables = [
-            p.name
-            for p in files
-            if p.suffix.lower() in EXECUTABLE_EXTS
-        ]
+        executables = [p.name for p in files if p.suffix.lower() in EXECUTABLE_EXTS]
         # A file is junk when its own name matches, or when ANY path
         # component is __MACOSX (nested AppleDouble dirs, not just the
         # immediate parent) — and .parts is safe on single-component paths.
         junk = [
             p.name
             for p in files
-            if p.name.lower() in JUNK_NAMES
-            or any(part.lower() == "__macosx" for part in p.parts)
+            if p.name.lower() in JUNK_NAMES or any(part.lower() == "__macosx" for part in p.parts)
         ]
 
         results = [
@@ -77,8 +69,7 @@ class ExtensionsCheck(Check):
                     check_id="inventory.zero_byte",
                     level="error",
                     passed=False,
-                    message=f"{len(zero_byte)} zero-byte file(s): "
-                    + ", ".join(zero_byte[:10]),
+                    message=f"{len(zero_byte)} zero-byte file(s): " + ", ".join(zero_byte[:10]),
                     details={"count": len(zero_byte), "files": zero_byte[:10]},
                 )
             )

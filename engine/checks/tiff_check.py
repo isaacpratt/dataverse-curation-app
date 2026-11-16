@@ -47,10 +47,7 @@ class TiffCheck(Check):
             compression = first.compression or "none"
             is_ome = tif.is_ome
 
-        message = (
-            f"{name}: {pages} page(s), {shape}, {dtype}, "
-            f"compression={compression}"
-        )
+        message = f"{name}: {pages} page(s), {shape}, {dtype}, compression={compression}"
         if series_count > 1:
             message += f", {series_count} series"
         if is_ome:

@@ -20,9 +20,9 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-EXE = pathlib.Path(os.environ.get(
-    "SMOKE_LITE_EXE", ROOT / "dist" / "curation-app-lite" / "curation-app-lite.exe"
-))
+EXE = pathlib.Path(
+    os.environ.get("SMOKE_LITE_EXE", ROOT / "dist" / "curation-app-lite" / "curation-app-lite.exe")
+)
 
 
 def main() -> int:
@@ -48,11 +48,7 @@ def main() -> int:
         return r.returncode
 
     report = json.loads(out.read_text(encoding="utf-8"))
-    msgs = [
-        c.get("message", "")
-        for f in report.get("files", [])
-        for c in f.get("checks", [])
-    ]
+    msgs = [c.get("message", "") for f in report.get("files", []) for c in f.get("checks", [])]
     bad = [m for m in msgs if "inspection failed" in m]
     print(f"frozen csv checks: {len(msgs)} | inspection failures: {bad}")
     return 1 if bad else 0

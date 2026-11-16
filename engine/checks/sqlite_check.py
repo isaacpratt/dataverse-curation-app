@@ -49,16 +49,12 @@ class SqliteCheck(Check):
         try:
             # integrity_check returns one row per problem ('ok' alone when
             # clean) — read ALL rows, not just the first.
-            problems = [
-                row[0]
-                for row in conn.execute("PRAGMA integrity_check").fetchall()
-            ]
+            problems = [row[0] for row in conn.execute("PRAGMA integrity_check").fetchall()]
             ok = problems == ["ok"]
             tables = [
                 row[0]
                 for row in conn.execute(
-                    "SELECT name FROM sqlite_master "
-                    "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
                 )
             ]
             _MAX_COUNT_SCAN = 100_000
@@ -88,9 +84,7 @@ class SqliteCheck(Check):
             level="info" if ok else "error",
             passed=ok,
             message=(
-                f"{name}: integrity ok"
-                if ok
-                else f"{name}: integrity problems ({first_problem})"
+                f"{name}: integrity ok" if ok else f"{name}: integrity problems ({first_problem})"
             ),
         )
         manifest = CheckResult(
@@ -100,7 +94,11 @@ class SqliteCheck(Check):
             message=(
                 f"{name}: {len(tables)} table(s)"
                 + (" (list truncated)" if truncated else "")
-                + ("; counts capped at 100k" if any(isinstance(v, str) for v in counts.values()) else "")
+                + (
+                    "; counts capped at 100k"
+                    if any(isinstance(v, str) for v in counts.values())
+                    else ""
+                )
             ),
             details={"tables": counts, "truncated": truncated},
         )

@@ -46,6 +46,7 @@ class Hdf5Check(Check):
         external_links: list[str] = []
         truncated = False
         with h5py.File(str(path), "r", locking=False) as handle:
+
             def _visit(obj_path, obj):
                 nonlocal truncated
                 if truncated:

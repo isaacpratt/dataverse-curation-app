@@ -82,9 +82,7 @@ def test_pii_result_clean():
 
 
 def test_pii_result_truncation_message():
-    findings = [
-        {"type": "intl_email", "value": f"user{i}@example.com"} for i in range(15)
-    ]
+    findings = [{"type": "intl_email", "value": f"user{i}@example.com"} for i in range(15)]
     r = pii_result("format.csv.pii", "a.csv", findings)
     assert r.passed is False
     assert r.details["count"] == 15

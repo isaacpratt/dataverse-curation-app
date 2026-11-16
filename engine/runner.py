@@ -50,9 +50,7 @@ def _safe_run(check_cls, files: list[Path]) -> list[CheckResult]:
         ]
 
 
-def _safe_run_dataset(
-    check_cls, files: list[Path], context: dict
-) -> list[CheckResult]:
+def _safe_run_dataset(check_cls, files: list[Path], context: dict) -> list[CheckResult]:
     """Run a dataset-level check, passing the inventory/metadata context."""
     try:
         result: list[CheckResult] = check_cls().run_dataset(files, context)
@@ -163,7 +161,9 @@ def run_report(
             return False
 
     dataset_context = {"inventory": inventory, "metadata": metadata}
-    _report_progress(f"Found {len(files)} file(s), starting {len(dataset_level_checks())} dataset-level check(s)…")
+    _report_progress(
+        f"Found {len(files)} file(s), starting {len(dataset_level_checks())} dataset-level check(s)…"
+    )
     dataset_checks: list[CheckResult] = []
     for check_cls in dataset_level_checks():
         if _cancelled():
@@ -180,7 +180,9 @@ def run_report(
         except Exception:
             checks = []
         if checks:
-            _report_progress(f"[{idx}/{len(files)}] {path.name}: {', '.join(c.check_id for c in checks)} …")
+            _report_progress(
+                f"[{idx}/{len(files)}] {path.name}: {', '.join(c.check_id for c in checks)} …"
+            )
         file_checks: list[CheckResult] = []
         for check_cls in checks:
             if _cancelled():
@@ -307,8 +309,14 @@ def run_report_to_file(
             out_path = out_path.with_suffix(".md")
         report.save_markdown(out_path)
     elif fmt == "both":
-        json_path = out_path if out_path.suffix.lower() == ".json" else out_path.with_suffix(".json")
-        md_path = json_path.with_suffix(".md") if json_path.suffix.lower() == ".json" else out_path.with_suffix(".md")
+        json_path = (
+            out_path if out_path.suffix.lower() == ".json" else out_path.with_suffix(".json")
+        )
+        md_path = (
+            json_path.with_suffix(".md")
+            if json_path.suffix.lower() == ".json"
+            else out_path.with_suffix(".md")
+        )
         # When caller passed .md, mirror: md as given, json sibling.
         if out_path.suffix.lower() == ".md":
             md_path = out_path

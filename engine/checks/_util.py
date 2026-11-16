@@ -225,9 +225,7 @@ def pii_result(
         details["samples"] = samples
         details["samples_listed"] = len(samples)
         trunc = (
-            f" — showing first {len(samples)} of {count} sample(s)"
-            if len(samples) < count
-            else ""
+            f" — showing first {len(samples)} of {count} sample(s)" if len(samples) < count else ""
         )
         message = f"{name}: {count} possible PII value(s){trunc}{scope_note}"
         level, passed = "warning", False
@@ -264,9 +262,7 @@ def quoted_ident(name: str) -> str:
     return '"' + str(name).replace('"', '""') + '"'
 
 
-def run_per_file(
-    check: Check, files: list[Path], handler
-) -> list[CheckResult]:
+def run_per_file(check: Check, files: list[Path], handler) -> list[CheckResult]:
     """Apply `handler(path) -> List[CheckResult]` to each file.
 
     Unexpected exceptions become an error-level result instead of failing

@@ -69,7 +69,11 @@ def main() -> int:
     for y in range(h - 12, h):
         for x in range(w - 12, w):
             c = image.pixelColor(x, y)
-            if abs(c.red() - page[0]) <= 2 and abs(c.green() - page[1]) <= 2 and abs(c.blue() - page[2]) <= 2:
+            if (
+                abs(c.red() - page[0]) <= 2
+                and abs(c.green() - page[1]) <= 2
+                and abs(c.blue() - page[2]) <= 2
+            ):
                 notch += 1
     report.check(
         notch == 0,

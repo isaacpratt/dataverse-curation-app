@@ -1,4 +1,4 @@
-﻿"""NetCDF inspection.
+"""NetCDF inspection.
 
 Port of CUR_Res_CurationTools Scripts/Inspect_nc_Script.R Phase A
 (usability scan): safe load, dimension summary, variable count, spatial
@@ -42,9 +42,7 @@ def _data_health(ds: Any) -> tuple[str, bool]:
         import numpy as np
 
         per_dim = max(1, int(np.ceil(_SAMPLE_VALUES ** (1 / len(first.dimensions)))))
-        index = tuple(
-            slice(0, min(per_dim, ds.dimensions[d].size)) for d in first.dimensions
-        )
+        index = tuple(slice(0, min(per_dim, ds.dimensions[d].size)) for d in first.dimensions)
         values = np.ma.compressed(first[index])
         if values.size == 0 or np.all(np.isnan(values.astype("float64"))):
             return ("all NaNs (empty)", False)

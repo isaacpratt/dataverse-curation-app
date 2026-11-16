@@ -97,11 +97,7 @@ def _throttle_delay(exc: requests.HTTPError) -> float | None:
 
 
 def _field_value(dataset_version: dict[str, Any], type_name: str) -> Any:
-    fields = (
-        dataset_version.get("metadataBlocks", {})
-        .get("citation", {})
-        .get("fields", [])
-    )
+    fields = dataset_version.get("metadataBlocks", {}).get("citation", {}).get("fields", [])
     for field in fields:
         if field.get("typeName") == type_name:
             return field.get("value")
@@ -117,8 +113,16 @@ def _extract_contact(dataset_version: dict[str, Any]) -> str:
     value = _field_value(dataset_version, "datasetContact")
     if isinstance(value, list) and value:
         first = value[0] or {}
-        name = first.get("datasetContactName", {}).get("value", "") if isinstance(first.get("datasetContactName"), dict) else first.get("datasetContactName", "")
-        email = first.get("datasetContactEmail", {}).get("value", "") if isinstance(first.get("datasetContactEmail"), dict) else first.get("datasetContactEmail", "")
+        name = (
+            first.get("datasetContactName", {}).get("value", "")
+            if isinstance(first.get("datasetContactName"), dict)
+            else first.get("datasetContactName", "")
+        )
+        email = (
+            first.get("datasetContactEmail", {}).get("value", "")
+            if isinstance(first.get("datasetContactEmail"), dict)
+            else first.get("datasetContactEmail", "")
+        )
         if name and email:
             return f"{name} <{email}>"
         return name or email or ""
@@ -151,13 +155,14 @@ def normalize_files(dataset_version: dict[str, Any]) -> list[dict[str, Any]]:
         # JsonPrinter (UNF is uppercase there). The UNF is the stable
         # fingerprint when the server regenerates .tab bytes.
         unf = (
-            data_file.get("UNF") or data_file.get("unf")
-            or entry.get("UNF") or entry.get("unf") or ""
+            data_file.get("UNF")
+            or data_file.get("unf")
+            or entry.get("UNF")
+            or entry.get("unf")
+            or ""
         )
         # Tabular ingest status/errors surfaced from the API (when present).
-        ingest_status = str(
-            data_file.get("ingestStatus") or entry.get("ingestStatus") or ""
-        )
+        ingest_status = str(data_file.get("ingestStatus") or entry.get("ingestStatus") or "")
         ingest_error = str(
             data_file.get("ingestErrorMessage")
             or data_file.get("ingestError")
@@ -166,9 +171,7 @@ def normalize_files(dataset_version: dict[str, Any]) -> list[dict[str, Any]]:
             or ""
         )
         # Access restrictions (restricted files, embargo, retention).
-        restricted = bool(
-            entry.get("restricted", data_file.get("restricted", False))
-        )
+        restricted = bool(entry.get("restricted", data_file.get("restricted", False)))
         try:
             original_size = int(
                 data_file.get("originalFileSize") or entry.get("originalFileSize") or 0
@@ -351,9 +354,7 @@ def search_item_state(item: dict[str, Any]) -> tuple:
     statuses = [str(s or "") for s in (item.get("publicationStatuses") or [])]
     lowered = [s.lower() for s in statuses]
     vs = str(item.get("versionState") or "")
-    has_draft = vs.upper() == "DRAFT" or any(
-        "draft" in s or "review" in s for s in lowered
-    )
+    has_draft = vs.upper() == "DRAFT" or any("draft" in s or "review" in s for s in lowered)
     if any("review" in s for s in lowered):
         return STATE_IN_REVIEW, True
     if has_draft:
@@ -573,9 +574,7 @@ def _allowed_labels_disk_key(base_url: str, collection: str) -> str:
     return f"{base}|{top}"
 
 
-def read_allowed_labels_cache(
-    workspace, base_url: str, collection: str
-) -> list[str] | None:
+def read_allowed_labels_cache(workspace, base_url: str, collection: str) -> list[str] | None:
     """Read allowed labels from disk for a top-level collection (None = unknown).
 
     Only slots stamped "probed" at format v2 by a real discovery round
@@ -736,10 +735,13 @@ def parse_metadatablock_fields(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 if isinstance(spec, dict):
                     label = str(spec.get("displayName") or spec.get("displayname") or label)
                 block_name = block or "citation"
-                out.append({
-                    "block": block_name, "field": fname.strip(),
-                    "label": label.strip() or fname.strip(),
-                })
+                out.append(
+                    {
+                        "block": block_name,
+                        "field": fname.strip(),
+                        "label": label.strip() or fname.strip(),
+                    }
+                )
                 if isinstance(spec, dict):
                     sub = spec.get("childFields") or spec.get("subFields") or spec.get("fields")
                     if isinstance(sub, dict):
@@ -749,16 +751,22 @@ def parse_metadatablock_fields(payload: dict[str, Any]) -> list[dict[str, Any]]:
                                 continue
                             slabel = sname.strip()
                             if isinstance(sspec, dict):
-                                slabel = str(sspec.get("title") or sspec.get("displayName")
-                                             or sspec.get("displayname") or slabel)
-                            out.append({
-                                "block": block_name,
-                                "field": f"{fname.strip()}.{sname.strip()}",
-                                "label": slabel.strip() or sname.strip(),
-                                "parent": fname.strip(),
-                                "parent_label": parent_label,
-                                "is_subfield": True,
-                            })
+                                slabel = str(
+                                    sspec.get("title")
+                                    or sspec.get("displayName")
+                                    or sspec.get("displayname")
+                                    or slabel
+                                )
+                            out.append(
+                                {
+                                    "block": block_name,
+                                    "field": f"{fname.strip()}.{sname.strip()}",
+                                    "label": slabel.strip() or sname.strip(),
+                                    "parent": fname.strip(),
+                                    "parent_label": parent_label,
+                                    "is_subfield": True,
+                                }
+                            )
         elif isinstance(fields, list):
             for spec in fields:
                 if not isinstance(spec, dict):
@@ -777,16 +785,22 @@ def parse_metadatablock_fields(payload: dict[str, Any]) -> list[dict[str, Any]]:
                             continue
                         slabel = sname.strip()
                         if isinstance(sspec, dict):
-                            slabel = str(sspec.get("title") or sspec.get("displayName")
-                                         or sspec.get("displayname") or slabel)
-                        out.append({
-                            "block": block_name,
-                            "field": f"{fname}.{sname.strip()}",
-                            "label": slabel.strip() or sname.strip(),
-                            "parent": fname,
-                            "parent_label": parent_label,
-                            "is_subfield": True,
-                        })
+                            slabel = str(
+                                sspec.get("title")
+                                or sspec.get("displayName")
+                                or sspec.get("displayname")
+                                or slabel
+                            )
+                        out.append(
+                            {
+                                "block": block_name,
+                                "field": f"{fname}.{sname.strip()}",
+                                "label": slabel.strip() or sname.strip(),
+                                "parent": fname,
+                                "parent_label": parent_label,
+                                "is_subfield": True,
+                            }
+                        )
     except Exception:
         pass
     return out
@@ -930,8 +944,10 @@ def parse_curation_states_csv(text: str) -> list[dict[str, Any]]:
             # Header row or unexpected shape — keep the raw text as a
             # title candidate only if it cannot be the localized header.
             title = first
+
         def _cell(i: int, _cells=cells) -> str:
             return _cells[i].strip() if len(_cells) > i else ""
+
         label = _clean_curation_value(_cell(3))
         rows.append(
             {
@@ -1023,7 +1039,10 @@ def parse_version_compare(payload: dict[str, Any]) -> dict[str, Any] | None:
         if not isinstance(pair, dict):
             continue
         files_replaced.append(
-            {"old": _summarize_file_entry(pair.get("oldFile")), "new": _summarize_file_entry(pair.get("newFile"))}
+            {
+                "old": _summarize_file_entry(pair.get("oldFile")),
+                "new": _summarize_file_entry(pair.get("newFile")),
+            }
         )
     file_changes = []
     for entry in data.get("fileChanges") or []:
@@ -1067,7 +1086,11 @@ def parse_dataset_versions(data: Any) -> list[dict[str, str]]:
     """
     out: list[dict[str, str]] = []
     if isinstance(data, dict):
-        data = [data] if any(k in data for k in ("versionState", "versionNumber", "createTime")) else []
+        data = (
+            [data]
+            if any(k in data for k in ("versionState", "versionNumber", "createTime"))
+            else []
+        )
     items = data if isinstance(data, list) else []
     for v in items:
         if not isinstance(v, dict):
@@ -1132,9 +1155,7 @@ class DataverseClient:
     def _api(self, path: str) -> str:
         return f"{self._base_url}{path}"
 
-    def _get_json(
-        self, path: str, params: dict[str, str] | None = None
-    ) -> dict[str, Any]:
+    def _get_json(self, path: str, params: dict[str, str] | None = None) -> dict[str, Any]:
         from applog import log_response
 
         last_exc: Exception | None = None
@@ -1162,8 +1183,7 @@ class DataverseClient:
                         )
                         response.raise_for_status()
                         raise RuntimeError(
-                            f"GET {path} returned non-JSON response "
-                            f"({response.status_code})"
+                            f"GET {path} returned non-JSON response ({response.status_code})"
                         ) from None
                     if path == "/api/search" and isinstance(body, dict):
                         try:
@@ -1185,7 +1205,9 @@ class DataverseClient:
                 delay = _throttle_delay(exc)
                 if delay is not None and attempt < 2:
                     wait = delay or 1.5 * (attempt + 1)
-                    get_app_log().error(f"GET {path} throttled, retrying in {wait:.1f}s (attempt {attempt + 1}/3)")
+                    get_app_log().error(
+                        f"GET {path} throttled, retrying in {wait:.1f}s (attempt {attempt + 1}/3)"
+                    )
                     time.sleep(wait)
                     continue
                 raise
@@ -1206,9 +1228,7 @@ class DataverseClient:
         assert last_exc is not None
         raise last_exc  # pragma: no cover
 
-    def _get_text(
-        self, path: str, params: dict[str, str] | None = None
-    ) -> str:
+    def _get_text(self, path: str, params: dict[str, str] | None = None) -> str:
         """GET returning raw text (for non-JSON endpoints like the CSV report).
 
         Same retry/logging contract as _get_json, except the Accept header
@@ -1245,7 +1265,9 @@ class DataverseClient:
                 delay = _throttle_delay(exc)
                 if delay is not None and attempt < 2:
                     wait = delay or 1.5 * (attempt + 1)
-                    get_app_log().error(f"GET {path} throttled, retrying in {wait:.1f}s (attempt {attempt + 1}/3)")
+                    get_app_log().error(
+                        f"GET {path} throttled, retrying in {wait:.1f}s (attempt {attempt + 1}/3)"
+                    )
                     time.sleep(wait)
                     continue
                 raise
@@ -1286,7 +1308,9 @@ class DataverseClient:
         subtree = (subtree or "").strip()
         if subtree and subtree.lower() not in ("root", ":root"):
             params["subtree"] = subtree
-        get_app_log().info(f"Search API q=* type=dataset per_page={per_page} start={start} subtree='{subtree}'")
+        get_app_log().info(
+            f"Search API q=* type=dataset per_page={per_page} start={start} subtree='{subtree}'"
+        )
         try:
             payload = self._get_json("/api/search", params=params)
         except requests.HTTPError as exc:
@@ -1330,7 +1354,9 @@ class DataverseClient:
                     "collection": collection,
                     "state": state,
                     "has_draft": has_draft,
-                    "publication_statuses": [str(s or "") for s in (item.get("publicationStatuses") or [])],
+                    "publication_statuses": [
+                        str(s or "") for s in (item.get("publicationStatuses") or [])
+                    ],
                     "file_count": int(item.get("fileCount") or 0),
                     # Search items carry no byte totals — None (unknown, shown
                     # as "—") rather than a misleading 0. The enrichment
@@ -1395,9 +1421,7 @@ class DataverseClient:
                 except Exception:
                     pages_total = None
             if not batch:
-                get_app_log().info(
-                    f"Search page {page} (start={start}): empty — stopping"
-                )
+                get_app_log().info(f"Search page {page} (start={start}): empty — stopping")
                 break
             new = 0
             for d in batch:
@@ -1468,12 +1492,15 @@ class DataverseClient:
             else:
                 payload = self._get_json(f"/api/datasets/{identifier}/locks")
             return locks_indicate_review(payload.get("data", []))
-        except (requests.HTTPError, requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, ConnectionResetError):
+        except (
+            requests.HTTPError,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            ConnectionResetError,
+        ):
             return False
 
-    def list_datasets_in_review(
-        self, subtree: str = ""
-    ) -> list[dict[str, Any]]:
+    def list_datasets_in_review(self, subtree: str = "") -> list[dict[str, Any]]:
         """Drafts from the crawl, kept only when locked IN_REVIEW."""
         drafts = self.list_draft_datasets(subtree)
         return [d for d in drafts if self.dataset_in_review(d["persistent_id"])]
@@ -1507,8 +1534,7 @@ class DataverseClient:
             if status in (400, 401, 403, 404):
                 try:
                     get_app_log().info(
-                        f"users/:me unavailable (HTTP {status}) — "
-                        "continuing without identity"
+                        f"users/:me unavailable (HTTP {status}) — continuing without identity"
                     )
                 except Exception:
                     pass
@@ -1570,9 +1596,7 @@ class DataverseClient:
         try:
             from urllib.parse import quote as _quote
 
-            payload = self._get_json(
-                f"/api/dataverses/{_quote(alias, safe='')}/assignments"
-            )
+            payload = self._get_json(f"/api/dataverses/{_quote(alias, safe='')}/assignments")
         except requests.HTTPError as exc:
             resp = getattr(exc, "response", None)
             status = resp.status_code if resp is not None else 0
@@ -1605,9 +1629,7 @@ class DataverseClient:
                     continue
                 if str(entry.get("assignee") or "").strip() != identifier:
                     continue
-                name = str(
-                    entry.get("roleName") or entry.get("_roleAlias") or ""
-                ).strip()
+                name = str(entry.get("roleName") or entry.get("_roleAlias") or "").strip()
                 if name and name not in roles:
                     roles.append(name)
             except Exception:
@@ -1649,7 +1671,11 @@ class DataverseClient:
             if resp is not None and resp.status_code in (400, 401, 403, 404):
                 return None
             raise
-        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, ConnectionResetError):
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            ConnectionResetError,
+        ):
             return None
         return parse_curation_status(payload)
 
@@ -1665,7 +1691,11 @@ class DataverseClient:
             if resp is not None and resp.status_code in (400, 401, 403, 404):
                 return []
             raise
-        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, ConnectionResetError):
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            ConnectionResetError,
+        ):
             return []
         data = (payload or {}).get("data")
         if not isinstance(data, list):
@@ -1715,7 +1745,11 @@ class DataverseClient:
                     pass
                 return []
             raise
-        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, ConnectionResetError):
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            ConnectionResetError,
+        ):
             try:
                 get_app_log().info(
                     f"allowedCurationLabels for {identifier}: network error — no answer"
@@ -1727,7 +1761,11 @@ class DataverseClient:
         try:
             get_app_log().info(
                 f"allowedCurationLabels for {identifier}: received "
-                + (", ".join(f"'{lbl}'" for lbl in labels) if labels else "(empty — none configured)")
+                + (
+                    ", ".join(f"'{lbl}'" for lbl in labels)
+                    if labels
+                    else "(empty — none configured)"
+                )
             )
         except Exception:
             pass
@@ -1754,7 +1792,7 @@ class DataverseClient:
                 break
         if not labels:
             # Fall back to sampling the rest if the head had none configured
-            for pid in (persistent_ids or [])[max(1, sample_size):]:
+            for pid in (persistent_ids or [])[max(1, sample_size) :]:
                 try:
                     for label in self.get_allowed_curation_labels(pid):
                         if label not in labels:
@@ -1823,9 +1861,15 @@ class DataverseClient:
         try:
             get_app_log().info(
                 f"allowedCurationLabels: probed {probed} dataset(s), "
-                + (", ".join(f"'{lbl}'" for lbl in labels) if labels
-                   else ("no dataset answered — will retry next session"
-                         if not answered else "none configured"))
+                + (
+                    ", ".join(f"'{lbl}'" for lbl in labels)
+                    if labels
+                    else (
+                        "no dataset answered — will retry next session"
+                        if not answered
+                        else "none configured"
+                    )
+                )
             )
         except Exception:
             pass
@@ -1930,7 +1974,11 @@ class DataverseClient:
                 )
                 return None
             raise
-        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, ConnectionResetError):
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            ConnectionResetError,
+        ):
             return None
         return parse_curation_states_csv(text)
 
@@ -1960,12 +2008,15 @@ class DataverseClient:
             resp = getattr(exc, "response", None)
             if resp is not None and resp.status_code in (400, 401, 403, 404):
                 get_app_log().info(
-                    f"compare {old}→{new} unavailable for {identifier} "
-                    f"({resp.status_code})"
+                    f"compare {old}→{new} unavailable for {identifier} ({resp.status_code})"
                 )
                 return None
             raise
-        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, ConnectionResetError):
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            ConnectionResetError,
+        ):
             return None
         return parse_version_compare(payload)
 
@@ -1988,13 +2039,15 @@ class DataverseClient:
             if resp is not None and resp.status_code in (400, 401, 403, 404):
                 return []
             raise
-        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, ConnectionResetError):
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            ConnectionResetError,
+        ):
             return []
         return parse_dataset_versions((payload or {}).get("data"))
 
-    def get_timestamps(
-        self, identifier: str, numeric_id: Any = None
-    ) -> dict[str, str]:
+    def get_timestamps(self, identifier: str, numeric_id: Any = None) -> dict[str, str]:
         """Lifecycle timestamps for a dataset (create/publication/DOI/draft touches).
 
         Wraps GET /api/datasets/{id}/timestamps. Tries the :persistentId form
@@ -2022,7 +2075,11 @@ class DataverseClient:
                 if resp is not None and resp.status_code in (400, 401, 403, 404):
                     continue
                 raise
-            except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, ConnectionResetError):
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.ChunkedEncodingError,
+                ConnectionResetError,
+            ):
                 return {}
             parsed = parse_timestamps(payload)
             if parsed:
@@ -2076,7 +2133,11 @@ class DataverseClient:
                         matches.append(hit)
                 if len(items) < per_page:
                     break
-        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, ConnectionResetError):
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            ConnectionResetError,
+        ):
             pass
         return matches
 
@@ -2098,7 +2159,9 @@ class DataverseClient:
             elapsed_ms = int((time.monotonic() - start) * 1000)
             log_response("PUT", str(response.url), response.status_code, elapsed_ms, label)
             if not response.ok:
-                get_app_log().error(f"PUT {response.url} → {response.status_code}: {response.text[:300]}")
+                get_app_log().error(
+                    f"PUT {response.url} → {response.status_code}: {response.text[:300]}"
+                )
             response.raise_for_status()
             return True
         except Exception as exc:
@@ -2121,7 +2184,9 @@ class DataverseClient:
             elapsed_ms = int((time.monotonic() - start) * 1000)
             log_response("DELETE", str(response.url), response.status_code, elapsed_ms, "")
             if not response.ok:
-                get_app_log().error(f"DELETE {response.url} → {response.status_code}: {response.text[:300]}")
+                get_app_log().error(
+                    f"DELETE {response.url} → {response.status_code}: {response.text[:300]}"
+                )
             response.raise_for_status()
             return True
         except Exception as exc:
@@ -2169,9 +2234,7 @@ class DataverseClient:
         data = payload.get("data") if isinstance(payload, dict) else None
         return data if isinstance(data, dict) else {}
 
-    def get_file_inventory(
-        self, identifier: str, version: str = "draft"
-    ) -> list[dict[str, Any]]:
+    def get_file_inventory(self, identifier: str, version: str = "draft") -> list[dict[str, Any]]:
         data, api_version, tried = self._fetch_version_data(identifier, version)
         if api_version != f":{version.lstrip(':').lower()}":
             get_app_log().error(
@@ -2216,9 +2279,7 @@ class DataverseClient:
                         params={"persistentId": identifier},
                     )
                 else:
-                    payload = self._get_json(
-                        f"/api/datasets/{identifier}/versions/{api_version}"
-                    )
+                    payload = self._get_json(f"/api/datasets/{identifier}/versions/{api_version}")
                 return payload.get("data", {}), api_version, tried
             except requests.HTTPError as exc:
                 resp = getattr(exc, "response", None)
@@ -2238,7 +2299,9 @@ class DataverseClient:
                     )
                     continue
                 if status in (400, 404):
-                    get_app_log().info(f"Version {api_version} not available for {identifier} ({status}), trying next")
+                    get_app_log().info(
+                        f"Version {api_version} not available for {identifier} ({status}), trying next"
+                    )
                     continue
                 raise
         # Every version was refused (401/403) — the token cannot read this
@@ -2287,7 +2350,8 @@ class DataverseClient:
         except Exception:
             return {"attempted": 0, "enriched": 0, "pending": 0, "auth_failed": 0}
         candidates = [
-            ds for ds in rows
+            ds
+            for ds in rows
             if ds.get("total_size_bytes") is None and str(ds.get("persistent_id") or "")
         ]
         # Drafts first: capped runs spend calls on curation candidates.
@@ -2296,13 +2360,18 @@ class DataverseClient:
         except Exception:
             pass
         todo = candidates[:max_rows] if max_rows >= 0 else list(candidates)
-        for ds in candidates[len(todo):]:
+        for ds in candidates[len(todo) :]:
             try:
                 if ds.get("total_size_bytes") is None:
                     ds["size_pending"] = True
             except Exception:
                 pass
-        result = {"attempted": 0, "enriched": 0, "pending": len(candidates) - len(todo), "auth_failed": 0}
+        result = {
+            "attempted": 0,
+            "enriched": 0,
+            "pending": len(candidates) - len(todo),
+            "auth_failed": 0,
+        }
         if not todo:
             return result
 
@@ -2311,9 +2380,7 @@ class DataverseClient:
             # fall_back_on_auth: a published dataset has no readable draft
             # and a guest token cannot see drafts at all — fall through to
             # the published version instead of failing the dataset.
-            data, used_version, _tried = self._fetch_version_data(
-                pid, fall_back_on_auth=True
-            )
+            data, used_version, _tried = self._fetch_version_data(pid, fall_back_on_auth=True)
             files, depositor, state, files_known = _summarize_version_data(data)
             return ds, (files, depositor, state, used_version, files_known)
 
@@ -2362,7 +2429,9 @@ class DataverseClient:
                                 pass
                             if not ds.get("file_count") and files:
                                 ds["file_count"] = len(files)
-                        if depositor and (not ds.get("depositor") or ds.get("depositor") == ds.get("contact")):
+                        if depositor and (
+                            not ds.get("depositor") or ds.get("depositor") == ds.get("contact")
+                        ):
                             ds["depositor"] = depositor
                         if state and "REVIEW" not in str(ds.get("state") or "").upper():
                             ds["state"] = state
@@ -2485,17 +2554,23 @@ class DataverseClient:
                 delay = _throttle_delay(exc)
                 if delay is not None and attempt < 2:
                     wait = delay or 1.5 * (attempt + 1)
-                    get_app_log().error(f"Download {label} throttled, retrying in {wait:.1f}s (attempt {attempt + 1}/3)")
+                    get_app_log().error(
+                        f"Download {label} throttled, retrying in {wait:.1f}s (attempt {attempt + 1}/3)"
+                    )
                     time.sleep(wait)
                     continue
                 raise
             except _RETRYABLE_NETWORK as exc:
-                get_app_log().error(f"Download {label} network error (attempt {attempt + 1}/3): {exc}")
+                get_app_log().error(
+                    f"Download {label} network error (attempt {attempt + 1}/3): {exc}"
+                )
                 if attempt < 2:
                     time.sleep(1.5 * (attempt + 1))
                     continue
                 raise
-        raise requests.ConnectionError(f"Download {label} failed after 3 attempts")  # pragma: no cover
+        raise requests.ConnectionError(
+            f"Download {label} failed after 3 attempts"
+        )  # pragma: no cover
 
     def _stream_download(
         self,
@@ -2512,9 +2587,7 @@ class DataverseClient:
             self._api(path), params, dl_headers, dest, progress, label, is_cancelled
         )
 
-    def _guestbook_signed_url(
-        self, identifier: str, guestbook_response: dict[str, Any]
-    ) -> str:
+    def _guestbook_signed_url(self, identifier: str, guestbook_response: dict[str, Any]) -> str:
         """POST a guestbook response and return Dataverse's signed download URL.
 
         Dataverse never streams the bundle for a guestbook-protected dataset
@@ -2529,7 +2602,9 @@ class DataverseClient:
                 "Dataverse API token. Add one in Settings (Ctrl+,)."
             )
         by_pid = ":" in identifier
-        path = "/api/access/dataset/:persistentId" if by_pid else f"/api/access/dataset/{identifier}"
+        path = (
+            "/api/access/dataset/:persistentId" if by_pid else f"/api/access/dataset/{identifier}"
+        )
         params = {"persistentId": identifier} if by_pid else {}
         headers = {
             "X-Dataverse-key": self._api_token,
@@ -2590,23 +2665,42 @@ class DataverseClient:
             # then stream the signed URL. Version fallback does not apply (the
             # POST endpoint already picks the draft when the token may see it).
             signed_url = self._guestbook_signed_url(identifier, guestbook_response)
-            if self._stream_url(
-                signed_url, {}, {}, dest, progress, "guestbook", is_cancelled
-            ) is not None:
+            if (
+                self._stream_url(signed_url, {}, {}, dest, progress, "guestbook", is_cancelled)
+                is not None
+            ):
                 return dest
             detail = getattr(self, "_last_download_error", "") or "the bundle was not found"
             raise requests.HTTPError(f"Dataset bundle download failed: {detail}.")
         # Try requested version, fall back to latest if not found
         for ver in (access_version, "latest"):
             params = {"persistentId": identifier, "version": ver} if by_pid else {"version": ver}
-            path = "/api/access/dataset/:persistentId" if by_pid else f"/api/access/dataset/{identifier}"
-            if self._stream_download(path, params, dl_headers, dest, progress, f"version {ver}", is_cancelled) is not None:
+            path = (
+                "/api/access/dataset/:persistentId"
+                if by_pid
+                else f"/api/access/dataset/{identifier}"
+            )
+            if (
+                self._stream_download(
+                    path, params, dl_headers, dest, progress, f"version {ver}", is_cancelled
+                )
+                is not None
+            ):
                 return dest
         # final attempt without version
-        path = "/api/access/dataset/:persistentId" if by_pid else f"/api/access/dataset/{identifier}"
+        path = (
+            "/api/access/dataset/:persistentId" if by_pid else f"/api/access/dataset/{identifier}"
+        )
         params = {"persistentId": identifier} if by_pid else {}
-        if self._stream_download(path, params, dl_headers, dest, progress, "unversioned", is_cancelled) is None:
-            detail = getattr(self, "_last_download_error", "") or "the dataset or version was not found"
+        if (
+            self._stream_download(
+                path, params, dl_headers, dest, progress, "unversioned", is_cancelled
+            )
+            is None
+        ):
+            detail = (
+                getattr(self, "_last_download_error", "") or "the dataset or version was not found"
+            )
             raise requests.HTTPError(
                 f"Dataset bundle download failed: {detail}. Check that the dataset "
                 "exists on this Dataverse and that the API token can access it."
@@ -2626,15 +2720,8 @@ class DataverseClient:
         data = payload.get("data") if isinstance(payload, dict) else None
         if not isinstance(data, dict):
             return {"status": "", "error": ""}
-        status = str(
-            data.get("status") or data.get("ingestStatus") or data.get("state") or ""
-        )
-        error = str(
-            data.get("errorMessage")
-            or data.get("error")
-            or data.get("ingestError")
-            or ""
-        )
+        status = str(data.get("status") or data.get("ingestStatus") or data.get("state") or "")
+        error = str(data.get("errorMessage") or data.get("error") or data.get("ingestError") or "")
         return {"status": status, "error": error}
 
     def download_datafile_original(
@@ -2677,7 +2764,9 @@ class DataverseClient:
                             f"original format unavailable for file {file_id} "
                             f"({response.status_code})"
                         )
-                    log_response("GET", str(response.url), response.status_code, 0, "streaming original…")
+                    log_response(
+                        "GET", str(response.url), response.status_code, 0, "streaming original…"
+                    )
                     try:
                         response.raise_for_status()
                     except requests.HTTPError as http_exc:
@@ -2718,11 +2807,15 @@ class DataverseClient:
                 continue
             except _RETRYABLE_NETWORK as exc:
                 last_exc = exc
-                get_app_log().error(f"GET datafile/{file_id} network error (attempt {attempt + 1}/3): {exc}")
+                get_app_log().error(
+                    f"GET datafile/{file_id} network error (attempt {attempt + 1}/3): {exc}"
+                )
                 if attempt < 2:
                     time.sleep(1.5 * (attempt + 1))
                     continue
-                raise RuntimeError(f"original-format download failed for file {file_id}: {exc}") from exc
+                raise RuntimeError(
+                    f"original-format download failed for file {file_id}: {exc}"
+                ) from exc
         assert last_exc is not None
         raise RuntimeError(f"original-format download failed for file {file_id}: {last_exc}")
 

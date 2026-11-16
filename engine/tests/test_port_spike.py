@@ -12,9 +12,7 @@ from engine.checks.gpkg_check import GpkgCheck
 from engine.checks.nc_check import NcCheck
 from engine.checks.sas7bdat_check import Sas7bdatCheck
 
-CUR_DATA = (
-    Path(__file__).resolve().parents[3] / "CUR_Res_CurationTools" / "data"
-)
+CUR_DATA = Path(__file__).resolve().parents[3] / "CUR_Res_CurationTools" / "data"
 
 requires_samples = pytest.mark.skipif(
     not CUR_DATA.exists(), reason="CUR_Res_CurationTools sample data not found"
@@ -57,9 +55,7 @@ def test_gpkg_layers_and_crs():
     valid = [r for r in results if r.check_id == "format.gpkg.valid"]
     assert valid and all(r.passed for r in valid), "samples should be valid GPKG"
 
-    layers = [
-        r for r in results if r.check_id == "format.gpkg.layers" and r.passed
-    ]
+    layers = [r for r in results if r.check_id == "format.gpkg.layers" and r.passed]
     assert layers, "samples should contain layers"
     first_layer = layers[0].details["layers"][0]
     assert first_layer["name"]

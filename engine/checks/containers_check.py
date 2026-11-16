@@ -68,10 +68,7 @@ class ContainersCheck(Check):
                 check_id="format.containers.valid",
                 level="warning",
                 passed=False,
-                message=(
-                    f"{name}: no native reader for '{suffix}' - "
-                    "manual verification required"
-                ),
+                message=(f"{name}: no native reader for '{suffix}' - manual verification required"),
             ),
             _skipped(
                 "format.containers.unsafe_entry",
@@ -260,9 +257,7 @@ class ContainersCheck(Check):
                 level="info",
                 passed=True,
                 message=f"{name}: tar readable ({len(members)} members)",
-                details={
-                    "entries": [m.name for m in members[:_MAX_ENTRIES_LISTED]]
-                },
+                details={"entries": [m.name for m in members[:_MAX_ENTRIES_LISTED]]},
             )
         ]
         if unsafe:

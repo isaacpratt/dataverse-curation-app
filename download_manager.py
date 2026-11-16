@@ -51,9 +51,7 @@ class DownloadManager:
     # -- paths ---------------------------------------------------------------
 
     def dataset_dir(self, persistent_id: str) -> Path:
-        sanitized = (
-            persistent_id.replace(":", "_").replace("/", "_").replace("\\", "_")
-        )
+        sanitized = persistent_id.replace(":", "_").replace("/", "_").replace("\\", "_")
         # Block ".." traversal: server-supplied PIDs are untrusted.
         sanitized = sanitized.replace("..", "__")
         sanitized = sanitized.strip()
@@ -387,8 +385,7 @@ class DownloadManager:
                     except OSError:
                         actual_size = -1
                     if actual_size >= 0 and (
-                        (expected and actual_size == expected)
-                        or (not expected and actual_size > 0)
+                        (expected and actual_size == expected) or (not expected and actual_size > 0)
                     ):
                         return dest.relative_to(root).as_posix()
                 dest.parent.mkdir(parents=True, exist_ok=True)
@@ -662,14 +659,10 @@ class DownloadManager:
                 # member's write outside the workspace (TOCTOU-proofing the
                 # containment check below is not possible with extractall).
                 if (member.external_attr >> 16) & 0o170000 == 0o120000:
-                    raise RuntimeError(
-                        f"unsafe archive entry (symlink): {member.filename}"
-                    )
+                    raise RuntimeError(f"unsafe archive entry (symlink): {member.filename}")
                 target = (dest / member.filename).resolve()
                 if not target.is_relative_to(root):
-                    raise RuntimeError(
-                        f"unsafe archive entry: {member.filename}"
-                    )
+                    raise RuntimeError(f"unsafe archive entry: {member.filename}")
             archive.extractall(dest)
 
     def _extract(self, bundle: Path, dest: Path) -> None:

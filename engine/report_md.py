@@ -62,9 +62,7 @@ def render_markdown(report: DatasetReport) -> str:
     lines.append(f"- Files: {len(report.files)}")
     lines.append("")
 
-    all_results = list(report.dataset_checks) + [
-        c for f in report.files for c in f.checks
-    ]
+    all_results = list(report.dataset_checks) + [c for f in report.files for c in f.checks]
     summary = summarize(all_results)
     lines.append("## Summary")
     lines.append("")
