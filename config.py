@@ -22,6 +22,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 
 try:  # optional, hard-imported but never fatal to the app at runtime
     import keyring as _keyring
@@ -60,6 +61,33 @@ def resolve_config_path(path: Path | None = None) -> Path:
     return exe_dir.parent / primary.name
 
 
+def normalise_base_url(raw: str) -> str:
+    """Validate and normalise a Dataverse base URL (env or explicit).
+
+    Raises ValueError with a message naming the offending value on anything
+    that cannot point at a Dataverse: non-http(s) schemes, plain http (the
+    API token travels as X-Dataverse-key, so cleartext is refused), missing
+    host, or empty string.
+    """
+    url = raw.strip()
+    if not url:
+        raise ValueError("DATAVERSE_BASE_URL is empty")
+    parsed = urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    if scheme == "http":
+        raise ValueError(
+            f"DATAVERSE_BASE_URL uses plain HTTP ({raw!r}); the API token is sent as "
+            "X-Dataverse-key - use an https:// URL"
+        )
+    if scheme != "https":
+        raise ValueError(
+            f"DATAVERSE_BASE_URL must start with https:// (scheme {scheme!r} in {raw!r})"
+        )
+    if not parsed.netloc:
+        raise ValueError(f"DATAVERSE_BASE_URL has no host ({raw!r})")
+    return url.rstrip("/")
+
+
 def default_workspace() -> Path:
     """Workspace folder for staged downloads and caches."""
     return Path.home() / "Documents" / "curation-workspace"
@@ -84,6 +112,13 @@ class DataverseConfig:
         self.collection = value or ""
 
 
+def _env_workspace() -> Path | None:
+    raw = os.environ.get("DATAVERSE_WORKSPACE", "").strip()
+    if not raw:
+        return None
+    return Path(raw).expanduser()
+
+
 @dataclass
 class AppConfig:
     workspace: Path = field(default_factory=default_workspace)
@@ -102,17 +137,20 @@ class Config:
         # Env overrides win over file (CI / headless secrets without
         # persisting tokens to disk).
         env_url = os.environ.get("DATAVERSE_BASE_URL", "").strip()
-        env_token = os.environ.get("DATAVERSE_API_TOKEN", "")
-        env_collection = os.environ.get("DATAVERSE_COLLECTION", "")
+        env_token = os.environ.get("DATAVERSE_API_TOKEN", "").strip()
+        env_collection = os.environ.get("DATAVERSE_COLLECTION", "").strip()
         if not cfg_path.exists():
             cfg = cls()
             if env_url:
-                cfg.dataverse.base_url = env_url.rstrip("/")
+                cfg.dataverse.base_url = normalise_base_url(env_url)
             if env_token:
                 cfg.dataverse.api_token = env_token
                 cfg.dataverse.api_token_source = "env"
             if env_collection:
                 cfg.dataverse.collection = env_collection
+            env_ws = _env_workspace()
+            if env_ws is not None:
+                cfg.app.workspace = env_ws
             return cfg
         try:
             raw = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -179,12 +217,15 @@ class Config:
                 cfg.dataverse.api_token_source = "keyring"
         # Env overrides apply on top of file.
         if env_url:
-            cfg.dataverse.base_url = env_url.rstrip("/")
+            cfg.dataverse.base_url = normalise_base_url(env_url)
         if env_token:
             cfg.dataverse.api_token = env_token
             cfg.dataverse.api_token_source = "env"
         if env_collection:
             cfg.dataverse.collection = env_collection
+        env_ws = _env_workspace()
+        if env_ws is not None:
+            cfg.app.workspace = env_ws
         return cfg
 
     def save(self, path: Path | None = None) -> None:

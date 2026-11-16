@@ -204,3 +204,53 @@ def test_keyring_keyed_by_base_url(store, tmp_path):
 
 def test_default_path_untouched():
     assert cfg_module.Path("config.json") == DEFAULT_CONFIG_PATH
+
+def _cfg_env(monkeypatch, **vars):
+    # scrub every relevant var, then set what the test wants
+    for name in ("DATAVERSE_BASE_URL", "DATAVERSE_API_TOKEN", "DATAVERSE_COLLECTION", "DATAVERSE_WORKSPACE"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in vars.items():
+        monkeypatch.setenv(name, value)
+
+
+def test_env_http_url_rejected(store, tmp_path, monkeypatch):
+    _cfg_env(monkeypatch, DATAVERSE_BASE_URL="http://borealis.example")
+    with pytest.raises(ValueError, match="plain HTTP"):
+        Config.load(tmp_path / "config.json")
+
+
+def test_env_non_https_scheme_rejected(store, tmp_path, monkeypatch):
+    _cfg_env(monkeypatch, DATAVERSE_BASE_URL="ftp://borealis.example")
+    with pytest.raises(ValueError, match="https://"):
+        Config.load(tmp_path / "config.json")
+
+
+def test_env_url_without_host_rejected(store, tmp_path, monkeypatch):
+    _cfg_env(monkeypatch, DATAVERSE_BASE_URL="https://")
+    with pytest.raises(ValueError):
+        Config.load(tmp_path / "config.json")
+
+
+def test_env_url_normalised_and_ws_honoured(tmp_path, monkeypatch):
+    store_dir = tmp_path / "ws-from-env"
+    _cfg_env(
+        monkeypatch,
+        DATAVERSE_BASE_URL="  https://demo.borealisdata.ca/  ",
+        DATAVERSE_WORKSPACE=str(store_dir),
+    )
+    cfg = Config.load(tmp_path / "config.json")
+    assert cfg.dataverse.base_url == "https://demo.borealisdata.ca"
+    assert cfg.app.workspace == store_dir
+
+
+def test_env_http_url_rejected_with_file(store, tmp_path, monkeypatch):
+    _write(
+        tmp_path,
+        {
+            "dataverse": {"base_url": "https://ok.test", "api_token": "", "collection": ""},
+            "app": {},
+        },
+    )
+    _cfg_env(monkeypatch, DATAVERSE_BASE_URL="http://borealis.example")
+    with pytest.raises(ValueError, match="plain HTTP"):
+        Config.load(tmp_path / "config.json")

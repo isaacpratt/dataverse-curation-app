@@ -46,6 +46,16 @@ uv export --format requirements-txt      # pip escape hatch (lockfile remains so
 <p><code>poe typecheck</code> gates the engine contract: <code>engine/</code> plus the Dataverse-facing modules it feeds (<code>client</code>, <code>download_manager</code>, <code>storage</code>, <code>review_rules</code>, <code>metadata_check</code>, <code>applog</code>) — scope lives in <code>[tool.mypy] files</code>, so run bare <code>uv run mypy</code>. <code>engine/tests/</code> is excluded on purpose: it imports the PySide6 view layer, and PySide6's stubs expose enums only under scoped names (<code>Qt.CursorShape.PointingHandCursor</code>, not <code>Qt.PointingHandCursor</code>), so including it would bury the engine signal under ~170 Qt-only <code>attr-defined</code> errors. Typing the UI layer is tracked separately.</p>
 <p>The repo pins its toolchain with <code>uv.lock</code> and <code>.python-version</code> (3.11), so every PyInstaller build resolves the same dependency set; a stale lock fails CI's <code>uv lock --check</code> before anything builds. The hook set is check-only (no auto-fixers other than whitespace/EOF fixers). <code>core.hooksPath</code> is beads-managed, so hooks are not auto-installed; run <code>uv run pre-commit run --all-files</code> manually, or rely on the CI step.</p>
 
+<h2>Environment variables</h2>
+<p>All <code>DATAVERSE_*</code> variables override the corresponding <code>config.json</code> value; none are required (the Borealis demo is the default target).</p>
+<table>
+<tr><th>Variable</th><th>Type</th><th>Resolution</th><th>Notes</th></tr>
+<tr><td><code>DATAVERSE_BASE_URL</code></td><td>URL</td><td>env &gt; config.json (default <code>https://demo.borealisdata.ca</code>)</td><td>Must be <code>https://</code> with a host; plain HTTP is refused with a clear error (the token travels as <code>X-Dataverse-key</code>); trailing slashes trimmed</td></tr>
+<tr><td><code>DATAVERSE_API_TOKEN</code></td><td>string</td><td>env &gt; OS credential store (keyring) &gt; config.json plaintext</td><td>Leading/trailing spaces stripped; empty means "no token (public-only)"</td></tr>
+<tr><td><code>DATAVERSE_COLLECTION</code></td><td>string</td><td>env &gt; config.json</td><td>Collection alias used for discovery (<code>subtree</code>)</td></tr>
+<tr><td><code>DATAVERSE_WORKSPACE</code></td><td>path</td><td>env &gt; config.json <code>app.workspace</code> (default <code>~/Documents/curation-workspace</code>)</td><td>Where staged downloads and caches live</td></tr>
+</table>
+
 <h2>On-disk artefacts</h2>
 <p>Every file the app writes, its resolution rule and who writes it. Runtime caches are all listed as gitignored; a fresh clone starts clean.</p>
 <table>
