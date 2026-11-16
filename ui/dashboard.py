@@ -972,7 +972,7 @@ class DashboardView(QWidget):
         self._startup_started = True
         self._restoring = False
         try:
-            from startup_probe import mark
+            from tools.startup_probe import mark
         except Exception:  # pragma: no cover - probe is optional
             mark = lambda _label: None  # noqa: E731
         mark("dashboard: background load start")

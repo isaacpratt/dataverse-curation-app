@@ -37,5 +37,6 @@ config.json -diff -text
 *.webp binary
 *.db binary
 *.sqlite binary
-# Piskel sprite files are opaque editor project files; keep them byte-identical.
+# Piskel sprite files (design/sprites/) are opaque editor project files; keep
+# them byte-identical.
 *.piskel binary

@@ -37,6 +37,10 @@ Thumbs.db
 .pyi-cache/
 # Local AI-agent tooling (skills, sessions) — environment-specific, not app source.
 .opencode/
+# Session scratch from design/critique tooling: untracked by design, the
+# durable decisions they carry live in docs/adr/ (see dv-hcg.32).
+.impeccable/
+.lavish/
 # Agent screenshots/scratch (browser captures, verification images).
 .openchamber/
 # Probe artefacts (tools/probes writes a PNG of the card it checked).

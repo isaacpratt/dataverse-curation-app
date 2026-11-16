@@ -8,8 +8,15 @@ import argparse
 import sys
 from pathlib import Path
 
-from startup_probe import mark
 from ui.i18n import t
+
+try:
+    from tools.startup_probe import mark
+except ImportError:  # pragma: no cover - frozen builds without tools/
+
+    def mark(label: str) -> None:
+        """No-op fallback when the startup probe is unavailable."""
+
 
 mark("main.py imported")
 

@@ -166,13 +166,13 @@ type = "simple"
   # excluded. No --clean so the Analysis cache is reused (fast rebuilds).
   [tool.poe.tasks.build-lite]
   help = "Build dist/curation-app-lite (lite onedir; incremental)"
-  cmd = 'python -m PyInstaller --noconfirm --name curation-app-lite --windowed --onedir --exclude-module pyreadstat --exclude-module netCDF4 --exclude-module h5py --exclude-module scipy --exclude-module tkinter --exclude-module turtle --exclude-module PIL.ImageTk --exclude-module PIL.SpiderImagePlugin --exclude-module PIL._avif --hidden-import hush --hidden-import hush.scanner --hidden-import hush.rules --hidden-import hush.entropy --collect-all piigex --hidden-import stdnum --add-data "ui/assets;ui/assets" --icon ui/assets/docent-mark.ico --workpath .pyi-cache main.py'
+  cmd = 'python -m PyInstaller --noconfirm --name curation-app-lite --windowed --onedir --exclude-module pyreadstat --exclude-module netCDF4 --exclude-module h5py --exclude-module scipy --exclude-module tkinter --exclude-module turtle --exclude-module PIL.ImageTk --exclude-module PIL.SpiderImagePlugin --exclude-module PIL._avif --hidden-import hush --hidden-import hush.scanner --hidden-import hush.rules --hidden-import hush.entropy --collect-all piigex --hidden-import stdnum --hidden-import tools.startup_probe --add-data "ui/assets;ui/assets" --icon ui/assets/docent-mark.ico --workpath .pyi-cache main.py'
 
   # PyInstaller full build: heavy libs (pyreadstat/netCDF4/h5py/scipy) stay
   # in the same folder; run its exe directly for SPSS/SAS/Stata/NetCDF/HDF5.
   [tool.poe.tasks.build-full]
   help = "Build dist/curation-app-full (full onedir)"
-  cmd = 'python -m PyInstaller --noconfirm --clean --name curation-app-full --windowed --onedir --hidden-import hush --hidden-import hush.scanner --hidden-import hush.rules --hidden-import hush.entropy --collect-all piigex --hidden-import stdnum --add-data "ui/assets;ui/assets" --icon ui/assets/docent-mark.ico --workpath .pyi-cache main.py'
+  cmd = 'python -m PyInstaller --noconfirm --clean --name curation-app-full --windowed --onedir --hidden-import hush --hidden-import hush.scanner --hidden-import hush.rules --hidden-import hush.entropy --collect-all piigex --hidden-import stdnum --hidden-import tools.startup_probe --add-data "ui/assets;ui/assets" --icon ui/assets/docent-mark.ico --workpath .pyi-cache main.py'
 
   [tool.poe.tasks.copy-example-config]
   help = "Copy config.example.json into dist/curation-app-full/ (no-op if absent)"

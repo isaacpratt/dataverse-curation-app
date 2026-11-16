@@ -18,7 +18,9 @@ dataverse-curation-app/
 │   ├── widgets.py        # the component kit (every view builds its controls through it)
 │   ├── gallery.py        # the component gallery: every kit component on one page
 │   └── table_layout.py   # one layout controller per table header (persists user gestures only)
-├── tools/probes/         # offscreen UI probes (queue columns, manifest columns, page headings, card corner, buttons, gallery)
+├── tools/                  # operational helpers (audit/SBOM/licenses, smoke, startup probe) + probes/
+│   ├── probes/             # offscreen UI probes (queue columns, manifest columns, page headings, card corner, buttons, gallery)
+│   └── startup_probe.py    # opt-in startup phase timings (DOCENT_STARTUP_LOG)
 ├── client/               # Native/Search API client (constants/errors/http/parsers/caches/downloads/DataverseClient; total-driven paginated search + pooled inventory enrichment, versions/compare/timestamps/notifications/curation labels)
 ├── dataverse_client.py   # compatibility shim re-exporting client/ (existing imports keep working)
 ├── download_manager.py   # approval-gated downloads, originals, skip-if-staged, verify (ok/problems/warnings)

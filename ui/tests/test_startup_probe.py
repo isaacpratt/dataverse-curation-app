@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from tools import startup_probe
+
 
 def test_disabled_is_a_noop(tmp_path, monkeypatch):
     monkeypatch.delenv("DOCENT_STARTUP_LOG", raising=False)
-    import startup_probe
-
     target = tmp_path / "startup.log"
     assert not startup_probe.enabled()
     startup_probe.mark("ignored")
@@ -16,8 +16,6 @@ def test_disabled_is_a_noop(tmp_path, monkeypatch):
 def test_enabled_writes_one_row_per_mark(tmp_path, monkeypatch):
     log = tmp_path / "startup.log"
     monkeypatch.setenv("DOCENT_STARTUP_LOG", str(log))
-    import startup_probe
-
     monkeypatch.setattr(startup_probe, "_HEADER_WRITTEN", False)
     assert startup_probe.enabled()
     startup_probe.mark("first")
@@ -37,8 +35,6 @@ def test_enabled_writes_one_row_per_mark(tmp_path, monkeypatch):
 def test_label_tabs_are_sanitized(tmp_path, monkeypatch):
     log = tmp_path / "startup.log"
     monkeypatch.setenv("DOCENT_STARTUP_LOG", str(log))
-    import startup_probe
-
     monkeypatch.setattr(startup_probe, "_HEADER_WRITTEN", False)
     startup_probe.mark("bad\tphase")
 
