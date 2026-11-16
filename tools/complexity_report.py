@@ -121,7 +121,11 @@ def render_report(blocks: list[dict[str, Any]], mi: dict[str, Any]) -> str:
     if over:
         lines += ["| File | Function | Line | Complexity |", "|---|---|---|---|"]
         for block in over:
-            rel = Path(block["file"]).relative_to(ROOT) if Path(block["file"]).is_absolute() else block["file"]
+            rel = (
+                Path(block["file"]).relative_to(ROOT)
+                if Path(block["file"]).is_absolute()
+                else block["file"]
+            )
             lines.append(
                 f"| `{rel}` | `{block['name']}` | {block['line']} | {block['complexity']} |"
             )
