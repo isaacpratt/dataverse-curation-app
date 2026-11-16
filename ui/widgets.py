@@ -1802,13 +1802,13 @@ class WorkflowRail(QWidget):
         self.hint.setObjectName("CaptionSM")
         self.hint.setWordWrap(False)
         self.hint.setMinimumWidth(0)
-        self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.hint.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
         self._toggle = QPushButton("")
         self._toggle.setObjectName("WorkflowStep")
         self._toggle.setFlat(True)
         self._toggle.setCursor(Qt.PointingHandCursor)
         self._toggle.setMinimumWidth(0)
-        self._toggle.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self._toggle.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         self._toggle.setToolTip(t("workflow.curated.toggle_tip"))
         self._toggle.setAccessibleName(t("workflow.curated.toggle_tip"))
         self._toggle.clicked.connect(lambda _c: self.viewToggled.emit())
@@ -1838,9 +1838,9 @@ class WorkflowRail(QWidget):
             btn.setFlat(True)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setMinimumWidth(0)
-            # Ignored horizontally: seven CURATE(D) steps must compress
-            # inside the app's 960px floor instead of forcing the window.
-            btn.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+            # MinimumExpanding ensures buttons take available space but don't 
+            # force the window wider than 960px.
+            btn.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
             btn.clicked.connect(lambda _c, k=key: self.stepClicked.emit(k))
             lay.addWidget(btn)
             self.buttons[key] = btn
@@ -1848,7 +1848,8 @@ class WorkflowRail(QWidget):
                 connector = QLabel("\u203a")
                 connector.setObjectName("WorkflowSeparator")
                 lay.addWidget(connector)
-        lay.addStretch(1)
+        # The buttons and hint should share space; we remove the hard stretch
+        # to allow the MinimumExpanding buttons to actually expand.
         lay.addWidget(self.hint)
         lay.addWidget(self._toggle)
 
