@@ -8,7 +8,7 @@ is best-effort and never raises — a missing asset yields an empty QIcon.
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap
-from PySide6.QtSvg import QSvgRenderer  # noqa: F401 (forces PyInstaller to bundle QtSvg)
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QLabel
 
 from ui.theme import (

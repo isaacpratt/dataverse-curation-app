@@ -15,6 +15,7 @@ import importlib.metadata
 import subprocess
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import requests
 from PySide6.QtCore import Qt, QThread, Signal
@@ -122,7 +123,7 @@ class SettingsPane(QWidget):
     # Heavy binary libs are excluded from the lite build; pure-Python format
     # helpers ship in lite. Required scanners (piigex, hush-scan) are bundled
     # in both builds and listed here so install status stays visible.
-    EXTENSIONS = [
+    EXTENSIONS: ClassVar[list[tuple[str, str, str]]] = [
         ("pyreadstat", "pyreadstat", t("settings.extensions.used_pyreadstat")),
         ("netCDF4", "netCDF4", t("settings.extensions.used_netcdf4")),
         ("h5py", "h5py", t("settings.extensions.used_h5py")),
@@ -369,10 +370,9 @@ class SettingsPane(QWidget):
         layout.addLayout(outer)
 
         try:
-            from PySide6.QtGui import QKeySequence as _QKS
-            from PySide6.QtGui import QShortcut as _QSC
+            from PySide6.QtGui import QKeySequence, QShortcut
 
-            _QSC(_QKS("Ctrl+S", _QKS.PortableText), self, self._on_save)  # type: ignore[arg-type]
+            QShortcut(QKeySequence("Ctrl+S", QKeySequence.PortableText), self, self._on_save)  # type: ignore[arg-type]
         except Exception:
             pass
 
@@ -560,7 +560,7 @@ class SettingsPane(QWidget):
             self.workspace_edit.setText(chosen)
 
     # External binaries shown as table rows (not pip packages)
-    TOOLS = [
+    TOOLS: ClassVar[list[tuple[str, str, str]]] = [
         (
             "tesseract",
             t("settings.extensions.tool_tesseract"),
@@ -602,7 +602,7 @@ class SettingsPane(QWidget):
         return human_size(total)
 
     @staticmethod
-    def _package_size(pip_name: str, import_name: str = "") -> str:
+    def _package_size(pip_name: str, import_name: str = "") -> str:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Installed size of a distribution (humanized) or '—'.
 
         Fast path first: sum the dist RECORD via importlib.metadata (no
@@ -669,7 +669,7 @@ class SettingsPane(QWidget):
             pass
         return "—"
 
-    def _refresh_extensions(self) -> None:
+    def _refresh_extensions(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         from ui.icons import icon as _ext_icon  # hoisted: also used in TOOLS rows below
 
         frozen = bool(getattr(sys, "frozen", False))

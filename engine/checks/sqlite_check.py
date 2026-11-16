@@ -6,6 +6,7 @@ check plus a manifest of tables with row counts.
 
 import sqlite3
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -16,7 +17,7 @@ class SqliteCheck(Check):
     """SQLite check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.sqlite"
-    extensions = {".sqlite", ".sqlite3", ".db"}
+    extensions: ClassVar[set[str]] = {".sqlite", ".sqlite3", ".db"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
@@ -57,7 +58,7 @@ class SqliteCheck(Check):
                     "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
                 )
             ]
-            _MAX_COUNT_SCAN = 100_000
+            _max_count_scan = 100_000
             counts = {}
             truncated = len(tables) > _MAX_TABLES_LISTED
             for table in tables[:_MAX_TABLES_LISTED]:
@@ -70,9 +71,9 @@ class SqliteCheck(Check):
                     # minutes. Cap the scan — report ">N" when truncated.
                     n = conn.execute(
                         f"SELECT COUNT(*) FROM "
-                        f"(SELECT 1 FROM {quoted_ident(table)} LIMIT {_MAX_COUNT_SCAN + 1})"
+                        f"(SELECT 1 FROM {quoted_ident(table)} LIMIT {_max_count_scan + 1})"
                     ).fetchone()[0]
-                    counts[table] = n if n <= _MAX_COUNT_SCAN else f">{_MAX_COUNT_SCAN}"
+                    counts[table] = n if n <= _max_count_scan else f">{_max_count_scan}"
                 except sqlite3.Error:
                     counts[table] = None
         finally:

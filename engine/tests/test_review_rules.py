@@ -59,7 +59,8 @@ def test_optional_missing_stays_incomplete_with_level():
     rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
     res = rr.evaluate_ruleset(_meta([]), rs, [])
     orcid = next(r for r in res if r["rule_id"] == "field:citation.author.authorIdentifier:orcid")
-    assert orcid["status"] == "incomplete" and orcid["level"] == "optional"
+    assert orcid["status"] == "incomplete"
+    assert orcid["level"] == "optional"
 
 
 def test_content_rule_filename_glob():
@@ -361,7 +362,8 @@ def test_dotted_nonempty_rule_requires_every_identifier():
     res2 = rr.evaluate_ruleset(meta2, ruleset, [])
     r2 = next(x for x in res2 if x["block"] == "citation")
     assert r2["status"] == "complete"
-    assert "X" in r2["value"] and "Y" in r2["value"]
+    assert "X" in r2["value"]
+    assert "Y" in r2["value"]
 
 
 def test_legacy_orcid_field_author_migrates_on_load():
@@ -436,4 +438,5 @@ def test_deleted_ruleset_leaves_profiles(tmp_path, monkeypatch):
     _rr.save_rulesets(pool)
     _mc.refresh_profiles_from_rulesets()
     assert "temp-custom" not in _mc.PROFILES
-    assert "McMaster" in _mc.PROFILES and "Minimal" in _mc.PROFILES
+    assert "McMaster" in _mc.PROFILES
+    assert "Minimal" in _mc.PROFILES

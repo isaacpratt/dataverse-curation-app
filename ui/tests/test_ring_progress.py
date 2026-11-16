@@ -10,7 +10,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from ui.progress import (  # noqa: E402
+from ui.progress import (
     PHASE_DISCOVERY,
     PHASE_ENRICHMENT,
     PHASE_LABELS,

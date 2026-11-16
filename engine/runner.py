@@ -112,7 +112,7 @@ def list_planned_checks(files: list[Path]) -> list[dict]:
     return planned
 
 
-def run_report(
+def run_report(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     dataset_dir: Path,
     persistent_id: str = "",
     label: str = "",

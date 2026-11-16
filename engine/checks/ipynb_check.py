@@ -6,6 +6,7 @@ schema, cell counts, output presence and unexecuted-code detection.
 
 import json
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -17,7 +18,7 @@ class IpynbCheck(Check):
     """Jupyter notebook check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.ipynb"
-    extensions = {".ipynb"}
+    extensions: ClassVar[set[str]] = {".ipynb"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file

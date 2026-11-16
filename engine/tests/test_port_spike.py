@@ -40,7 +40,8 @@ def test_sas_dictionary_extracted():
     dictionaries = [r for r in by_id["format.sas.dictionary"] if r.passed]
     assert dictionaries
     variables = dictionaries[0].details["variables"]
-    assert variables and all("name" in v and "type" in v for v in variables)
+    assert variables
+    assert all("name" in v and "type" in v for v in variables)
 
     for result in results:
         assert result.level in {"info", "warning", "error"}
@@ -53,7 +54,8 @@ def test_gpkg_layers_and_crs():
 
     results = GpkgCheck().run(files[:2])
     valid = [r for r in results if r.check_id == "format.gpkg.valid"]
-    assert valid and all(r.passed for r in valid), "samples should be valid GPKG"
+    assert valid, "samples should be valid GPKG"
+    assert all(r.passed for r in valid), "samples should be valid GPKG"
 
     layers = [r for r in results if r.check_id == "format.gpkg.layers" and r.passed]
     assert layers, "samples should contain layers"
@@ -72,4 +74,5 @@ def test_netcdf_georeferenced():
     assert any(r.passed for r in spatial), "ERA5/CHIRPS-style nc should be georeferenced"
 
     openable = [r for r in results if r.check_id == "format.netcdf.openable"]
-    assert openable and any(r.passed for r in openable)
+    assert openable
+    assert any(r.passed for r in openable)

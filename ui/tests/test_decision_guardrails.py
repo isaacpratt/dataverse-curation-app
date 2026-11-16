@@ -29,7 +29,8 @@ def test_placeholder_gates_commit(det):
     assert combo.currentData() is None
     assert not commit.isEnabled()
     text = det._decision_help.text()
-    assert "disabled" in text and "Pick an action" in text
+    assert "disabled" in text
+    assert "Pick an action" in text
 
 
 def test_real_choice_enables_commit(det):

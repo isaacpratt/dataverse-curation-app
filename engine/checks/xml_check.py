@@ -5,6 +5,7 @@ root element and namespace summary.
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -13,7 +14,7 @@ class XmlCheck(Check):
     """XML check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.xml"
-    extensions = {".xml", ".xsd"}
+    extensions: ClassVar[set[str]] = {".xml", ".xsd"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
@@ -31,12 +32,12 @@ class XmlCheck(Check):
         name = path.name
         # Size gate: full DOM parse of a 500MB dump OOMs. Beyond the cap,
         # stream with iterparse for root/namespace summary only.
-        _MAX_FULL_PARSE_BYTES = 64 << 20
+        _max_full_parse_bytes = 64 << 20
         try:
             size = path.stat().st_size
         except OSError:
             size = 0
-        if size > _MAX_FULL_PARSE_BYTES:
+        if size > _max_full_parse_bytes:
             try:
                 context = etree.iterparse(str(path), events=("start",), huge_tree=False)
                 root_tag = None

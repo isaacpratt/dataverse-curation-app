@@ -420,7 +420,7 @@ def test_quote_and_verify_with_fake_client(tmp_path):
 def test_verify_detects_missing_file(tmp_path):
     inventory = [{"path": "gone.csv", "size_bytes": 10, "checksum_type": "", "checksum_value": ""}]
     manager = DownloadManager(FakeClient(inventory), tmp_path / "ws")
-    ok, problems, warnings = manager.verify("any")
+    ok, problems, _warnings = manager.verify("any")
     assert not ok
     assert any(p.startswith("missing") for p in problems)
 
@@ -513,7 +513,8 @@ def test_verify_mismatch_reports_hashes_and_tabular_note(tmp_path):
     assert len(warnings) == 1
     line = warnings[0]
     assert "checksum mismatch: eco.tab" in line
-    assert "md5 expected " in line and " got " in line
+    assert "md5 expected " in line
+    assert " got " in line
     assert "UNF:6:abc==" in line
     assert "server-regenerated" in line
     assert "application/x-spss-sav" in line
@@ -591,7 +592,7 @@ def test_download_originals_skips_staged_and_nontabular(tmp_path):
 
 
 def test_quote_prefers_original_size_for_tabular():
-    from download_manager import DownloadManager as DM
+    from download_manager import DownloadManager
 
     inv = [
         {
@@ -603,7 +604,7 @@ def test_quote_prefers_original_size_for_tabular():
         },
         {"path": "b.csv", "tabular": False, "size_bytes": 50},
     ]
-    q = DM.quote_from(inv, "pid")
+    q = DownloadManager.quote_from(inv, "pid")
     assert q.file_count == 2
     assert q.total_size_bytes == 150
 
@@ -821,7 +822,7 @@ def test_parse_allowed_labels_shapes():
     assert parse_allowed_labels(None) == []
 
 
-def test_snapshot_apply_clear_table_view(tmp_path):
+def test_snapshot_apply_clear_table_view(tmp_path):  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Reset reproduces construction state; clear drops the persisted entry."""
     import json as _json
 
@@ -1076,7 +1077,7 @@ def test_table_layout_roundtrip(tmp_path):
     assert restore_table_state(tmp_path, "dataset_files", FakeHeader([1])) is False
 
 
-def test_table_view_state_roundtrip(tmp_path):
+def test_table_view_state_roundtrip(tmp_path):  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Widths + sort + hidden columns + visual order all persist."""
     from storage import restore_table_state, save_table_state
 

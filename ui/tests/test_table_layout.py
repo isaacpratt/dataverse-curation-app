@@ -22,7 +22,7 @@ from storage import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def header(qapp):
     """Build a table with three columns and a throwaway workspace."""
     import tempfile
@@ -84,7 +84,7 @@ def test_restore_reapplies_the_saved_layout(header):
 def test_reset_clears_the_saved_layout_and_restores_the_snapshot(header):
     from ui.table_layout import TableLayout
 
-    table, hdr, ws = header
+    _table, hdr, ws = header
     layout = TableLayout(ws, "probe", hdr)
     original = hdr.sectionSize(0)
     hdr.resizeSection(0, 240)
@@ -106,7 +106,7 @@ def test_reset_survives_a_restart(header):
 def test_a_layout_for_another_column_count_is_ignored(header):
     from ui.table_layout import TableLayout
 
-    table, hdr, ws = header
+    _table, hdr, ws = header
     path = ws / "table_layout.json"
     path.write_text(
         json.dumps({"probe": {"v": TABLE_LAYOUT_VERSION, "widths": [10, 20, 30, 40, 50]}}),

@@ -88,42 +88,42 @@ from ui.theme import (
 from ui.workflow import STEP_ORDER, Workflow
 
 __all__ = [
+    "BUTTON_HEIGHTS",
     "AppButton",
     "AppTable",
     "AppTree",
     "AppTreeWidget",
-    "SortArrowHeaderView",
+    "ElidedLabel",
     "PaneFooter",
+    "SortArrowHeaderView",
     "WorkflowRail",
-    "flush_table_style",
-    "flush_list_style",
-    "tree_style",
-    "make_card",
     "add_info_tip",
+    "flush_list_style",
+    "flush_table_style",
+    "human_size",
     "make_action_button",
     "make_badge",
-    "make_checkbox",
-    "make_list",
-    "make_multiline_input",
-    "make_page_heading",
-    "make_split_chip",
-    "make_plain_text_view",
-    "make_progress_bar",
-    "make_section_heading",
     "make_body_label",
     "make_caption_label",
-    "make_field_label",
-    "make_small_body_label",
+    "make_card",
     "make_card_title",
-    "make_metric_value",
+    "make_checkbox",
+    "make_combo",
     "make_elided_label",
-    "ElidedLabel",
+    "make_field_label",
+    "make_line_edit",
+    "make_list",
+    "make_metric_value",
+    "make_multiline_input",
+    "make_page_heading",
+    "make_plain_text_view",
+    "make_progress_bar",
     "make_reset_columns_button",
     "make_search_field",
-    "make_line_edit",
-    "make_combo",
-    "BUTTON_HEIGHTS",
-    "human_size",
+    "make_section_heading",
+    "make_small_body_label",
+    "make_split_chip",
+    "tree_style",
 ]
 
 # Button heights (px) by size token.
@@ -221,7 +221,7 @@ class _HeaderTooltipFilter(QObject):
     has to carry the name the section cannot show.
     """
 
-    def eventFilter(self, obj, event) -> bool:  # noqa: N802 (Qt naming)
+    def eventFilter(self, obj, event) -> bool:
         if event.type() == QEvent.ToolTip:
             header = obj
             try:
@@ -279,7 +279,7 @@ class SortArrowHeaderView(QHeaderView):
         if not self._painting:
             self.update()
 
-    def paintEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+    def paintEvent(self, event) -> None:
         section = self.sortIndicatorSection()
         active = (
             self.orientation() == Qt.Horizontal
@@ -356,7 +356,7 @@ class SelectionDelegate(QStyledItemDelegate):
     the row tint stays, because selection is a separate state.
     """
 
-    def paint(self, painter, option, index) -> None:  # noqa: N802 (Qt naming)
+    def paint(self, painter, option, index) -> None:
         if option.state & QStyle.State_HasFocus:
             option = QStyleOptionViewItem(option)
             option.state &= ~QStyle.State_HasFocus
@@ -380,7 +380,7 @@ class AppTable(QTableWidget):
     columns_fitted = Signal()
     user_layout_changed = Signal()
 
-    def setHorizontalHeaderLabels(self, labels) -> None:  # noqa: N802 (Qt naming)
+    def setHorizontalHeaderLabels(self, labels) -> None:
         """Set the column titles in sentence case, as painted.
 
         Headers read as the catalogue writes them ("Dataset Title",
@@ -528,7 +528,7 @@ class AppTable(QTableWidget):
         self._auto_fit = True
         self._fitted = False
 
-    def fit_columns_to_content(
+    def fit_columns_to_content(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         self,
         *,
         min_width: int = 48,
@@ -600,7 +600,7 @@ class AppTable(QTableWidget):
             if usable > 0 and total > usable:
                 ratio = usable / total
                 for i, w in list(targets.items()):
-                    targets[i] = max(min_width, int(round(w * ratio)))
+                    targets[i] = max(min_width, round(w * ratio))
             for i, w in targets.items():
                 hdr.resizeSection(i, w)
             hdr.setStretchLastSection(was_stretch_last)
@@ -719,7 +719,7 @@ class _BranchPainting:
 
     _BRANCH_PX = 14
 
-    def drawBranches(self, painter, rect, index) -> None:  # noqa: N802 (Qt naming)
+    def drawBranches(self, painter, rect, index) -> None:
         """Replace the style's branch painting with one chevron."""
         self._paint_branch(painter, rect, index)
 
@@ -856,7 +856,7 @@ class AppTreeWidget(_BranchPainting, QTreeWidget):
 
     user_layout_changed = Signal()
 
-    def setHeaderLabels(self, labels) -> None:  # noqa: N802 (Qt naming)
+    def setHeaderLabels(self, labels) -> None:
         """Set the column titles in sentence case, as painted.
 
         Same rule as AppTable: the stored label is the painted label, so
@@ -1126,7 +1126,7 @@ class _ElidedChipButton(QPushButton):
         self._full_text = text
         self._shown_text = text
 
-    def sizeHint(self) -> QSize:  # noqa: N802 (Qt naming)
+    def sizeHint(self) -> QSize:
         """Ask for the room the FULL title needs.
 
         QPushButton's own hint follows the *current* text, and
@@ -1143,7 +1143,7 @@ class _ElidedChipButton(QPushButton):
         shown = metrics.horizontalAdvance(self._shown_text)
         return QSize(hint.width() + max(0, full - shown), hint.height())
 
-    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._apply_elide()
 
@@ -1389,12 +1389,12 @@ class ElidedLabel(QLabel):
         """Return the un-elided text (the tooltip carries it as well)."""
         return self._full_text
 
-    def setText(self, text: str) -> None:  # noqa: N802 (Qt naming)
+    def setText(self, text: str) -> None:
         self._full_text = text or ""
         self.setToolTip(self._full_text)
         self._apply_elide()
 
-    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._apply_elide()
 

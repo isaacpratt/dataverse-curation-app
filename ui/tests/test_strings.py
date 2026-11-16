@@ -100,7 +100,7 @@ def _catalog_data() -> dict:
         return json.load(fh)
 
 
-def _lookup_calls() -> list[tuple[Path, int, str, set[str]]]:
+def _lookup_calls() -> list[tuple[Path, int, str, set[str]]]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Every ``t("key", ...)`` / ``tn("key", count, ...)`` call in ui/.
 
     Returns ``(path, line, key, placeholders_supplied)`` tuples.

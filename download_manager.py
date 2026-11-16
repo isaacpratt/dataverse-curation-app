@@ -110,7 +110,7 @@ class DownloadManager:
             total_size_bytes=total,
         )
 
-    def missing_files(self, persistent_id: str, inventory: list | None = None) -> list:
+    def missing_files(self, persistent_id: str, inventory: list | None = None) -> list:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Inventory paths not yet staged (missing or size-changed).
 
         Exact directoryLabel paths win; a basename fallback covers bundles
@@ -330,7 +330,7 @@ class DownloadManager:
                 get_app_log().error(f"download_originals after bundle ({persistent_id}): {exc}")
             return self.files_dir(persistent_id)
 
-    def download_originals(
+    def download_originals(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         self,
         persistent_id: str,
         inventory: list | None = None,
@@ -356,7 +356,7 @@ class DownloadManager:
         if not isinstance(inv, list):
             return []
 
-        def _fetch_one(item) -> str | None:
+        def _fetch_one(item) -> str | None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
             dest: Path | None = None
             try:
                 if is_cancelled and is_cancelled():
@@ -461,7 +461,7 @@ class DownloadManager:
     def _is_tabular(item: dict) -> bool:
         return bool(item.get("tabular")) or str(item.get("path", "")).lower().endswith(".tab")
 
-    def verify(
+    def verify(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         self,
         persistent_id: str,
         progress: Callable[[int, int], None] | None = None,
@@ -497,7 +497,7 @@ class DownloadManager:
                 except Exception:
                     pass
 
-        def _verify_one(item) -> tuple[str | None, str | None]:
+        def _verify_one(item) -> tuple[str | None, str | None]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
             if not isinstance(item, dict):
                 return ("malformed inventory entry (missing path)", None)
             rel = str(item.get("path", "") or "")

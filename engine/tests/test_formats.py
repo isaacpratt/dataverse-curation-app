@@ -59,7 +59,7 @@ def _sample_files(check, subdirectory):
 
 
 @requires_samples
-@pytest.mark.parametrize("label,check,subdirectory", CASES, ids=[c[0] for c in CASES])
+@pytest.mark.parametrize(("label", "check", "subdirectory"), CASES, ids=[c[0] for c in CASES])
 def test_format_check_on_samples(label, check, subdirectory):
     files = _sample_files(check, subdirectory)
     assert files, f"no {label} samples found in {subdirectory}"

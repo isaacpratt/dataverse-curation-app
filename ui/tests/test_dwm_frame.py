@@ -190,7 +190,8 @@ def test_work_area_for_hwnd_returns_plausible_rect():
     rect = _work_area_for_hwnd(int(user32.GetDesktopWindow()))
     assert rect is not None
     left, top, right, bottom = rect
-    assert right - left > 100 and bottom - top > 100
+    assert right - left > 100
+    assert bottom - top > 100
 
 
 @win32_only

@@ -8,6 +8,7 @@ truncated `_bundle.zip.part` behind — all offline, against fake clients.
 import io
 import zipfile
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -22,7 +23,7 @@ class _ChunkedResponse:
 
     status_code = 200
     url = "http://example.test/stream"
-    headers: dict = {}
+    headers: ClassVar[dict] = {}
 
     def __init__(self):
         self.chunks_yielded = 0

@@ -30,7 +30,7 @@ def detail(win, qapp):
     return det
 
 
-@pytest.fixture()
+@pytest.fixture
 def quiet_commit(monkeypatch):
     """Silence the modal result dialogs a commit raises."""
     monkeypatch.setattr("ui.dataset_detail.show_info", lambda *a, **k: None)
@@ -143,7 +143,7 @@ def test_confirm_dialog_defaults_to_no_and_is_themed(qapp, monkeypatch):
     assert no_btn is not None
     assert no_btn.isDefault(), "No must be the default answer"
     assert no_btn.objectName() == "SecondaryButton"
-    yes_btn = [b for b in box.buttons() if b is not no_btn][0]
+    yes_btn = next(b for b in box.buttons() if b is not no_btn)
     assert yes_btn.objectName() == "PrimaryButton", (
         "the affirmative button must wear the brand face"
     )

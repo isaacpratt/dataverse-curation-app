@@ -8,7 +8,7 @@ health sample of the first variable.
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -55,7 +55,7 @@ class NcCheck(Check):
     """NetCDF check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.netcdf"
-    extensions = {".nc", ".cdf"}
+    extensions: ClassVar[set[str]] = {".nc", ".cdf"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         # Per-file isolation: a fault in one file becomes a finding, never a

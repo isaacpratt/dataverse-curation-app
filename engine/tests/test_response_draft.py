@@ -150,12 +150,13 @@ def test_render_respects_inclusion_flags():
         },
     ]
     md = render_response(rs, sections, "T", "doi:1")
-    assert "First item" in md and "Second item" not in md
+    assert "First item" in md
+    assert "Second item" not in md
 
 
 def test_items_raise_severity_tags():
     """Warnings/errors/required items are tagged up front in the draft."""
-    md, sections = build_response(_ruleset(), [], None, "T", "doi:1")
+    md, _sections = build_response(_ruleset(), [], None, "T", "doi:1")
     report = DatasetReport(
         persistent_id="doi:1",
         label="x",
@@ -210,8 +211,9 @@ def test_items_raise_severity_tags():
             "response_template": "Consider adding {field}.",
         },
     ]
-    md, sections = build_response(_ruleset(), completeness, report, "T", "doi:1")
-    assert "**Error:**" in md and "zero-byte" not in md
+    md, _sections = build_response(_ruleset(), completeness, report, "T", "doi:1")
+    assert "**Error:**" in md
+    assert "zero-byte" not in md
     assert "**Warning:**" in md
     assert "**Required:**" in md
     assert "**Recommended:**" in md

@@ -78,4 +78,5 @@ def test_level_column_shows_ruleset_levels(detail):
     model = detail._meta_model
     assert model.horizontalHeaderItem(1).text() == "Level"
     assert [model.item(r, 1).text() for r in range(2)] == ["Required", "Optional"]
-    assert model.item(0, 1).font().bold() and not model.item(1, 1).font().bold()
+    assert model.item(0, 1).font().bold()
+    assert not model.item(1, 1).font().bold()

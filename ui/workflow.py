@@ -97,7 +97,7 @@ class Workflow:
         return None
 
 
-def derive_workflow(inp: WorkflowInput) -> Workflow:
+def derive_workflow(inp: WorkflowInput) -> Workflow:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Derive the six step states, the current step, and the next-step hint."""
     meta = bool(inp.metadata_loaded)
     inv_ok = bool(inp.inventory_ok)

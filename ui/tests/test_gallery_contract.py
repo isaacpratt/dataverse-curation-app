@@ -96,7 +96,8 @@ def test_disabled_primary_label_stays_readable():
     for selector, props in _blocks(disabled):
         if selector.endswith(":disabled"):
             face, text = props.get("background"), props.get("color")
-    assert face is not None and text is not None, "primary needs a disabled state"
+    assert face is not None, "primary needs a disabled state"
+    assert text is not None, "primary needs a disabled state"
     assert contrast_ratio(text, face) >= 3.0, f"disabled pair fails 3:1 ({text} on {face})"
     assert contrast_ratio(text, SURFACE_CARD) >= 3.0
     assert text == TEXT_PRIMARY, "disabled label wears the primary text role"

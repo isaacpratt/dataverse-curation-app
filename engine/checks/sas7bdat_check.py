@@ -6,6 +6,7 @@ value labels) and a non-ASCII encoding scan over character columns.
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -54,7 +55,7 @@ class Sas7bdatCheck(Check):
     """SAS check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.sas"
-    extensions = {".sas7bdat", ".xpt"}
+    extensions: ClassVar[set[str]] = {".sas7bdat", ".xpt"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         # Per-file isolation like every other check (_detect_format opens the

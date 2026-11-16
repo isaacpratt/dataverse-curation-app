@@ -11,7 +11,7 @@ Each result: {field, requirement, value, status}
 
 import json as _json
 import re
-from pathlib import Path as _Path
+from pathlib import Path
 from typing import Any
 
 PROFILES: dict[str, dict[str, Any]] = {
@@ -35,7 +35,7 @@ PROFILE_TO_RULESET = {"McMaster": "mcmaster-default", "Minimal": "minimal"}
 _FILE_NAME = "requirements_profiles.json"
 
 
-def profiles_path() -> _Path:
+def profiles_path() -> Path:
     """Canonical location of the editable requirement profiles.
 
     Frozen exe: next to the executable (CWD is arbitrary there), falling
@@ -51,14 +51,14 @@ def profiles_path() -> _Path:
 
     if getattr(sys, "frozen", False):
         try:
-            exe_dir = _Path(sys.executable).parent
+            exe_dir = Path(sys.executable).parent
             for candidate in (exe_dir / _FILE_NAME, exe_dir.parent / _FILE_NAME):
                 if candidate.exists():
                     return candidate
             return exe_dir.parent / _FILE_NAME
         except Exception:
             pass
-    return _Path(_FILE_NAME)
+    return Path(_FILE_NAME)
 
 
 # Keys PROFILES gained from v2 rulesets (tracked so deleted rulesets can be
@@ -161,7 +161,7 @@ def _nonempty(value: Any) -> bool:
     return True
 
 
-def _display_value(value: Any, max_len: int = 120) -> str:
+def _display_value(value: Any, max_len: int = 120) -> str:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     if value is None:
         return "—"
     if isinstance(value, str):
@@ -249,7 +249,7 @@ def _extract_orcid_value(metadata_blocks: dict[str, Any]) -> str:
     return fallback
 
 
-def _check_mcmaster(
+def _check_mcmaster(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     metadata: dict, blocks: dict[str, Any], inventory: list[dict[str, Any]] | None
 ) -> list[dict[str, Any]]:
     def has(block: str, name: str) -> bool:
@@ -277,13 +277,11 @@ def _check_mcmaster(
     elif len(inventory) == 0:
         readme_val = "No files in dataset — README not applicable"
     else:
-        from pathlib import Path as _P
-
         for f in inventory:
             if not isinstance(f, dict):
                 continue
             raw_path = str(f.get("path") or f.get("label") or "")
-            base = _P(raw_path).name.lower()
+            base = Path(raw_path).name.lower()
             # Match README as a basename (readme, readme.md/txt, readme_*),
             # not any substring (avoids myreadme_data.csv false positives).
             if base == "readme" or base.startswith(("readme.", "readme_", "readme-")):

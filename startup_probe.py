@@ -27,7 +27,7 @@ import time
 
 _T0 = time.perf_counter()
 _HEADER_WRITTEN = False
-_PROCESS_START: float | None | bool = None  # False = looked up and unavailable
+_PROCESS_START: float | bool | None = None  # False = looked up and unavailable
 
 
 def enabled() -> bool:

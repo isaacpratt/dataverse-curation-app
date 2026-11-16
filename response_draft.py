@@ -78,7 +78,7 @@ def collect_metadata_sections(
     return sections
 
 
-def collect_filecheck_sections(ruleset: dict[str, Any], report: Any) -> list[dict[str, Any]]:
+def collect_filecheck_sections(ruleset: dict[str, Any], report: Any) -> list[dict[str, Any]]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """One section per failed warning/error file or dataset check."""
     sections: list[dict[str, Any]] = []
     if report is None:

@@ -402,7 +402,7 @@ def snapshot_table_view(header) -> dict:
     return snap
 
 
-def apply_table_view(header, snap) -> None:
+def apply_table_view(header, snap) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Re-apply a view-state dict (snapshot or persisted entry). Never raises."""
     try:
         if not isinstance(snap, dict):

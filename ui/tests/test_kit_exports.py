@@ -68,4 +68,5 @@ def test_table_and_tree_classes_exist(qapp):
 
     table = AppTable(["A", "B"])
     assert isinstance(table, QTableWidget)
-    assert AppTree is not None and AppTreeWidget is not None
+    assert AppTree is not None
+    assert AppTreeWidget is not None

@@ -6,6 +6,7 @@ line-ending sanity and TODO/FIXME markers.
 
 import re
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks._util import detect_encoding
 from engine.checks.base import Check, CheckResult
@@ -19,7 +20,7 @@ class CodeCheck(Check):
     """Code check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.code"
-    extensions = {
+    extensions: ClassVar[set[str]] = {
         ".r",
         ".py",
         ".qmd",

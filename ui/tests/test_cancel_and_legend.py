@@ -128,13 +128,15 @@ def test_log_legend_is_plain_text_in_highlighter_colours(win, qapp):
         labels = {lbl.text(): lbl for lbl in page.findChildren(QLabel)}
         # Ordinary text, not badge chrome (dv-wp1): sentence case, no
         # uppercase transform, tracking, heavy weight or pill face.
-        assert "Error" in labels and "Warning" in labels, "severity legend missing"
+        assert "Error" in labels, "severity legend missing"
+        assert "Warning" in labels, "severity legend missing"
         err, warn = labels["Error"], labels["Warning"]
         for lbl in (err, warn, labels["Info · Debug"]):
             assert lbl.objectName() == "BodySM", "legend must use the body text token"
             css = lbl.styleSheet()
             assert "background" not in css, "no pill/badge background"
-            assert "text-transform" not in css and "letter-spacing" not in css
+            assert "text-transform" not in css
+            assert "letter-spacing" not in css
             assert "font-weight" not in css, "normal text, not a badge"
         # lnav-style: severity is the text colour.
         assert STATE_ERROR_GRAPHIC in err.styleSheet() or "error" in err.styleSheet().lower()

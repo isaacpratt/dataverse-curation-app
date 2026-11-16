@@ -13,7 +13,7 @@ silent pass.
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -111,7 +111,7 @@ class AccessCheck(Check):
     """Access restrictions — restricted and embargoed files (dataset-level)."""
 
     check_id = "inventory.access"
-    extensions = set()
+    extensions: ClassVar[set[str]] = set()
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         return self.run_dataset(files, None)

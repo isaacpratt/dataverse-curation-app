@@ -72,23 +72,23 @@ def _inject_sibling_libs() -> int:
 # them via the explicit hidden-imports in the spec / Makefile.
 from typing import TYPE_CHECKING as _TYPE_CHECKING  # noqa: E402
 
-if _TYPE_CHECKING:  # pragma: no cover  # noqa: E402
-    import PySide6  # noqa: F401
-    import PySide6.QtCore  # noqa: F401
-    import PySide6.QtGui  # noqa: F401
+if _TYPE_CHECKING:  # pragma: no cover
+    import PySide6
+    import PySide6.QtCore
+    import PySide6.QtGui
     import PySide6.QtWidgets  # noqa: F401
 
     import response_draft  # noqa: F401
     import review_rules  # noqa: F401
-    import ui.dashboard  # noqa: F401
-    import ui.dataset_detail  # noqa: F401
-    import ui.main_window  # noqa: F401
-    import ui.review_config  # noqa: F401
-    import ui.settings_dialog  # noqa: F401
+    import ui.dashboard
+    import ui.dataset_detail
+    import ui.main_window
+    import ui.review_config
+    import ui.settings_dialog
     import ui.workers  # noqa: F401
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     parser = argparse.ArgumentParser(description=t("app.cli.description"))
     parser.add_argument(
         "--headless",

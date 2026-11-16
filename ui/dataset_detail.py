@@ -8,7 +8,7 @@ the metadata check card (profile selector).
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
@@ -239,7 +239,7 @@ class DatasetDetailView(QWidget):
     # emitted when the real title is known (header/metadata), so TopNav chips show titles
     titleChanged = Signal(str, str)
 
-    def minimumSizeHint(self):  # noqa: N802 (Qt naming)
+    def minimumSizeHint(self):
         """Never let the stacked layout force-grow the main window.
 
         QStackedWidget's minimum is the max over ALL pages — the tall
@@ -251,12 +251,12 @@ class DatasetDetailView(QWidget):
 
         return QSize(720, 480)
 
-    def sizeHint(self):  # noqa: N802 (Qt naming)
+    def sizeHint(self):
         from PySide6.QtCore import QSize
 
         return QSize(1200, 760)
 
-    def __init__(
+    def __init__(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         self,
         config: Config,
         persistent_id: str,
@@ -785,7 +785,7 @@ class DatasetDetailView(QWidget):
         # subfield (Name, Affiliation, Identifier, …), so a compound value
         # is readable instead of being flattened into one line.
         from PySide6.QtGui import QStandardItemModel as _QStandardItemModel
-        from PySide6.QtWidgets import QHeaderView as _QHV
+        from PySide6.QtWidgets import QHeaderView
 
         self._meta_check_tree = AppTree(row_height=30, flush=True)
         self._meta_model = _QStandardItemModel(0, 5, self)
@@ -801,7 +801,7 @@ class DatasetDetailView(QWidget):
         # Stretch mode (a Stretch section cannot be resized by hand).
         _meta_hdr.setStretchLastSection(False)
         for col in range(5):
-            _meta_hdr.setSectionResizeMode(col, _QHV.Interactive)
+            _meta_hdr.setSectionResizeMode(col, QHeaderView.Interactive)
         self._meta_check_tree.setColumnWidth(0, 170)
         self._meta_check_tree.setColumnWidth(1, 110)
         self._meta_check_tree.setColumnWidth(2, 120)
@@ -846,10 +846,10 @@ class DatasetDetailView(QWidget):
     # (dsDescriptionValue, dsDescriptionDate) but can never repeat, so the
     # tree must not invent a "<noun> 1" layer. Keyed by (block, field),
     # matched case-insensitively; lower-case.
-    _META_SINGLE_ENTRY_FIELDS = {("citation", "dsdescription")}
-    _META_ACRONYMS = {"id", "url", "uri", "doi", "orcid", "api", "html", "pdf"}
+    _META_SINGLE_ENTRY_FIELDS: ClassVar[set[tuple[str, str]]] = {("citation", "dsdescription")}
+    _META_ACRONYMS: ClassVar[set[str]] = {"id", "url", "uri", "doi", "orcid", "api", "html", "pdf"}
     # Dataverse prefixes that read as noise once the entry is nested.
-    _META_KEY_OVERRIDES = {
+    _META_KEY_OVERRIDES: ClassVar[dict[str, str]] = {
         "dsDescription": "Description",
         "dsDescriptionValue": "Description",
         "dsDescriptionDate": "Date",
@@ -889,7 +889,7 @@ class DatasetDetailView(QWidget):
         """Return True when a dict has real subfields (not just a wrapped ``value``)."""
         if not isinstance(value, dict):
             return False
-        keys = [k for k in value.keys() if k != "typeName"]
+        keys = [k for k in value if k != "typeName"]
         return any(k != "value" for k in keys)
 
     def _meta_subfields(self, entry: dict, prefix: str = "") -> list[tuple[str, str]]:
@@ -987,7 +987,7 @@ class DatasetDetailView(QWidget):
             dash,
         )
 
-    def _build_meta_tree(self, results: list[dict]) -> None:
+    def _build_meta_tree(self, results: list[dict]) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Rebuild the Check | Level | Block | Value | Status tree from results."""
         from PySide6.QtGui import QBrush, QStandardItem
 
@@ -1465,7 +1465,7 @@ class DatasetDetailView(QWidget):
         except Exception:
             return None
 
-    def _refresh_response(self, force: bool = False) -> None:
+    def _refresh_response(self, force: bool = False) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Rebuild findings + draft (skips overwriting manual edits unless forced)."""
         if getattr(self, "_response_loading", False):
             return
@@ -1716,8 +1716,6 @@ class DatasetDetailView(QWidget):
             pass
 
     def _on_response_export(self) -> None:
-        from pathlib import Path as _P
-
         from ui.dialogs import show_critical, show_warning
 
         text = ""
@@ -1757,7 +1755,7 @@ class DatasetDetailView(QWidget):
         if not path:
             return
         try:
-            out = _P(path)
+            out = Path(path)
             if out.suffix.lower() != ".md":
                 out = out.with_suffix(".md")
             out.write_text(text, encoding="utf-8")
@@ -1836,7 +1834,7 @@ class DatasetDetailView(QWidget):
     # File Manifest tree) below a usable width, so it folds away.
     _SIDEBAR_COLLAPSE_BELOW = 1100
 
-    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._sync_sidebar()
         # The metadata Value column tracks the card width (dv-dmv).
@@ -1971,7 +1969,7 @@ class DatasetDetailView(QWidget):
         except Exception:
             pass
 
-    def _refresh_dataset_log(self) -> None:
+    def _refresh_dataset_log(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Newest-first timeline: versions, record dates, review, labels, files, local actions.
 
         Sources (each best-effort; missing sources are simply skipped):
@@ -2268,7 +2266,7 @@ class DatasetDetailView(QWidget):
         s = (value or "").strip()
         return (s[:limit] + "…") if len(s) > limit else (s or t("common.em_dash"))
 
-    def _populate_version_diff(self) -> None:
+    def _populate_version_diff(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Render the version list plus the published→draft diff."""
         from PySide6.QtWidgets import QListWidgetItem
 
@@ -2623,7 +2621,7 @@ class DatasetDetailView(QWidget):
         """
         set_badge_label(pill, text, label=label)
 
-    def _update_header_link(self, metadata: dict | None = None) -> None:
+    def _update_header_link(self, metadata: dict | None = None) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         # Defensive: runs mid-__init__ before all header widgets exist, and
         # again on every metadata load (cached metadata makes `meta` truthy
         # on the very first call — see the reopen crash this guards).
@@ -2727,7 +2725,7 @@ class DatasetDetailView(QWidget):
         except Exception:
             pass
 
-    def _refresh_curation_preview(self) -> None:
+    def _refresh_curation_preview(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Populate Dataset-checks card: dataset-level results + summary.
 
         Per-file results live in the File Manifest tree (folder > file >
@@ -3089,7 +3087,7 @@ class DatasetDetailView(QWidget):
         # so any external callers fail gracefully during migration.
         return None
 
-    def _is_staged(self, path: str) -> bool:
+    def _is_staged(self, path: str) -> bool:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Check whether the inventory path is staged locally.
 
         Checks the exact directoryLabel path first, then falls back to a
@@ -3135,7 +3133,7 @@ class DatasetDetailView(QWidget):
         except Exception:
             return False
 
-    def _refresh_download_state(self) -> None:
+    def _refresh_download_state(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Reflect staged state on the Download button so it never surprises.
 
         Fully-staged inventories read "Downloaded (N)" with a check icon
@@ -3242,7 +3240,7 @@ class DatasetDetailView(QWidget):
     def _on_file_filter(self, text: str) -> None:
         self._apply_file_filter_internal()
 
-    def _apply_file_filter_internal(self) -> None:
+    def _apply_file_filter_internal(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         from engine.status import classify
         from ui.checks_tree import build_tree_model, matches_status_filter
 
@@ -3971,7 +3969,7 @@ class DatasetDetailView(QWidget):
         except Exception:
             missing = [t("detail.download.inventory_check_failed")]
         if inventory and not missing:
-            ok, problems, warnings = self._dl_mgr.verify(self._pid)
+            _ok, problems, warnings = self._dl_mgr.verify(self._pid)
             self._refresh_files_placeholder()
             self._check_btn.setEnabled(True)
             self._check_btn.setToolTip(t("detail.header.run_checks_tip_staged"))

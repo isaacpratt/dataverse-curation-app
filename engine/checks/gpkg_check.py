@@ -8,6 +8,7 @@ geospatial stack is required.
 
 import sqlite3
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -30,7 +31,7 @@ class GpkgCheck(Check):
     """GeoPackage check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.gpkg"
-    extensions = {".gpkg"}
+    extensions: ClassVar[set[str]] = {".gpkg"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         # Per-file isolation like every other check: one bad file must not

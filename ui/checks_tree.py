@@ -56,7 +56,7 @@ def _strip_legacy_caret(text: str) -> str:
     return text
 
 
-def update_carets(model, is_expanded) -> None:
+def update_carets(model, is_expanded) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Sync folder icons + names with the tree's live expanded state.
 
     model: QStandardItemModel built by build_tree_model.
@@ -152,7 +152,7 @@ def _new_item(text: str, tooltip: str = "") -> QStandardItem:
     return item
 
 
-def build_tree_model(
+def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     rows, report=None, is_staged=None, human_size=None, inventory=None
 ) -> QStandardItemModel:
     """Build the folder>file>check model.

@@ -41,11 +41,11 @@ _RETRYABLE_NETWORK = (
 _RETRYABLE_STATUS = (429, 503)
 
 
-class _RetryOriginal(Exception):
+class _RetryOriginal(Exception):  # noqa: N818 - internal control-flow signal, never crosses the API surface
     """Internal: throttled original-format download should retry the loop."""
 
 
-class DownloadCancelled(Exception):
+class DownloadCancelled(Exception):  # noqa: N818 - public API name; renaming breaks existing callers
     """Raised from a streaming loop when the curator cancels the download.
 
     Deliberately not an HTTP/network error: the retry loops must never
@@ -54,7 +54,7 @@ class DownloadCancelled(Exception):
     """
 
 
-class GuestbookRequired(Exception):
+class GuestbookRequired(Exception):  # noqa: N818 - public API name; renaming breaks existing callers
     """The Access API refused the bundle because a guestbook must be answered.
 
     Dataverse answers HTTP 400 ("You may not download this file without the
@@ -710,7 +710,7 @@ def parse_metadatablock_display_names(payload: dict[str, Any]) -> dict[str, str]
     return out
 
 
-def parse_metadatablock_fields(payload: dict[str, Any]) -> list[dict[str, Any]]:
+def parse_metadatablock_fields(payload: dict[str, Any]) -> list[dict[str, Any]]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Return [{block, field, label, parent?, ...}] from a metadatablocks payload.
 
     Values are mostly strings, but ``is_subfield`` is a bool — hence Any.
@@ -982,7 +982,7 @@ def _summarize_file_entry(entry: Any) -> dict[str, str]:
     return {"name": name, "path": path, "id": fid, "kind": kind}
 
 
-def parse_version_compare(payload: dict[str, Any]) -> dict[str, Any] | None:
+def parse_version_compare(payload: dict[str, Any]) -> dict[str, Any] | None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Parse a versions/compare response into a normalized diff.
 
     Mirrors DatasetVersionDifference.compareVersionsAsJson: oldVersion /
@@ -1155,7 +1155,7 @@ class DataverseClient:
     def _api(self, path: str) -> str:
         return f"{self._base_url}{path}"
 
-    def _get_json(self, path: str, params: dict[str, str] | None = None) -> dict[str, Any]:
+    def _get_json(self, path: str, params: dict[str, str] | None = None) -> dict[str, Any]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         from applog import log_response
 
         last_exc: Exception | None = None
@@ -1374,7 +1374,7 @@ class DataverseClient:
         rows, _total = self._search_page(subtree, per_page, start)
         return rows
 
-    def list_draft_datasets(
+    def list_draft_datasets(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         self,
         subtree: str = "",
         per_page: int = 1000,
@@ -1566,7 +1566,7 @@ class DataverseClient:
             return None
         return bool(me.get("superuser"))
 
-    def get_collection_roles(self, alias: str) -> list[str] | None:
+    def get_collection_roles(self, alias: str) -> list[str] | None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Role names the calling user holds on one collection, or None.
 
         Matches the /api/users/:me identifier against
@@ -1578,7 +1578,7 @@ class DataverseClient:
         alias = (alias or "").strip()
         if not alias:
             return None
-        key = _me_cache_key(self._base_url, self._api_token) + (alias.lower(),)
+        key = (*_me_cache_key(self._base_url, self._api_token), alias.lower())
         try:
             with _ME_LOCK:
                 hit = _ROLE_CACHE.get(key)
@@ -1803,7 +1803,7 @@ class DataverseClient:
                     break
         return labels
 
-    def fetch_allowed_labels_shared(
+    def fetch_allowed_labels_shared(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         self, collection: str, probe_pids: list[str], max_attempts: int = 3
     ) -> list[str]:
         """Return allowed labels via the top-level shared cache (probed once).
@@ -2317,7 +2317,7 @@ class DataverseClient:
         data = payload.get("data", {})
         return data, "unversioned", tried
 
-    def enrich_datasets_with_inventory(
+    def enrich_datasets_with_inventory(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         self,
         datasets: list[dict[str, Any]],
         max_rows: int = 200,
@@ -2452,7 +2452,7 @@ class DataverseClient:
 
     # -- download ------------------------------------------------------------
 
-    def _stream_url(
+    def _stream_url(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         self,
         url: str,
         params: dict[str, str],
@@ -2724,7 +2724,7 @@ class DataverseClient:
         error = str(data.get("errorMessage") or data.get("error") or data.get("ingestError") or "")
         return {"status": status, "error": error}
 
-    def download_datafile_original(
+    def download_datafile_original(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         self,
         file_id: str,
         dest: Path,

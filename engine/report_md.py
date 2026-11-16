@@ -53,7 +53,7 @@ def _details_lines(details: dict) -> list[str]:
     return lines
 
 
-def render_markdown(report: DatasetReport) -> str:
+def render_markdown(report: DatasetReport) -> str:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     lines: list[str] = []
     lines.append(f"# Curation report — {report.label}")
     lines.append("")

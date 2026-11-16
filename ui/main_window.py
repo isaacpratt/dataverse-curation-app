@@ -135,7 +135,7 @@ class _MONITORINFO(ctypes.Structure):
     ]
 
 
-class _NCCALCSIZE_PARAMS(ctypes.Structure):
+class _NCCALCSIZE_PARAMS(ctypes.Structure):  # noqa: N801 - mirrors the Win32 struct name verbatim
     _fields_ = [("rgrc", _RECT * 3), ("lppos", ctypes.c_void_p)]
 
 
@@ -778,10 +778,9 @@ class MainWindow(QMainWindow):
         """
         try:
             role = self._content_role()
-            if role == "settings" and name != "settings":
-                if not self._can_leave_settings():
-                    self._refresh_nav_state()
-                    return False
+            if role == "settings" and name != "settings" and not self._can_leave_settings():
+                self._refresh_nav_state()
+                return False
             if name in ("settings", "about"):
                 # Exclusive like before: opening a page switches stack.
                 if role not in ("settings", "about"):
@@ -801,13 +800,10 @@ class MainWindow(QMainWindow):
                 page = self._ensure_log()
                 if self._stack.currentWidget() is not page:
                     self._stack.setCurrentWidget(page)
-            elif name is None:
-                # Close pane: return to previous content if we're in settings/about/log.
-                if role in ("settings", "about", "log"):
-                    self._stack.setCurrentWidget(
-                        self._role_widget(getattr(self, "_pane_return", None))
-                    )
-                    self._pane_return = None
+            elif name is None and role in ("settings", "about", "log"):
+                # Close pane: return to previous content (we're in settings/about/log).
+                self._stack.setCurrentWidget(self._role_widget(getattr(self, "_pane_return", None)))
+                self._pane_return = None
             # Any other name: stack untouched.
         except Exception:
             pass
@@ -931,9 +927,7 @@ class MainWindow(QMainWindow):
             return
         # No dataset chip reads active while the dashboard is showing — the
         # Dashboard tab owns the highlight there.
-        if self._stack.currentWidget() is self._dashboard:
-            active_pid = None
-        elif (
+        if self._stack.currentWidget() is self._dashboard or (
             getattr(self, "_review_config", None) is not None
             and self._stack.currentWidget() is self._review_config
         ):
@@ -1292,10 +1286,7 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
 
-            if self.isMaximized():
-                margins = _MARGINS(0, 0, 0, 0)
-            else:
-                margins = _MARGINS(1, 1, 1, 1)
+            margins = _MARGINS(0, 0, 0, 0) if self.isMaximized() else _MARGINS(1, 1, 1, 1)
             hr_frame = dwmapi.DwmExtendFrameIntoClientArea(
                 wintypes.HWND(hwnd), ctypes.byref(margins)
             )
@@ -1358,10 +1349,11 @@ class MainWindow(QMainWindow):
                         return True
                 elif etype == QEvent.MouseButtonRelease:
                     self._drag_pos = None
-                elif etype == QEvent.MouseButtonDblClick:
-                    if not self._topnav_is_interactive(event.position().toPoint()):
-                        self._on_max_restore()
-                        return True
+                elif etype == QEvent.MouseButtonDblClick and not self._topnav_is_interactive(
+                    event.position().toPoint()
+                ):
+                    self._on_max_restore()
+                    return True
         except Exception:
             pass
         try:
@@ -1369,7 +1361,7 @@ class MainWindow(QMainWindow):
         except Exception:
             return False
 
-    def nativeEvent(self, eventType, message):
+    def nativeEvent(self, eventType, message):  # noqa: N803, C901 - Qt override; signature fixed by the base class; complexity burns down in dv-hcg.28
         """Custom-frame handling on Windows.
 
         WM_NCCALCSIZE strips the native caption/borders (whole window becomes

@@ -27,7 +27,8 @@ def test_selection_mixin_is_the_single_source():
     from ui.widgets import flush_table_style, tree_style
 
     mixin = selection_qss("QTableWidget")
-    assert "::item:selected" in mixin and "::item:hover" in mixin
+    assert "::item:selected" in mixin
+    assert "::item:hover" in mixin
     assert mixin in global_qss(), "app sheet uses the mixin"
     assert selection_qss("QTreeView") in tree_style()
     assert mixin in flush_table_style()

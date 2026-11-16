@@ -23,7 +23,7 @@ def qapp():
     from PySide6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
-    yield app
+    return app
 
 
 def _make_table(rows=5, cols=3, cell_text="x" * 40):
@@ -83,7 +83,8 @@ def test_enable_auto_fit_unlocks_and_refits(qapp):
     tbl.fit_columns_to_content()
     assert tbl._fitted is False or tbl._auto_fit is False
     tbl.enable_auto_fit()
-    assert tbl._auto_fit is True and tbl._fitted is False
+    assert tbl._auto_fit is True
+    assert tbl._fitted is False
     tbl.fit_columns_to_content()
     assert tbl._fitted is True
 
@@ -163,7 +164,8 @@ def test_show_refreshes_stale_cell_widget_geometry(qapp):
     QCoreApplication.processEvents()
     QCoreApplication.processEvents()
     cell = tbl.cellWidget(0, 1)
-    assert cell is not None and cell.width() > 0
+    assert cell is not None
+    assert cell.width() > 0
     assert cell.width() <= tbl.viewport().width() - 1
     # The cell content (the button) must not overflow its client rect.
     assert (

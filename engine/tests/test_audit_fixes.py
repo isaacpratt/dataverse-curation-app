@@ -33,7 +33,7 @@ from engine.runner import collect_files, list_planned_checks, run_report
 
 
 @pytest.mark.parametrize(
-    "name,expected",
+    ("name", "expected"),
     [
         ("sample.fq.gz", {"format.fastq"}),
         ("sample.fastq", {"format.fastq"}),
@@ -72,7 +72,7 @@ def test_missing_library_contract():
 
 
 @pytest.mark.parametrize(
-    "module,cls,file_suffix,result_id",
+    ("module", "cls", "file_suffix", "result_id"),
     [
         ("openpyxl", XlsxCheck, ".xlsx", "format.xlsx.openable"),
         ("h5py", Hdf5Check, ".h5", "format.hdf5.openable"),

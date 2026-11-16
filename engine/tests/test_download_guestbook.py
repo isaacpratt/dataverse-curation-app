@@ -6,6 +6,8 @@ endpoint carrying ``{"guestbookResponse": ...}``; the reply holds a signed
 URL that streams the ZIP. These tests pin the wire format and the error path.
 """
 
+from typing import ClassVar
+
 import requests
 
 from dataverse_client import DataverseClient
@@ -53,7 +55,7 @@ class _ErrorResponse:
 class _ZipResponse:
     status_code = 200
     url = "http://example.test/signed"
-    headers: dict = {}
+    headers: ClassVar[dict] = {}
 
     def __init__(self, payload=b"zipbytes"):
         self._payload = payload

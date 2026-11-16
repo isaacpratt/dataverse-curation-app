@@ -73,7 +73,7 @@ def test_config_load_roundtrip(tmp_path):
 # -- storage -----------------------------------------------------------------
 
 
-def test_storage_table_state_roundtrip(tmp_path):
+def test_storage_table_state_roundtrip(tmp_path):  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     from storage import clear_table_state, save_table_state
 
     class _Hdr:

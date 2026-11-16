@@ -31,7 +31,7 @@ def _pump(qapp, times=15):
         qapp.processEvents()
 
 
-@pytest.fixture()
+@pytest.fixture
 def small_window(win, qapp):
     """Put the shared window at 960x640, restored afterwards."""
     before = win.size()
@@ -62,10 +62,7 @@ def _right_edge_in(parent, widget) -> int:
 
 def _layout_holds(layout, widget) -> bool:
     """Tell whether the widget is one of the layout's items."""
-    for index in range(layout.count()):
-        if layout.itemAt(index).widget() is widget:
-            return True
-    return False
+    return any(layout.itemAt(index).widget() is widget for index in range(layout.count()))
 
 
 def test_queue_header_fits_the_window(small_window, qapp):

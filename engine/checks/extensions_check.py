@@ -7,6 +7,7 @@ This is a dataset-level check - it runs on the whole file set.
 
 from collections import Counter
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks._util import EXECUTABLE_EXTS, JUNK_NAMES
 from engine.checks.base import Check, CheckResult
@@ -18,7 +19,7 @@ class ExtensionsCheck(Check):
     """Inventory check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "inventory.extensions"
-    extensions = set()
+    extensions: ClassVar[set[str]] = set()
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         if not files:

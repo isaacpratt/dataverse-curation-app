@@ -39,7 +39,7 @@ from __future__ import annotations
 import fnmatch
 import json as _json
 import re
-from pathlib import Path as _Path
+from pathlib import Path
 from typing import Any
 
 RULESETS_VERSION = 2
@@ -137,7 +137,7 @@ def _file_name() -> str:
     return "requirements_profiles.json"
 
 
-def rulesets_path() -> _Path:
+def rulesets_path() -> Path:
     """Return the same location as the legacy profiles file (exe dir when frozen)."""
     try:
         from metadata_check import profiles_path as _legacy
@@ -148,10 +148,10 @@ def rulesets_path() -> _Path:
 
         if getattr(sys, "frozen", False):
             try:
-                return _Path(sys.executable).parent / _file_name()
+                return Path(sys.executable).parent / _file_name()
             except Exception:
                 pass
-        return _Path(_file_name())
+        return Path(_file_name())
 
 
 # --------------------------------------------------------------------------
@@ -512,7 +512,7 @@ def load_rulesets() -> dict[str, dict[str, Any]]:
         return base
 
 
-def save_rulesets(rulesets: dict[str, dict[str, Any]]) -> _Path:
+def save_rulesets(rulesets: dict[str, dict[str, Any]]) -> Path:
     import os
     import tempfile
 
@@ -688,7 +688,7 @@ def _leaves_value(leaves: list[Any], max_len: int = 200) -> str:
     return s[:max_len] or "—"
 
 
-def _orcid_dotted(m, blocks: dict[str, Any], block: str, field: str) -> tuple[bool, str]:
+def _orcid_dotted(m, blocks: dict[str, Any], block: str, field: str) -> tuple[bool, str]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """ORCID rule on a dotted identifier path ("author.authorIdentifier").
 
     Mirrors the composite ``orcid`` handler: every author needs a scheme of
@@ -737,7 +737,7 @@ def _orcid_dotted(m, blocks: dict[str, Any], block: str, field: str) -> tuple[bo
     return (not missing), shown
 
 
-def _eval_handler(
+def _eval_handler(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     handler: str,
     metadata: dict[str, Any],
     blocks: dict[str, Any],
@@ -981,7 +981,7 @@ def _iter_metadata_strings(metadata: dict[str, Any]) -> list[str]:
     return out
 
 
-def _match_filenames(
+def _match_filenames(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     rule: dict[str, Any], inventory: list[dict[str, Any]] | None
 ) -> tuple[bool | None, str]:
     """(found | None=pending, evidence). None when the file list is not loaded."""
@@ -1001,7 +1001,7 @@ def _match_filenames(
         if not isinstance(f, dict):
             continue
         raw_path = str(f.get("path") or f.get("label") or "")
-        base = _Path(raw_path).name
+        base = Path(raw_path).name
         target = raw_path if match != "filename-glob" else base
         if match == "filename-glob":
             # A glob containing "/" matches the full inventory path,
@@ -1067,13 +1067,11 @@ def _match_file_content(rule: dict[str, Any], staged_dir: Any) -> tuple[bool | N
     thread), so it is deliberately bounded: skips known-binary formats,
     caps files/bytes, and memoizes by directory signature + pattern.
     """
-    from pathlib import Path as _P
-
     pattern = str(rule.get("pattern") or "")
     if not pattern:
         return False, "—"
     try:
-        root = _P(str(staged_dir)) if staged_dir else None
+        root = Path(str(staged_dir)) if staged_dir else None
     except Exception:
         root = None
     if root is None or not root.exists():
@@ -1183,7 +1181,7 @@ def _staged_signature(root: Any) -> tuple[int, int, int] | None:
         return None
 
 
-def _scan_staged_files(root: Any, pattern: str, match: str, case: bool) -> tuple[bool | None, str]:
+def _scan_staged_files(root: Any, pattern: str, match: str, case: bool) -> tuple[bool | None, str]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
 
     candidates = []
     try:

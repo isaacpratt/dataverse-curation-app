@@ -1467,7 +1467,7 @@ def label_badge_style(label: str) -> str:
     )
 
 
-def _install_interaction_tracking(app) -> None:
+def _install_interaction_tracking(app) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Pointing-hand cursors + keyboard-only focus tint, in one app filter.
 
     Two behaviours share one QApplication event filter: QSS cannot set

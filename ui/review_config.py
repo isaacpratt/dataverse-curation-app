@@ -499,11 +499,11 @@ class ReviewConfigView(QWidget):
         if self._schema:
             live = [dict(f) for f in self._schema if isinstance(f, dict) and f.get("field")]
             try:
-                from review_rules import FIELD_CATALOG as _FC
+                from review_rules import FIELD_CATALOG
             except Exception:
-                _FC = []
+                FIELD_CATALOG = []  # noqa: N806 - fallback for the upstream constant import above
             seen = {(str(f.get("block") or "citation"), str(f.get("field") or "")) for f in live}
-            fallback = [dict(f) for f in _FC if isinstance(f, dict) and f.get("field")]
+            fallback = [dict(f) for f in FIELD_CATALOG if isinstance(f, dict) and f.get("field")]
             for f in fallback:
                 key = (str(f.get("block") or "citation"), str(f.get("field") or ""))
                 if key not in seen:
@@ -630,7 +630,7 @@ class ReviewConfigView(QWidget):
         self._refresh_content_list()
         self._loading = False
 
-    def _refresh_field_table(self) -> None:
+    def _refresh_field_table(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Rebuild the block-grouped field tree (text + status filters apply)."""
         try:
             filt = (self._field_filter.text() or "").strip().lower()

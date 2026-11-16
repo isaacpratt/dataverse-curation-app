@@ -5,6 +5,7 @@ page/series structure, dimensions, data type and compression.
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -13,7 +14,7 @@ class TiffCheck(Check):
     """TIFF check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.tiff"
-    extensions = {".tif", ".tiff"}
+    extensions: ClassVar[set[str]] = {".tif", ".tiff"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file

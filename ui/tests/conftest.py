@@ -25,7 +25,7 @@ def qapp():
         apply_theme(app)
     except Exception:
         pass
-    yield app
+    return app
 
 
 @pytest.fixture(scope="session")

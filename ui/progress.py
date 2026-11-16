@@ -5,12 +5,12 @@ be tested without an offscreen Qt platform.
 """
 
 __all__ = [
-    "ease_step",
-    "PHASE_SPANS",
     "PHASE_DISCOVERY",
     "PHASE_ENRICHMENT",
-    "PHASE_LOCKS",
     "PHASE_LABELS",
+    "PHASE_LOCKS",
+    "PHASE_SPANS",
+    "ease_step",
     "phase_fraction",
 ]
 

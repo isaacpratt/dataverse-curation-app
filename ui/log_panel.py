@@ -283,7 +283,7 @@ class LogHighlighter(QSyntaxHighlighter):
         if length > 0:
             self.setFormat(match.start(), length, fmt)
 
-    def highlightBlock(self, text: str) -> None:  # type: ignore[override]
+    def highlightBlock(self, text: str) -> None:  # type: ignore[override]  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         severity = self._severity(text)
         if severity == "error":
             self.setFormat(0, len(text), self.line_error_format)

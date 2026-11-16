@@ -6,6 +6,7 @@ structured-PII scan on character columns (piigex + CA pack).
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks._util import find_pii, pii_result
 from engine.checks.base import Check, CheckResult
@@ -43,7 +44,7 @@ class DtaCheck(Check):
     """Stata check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.stata"
-    extensions = {".dta"}
+    extensions: ClassVar[set[str]] = {".dta"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file

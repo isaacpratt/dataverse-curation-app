@@ -5,6 +5,7 @@ detection, mixed line endings and non-printable control characters.
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks._util import detect_encoding, find_pii, pii_result
 from engine.checks.base import Check, CheckResult
@@ -20,7 +21,7 @@ class TextCheck(Check):
     """Text check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.text"
-    extensions = {".txt", ".md", ".rst", ".log"}
+    extensions: ClassVar[set[str]] = {".txt", ".md", ".rst", ".log"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file

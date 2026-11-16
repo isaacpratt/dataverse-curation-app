@@ -13,7 +13,7 @@ def test_credit_card_luhn_ok():
     found = find_pii("card 4111 1111 1111 1111")
     cards = [f for f in found if f["type"] == "intl_credit_card"]
     assert cards
-    assert cards[0]["valid"] if "valid" in cards[0] else True
+    assert cards[0].get("valid", True)
 
 
 def test_credit_card_luhn_fail_excluded():

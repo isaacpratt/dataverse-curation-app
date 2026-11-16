@@ -9,6 +9,7 @@ a content listing. Formats without a native Python reader are reported as
 import tarfile
 import zipfile
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -43,7 +44,17 @@ class ContainersCheck(Check):
     """Archive check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.containers"
-    extensions = {".zip", ".tar", ".tgz", ".tbz2", ".7z", ".rar", ".gz", ".bz2", ".xz"}
+    extensions: ClassVar[set[str]] = {
+        ".zip",
+        ".tar",
+        ".tgz",
+        ".tbz2",
+        ".7z",
+        ".rar",
+        ".gz",
+        ".bz2",
+        ".xz",
+    }
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file

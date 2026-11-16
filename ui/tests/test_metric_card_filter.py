@@ -48,7 +48,8 @@ def test_theme_paints_a_metric_card_hover_state():
     qss = global_qss()
     assert "#MetricCard:hover" in qss, "hover must signal the filter (dv-1k4)"
     hover = qss.split("#MetricCard:hover", 1)[1].split("}", 1)[0]
-    assert "background" in hover and "border" in hover
+    assert "background" in hover
+    assert "border" in hover
 
 
 def test_caption_label_is_elided_not_truncated(win):

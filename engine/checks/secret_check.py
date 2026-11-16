@@ -6,6 +6,7 @@ PyInstaller builds — not an optional/excluded dependency.
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from hush import Scanner
 
@@ -26,7 +27,7 @@ class SecretCheck(Check):
     """Secret/credential scan (API keys, tokens, private keys, high-entropy)."""
 
     check_id = "format.secrets"
-    extensions = {
+    extensions: ClassVar[set[str]] = {
         # code
         ".r",
         ".py",

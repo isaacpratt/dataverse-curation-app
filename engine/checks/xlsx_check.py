@@ -6,6 +6,7 @@ header preview and a 'likely non-tabular' heuristic.
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks._util import pii_result
 from engine.checks.base import Check, CheckResult
@@ -24,14 +25,14 @@ class XlsxCheck(Check):
     """Excel check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.xlsx"
-    extensions = {".xlsx", ".xlsm", ".xls"}
+    extensions: ClassVar[set[str]] = {".xlsx", ".xlsm", ".xls"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
 
         return run_per_file(self, files, self._run_one)
 
-    def _run_one(self, path: Path) -> list[CheckResult]:
+    def _run_one(self, path: Path) -> list[CheckResult]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         from engine.checks._util import skipped as _skipped
 
         name = path.name
@@ -113,15 +114,15 @@ class XlsxCheck(Check):
             try:
                 from engine.constants import CAPS as _CAPS
 
-                _PII_ROWS = _CAPS.pii_sample_rows
+                _pii_rows = _CAPS.pii_sample_rows
             except Exception:  # pragma: no cover
-                _PII_ROWS = 1_000
+                _pii_rows = 1_000
             from engine.checks._util import find_pii as _find_pii_text
 
             for sheet_name in sheet_names:
                 # Cache worksheet handle (was: 3x workbook[s] lookups per sheet).
                 ws = workbook[sheet_name]
-                headers, messy = _sheet_headers(workbook, sheet_name)
+                _headers, messy = _sheet_headers(workbook, sheet_name)
                 try:
                     dims = ws.calculate_dimension()
                 except Exception:
@@ -131,7 +132,7 @@ class XlsxCheck(Check):
                     messy_sheets.append(sheet_name)
                 # PII sample: first pii_sample_rows data rows (header skipped).
                 for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-                    if row_idx - 1 > _PII_ROWS:
+                    if row_idx - 1 > _pii_rows:
                         break
                     cells = [str(c) for c in row if c is not None]
                     if cells:
@@ -235,7 +236,7 @@ class XlsxCheck(Check):
                 "format.xlsx.pii",
                 name,
                 unique_pii,
-                scope=f"(first {_PII_ROWS} rows per sheet)",
+                scope=f"(first {_pii_rows} rows per sheet)",
             )
         )
         return results

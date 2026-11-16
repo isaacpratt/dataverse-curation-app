@@ -56,12 +56,14 @@ def test_icon_only_buttons_are_square_and_big_enough(qapp):
     from ui.widgets import add_info_tip, make_reset_columns_button
 
     reset = make_reset_columns_button("files")
-    assert reset.width() >= 32 and reset.height() >= 32
+    assert reset.width() >= 32
+    assert reset.height() >= 32
 
     host = QWidget()
     layout = QHBoxLayout(host)
     tip = add_info_tip(layout, "Explains the section")
-    assert tip.width() >= 32 and tip.height() >= 32
+    assert tip.width() >= 32
+    assert tip.height() >= 32
 
 
 def test_a_blocked_step_is_readable_and_carries_a_lock(qapp):

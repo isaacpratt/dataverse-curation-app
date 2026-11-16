@@ -5,6 +5,7 @@ dataset shapes/dtypes/compression and external-link risk detection.
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -18,7 +19,7 @@ class Hdf5Check(Check):
     """HDF5 check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.hdf5"
-    extensions = {".h5", ".hdf5", ".hdf"}
+    extensions: ClassVar[set[str]] = {".h5", ".hdf5", ".hdf"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file

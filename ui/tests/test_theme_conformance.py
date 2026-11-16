@@ -131,9 +131,12 @@ def _module_bindings(tree: ast.Module) -> dict[str, ast.expr]:
             for target in node.targets:
                 if isinstance(target, ast.Name):
                     bindings[target.id] = node.value
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            if node.value is not None:
-                bindings[node.target.id] = node.value
+        elif (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.value is not None
+        ):
+            bindings[node.target.id] = node.value
     return bindings
 
 

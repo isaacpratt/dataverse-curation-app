@@ -8,7 +8,7 @@ engine.report. See docs/html/report-contract.html for the JSON contract.
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 
 @dataclass
@@ -55,8 +55,9 @@ class CheckResult:
 class Check:
     check_id: str = "base.check"
     # Checks declare a literal set; the base default is the empty frozenset,
-    # so the annotation must admit both (AbstractSet, not `set`).
-    extensions: AbstractSet[str] = frozenset()
+    # so the annotation must admit both (AbstractSet, not `set`). All checks
+    # are class-level (ClassVar) — instances carry no extension state.
+    extensions: ClassVar[AbstractSet[str]] = frozenset()
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         raise NotImplementedError

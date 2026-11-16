@@ -6,6 +6,7 @@ a non-ASCII encoding scan.
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -26,7 +27,7 @@ class SavCheck(Check):
     """SPSS check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.spss"
-    extensions = {".sav"}
+    extensions: ClassVar[set[str]] = {".sav"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file

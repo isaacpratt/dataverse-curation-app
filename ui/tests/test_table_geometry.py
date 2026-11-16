@@ -10,7 +10,7 @@ dragged edge, a moved column, a resized window).
 import pytest
 
 
-@pytest.fixture()
+@pytest.fixture
 def dash(win, qapp):
     """Return the dashboard, on screen (the fit needs a visible table)."""
     win._show_dashboard()

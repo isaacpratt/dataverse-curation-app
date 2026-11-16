@@ -24,10 +24,7 @@ def _pump(qapp, times=15):
 
 
 def _layout_holds(layout, widget) -> bool:
-    for index in range(layout.count()):
-        if layout.itemAt(index).widget() is widget:
-            return True
-    return False
+    return any(layout.itemAt(index).widget() is widget for index in range(layout.count()))
 
 
 def _title_row(card) -> QHBoxLayout:
