@@ -48,6 +48,12 @@ repos:
 
   - repo: local
     hooks:
+      - id: forbid-config-json
+        name: forbid committing config.json (holds the API token)
+        # language: fail can never succeed; fires when a staged/committed path matches
+        entry: "config.json contains a Dataverse API token and must never be committed (copy config.example.json instead). Unstage it and rotate the token if it already landed anywhere."
+        language: fail
+        files: "^config\\.json$"
       - id: actionlint
         name: actionlint (GitHub workflows)
         entry: uv run --group dev actionlint

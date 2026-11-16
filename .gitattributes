@@ -23,6 +23,12 @@ Makefile text eol=lf
 *.bat text eol=crlf
 *.cmd text eol=crlf
 
+# Generated lockfile: not for review diffs; GitHub stats it as generated.
+uv.lock -diff linguist-generated
+
+# Holds a Dataverse API token: never diffed, never pasted into reviews.
+config.json -diff -text
+
 # Binary assets: never normalize.
 *.png binary
 *.ico binary
