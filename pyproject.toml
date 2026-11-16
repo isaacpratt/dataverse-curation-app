@@ -134,8 +134,16 @@ type = "simple"
   cmd = "python tools/make_licenses.py"
 
   [tool.poe.tasks.sbom]
-  help = "Write dist/sbom.cdx.json - CycloneDX SBOM of the project venv"
+  help = "Write dist/sbom.cdx.json + dist/sbom.spdx.json - CycloneDX and SPDX SBOMs of the project venv"
   cmd = "python tools/make_sbom.py"
+
+  [tool.poe.tasks.notice]
+  help = "Write dist/NOTICE - attribution file for the release artefacts"
+  cmd = "python tools/make_notice.py"
+
+  [tool.poe.tasks.release-artefacts]
+  help = "Generate every release artefact: licenses.md, NOTICE, both SBOMs"
+  sequence = ["license-report", "notice", "sbom"]
 
   [tool.poe.tasks.docs-links]
   help = "Offline link/anchor check for docs/html/*.html"

@@ -17,9 +17,10 @@ Set the token in `config.json` **or** use the environment instead (good for CI/h
 
 ```bash
 uv run poe run           # launch the desktop GUI
-uv run pytest            # 218 engine + 295 UI tests (offscreen Qt)
+uv run pytest            # 550 tests (offscreen Qt)
 uv run poe check         # lint + typecheck + tests
 uv run poe build         # dist/curation-app-lite + dist/curation-app-full
+uv run poe release-artefacts   # dist/licenses.md + NOTICE + both SBOMs
 uv run python main.py --headless <staged_dir> --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE
 ```
 
@@ -51,4 +52,4 @@ The app is built on two existing projects:
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Third-party components keep their own licenses (see `dist/licenses.md`, produced by `uv run poe license-report` at release time). The check engine is ported from the MIT-licensed `CUR_Res_CurationTools` (© 2026 Curation Services Team, Digital Research Alliance of Canada).
+MIT — see [LICENSE](LICENSE). Third-party components keep their own licenses: `uv run poe release-artefacts` writes the per-dependency inventory (`dist/licenses.md`), the attribution file (`dist/NOTICE`) and both SBOMs (`dist/sbom.cdx.json` CycloneDX, `dist/sbom.spdx.json` SPDX 2.3); the release workflow attaches all four. The check engine is ported from the MIT-licensed `CUR_Res_CurationTools` (© 2026 Curation Services Team, Digital Research Alliance of Canada).

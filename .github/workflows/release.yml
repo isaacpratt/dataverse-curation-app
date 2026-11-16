@@ -49,11 +49,8 @@ jobs:
         run: uv run --group dev poe build
       - name: Smoke the lite exe
         run: uv run --group dev poe smoke
-      - name: License inventory
-        run: uv run --group dev poe license-report
-        continue-on-error: true
-      - name: SBOM (CycloneDX)
-        run: uv run --group dev poe sbom
+      - name: License inventory, NOTICE and SBOMs
+        run: uv run --group dev poe release-artefacts
 
       - name: Zip release artefacts
         shell: pwsh
@@ -62,7 +59,9 @@ jobs:
           Compress-Archive -Path dist/curation-app-lite -DestinationPath dist_release/curation-app-lite.zip -Force
           Compress-Archive -Path dist/curation-app-full -DestinationPath dist_release/curation-app-full.zip -Force
           Copy-Item dist/sbom.cdx.json dist_release/sbom.cdx.json -Force
+          Copy-Item dist/sbom.spdx.json dist_release/sbom.spdx.json -Force
           Copy-Item dist/licenses.md dist_release/licenses.md -Force
+          Copy-Item dist/NOTICE dist_release/NOTICE -Force
           $checksums = Get-ChildItem dist_release -File | ForEach-Object {
             $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower()
             "$hash  $($_.Name)"
@@ -96,7 +95,9 @@ jobs:
             dist_release/curation-app-lite.zip `
             dist_release/curation-app-full.zip `
             dist_release/sbom.cdx.json `
+            dist_release/sbom.spdx.json `
             dist_release/licenses.md `
+            dist_release/NOTICE `
             dist_release/SHA256SUMS.txt `
             --title "Dataverse Docent $tag" `
             --notes-file dist_release/RELEASE_NOTES.md
