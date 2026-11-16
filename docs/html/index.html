@@ -56,7 +56,7 @@ footer .wrap{padding:16px 24px}
 <header class="hero"><div class="wrap">
 <h1>Dataverse Docent — Documentation</h1>
 <p>Desktop curation assistant for Alliance Dataverse instances: pulls datasets submitted for review, runs automated format checks, checks metadata completeness, and presents findings with an exportable curation report. These HTML pages are the documentation source of truth.</p>
-<div class="badges"><span class="badge ok">22 check modules</span><span class="badge ok">513 tests</span><span class="badge info">PySide6 desktop</span><span class="badge">Engine v0.1.0</span><span class="badge warn">Verified vs code 2026-11-12</span></div>
+<div class="badges"><span class="badge ok">22 check modules</span><span class="badge ok">550 tests</span><span class="badge info">PySide6 desktop</span><span class="badge">Engine v0.2.0</span><span class="badge warn">Verified vs code 2026-11-16</span></div>
 </div></header>
 <nav class="top"><div class="wrap">
 <a href="index.html" aria-current="page">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a><a href="proposals.html">Proposals</a>
@@ -73,13 +73,14 @@ footer .wrap{padding:16px 24px}
 <div class="card"><h3>🧭 User guide</h3><p>Dashboard, dataset detail, workflow steps, log, troubleshooting, headless.</p><a href="user-guide.html">Read →</a></div>
 <div class="card"><h3>🛠 Development</h3><p>Setup, layout, adding a check, UI conventions, the component gallery, Qt pitfalls, probes, the planned dark-mode step, packaging.</p><a href="development.html">Read →</a></div>
 <div class="card"><h3>📌 Proposals</h3><p>The remaining plan by bucket — queued UX, verification, deferred checks, packaging, open decisions — plus the shipped record.</p><a href="proposals.html">Read →</a></div>
+<div class="card"><h3>⚖️ Decision records</h3><p>The repository-level decisions — toolchain, layout, packaging, token storage — as short, dated ADRs in <code>docs/adr/</code>.</p><a href="../adr/README.md">Read →</a></div>
 </div>
 
 <h2>Project status</h2>
-<div class="callout ok"><b>Snapshot 2026-11-12 - all six phases complete.</b> The app is feature-complete for its documented scope: 22 check modules, 513 tests (218 engine + 295 UI), 21 UI modules. Discovery is total-driven Search at <code>per_page=1000</code> plus pooled in-process inventory enrichment (no crawler dependency); the dashboard, dataset detail, downloads, auto-checks and export paths work end-to-end; lite and full <b>onedir</b> builds are packaged; startup paints and reveals the shell before cache/network work (~1 s warm, measured via <code>DOCENT_STARTUP_LOG</code>), so no blank frame or title-bar flash precedes it. The remaining plan is queued, not blocking — see below.</div>
+<div class="callout ok"><b>Snapshot 2026-11-16 - all six phases complete.</b> The app is feature-complete for its documented scope: 22 check modules, 550 tests (engine + UI), 21 UI modules. Discovery is total-driven Search at <code>per_page=1000</code> plus pooled in-process inventory enrichment (no crawler dependency); the dashboard, dataset detail, downloads, auto-checks and export paths work end-to-end; lite and full <b>onedir</b> builds are packaged; startup paints and reveals the shell before cache/network work (~1 s warm, measured via <code>DOCENT_STARTUP_LOG</code>), so no blank frame or title-bar flash precedes it. The remaining plan is queued, not blocking — see below.</div>
 <div class="flow">
 <div class="step"><b><span class="n">0</span>Scaffold</b>Repo, GUI shell, storage <span class="pill p-ok">done</span></div><div class="arrow">→</div>
-<div class="step"><b><span class="n">1</span>Engine port</b>22 checks, 513 tests <span class="pill p-ok">done</span></div><div class="arrow">→</div>
+<div class="step"><b><span class="n">1</span>Engine port</b>22 checks, 550 tests <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">2</span>Report runner</b><code>run_report</code> end-to-end <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">3</span>Client + downloads</b>Search + enrichment, approval gate <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">4</span>PySide6 GUI</b>Dashboard, detail, settings, log <span class="pill p-ok">done</span></div><div class="arrow">→</div>
