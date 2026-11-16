@@ -1,6 +1,9 @@
 # Project Instructions for AI Agents
 
-This file provides instructions and context for AI coding agents working on this project.
+**Read `AGENTS.md`.** It is the single source of truth for this repository:
+layout, languages/toolchains, quality gates, beads workflow, and the
+definition of done. This file exists only so Claude-based tooling finds its
+way; it intentionally carries no independent guidance.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:1105d646 -->
 ## Beads Issue Tracker
@@ -56,16 +59,3 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 - Do not commit or push without clear authority from the active profile or the current user request.
 - If a required sync or push is blocked, stop and report the exact command and error.
 <!-- END BEADS INTEGRATION -->
-
-
-## Build & Test
-
-See `AGENTS.md` Quick start (`pytest` 454 tests, `python main.py`, `python main.py --gallery`); full workflow via `bd prime`.
-
-## Architecture Overview
-
-_Add a brief overview of your project architecture_
-
-## Conventions & Patterns
-
-_Add your project-specific conventions here_
