@@ -227,7 +227,7 @@ def test_env_non_https_scheme_rejected(store, tmp_path, monkeypatch):
 
 def test_env_url_without_host_rejected(store, tmp_path, monkeypatch):
     _cfg_env(monkeypatch, DATAVERSE_BASE_URL="https://")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="no host"):
         Config.load(tmp_path / "config.json")
 
 
