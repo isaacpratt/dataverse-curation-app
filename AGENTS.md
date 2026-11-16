@@ -103,6 +103,7 @@ Gate before handoff; run from the repository root when code (not docs-only) chan
 
 - `uv run pytest -q` — must exit 0
 - `uv run poe typecheck` — must report `Success: no issues found`; scope is the engine contract (`[tool.mypy] files`), so run bare `uv run mypy`
+- `uv run poe contracts` — import-linter contracts must stay green: `engine/` may not import `ui/` or `PySide6`, and the operational helpers in `tools/` may not import `ui/` (the UI probes and the two engine-test fixtures are the documented exceptions)
 - `python tools/probes/run_all.py` — must end with `all N probes passed`; mandatory for UI/theme changes, and cheap enough to always run
 - headless box? set `QT_QPA_PLATFORM=offscreen` first, or the probes fail for the wrong reason
 - probes run against a throwaway temp workspace (see `tools/probes/README.md`) — never against the configured instance or the real `workspace/table_layout.json`

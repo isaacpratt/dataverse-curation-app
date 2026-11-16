@@ -63,6 +63,7 @@ dev = [
     "poethepoet>=0.48.0",
     "pre-commit>=4.0",
     "pytest-xdist>=3.6",
+    "import-linter>=2.3",
 ]
 [tool.pytest.ini_options]
 testpaths = ["engine/tests", "ui/tests"]
@@ -157,6 +158,10 @@ type = "simple"
   help = "Advisory cyclomatic-complexity report (radon) -> reports/complexity.md"
   cmd = "python tools/complexity_report.py"
 
+  [tool.poe.tasks.contracts]
+  help = "Import-linter contracts: the engine must not import ui/Qt; the tools must not import ui"
+  cmd = "lint-imports"
+
   [tool.poe.tasks.typecheck]
   help = "Type-check the engine (mypy; scope from [tool.mypy] files/exclude)"
   cmd = "mypy"
@@ -170,8 +175,8 @@ type = "simple"
   cmd = "python tools/probes/run_all.py"
 
   [tool.poe.tasks.check]
-  help = "Lint + format-check + typecheck + tests"
-  sequence = ["lint", "format-check", "typecheck", "test"]
+  help = "Lint + format-check + typecheck + contracts + tests"
+  sequence = ["lint", "format-check", "typecheck", "contracts", "test"]
 
   [tool.poe.tasks.clean]
   help = "Remove build/, dist/, .pyi-cache/ and stray .spec files"
@@ -283,4 +288,54 @@ exclude = [
     "^build/",
     "^dist/",
     "^engine/tests/",
+]
+
+# Machine-enforced dependency direction (import-linter).
+#
+#   engine  <-  root services (config/storage/client/...)  <-  ui
+#
+# The engine is the part that must stay usable headless and testable
+# without Qt: if engine/ ever imports ui/ or PySide6, the engine gate and
+# the headless build break. The tools/ scripts are operational helpers that
+# run outside the app, so they may not drag the UI layer in either.
+[tool.importlinter]
+# The repo has no importable top-level package (the app is flat and
+# `package = false`), so the contracts are expressed against the project
+# directories that are packages in their own right.
+root_packages = ["engine", "ui", "client", "tools"]
+# PySide6 must be in the graph: the Qt half of the engine contract is only
+# visible when external packages are included.
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Engine must not import the UI layer or Qt"
+type = "forbidden"
+source_modules = ["engine"]
+forbidden_modules = ["ui", "PySide6"]
+# engine/tests import the view layer for fixtures; that trade-off is
+# documented in [tool.mypy] and tracked by the Qt-free-seam bead.
+ignore_imports = [
+    "engine.tests.test_audit_p0p1 -> ui.checks_tree",
+    "engine.tests.test_audit_p0p1 -> ui.dashboard",
+    "engine.tests.test_audit_p0p1 -> ui.dataset_detail",
+    "engine.tests.test_audit_p0p1 -> ui.download_dialog",
+    "engine.tests.test_dashboard_cache -> ui.dashboard",
+    "engine.tests.test_enrichment -> ui.dashboard",
+]
+
+[[tool.importlinter.contracts]]
+name = "Tools must not import the UI layer"
+type = "forbidden"
+source_modules = ["tools"]
+forbidden_modules = ["ui"]
+# The probes ARE the UI's test harness: they drive the views offscreen and
+# assert on pixels and geometry. Every other tool (audit, sbom, licenses,
+# notice, smoke, doc links, complexity) is an operational helper that runs
+# outside the app and must stay importable without Qt.
+ignore_imports = [
+    "tools.probes._common -> ui.theme",
+    "tools.probes.probe_card_corner -> ui.main_window",
+    "tools.probes.probe_headings -> ui.main_window",
+    "tools.probes.probe_manifest_columns -> ui.dataset_detail",
+    "tools.probes.probe_queue_columns -> ui.main_window",
 ]

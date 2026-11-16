@@ -69,6 +69,8 @@ jobs:
         run: uv run --group dev poe format-check
       - name: Lint
         run: uv run --group dev python -m ruff check .
+      - name: Architecture contracts (import-linter)
+        run: uv run --group dev lint-imports
       - name: Type check
         run: uv run --group dev mypy
       - name: Tests
