@@ -776,6 +776,7 @@
       "filter_tip": "Show complete, incomplete, or not-checked rules",
       "filter_unchecked": "Not checked",
       "status_unchecked": "Not checked",
+      "status_pending": "Pending",
       "block_counts": "{complete} of {total} complete",
       "block_unchecked": "not checked",
       "pending_body": "Load metadata from Dataverse to evaluate completeness.",

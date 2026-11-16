@@ -1436,6 +1436,9 @@ class DatasetDetailView(QWidget):
         status = str(result.get("status") or "incomplete")
         rule_id = str(result.get("rule_id") or "")
         requirement = str(result.get("requirement") or "")
+        # dv-7w3: a pending row means "no data yet", not a finding — no
+        # disposition controls; render it muted so it can't read as one.
+        pending = bool(result.get("pending"))
         level_required = str(result.get("level") or "required") == "required"
         label = str(result.get("field") or "")
         value_text = str(result.get("value") or dash)
@@ -1448,7 +1451,15 @@ class DatasetDetailView(QWidget):
         from ui.icons import icon as _icon
         from ui.icons import icon_label as _icon_label
 
-        if status == "complete":
+        if pending:
+            # Pending = no data yet: muted row, neutral badge, no bar.
+            frame.setStyleSheet(
+                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+            )
+            icon_name, icon_color = "circle-dashed", TEXT_MUTED
+            badge_text = t("detail.metadata_check.status_pending")
+            badge_bg, badge_fg = SURFACE_ALT, TEXT_MUTED
+        elif status == "complete":
             frame.setStyleSheet(
                 surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
             )
@@ -1480,7 +1491,7 @@ class DatasetDetailView(QWidget):
         lay = QHBoxLayout(frame)
         lay.setContentsMargins(10, 8, 10, 8)
         lay.setSpacing(8)
-        if level_required:
+        if level_required and not pending:
             lay.addWidget(self._meta_required_bar())
         lay.addWidget(_icon_label(icon_name, size=16, color=icon_color))
 
@@ -1495,7 +1506,7 @@ class DatasetDetailView(QWidget):
         # dv-32x: inline disposition controls on incomplete findings, and
         # the right-click menu as a secondary path (top-level rows only).
         disposition_key = ""
-        if status == "incomplete":
+        if status == "incomplete" and not pending:
             disposition_key = finding_key(rule_id or label, "", requirement or label)
             current = self._dispositions_map().get(disposition_key, {})
             token = str(current.get("disposition") or "")
