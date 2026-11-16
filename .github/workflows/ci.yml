@@ -78,6 +78,46 @@ jobs:
       - name: Headless smoke
         run: uv run --group dev python main.py --headless --help
 
+  engine-linux:
+    # Advisory first: the engine is platform-agnostic Python, and a
+    # Windows-only CI misses newline and path bugs that a file-scanning
+    # engine can hit. The job is non-blocking (continue-on-error) until it
+    # has been green for ~14 days; promoting it to required is a
+    # branch-protection change (see dv-hcg.40).
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Lockfile check
+        run: uv lock --check
+      - name: Install
+        run: uv sync --locked --group dev
+      - name: Engine tests
+        run: uv run --group dev python -m pytest engine/tests -q
+      - name: Headless smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          printf 't,v\n2016-01-01 00:00,-5.1\n2016-01-01 01:00,jane@example.com\n' > "$tmp/probe.csv"
+          uv run --group dev python main.py --headless "$tmp" --out "$tmp/report.json"
+          uv run --group dev python -c "
+          import json, pathlib
+          report = json.loads(pathlib.Path('$tmp/report.json').read_text(encoding='utf-8'))
+          assert report.get('files'), 'no files in the headless report'
+          print('headless report ok:', len(report['files']), 'file(s) checked')
+          "
+
   probes:
     # The checks pytest cannot see: a pixel at a card's corner, a column
     # geometry after a drag. Each probe prints PASS/FAIL per check and
