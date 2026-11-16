@@ -38,27 +38,16 @@ _FILE_NAME = "requirements_profiles.json"
 def profiles_path() -> _Path:
     """Canonical location of the editable requirement profiles.
 
-    Frozen exe: next to the executable (CWD is arbitrary there), falling
-    back one level above — the folder holding the build, where onefile-era
-    launches kept the file — so an exe inside its own onedir subfolder
-    still finds an existing profiles file; with none anywhere, resolve
-    above the build folder so a fresh write survives rebuilds (PyInstaller
-    wipes its output folder). Dev runs: the current working directory
-    (repo root). One helper so the checker and the Requirements dialog
-    always read/write the same file.
+    One policy for every user-editable file, so the checker, the
+    Requirements dialog and the ruleset loader always agree: installed
+    builds keep it under the per-user app data folder (an update replaces
+    the install folder, an uninstall deletes it), portable builds beside
+    the exe, dev runs in the working directory. See
+    `config.resolve_user_file`.
     """
-    import sys
+    import config
 
-    if getattr(sys, "frozen", False):
-        try:
-            exe_dir = _Path(sys.executable).parent
-            for candidate in (exe_dir / _FILE_NAME, exe_dir.parent / _FILE_NAME):
-                if candidate.exists():
-                    return candidate
-            return exe_dir.parent / _FILE_NAME
-        except Exception:
-            pass
-    return _Path(_FILE_NAME)
+    return config.resolve_user_file(_FILE_NAME)
 
 
 # Keys PROFILES gained from v2 rulesets (tracked so deleted rulesets can be

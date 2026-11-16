@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dataverse-curation-app"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Desktop app to curate datasets submitted for review in Dataverse"
 readme = "README.md"
 license = { text = "MIT" }
@@ -45,6 +45,12 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["engine*", "ui*"]
+
+# One version literal in the repo: engine/__init__.py:__version__. The
+# package metadata reads it instead of keeping a second copy that a bump
+# can miss (the release workflow refuses a tag that disagrees with it).
+[tool.setuptools.dynamic]
+version = { attr = "engine.__version__" }
 
 [tool.pytest.ini_options]
 testpaths = ["engine/tests", "ui/tests"]
