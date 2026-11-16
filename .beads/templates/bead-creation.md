@@ -32,4 +32,5 @@ Copy this structure into every new `bd create --description`. A bead is the unit
 - **One bead, one outcome.** If it needs sequencing, split it and order with `bd dep add`.
 - **Don't close the loop in the title.** Titles state the work (`Fix X`), not the result (`X fixed`).
 - **Docs are part of the bead.** If it changes behavior, the hooks include the docs page that documents it (`docs/html/*.html`, `README.md`, `AGENTS.md`).
+- **Changelog:** if the change is user-visible, add a bullet to CHANGELOG.md's Unreleased section in the same commit.
 - After creating, run `bd show <id>` and read it back. Fix anything you have to make up from memory.
