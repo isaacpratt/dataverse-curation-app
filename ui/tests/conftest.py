@@ -38,6 +38,18 @@ def win(qapp):
     except Exception:
         cfg = Config()
     window = MainWindow(cfg)
+    try:
+        # A detail view constructed without cached metadata fires its load
+        # on a 100 ms timer as soon as the event loop runs. Tests never
+        # await that fetch; left live it hits the real configured instance
+        # from the test process and can take it down with an access
+        # violation mid-suite (seen as "Windows fatal exception" on the
+        # CI runner). Keep the suite off the network.
+        from ui.dataset_detail import DatasetDetailView as _DetailView
+
+        _DetailView._on_load_metadata = lambda self: None
+    except Exception:
+        pass
     # Shown so layouts activate (geometry assertions in the status-bar
     # tests) — offscreen, so no real window appears.
     window.show()
