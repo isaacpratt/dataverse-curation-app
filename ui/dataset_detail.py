@@ -756,6 +756,40 @@ class DatasetDetailView(QWidget):
         except Exception:
             pass
 
+        self._install_shortcuts()
+
+    # ---- Keyboard shortcuts (dv-9m2) ----------------------------------------
+    def _install_shortcuts(self) -> None:
+        """Power-path accelerators for the per-dataset loop.
+
+        Scoped to this view (WidgetWithChildrenShortcut): the chords fire
+        only while focus is inside the detail view, never from the dashboard
+        or a pane. Consistent with the app-level shortcuts in main_window.py.
+        """
+        from PySide6.QtGui import QKeySequence, QShortcut
+
+        def _sc(seq: str, handler):
+            sc = QShortcut(QKeySequence(seq, QKeySequence.PortableText), self, handler)
+            sc.setContext(Qt.WidgetWithChildrenShortcut)
+            return sc
+
+        self._shortcuts = [
+            _sc("Ctrl+Return", self._on_ctrl_enter),
+            _sc("Ctrl+Enter", self._on_ctrl_enter),
+            _sc("Ctrl+D", self._on_download),
+            _sc("Ctrl+Shift+O", self._on_open_folder),
+        ]
+
+    def _on_ctrl_enter(self) -> None:
+        """One chord, two contexts: Commit on the Response page, else Run checks."""
+        try:
+            if self._pages.currentIndex() == 1:
+                self._on_commit()
+                return
+        except Exception:
+            pass
+        self._on_run_checks()
+
     # ---- Builders ----
     def _build_verdict_card(self) -> QFrame:
         """Readiness banner (dv-6nv): one synthesized answer, top of page."""
@@ -1261,6 +1295,40 @@ class DatasetDetailView(QWidget):
     # caption line). Rules the ruleset marks "unchecked" surface only in
     # the Not checked filter (status "skipped", no verdict, no controls).
 
+    def _finding_overflow_button(self, text: str):
+        """⋯ ghost button opening the copy-this-finding menu (dv-18z).
+
+        One item, one job: copy a single line a curator can paste into a
+        comment or the depositor letter. No state, no log entry.
+        """
+        btn = make_action_button("⋯", kind="ghost", size="sm")
+        btn.setToolTip(t("detail.copy_finding.action"))
+        btn.setAccessibleName(t("detail.copy_finding.action"))
+        btn.clicked.connect(
+            lambda _c=False, b=btn, s=text: self._show_copy_menu(b, s)
+        )
+        return btn
+
+    def _build_copy_menu(self, text: str):
+        """Build the one-item copy menu for a finding row (dv-18z)."""
+        from PySide6.QtWidgets import QApplication, QMenu
+
+        menu = QMenu(self)
+        action = menu.addAction(t("detail.copy_finding.action"))
+
+        def _copy():
+            QApplication.clipboard().setText(text)
+            try:
+                self._set_status(t("detail.copy_finding.copied"))
+            except Exception:
+                pass
+
+        action.triggered.connect(_copy)
+        return menu
+
+    def _show_copy_menu(self, btn, text: str) -> None:
+        self._build_copy_menu(text).exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+
     def _meta_required_bar(self) -> QFrame:
         bar = QFrame()
         bar.setObjectName("MetaRequiredBar")
@@ -1436,6 +1504,9 @@ class DatasetDetailView(QWidget):
         status = str(result.get("status") or "incomplete")
         rule_id = str(result.get("rule_id") or "")
         requirement = str(result.get("requirement") or "")
+        # dv-7w3: a pending row means "no data yet", not a finding — no
+        # disposition controls; render it muted so it can't read as one.
+        pending = bool(result.get("pending"))
         level_required = str(result.get("level") or "required") == "required"
         label = str(result.get("field") or "")
         value_text = str(result.get("value") or dash)
@@ -1448,7 +1519,15 @@ class DatasetDetailView(QWidget):
         from ui.icons import icon as _icon
         from ui.icons import icon_label as _icon_label
 
-        if status == "complete":
+        if pending:
+            # Pending = no data yet: muted row, neutral badge, no bar.
+            frame.setStyleSheet(
+                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+            )
+            icon_name, icon_color = "circle-dashed", TEXT_MUTED
+            badge_text = t("detail.metadata_check.status_pending")
+            badge_bg, badge_fg = SURFACE_ALT, TEXT_MUTED
+        elif status == "complete":
             frame.setStyleSheet(
                 surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
             )
@@ -1480,7 +1559,7 @@ class DatasetDetailView(QWidget):
         lay = QHBoxLayout(frame)
         lay.setContentsMargins(10, 8, 10, 8)
         lay.setSpacing(8)
-        if level_required:
+        if level_required and not pending:
             lay.addWidget(self._meta_required_bar())
         lay.addWidget(_icon_label(icon_name, size=16, color=icon_color))
 
@@ -1495,7 +1574,7 @@ class DatasetDetailView(QWidget):
         # dv-32x: inline disposition controls on incomplete findings, and
         # the right-click menu as a secondary path (top-level rows only).
         disposition_key = ""
-        if status == "incomplete":
+        if status == "incomplete" and not pending:
             disposition_key = finding_key(rule_id or label, "", requirement or label)
             current = self._dispositions_map().get(disposition_key, {})
             token = str(current.get("disposition") or "")
@@ -1561,6 +1640,10 @@ class DatasetDetailView(QWidget):
         )
         badge.setAlignment(Qt.AlignCenter)
         lay.addWidget(badge)
+        copy_text = f"{label} — {value_text}"
+        if requirement:
+            copy_text += f"  ({requirement})"
+        lay.addWidget(self._finding_overflow_button(copy_text))
 
         if requirement:
             frame.setToolTip(
@@ -1607,6 +1690,8 @@ class DatasetDetailView(QWidget):
         row = QHBoxLayout()
         row.addStretch()
         commit = make_action_button(t("detail.assessment.commit"), kind="primary", size="md")
+        commit.setToolTip(t("detail.assessment.commit_tip"))
+        commit.setAccessibleName(t("detail.assessment.commit"))
         commit.clicked.connect(self._on_commit)
         self._commit_btn = commit
         row.addWidget(commit)
@@ -3750,6 +3835,11 @@ class DatasetDetailView(QWidget):
         badge_lbl.setFixedHeight(20)
         badge_lbl.setMinimumWidth(56)
         lay.addWidget(badge_lbl)
+        lay.addWidget(
+            self._finding_overflow_button(
+                t("detail.auto_checks.file_result_format", path=title, message=desc)
+            )
+        )
         return frame
 
     def _refresh_files_placeholder(self) -> None:

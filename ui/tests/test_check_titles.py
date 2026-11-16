@@ -209,6 +209,11 @@ class _Bare:
     def _dispositions_map(self):
         return {}
 
+    def _finding_overflow_button(self, text):
+        from ui.dataset_detail import DatasetDetailView
+
+        return DatasetDetailView._finding_overflow_button(self, text)
+
 
 def _auto_row(title, desc, passed, level, badge=None):
     from ui.dataset_detail import DatasetDetailView

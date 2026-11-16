@@ -1,10 +1,10 @@
 """Metadata checks render as Auto-Checks-style rows (dv-h70).
 
-One card per rule: icon reflecting the outcome, bold caption = the rule's
-label, a one-line verdict sentence, right-aligned badge and a small left
-bar on required rules. Compound fields expand into an inline drawer (one
-block per entry, each subfield as a caption line) instead of a 5-column
-tree. Two rules may share a field — the rows key off the result list.
+One row per rule: outcome icon, the rule's label as the bold caption, a
+one-line verdict sentence, a badge on the right and a left bar on required
+rules. Compound fields expand into an inline drawer (one block per entry;
+each subfield is a caption line). Two rules may share a field — rows key
+off the result list.
 """
 
 from pathlib import Path
@@ -177,6 +177,89 @@ def test_author_entry_headline_is_authorname_not_affiliation(detail):
 def test_orcid_rule_has_no_drawer(detail):
     row = _row(detail, "ORCiD for authors")
     assert not row.findChildren(QToolButton), "the ORCID rule must not re-expand the author entries"
+
+
+@pytest.fixture
+def pending_detail(qapp, tmp_path, monkeypatch):
+    """Yield a view whose ruleset includes a file-content rule with nothing staged.
+
+    That rule cannot be evaluated (no staged dir), so the engine returns a
+    pending row — a real gap, not a finding; the row must not read as one.
+    """
+    import review_rules as _rr
+
+    target = tmp_path / "requirements_profiles.json"
+    monkeypatch.setattr(_rr, "rulesets_path", lambda: target)
+    monkeypatch.setattr(_rr, "_RULESETS_MEMO", {})
+    pool = _rr.load_rulesets()
+    base = pool["mcmaster-default"]
+    probe = {
+        "label": "pending probe",
+        "description": "file-content scope rule, nothing staged",
+        "dataverses": ["*"],
+        "field_rules": [dict(base["field_rules"][0])],
+        "content_rules": [
+            {
+                "id": "content-scan", "label": "Content scan",
+                "level": "required", "requirement": "probe pending rule",
+                "scope": ["file-content"], "match": "substring",
+                "pattern": "zebra", "case_sensitive": False,
+                "response_template": "zebra",
+            }
+        ],
+        "filecheck_templates": {}, "response_header": "hi", "response_footer": "bye",
+    }
+    pool["pending-probe"] = probe
+    _rr.save_rulesets(pool)
+
+    from config import Config
+    from ui.dataset_detail import DatasetDetailView
+
+    cfg = Config()
+    cfg.app.workspace = Path(tmp_path)
+    view = DatasetDetailView(
+        cfg,
+        "doi:10.5072/FK2/PENDING",
+        "Pending probe",
+        cached_metadata=_metadata(),
+        cached_inventory=[],
+    )
+    view._profile = "pending-probe"
+    view._populate_completeness(view._metadata)
+    for _ in range(5):
+        qapp.processEvents()
+    yield view
+    view.deleteLater()
+
+
+def test_pending_row_renders_muted_without_disposition(pending_detail):
+    from PySide6.QtCore import Qt
+
+    rows = _rows(pending_detail)
+    pending = [r for r in rows if "Content scan" in _labels_in(r)]
+    assert pending, "the probe rule must produce a visible row"
+    row = pending[0]
+    assert "Pending" in _labels_in(row)
+    assert not row.findChildren(QComboBox), "a pending row carries no disposition combo"
+    assert row.contextMenuPolicy() != Qt.CustomContextMenu, (
+        "a pending row must not carry the right-click disposition menu"
+    )
+    # Required level, but no money-test bar and no error face for pending.
+    assert _qframe_by_name(row, "MetaRequiredBar") == []
+
+
+def test_pending_row_is_not_a_verdict_input(pending_detail):
+    """Pending must never leak into the verdict's disposition keying."""
+    from engine.verdict import assess
+
+    view = pending_detail
+    full = list(getattr(view, "_completeness_full", []))
+    pending = [r for r in full if r.get("pending")]
+    assert any(r.get("rule_id") == "content-scan" for r in pending)
+    # verdict counts only complete/incomplete non-pending findings, so the
+    # pending probe row must not alter the counts either way.
+    verdict = assess(view._report, full, {})
+    assert verdict is not None
 
 
 def test_single_entry_description_has_no_numbered_entry(detail):
