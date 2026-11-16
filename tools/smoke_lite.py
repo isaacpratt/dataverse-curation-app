@@ -1,10 +1,14 @@
 """Frozen-build smoke probe for the lite PyInstaller artifact.
 
-Port of the two-step smoke recipe that lived in the Makefile:
-(1) report the exe size and that `--headless --help` exits 0, and
-(2) run the frozen lite against a tiny CSV with an email probe and fail
-    if any check reports "inspection failed" (this is the regression that
-    showed up when a rebuild was made without the SECRET_HIDDENS
+Three checks, in order:
+(1) report the exe size and that `--headless --help` exits 0;
+(2) assert the heavy scientific libraries really are absent from the lite
+    folder - the build excludes pyreadstat/netCDF4/h5py/scipy so the app can
+    report "Missing ..." instead of shipping 250 MB of binaries, and nothing
+    asserted that before;
+(3) run the frozen lite against a tiny CSV with an email probe and fail if
+    any check reports "inspection failed" (this is the regression that showed
+    up when a rebuild was made without the SECRET_HIDDENS
     --hidden-import/--collect-all flags, surfacing as
     "cannot import name 'vnr' from 'stdnum.at'").
 
@@ -24,6 +28,24 @@ EXE = pathlib.Path(
     os.environ.get("SMOKE_LITE_EXE", ROOT / "dist" / "curation-app-lite" / "curation-app-lite.exe")
 )
 
+# The libraries the lite build excludes (see the poe build-lite task).
+HEAVY_MODULES = ("pyreadstat", "netCDF4", "h5py", "scipy")
+
+
+def find_heavy_modules(root: pathlib.Path) -> list[str]:
+    """Names of excluded heavy libraries that are present under ``root``."""
+    if not root.is_dir():
+        return []
+    found: set[str] = set()
+    lowered = {name.lower(): name for name in HEAVY_MODULES}
+    for path in root.rglob("*"):
+        stem = path.name.split(".")[0].lower()
+        if stem in lowered:
+            found.add(lowered[stem])
+        elif path.is_dir() and path.name.lower() in lowered:
+            found.add(lowered[path.name.lower()])
+    return sorted(found)
+
 
 def main() -> int:
     """Lite-build smoke: exe exists, --headless --help works; exit 0/1."""
@@ -36,6 +58,12 @@ def main() -> int:
     if r.returncode != 0:
         print(f"headless --help exited {r.returncode}")
         return r.returncode
+
+    heavy = find_heavy_modules(EXE.parent)
+    if heavy:
+        print(f"lite build contains excluded heavy modules: {', '.join(heavy)}")
+        return 1
+    print(f"lite build excludes heavy modules: {', '.join(HEAVY_MODULES)}")
 
     workdir = pathlib.Path(tempfile.mkdtemp(prefix="lite-smoke-"))
     (workdir / "CA-TP4_HH_201601010000_201701010000.csv").write_text(
