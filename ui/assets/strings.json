@@ -86,6 +86,8 @@
       "workspace": "workspace: {value}",
       "base_url": "base url: {value}",
       "api_token": "api token: {value}",
+      "commit": "commit: {value}",
+      "lock_hash": "uv.lock hash: {value}",
       "set": "set",
       "not_set": "not set",
       "config_unavailable": "config: unavailable",

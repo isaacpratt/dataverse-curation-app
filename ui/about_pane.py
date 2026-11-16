@@ -56,6 +56,44 @@ def _platform_text() -> str:
         return t("common.unknown")
 
 
+def _build_provenance() -> tuple[str, str]:
+    """(git sha, uv.lock hash) for a support request; 'dev'/'unknown' in dev."""
+    import hashlib as _hashlib
+    import json as _json
+    import subprocess as _subprocess
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    repo_root = _Path(__file__).resolve().parent.parent
+    if getattr(_sys, "frozen", False):
+        for candidate in (
+            _Path(_sys.executable).parent / "build_info.json",
+            _Path(_sys.executable).parent.parent / "build_info.json",
+        ):
+            try:
+                info = _json.loads(candidate.read_text(encoding="utf-8"))
+                return str(info.get("git_sha", "unknown")), str(info.get("lock_hash", "unknown"))
+            except Exception:
+                continue
+        return "unknown", "unknown"
+    sha = "dev"
+    try:
+        out = _subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(repo_root),
+            stderr=_subprocess.DEVNULL,
+        )
+        sha = out.decode().strip() or "dev"
+    except Exception:
+        pass
+    lock_hash = "unknown"
+    try:
+        lock_hash = _hashlib.sha256((repo_root / "uv.lock").read_bytes()).hexdigest()[:12]
+    except Exception:
+        pass
+    return sha, lock_hash
+
+
 def _diag_text() -> str:
     """Environment facts for a support request — never the API token."""
     import sys as _sys
@@ -72,6 +110,9 @@ def _diag_text() -> str:
         t("about.diag.platform", value=_platform_text()),
         t("about.diag.install", value=install),
     ]
+    sha, lock_hash = _build_provenance()
+    lines.append(t("about.diag.commit", value=sha))
+    lines.append(t("about.diag.lock_hash", value=lock_hash))
     try:
         from config import Config
 
