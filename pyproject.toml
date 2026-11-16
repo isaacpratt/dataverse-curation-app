@@ -62,9 +62,13 @@ dev = [
     "pyinstaller>=6.0",
     "poethepoet>=0.48.0",
     "pre-commit>=4.0",
+    "pytest-xdist>=3.6",
 ]
 [tool.pytest.ini_options]
 testpaths = ["engine/tests", "ui/tests"]
+# Serial by default: a local run is easier to read and to debug. CI passes
+# `-n auto` (pytest-xdist) for the wall-clock win; the suite is
+# order-independent, verified by repeated parallel runs (dv-hcg.41).
 addopts = "-q --strict-markers"
 qt_api = "pyside6"
 xfail_strict = true
