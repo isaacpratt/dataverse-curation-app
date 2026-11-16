@@ -18,6 +18,7 @@ def _field_value(dataset_version: dict[str, Any], type_name: str) -> Any:
 
 
 def extract_title(dataset_version: dict[str, Any]) -> str:
+    """Return the dataset title from a version payload (first titleValue)."""
     value = _field_value(dataset_version, "title")
     return value if isinstance(value, str) else ""
 
@@ -241,6 +242,7 @@ def note_review_submission(pid: str, note: Any) -> dict[str, str] | None:
 
 
 def locks_indicate_review(locks: list[dict[str, Any]]) -> bool:
+    """Return True when any lock's type/reason indicates an in-review lock."""
     import re as _re
 
     # Match "review" (InReview, in_review, in-review, "In Review") but not

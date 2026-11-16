@@ -402,6 +402,7 @@ def _builtin_minimal() -> dict[str, Any]:
 
 
 def builtin_rulesets() -> dict[str, dict[str, Any]]:
+    """Default review rulesets shipped with the app."""
     return {"mcmaster-default": _builtin_mcmaster(), "minimal": _builtin_minimal()}
 
 
@@ -513,6 +514,7 @@ def load_rulesets() -> dict[str, dict[str, Any]]:
 
 
 def save_rulesets(rulesets: dict[str, dict[str, Any]]) -> Path:
+    """Persist rulesets to disk; returns the ruleset path."""
     import os
     import tempfile
 
@@ -540,6 +542,7 @@ def save_rulesets(rulesets: dict[str, dict[str, Any]]) -> Path:
 
 
 def get_ruleset(key: str, rulesets: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+    """One ruleset by key (defaults to the builtins if none passed)."""
     pool = rulesets if isinstance(rulesets, dict) else load_rulesets()
     if key in pool:
         return pool[key]

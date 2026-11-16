@@ -114,10 +114,12 @@ def update_carets(model, is_expanded) -> None:  # noqa: C901 - grandfathered; co
 
 
 def check_badge_text(result) -> str:
+    """Short badge text for a check result (e.g. PASS/FAIL)."""
     return badge_text(result)
 
 
 def format_details_tooltip(result) -> str:
+    """Details-tooltip text summarizing one check result for hover."""
     parts = [
         f"{result.check_id} [{result.level}]",
         result.message,
@@ -342,6 +344,7 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
 
 
 def node_kind(index) -> dict:
+    """Node descriptor (kind, icons, labels) for a tree item index."""
     try:
         from PySide6.QtCore import QModelIndex
 

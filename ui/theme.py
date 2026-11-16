@@ -826,6 +826,7 @@ def badge_qss(
 
 
 def global_qss() -> str:
+    """Return the app's global Qt style sheet, derived from the active palette."""
     return f"""
 /* ===== Base ===== */
 QWidget {{

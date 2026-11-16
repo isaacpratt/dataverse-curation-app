@@ -236,7 +236,10 @@ ignore = [
 # win32 ctypes constants keep MSDN names for cross-reference (SWP_*, HT*...).
 "ui/main_window.py" = ["N806"]
 # Fake Qt header stubs in engine tests mirror the real camelCase API.
-"engine/tests/**" = ["N802"]
+# Test functions document themselves via their names; no docstrings required.
+"engine/tests/**" = ["N802", "D103"]
+"ui/tests/**" = ["D103"]
+"tools/probes/**" = ["D103"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 12

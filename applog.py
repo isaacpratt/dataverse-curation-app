@@ -39,6 +39,7 @@ def _redact(message: str) -> str:
 
 
 def log(message: str) -> None:
+    """Append one line to the in-memory request log."""
     # Local time (was UTC): curators read the strip against their clock.
     line = f"[{datetime.now().strftime('%H:%M:%S')}] {_redact(message)}"
     with _LOCK:
@@ -50,11 +51,13 @@ def log(message: str) -> None:
 
 
 def lines() -> list[str]:
+    """Return all logged lines (copy)."""
     with _LOCK:
         return list(_BUFFER)
 
 
 def clear() -> None:
+    """Drop all logged lines."""
     with _LOCK:
         _BUFFER.clear()
 
@@ -89,6 +92,7 @@ class AppLog:
 
 
 def log_response(method: str, url: str, status: int, elapsed_ms: int, summary: str = "") -> None:
+    """Log one completed HTTP response (method, url, status code, elapsed ms)."""
     # Strip query-string secrets from URLs before storing.
     try:
         import re

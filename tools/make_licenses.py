@@ -16,6 +16,7 @@ DIST = ROOT / "dist"
 
 
 def main() -> int:
+    """Write dist/licenses.md from the locked environment; exit 0 on success."""
     DIST.mkdir(exist_ok=True)
     rc = subprocess.run(
         [

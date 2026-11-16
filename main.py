@@ -89,6 +89,7 @@ if _TYPE_CHECKING:  # pragma: no cover
 
 
 def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    """GUI/headless entry point; returns the process exit code."""
     parser = argparse.ArgumentParser(description=t("app.cli.description"))
     parser.add_argument(
         "--headless",

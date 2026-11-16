@@ -26,6 +26,7 @@ EXE = pathlib.Path(
 
 
 def main() -> int:
+    """Lite-build smoke: exe exists, --headless --help works; exit 0/1."""
     if not EXE.exists():
         print(f"lite exe missing - run `poe build-lite` first ({EXE})")
         return 1

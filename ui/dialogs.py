@@ -173,14 +173,17 @@ def _show(
 
 
 def show_warning(parent, title: str, text: str, details: str = "", retry=None) -> None:
+    """Non-blocking warning dialog with copyable details."""
     _show(parent, title, text, "triangle-alert", details, retry)
 
 
 def show_critical(parent, title: str, text: str, details: str = "", retry=None) -> None:
+    """Blocking error dialog with copyable details and optional retry."""
     _show(parent, title, text, "octagon-x", details, retry)
 
 
 def show_info(parent, title: str, text: str, details: str = "", retry=None) -> None:
+    """Informational dialog with copyable details."""
     _show(parent, title, text, "info", details, retry)
 
 

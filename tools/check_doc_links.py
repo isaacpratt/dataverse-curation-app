@@ -30,6 +30,7 @@ class LinkParser(HTMLParser):
 
 
 def anchors_in(path: Path) -> set[str]:
+    """All `id`/`name` anchor values in one HTML file."""
     text = path.read_text(encoding="utf-8", errors="ignore")
     found: set[str] = set()
     for m in ID_RE.finditer(text):
@@ -38,6 +39,7 @@ def anchors_in(path: Path) -> set[str]:
 
 
 def main() -> int:
+    """Check every href/src anchor in docs/html/*.html; exit 1 on any broken."""
     if not DOCS.is_dir():
         print(f"docs-links: {DOCS} not found", file=sys.stderr)
         return 2

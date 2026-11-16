@@ -61,6 +61,7 @@ def resolve_config_path(path: Path | None = None) -> Path:
 
 
 def default_workspace() -> Path:
+    """Workspace folder for staged downloads and caches."""
     return Path.home() / "Documents" / "curation-workspace"
 
 

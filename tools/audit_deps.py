@@ -21,10 +21,12 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def run(cmd: list[str], **kw) -> subprocess.CompletedProcess[str]:
+    """Run a subprocess and capture output without raising."""
     return subprocess.run(cmd, capture_output=True, text=True, check=False, **kw)
 
 
 def main() -> int:
+    """Export uv.lock and run pip-audit against OSV; exit code of pip-audit."""
     export = run(
         [
             "uv",

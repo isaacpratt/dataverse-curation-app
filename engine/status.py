@@ -10,6 +10,7 @@ from engine.checks.base import CheckResult
 
 
 def is_skipped(result: CheckResult) -> bool:
+    """Return True for skipped/other-missing-library style results."""
     try:
         return bool((result.details or {}).get("skipped"))
     except Exception:
@@ -28,6 +29,7 @@ def classify(result: CheckResult) -> str:
 
 
 def summarize(results: list) -> dict:
+    """Count results by level and overall status for a file set."""
     counts = {"passed": 0, "failed-error": 0, "failed-warning": 0, "skipped": 0}
     for result in results:
         counts[classify(result)] += 1

@@ -187,6 +187,7 @@ def _metadatablocks_disk_key(base_url: str) -> str:
 
 
 def get_cached_metadata_fields(base_url: str) -> list[dict[str, Any]] | None:
+    """Return the cached field catalog for a base URL, if present."""
     try:
         with _METADATABLOCKS_LOCK:
             hit = _METADATABLOCKS_MEMO.get((_metadatablocks_disk_key(base_url),))
@@ -196,6 +197,7 @@ def get_cached_metadata_fields(base_url: str) -> list[dict[str, Any]] | None:
 
 
 def set_cached_metadata_fields(base_url: str, fields: list[dict[str, Any]]) -> None:
+    """Persist the field catalog for a base URL (best effort)."""
     try:
         clean = [dict(f) for f in (fields or []) if isinstance(f, dict) and f.get("field")]
         with _METADATABLOCKS_LOCK:

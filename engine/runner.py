@@ -31,6 +31,7 @@ def collect_files(dataset_dir: Path) -> list[Path]:
 
 
 def guess_mime(path: Path) -> str:
+    """Guess a file's MIME type from its name (best effort)."""
     mime, _ = mimetypes.guess_type(path.name)
     return mime or "application/octet-stream"
 

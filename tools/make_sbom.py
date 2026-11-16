@@ -16,6 +16,7 @@ DIST = ROOT / "dist"
 
 
 def main() -> int:
+    """Write dist/sbom.cdx.json from the project venv; exit 0 on success."""
     DIST.mkdir(exist_ok=True)
     rc = subprocess.run(
         [

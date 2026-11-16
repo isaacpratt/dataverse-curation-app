@@ -672,4 +672,5 @@ def check_completeness(
     profile: str = DEFAULT_PROFILE,
     inventory: list[dict[str, Any]] | None = None,
 ) -> list[dict]:
+    """Citation-block completeness against a McMaster/Minimal profile."""
     return check_metadata_completeness(metadata, profile, inventory)
