@@ -205,9 +205,15 @@ def test_keyring_keyed_by_base_url(store, tmp_path):
 def test_default_path_untouched():
     assert cfg_module.Path("config.json") == DEFAULT_CONFIG_PATH
 
+
 def _cfg_env(monkeypatch, **vars):
     # scrub every relevant var, then set what the test wants
-    for name in ("DATAVERSE_BASE_URL", "DATAVERSE_API_TOKEN", "DATAVERSE_COLLECTION", "DATAVERSE_WORKSPACE"):
+    for name in (
+        "DATAVERSE_BASE_URL",
+        "DATAVERSE_API_TOKEN",
+        "DATAVERSE_COLLECTION",
+        "DATAVERSE_WORKSPACE",
+    ):
         monkeypatch.delenv(name, raising=False)
     for name, value in vars.items():
         monkeypatch.setenv(name, value)
@@ -253,4 +259,61 @@ def test_env_http_url_rejected_with_file(store, tmp_path, monkeypatch):
     )
     _cfg_env(monkeypatch, DATAVERSE_BASE_URL="http://borealis.example")
     with pytest.raises(ValueError, match="plain HTTP"):
+        Config.load(tmp_path / "config.json")
+
+
+def test_config_write_includes_schema_version(store, tmp_path):
+    cfg = Config()
+    cfg.save(tmp_path / "config.json")
+    raw = _read(tmp_path)
+    assert raw["version"] == 1
+
+
+def test_config_drops_compat_aliases(store, tmp_path):
+    cfg = Config()
+    cfg.dataverse.collection = "mcmaster"
+    cfg.save(tmp_path / "config.json")
+    raw = _read(tmp_path)
+    dv = raw["dataverse"]
+    assert "subtree" not in dv
+    assert "collection_alias" not in dv
+    assert dv["collection"] == "mcmaster"
+
+
+def test_config_version_missing_is_tolerated(tmp_path):
+    _write(
+        tmp_path,
+        {
+            "dataverse": {"base_url": "https://ok.test", "api_token": "", "collection": ""},
+            "app": {},
+        },
+    )
+    cfg = Config.load(tmp_path / "config.json")
+    assert cfg.dataverse.base_url == "https://ok.test"
+
+
+def test_config_wrong_shaped_section_fails_loudly(tmp_path):
+    _write(
+        tmp_path,
+        {"dataverse": "not-an-object", "app": {}},
+    )
+    with pytest.raises(ValueError, match="dataverse"):
+        Config.load(tmp_path / "config.json")
+
+
+def test_config_wrong_shaped_engine_tools_fails_loudly(tmp_path):
+    _write(
+        tmp_path,
+        {"dataverse": {}, "engine": {"optional_tools": {"tesseract": 123}}},
+    )
+    with pytest.raises(ValueError, match="optional_tools"):
+        Config.load(tmp_path / "config.json")
+
+
+def test_config_wrong_base_url_type_fails_loudly(tmp_path):
+    _write(
+        tmp_path,
+        {"dataverse": {"base_url": 42}, "app": {}},
+    )
+    with pytest.raises(ValueError, match=r"dataverse\.base_url"):
         Config.load(tmp_path / "config.json")

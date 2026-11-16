@@ -30,6 +30,7 @@ except Exception:  # pragma: no cover - keyring absent entirely
     _keyring = None
 
 KEYRING_SERVICE = "Dataverse Docent"
+CONFIG_SCHEMA_VERSION = 1
 
 PRESETS: dict[str, str] = {
     "Borealis Demo — demo.borealisdata.ca": "https://demo.borealisdata.ca",
@@ -37,6 +38,62 @@ PRESETS: dict[str, str] = {
 }
 
 DEFAULT_CONFIG_PATH = Path("config.json")
+
+
+def validate_raw(raw: object) -> dict:
+    """Validate the decoded config.json payload shape.
+
+    Tolerant of unknown keys; strict about the ones we know. Raises
+    ValueError with the offending field path in the message.
+    """
+    if not isinstance(raw, dict):
+        raise ValueError("top-level value must be an object")
+
+    dv = _section(raw, "dataverse")
+    for key in (
+        "base_url",
+        "api_token",
+        "collection",
+        "collection_alias",
+        "subtree",
+        "api_token_source",
+    ):
+        _check_str(dv, key, "dataverse")
+    app = _section(raw, "app")
+    for key in ("workspace", "tesseract", "exiftool"):
+        _check_str(app, key, "app")
+    _validate_engine(raw.get("engine"))
+    return raw
+
+
+def _section(raw: dict, name: str) -> dict:
+    value = raw.get(name, {})
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"section '{name}' must be an object")
+    return value
+
+
+def _check_str(section: dict, key: str, where: str) -> None:
+    value = section.get(key)
+    if value is not None and not isinstance(value, str):
+        raise ValueError(f"'{where}.{key}' must be a string")
+
+
+def _validate_engine(engine: object) -> None:
+    if engine is None:
+        return
+    if not isinstance(engine, dict):
+        raise ValueError("section 'engine' must be an object")
+    tools = engine.get("optional_tools", {})
+    if tools is None:
+        return
+    if not isinstance(tools, dict):
+        raise ValueError("section 'engine.optional_tools' must be an object")
+    for key, value in tools.items():
+        if not isinstance(value, str):
+            raise ValueError(f"'engine.optional_tools.{key}' must be a string")
 
 
 def resolve_config_path(path: Path | None = None) -> Path:
@@ -160,6 +217,10 @@ class Config:
             raise ValueError(f"config unreadable ({cfg_path}): {exc}") from exc
         if not isinstance(raw, dict):
             raise ValueError(f"config unreadable ({cfg_path}): top-level JSON must be an object")
+        try:
+            validate_raw(raw)
+        except ValueError as exc:
+            raise ValueError(f"config unreadable ({cfg_path}): {exc}") from exc
         dv = raw.get("dataverse", {}) if isinstance(raw.get("dataverse", {}), dict) else {}
         app_raw = raw.get("app", {}) if isinstance(raw.get("app", {}), dict) else {}
         engine_block = raw.get("engine", {}) if isinstance(raw.get("engine", {}), dict) else {}
@@ -261,13 +322,12 @@ class Config:
             except Exception:
                 pass
         payload = {
+            "version": CONFIG_SCHEMA_VERSION,
             "dataverse": {
                 "base_url": self.dataverse.base_url,
                 "api_token": persisted,
                 "api_token_source": source,
                 "collection": self.dataverse.collection,
-                "subtree": self.dataverse.collection,  # compat
-                "collection_alias": self.dataverse.collection,  # explicit alias for user
             },
             "app": {"workspace": str(self.app.workspace)},
             "engine": {
