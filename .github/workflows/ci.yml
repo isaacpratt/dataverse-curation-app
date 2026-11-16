@@ -50,6 +50,9 @@ jobs:
         run: uv run --group dev actionlint
       - name: Dependency vulnerability scan (uv.lock via OSV)
         run: uv run --group dev python tools/audit_deps.py
+      - name: Docs link check (advisory)
+        run: uv run --group dev poe docs-links
+        continue-on-error: true
       - name: Commit hygiene (pre-commit)
         run: uv run --group dev pre-commit run --all-files
       - name: Format check
