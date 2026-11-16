@@ -6,7 +6,7 @@ their own check results. Serializes to JSON - see docs/html/report-contract.html
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +57,7 @@ class DatasetReport:
     label: str
     engine_version: str
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
     dataset_checks: list[CheckResult] = field(default_factory=list)
     files: list[FileEntry] = field(default_factory=list)

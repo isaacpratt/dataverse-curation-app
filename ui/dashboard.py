@@ -8,6 +8,7 @@ date sourced from the workspace state.db + staged folders.
 """
 
 import math
+from datetime import UTC
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
@@ -186,21 +187,21 @@ def _parse_date_epoch(s: str) -> float:
     if not text:
         return 0.0
     try:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # ISO-8601 first (handles TZ suffixes the old loop ignored).
         try:
             iso = text.replace("Z", "+00:00") if text.endswith("Z") else text
             dt = datetime.fromisoformat(iso)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
             return dt.timestamp()
         except ValueError:
             pass
         for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
             try:
                 dt = datetime.strptime(text[: len(fmt)], fmt)
-                return dt.replace(tzinfo=timezone.utc).timestamp()
+                return dt.replace(tzinfo=UTC).timestamp()
             except ValueError:
                 continue
         # Year-only fallback preserves rough ordering.
@@ -503,7 +504,7 @@ def save_dashboard_cache(workspace: Path, key: str, datasets: list[dict], labels
                 continue
             clean_rows.append({k: v for k, v in d.items() if not k.startswith("_sort_")})
         raw[key] = {
-            "saved_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+            "saved_at": _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
             "datasets": clean_rows,
             "labels": [str(lbl) for lbl in (labels or []) if str(lbl).strip()],
         }
@@ -517,7 +518,7 @@ def save_dashboard_cache(workspace: Path, key: str, datasets: list[dict], labels
                 raw = dict(items[:10])
                 if key not in raw:
                     raw[key] = {
-                        "saved_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+                        "saved_at": _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
                         "datasets": clean_rows,
                         "labels": [str(lbl) for lbl in (labels or []) if str(lbl).strip()],
                     }

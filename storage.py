@@ -18,7 +18,7 @@ Stored under <workspace>/state.db. The API token never touches the database.
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_curation_actions_action
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _atomic_write_json(path: Path, payload: object) -> None:
