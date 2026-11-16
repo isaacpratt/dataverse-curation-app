@@ -24,31 +24,40 @@ def _metadata() -> dict:
                 "citation": {
                     "fields": [
                         {"typeName": "title", "value": "A study"},
-                        {"typeName": "author", "value": [
-                            {
-                                "authorName": _fv("Ada Lovelace"),
-                                "authorAffiliation": _fv("Analytical Engine Lab"),
-                                "authorIdentifierScheme": _fv("ORCID"),
-                                "authorIdentifier": _fv("0000-0002-1825-0097"),
-                            },
-                            {
-                                "authorName": _fv("Grace Hopper"),
-                                "authorAffiliation": _fv(""),
-                            },
-                        ]},
-                        {"typeName": "datasetContact", "value": [
-                            {
-                                "datasetContactName": _fv("Ada Lovelace"),
-                                "datasetContactAffiliation": _fv("Analytical Engine Lab"),
-                                "datasetContactEmail": _fv("ada@example.org"),
-                            }
-                        ]},
-                        {"typeName": "dsDescription", "value": [
-                            {
-                                "dsDescriptionValue": _fv("A description."),
-                                "dsDescriptionDate": _fv("2026-01-01"),
-                            }
-                        ]},
+                        {
+                            "typeName": "author",
+                            "value": [
+                                {
+                                    "authorName": _fv("Ada Lovelace"),
+                                    "authorAffiliation": _fv("Analytical Engine Lab"),
+                                    "authorIdentifierScheme": _fv("ORCID"),
+                                    "authorIdentifier": _fv("0000-0002-1825-0097"),
+                                },
+                                {
+                                    "authorName": _fv("Grace Hopper"),
+                                    "authorAffiliation": _fv(""),
+                                },
+                            ],
+                        },
+                        {
+                            "typeName": "datasetContact",
+                            "value": [
+                                {
+                                    "datasetContactName": _fv("Ada Lovelace"),
+                                    "datasetContactAffiliation": _fv("Analytical Engine Lab"),
+                                    "datasetContactEmail": _fv("ada@example.org"),
+                                }
+                            ],
+                        },
+                        {
+                            "typeName": "dsDescription",
+                            "value": [
+                                {
+                                    "dsDescriptionValue": _fv("A description."),
+                                    "dsDescriptionDate": _fv("2026-01-01"),
+                                }
+                            ],
+                        },
                         {"typeName": "subject", "value": ["Computer and Information Science"]},
                         {"typeName": "depositor", "value": "Ada Lovelace"},
                         {"typeName": "dateOfDeposit", "value": "2026-01-02"},
@@ -146,13 +155,8 @@ def test_contact_description_and_subject_are_readable(detail):
 
 
 def test_complete_filter_rebuilds_the_tree(detail):
-    detail._meta_filter.setCurrentIndex(
-        detail._meta_filter.findData("incomplete")
-    )
-    texts = [
-        detail._meta_model.item(r, 0).text()
-        for r in range(detail._meta_model.rowCount())
-    ]
+    detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("incomplete"))
+    texts = [detail._meta_model.item(r, 0).text() for r in range(detail._meta_model.rowCount())]
     assert texts, "the incomplete filter must still show something"
     assert "Title" not in texts, "a complete check must be filtered out"
 

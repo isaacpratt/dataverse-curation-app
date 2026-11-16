@@ -54,12 +54,24 @@ def test_level_column_shows_ruleset_levels(detail):
     detail._meta_model.removeRows(0, detail._meta_model.rowCount())
 
     results = [
-        {"field": "Title", "block": "citation", "status": "complete",
-         "level": "required", "requirement": "", "value": "t",
-         "rule_id": "field:citation.title"},
-        {"field": "ORCiD for authors", "block": "citation", "status": "incomplete",
-         "level": "optional", "requirement": "", "value": "—",
-         "rule_id": "field:citation.author:orcid"},
+        {
+            "field": "Title",
+            "block": "citation",
+            "status": "complete",
+            "level": "required",
+            "requirement": "",
+            "value": "t",
+            "rule_id": "field:citation.title",
+        },
+        {
+            "field": "ORCiD for authors",
+            "block": "citation",
+            "status": "incomplete",
+            "level": "optional",
+            "requirement": "",
+            "value": "—",
+            "rule_id": "field:citation.author:orcid",
+        },
     ]
     detail._meta_results = results
     detail._build_meta_tree(results)

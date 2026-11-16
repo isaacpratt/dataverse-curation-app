@@ -126,14 +126,12 @@ _COLUMN_WIDTHS = {
 }
 
 
-
 # Metric-card value: the real count (DisplayLG, 22px bold) versus a named
 # pre-crawl state (StateMD, 12px muted words, 2026-10-02 P2) - the number
 # slot never shows a bare "-", so a visible "0" can only mean a completed
 # check counted zero. Both are theme tokens, not inline styles.
 _METRIC_VALUE_TOKEN = "DisplayLG"
 _METRIC_STATE_TOKEN = "StateMD"
-
 
 
 def _apply_metric_token(label: QLabel) -> None:
@@ -229,8 +227,7 @@ def _local_downloaded_batch(workspace: Path, pids: list[str]) -> dict[str, str]:
             conn = sqlite3.connect(str(db), timeout=30.0)
             try:
                 cur = conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' "
-                    "AND name='curation_actions'"
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='curation_actions'"
                 )
                 if cur.fetchone():
                     rows = conn.execute(
@@ -283,8 +280,7 @@ def _decided_ids(workspace: Path) -> set[str]:
         conn = sqlite3.connect(str(db), timeout=30.0)
         try:
             cur = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' "
-                "AND name='curation_actions'"
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='curation_actions'"
             )
             if not cur.fetchone():
                 return set()
@@ -428,8 +424,12 @@ def _merge_enriched_rows(existing: list[dict], batch: list[dict]) -> int:
                 continue
             try:
                 for key in (
-                    "total_size_bytes", "file_count", "depositor",
-                    "state", "has_draft", "size_enriched",
+                    "total_size_bytes",
+                    "file_count",
+                    "depositor",
+                    "state",
+                    "has_draft",
+                    "size_enriched",
                 ):
                     if key not in src:
                         continue
@@ -499,7 +499,7 @@ def save_dashboard_cache(workspace: Path, key: str, datasets: list[dict], labels
         if not isinstance(raw, dict):
             raw = {}
         clean_rows = []
-        for d in (datasets or []):
+        for d in datasets or []:
             if not isinstance(d, dict):
                 continue
             clean_rows.append({k: v for k, v in d.items() if not k.startswith("_sort_")})
@@ -513,7 +513,9 @@ def save_dashboard_cache(workspace: Path, key: str, datasets: list[dict], labels
             if len(raw) > 10:
                 # Keep current key + 9 most recent by saved_at.
                 items = sorted(
-                    raw.items(), key=lambda kv: str((kv[1] or {}).get("saved_at") or ""), reverse=True
+                    raw.items(),
+                    key=lambda kv: str((kv[1] or {}).get("saved_at") or ""),
+                    reverse=True,
                 )
                 raw = dict(items[:10])
                 if key not in raw:
@@ -644,9 +646,7 @@ class DashboardView(QWidget):
         title_row = QHBoxLayout()
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(12)
-        hdr_title = make_elided_label(
-            t("dashboard.queue.title"), object_name="HeadlineMD"
-        )
+        hdr_title = make_elided_label(t("dashboard.queue.title"), object_name="HeadlineMD")
         title_row.addWidget(hdr_title, 1)
         hdr_layout.addLayout(title_row)
 
@@ -657,9 +657,7 @@ class DashboardView(QWidget):
         # No visible label: the field's placeholder and accessible name
         # carry the label (the visible one duplicated the placeholder and
         # pushed the tools row past the window).
-        self._filter_edit = make_search_field(
-            t("dashboard.queue.search"), min_width=140
-        )
+        self._filter_edit = make_search_field(t("dashboard.queue.search"), min_width=140)
         self._filter_edit.setAccessibleName(t("dashboard.queue.search"))
         self._filter_edit.textChanged.connect(lambda _t: self._filter_timer.start())
         filter_row.addWidget(self._filter_edit, 1)
@@ -697,9 +695,7 @@ class DashboardView(QWidget):
         self._collection_filter.currentTextChanged.connect(self._apply_filter)
         filter_row.addWidget(self._collection_filter)
 
-        self._columns_btn = make_action_button(
-            t("dashboard.queue.columns"), kind="chip"
-        )
+        self._columns_btn = make_action_button(t("dashboard.queue.columns"), kind="chip")
         self._columns_btn.clicked.connect(self._show_columns_menu)
         filter_row.addWidget(self._columns_btn)
 
@@ -838,9 +834,7 @@ class DashboardView(QWidget):
             _pix = _QPixmap(mark_icon_path())
             if not _pix.isNull():
                 # Native 16x16 — never upscale the pixel mark.
-                mark.setPixmap(
-                    _pix.scaledToHeight(16, Qt.SmoothTransformation)
-                )
+                mark.setPixmap(_pix.scaledToHeight(16, Qt.SmoothTransformation))
                 mark.setToolTip(t("app.name"))
         except Exception:
             pass
@@ -992,8 +986,7 @@ class DashboardView(QWidget):
         if not has_token:
             if self._cache_loaded:
                 self._progress.setText(
-                    self._progress.text()
-                    + t("dashboard.progress.api_key_suffix")
+                    self._progress.text() + t("dashboard.progress.api_key_suffix")
                 )
             else:
                 self._progress.setText(t("dashboard.progress.api_key"))
@@ -1095,10 +1088,10 @@ class DashboardView(QWidget):
         try:
             self._collection_filter.blockSignals(True)
             self._collection_filter.clear()
-            self._collection_filter.addItem(
-                t("dashboard.filters.collection_all"), ""
-            )
-            for coll in sorted({str(ds.get("collection") or "") for ds in self._all_datasets} - {""}):
+            self._collection_filter.addItem(t("dashboard.filters.collection_all"), "")
+            for coll in sorted(
+                {str(ds.get("collection") or "") for ds in self._all_datasets} - {""}
+            ):
                 self._collection_filter.addItem(coll, coll)
             idx = self._collection_filter.findData(current)
             self._collection_filter.setCurrentIndex(idx if idx >= 0 else 0)
@@ -1122,9 +1115,7 @@ class DashboardView(QWidget):
             self._label_filter.addItem(t("dashboard.filters.label_all"), "")
             for label in self._curation_labels:
                 self._label_filter.addItem(label, label)
-            self._label_filter.addItem(
-                t("dashboard.filters.label_none"), _NO_LABEL_SENTINEL
-            )
+            self._label_filter.addItem(t("dashboard.filters.label_none"), _NO_LABEL_SENTINEL)
             idx = self._label_filter.findData(current)
             self._label_filter.setCurrentIndex(idx if idx >= 0 else 0)
         finally:
@@ -1233,9 +1224,7 @@ class DashboardView(QWidget):
         head_wrap.addWidget(self._empty_head, 1, Qt.AlignVCenter)
         inner.addLayout(head_wrap)
 
-        self._empty_body = make_small_body_label(
-            t("dashboard.empty.none_loaded_body")
-        )
+        self._empty_body = make_small_body_label(t("dashboard.empty.none_loaded_body"))
         inner.addWidget(self._empty_body)
 
         btn_row = QHBoxLayout()
@@ -1439,14 +1428,10 @@ class DashboardView(QWidget):
                 if other_total > room > 0:
                     ratio = room / other_total
                     if not getattr(self, "_queue_unscaled", None):
-                        self._queue_unscaled = {
-                            i: hdr.sectionSize(i) for i in others
-                        }
+                        self._queue_unscaled = {i: hdr.sectionSize(i) for i in others}
                     for i in others:
                         want[i] = max(floor, int(round(want[i] * ratio)))
-                    want[filler] = max(
-                        floor, width - sum(want[i] for i in others)
-                    )
+                    want[filler] = max(floor, width - sum(want[i] for i in others))
                 else:
                     want[filler] = max(floor, target_filler)
             # Rounding the scaled widths can leave the columns a pixel or
@@ -1500,7 +1485,11 @@ class DashboardView(QWidget):
         """Sort the table by a column (toggle on repeat), like a header click."""
         table_hdr = self._table.horizontalHeader()
         if table_hdr.sortIndicatorSection() == logical and table_hdr.isSortIndicatorShown():
-            order = Qt.DescendingOrder if table_hdr.sortIndicatorOrder() == Qt.AscendingOrder else Qt.AscendingOrder
+            order = (
+                Qt.DescendingOrder
+                if table_hdr.sortIndicatorOrder() == Qt.AscendingOrder
+                else Qt.AscendingOrder
+            )
         else:
             order = Qt.AscendingOrder
         self._table.sortItems(logical, order)
@@ -1812,7 +1801,9 @@ class DashboardView(QWidget):
             self._rebuild_collection_filter()
             # Persist this crawl so the next app open paints instantly.
             try:
-                save_dashboard_cache(ws, self._dashboard_cache_key(), datasets, self._curation_labels)
+                save_dashboard_cache(
+                    ws, self._dashboard_cache_key(), datasets, self._curation_labels
+                )
                 self._shown_cache_key = self._dashboard_cache_key()
             except Exception:
                 pass
@@ -1825,13 +1816,9 @@ class DashboardView(QWidget):
                 n_del = len(summary.get("removed", []))
                 total = len(datasets)
                 if not had_previous:
-                    self._progress.setText(
-                        t("dashboard.progress.first_result", total=total)
-                    )
+                    self._progress.setText(t("dashboard.progress.first_result", total=total))
                 elif not (n_new or n_chg or n_del):
-                    self._progress.setText(
-                        t("dashboard.progress.no_changes", total=total)
-                    )
+                    self._progress.setText(t("dashboard.progress.no_changes", total=total))
                 else:
                     parts = []
                     if n_new:
@@ -1851,9 +1838,11 @@ class DashboardView(QWidget):
                 pass
         except Exception as exc:
             import traceback
+
             self._refresh_btn.setEnabled(True)
             self._progress.setText(t("dashboard.progress.render_error"))
             from ui.dialogs import show_warning
+
             show_warning(
                 self,
                 t("dashboard.dialogs.render_title"),
@@ -1889,12 +1878,8 @@ class DashboardView(QWidget):
                     _apply_metric_token(v_lbl)
             self._update_empty_state()
             return
-        in_review = sum(
-            1 for d in self._all_datasets if "REVIEW" in (d.get("state") or "").upper()
-        )
-        pending = sum(
-            1 for d in self._all_datasets if (d.get("state") or "").upper() == "DRAFT"
-        )
+        in_review = sum(1 for d in self._all_datasets if "REVIEW" in (d.get("state") or "").upper())
+        pending = sum(1 for d in self._all_datasets if (d.get("state") or "").upper() == "DRAFT")
         try:
             ws = getattr(getattr(self._config, "app", None), "workspace", Path.home())
             decided = self._decided_cache
@@ -1990,7 +1975,11 @@ class DashboardView(QWidget):
                         continue
                     elif wanted == "DEACCESSIONED" and "DEACCESSIONED" not in ds_state:
                         continue
-                    elif wanted not in ("PENDING", "PUBLISHED", "DRAFT", "IN REVIEW", "DEACCESSIONED") and wanted != ds_state:
+                    elif (
+                        wanted
+                        not in ("PENDING", "PUBLISHED", "DRAFT", "IN REVIEW", "DEACCESSIONED")
+                        and wanted != ds_state
+                    ):
                         continue
                 if wanted == "PENDING" and getattr(self, "_needs_action_only", False):
                     # Needs Action card: pending items with no logged decision.
@@ -2009,9 +1998,15 @@ class DashboardView(QWidget):
                         continue
                 if text:
                     haystack = " ".join(
-                        str(ds.get(k, "")) for k in (
-                            "title", "persistent_id", "contact", "depositor",
-                            "collection", "state", "curation_label",
+                        str(ds.get(k, ""))
+                        for k in (
+                            "title",
+                            "persistent_id",
+                            "contact",
+                            "depositor",
+                            "collection",
+                            "state",
+                            "curation_label",
                         )
                     ).lower()
                     if text not in haystack:
@@ -2064,17 +2059,12 @@ class DashboardView(QWidget):
                             else:
                                 item.setToolTip(t("dashboard.table.size_unknown"))
                         elif ds.get("size_enriched"):
-                            item.setToolTip(
-                                t("dashboard.table.size_enriched", value=text_val)
-                            )
+                            item.setToolTip(t("dashboard.table.size_enriched", value=text_val))
                         elif ds.get("size_from_cache"):
-                            item.setToolTip(
-                                t("dashboard.table.size_cached", value=text_val)
-                            )
+                            item.setToolTip(t("dashboard.table.size_cached", value=text_val))
                     sort_key = self._cell_sort_key(ds, key)
                     item.setData(Qt.UserRole, sort_key)
-                    if key in ("date_created", "date_published", "downloaded_at",
-                               "persistent_id"):
+                    if key in ("date_created", "date_published", "downloaded_at", "persistent_id"):
                         item.setFont(mono)
                     if key == "title":
                         f = item.font()
@@ -2088,9 +2078,11 @@ class DashboardView(QWidget):
             self._table.viewport().update()
         except Exception as exc:
             import traceback
+
             self._refresh_btn.setEnabled(True)
             self._progress.setText(t("dashboard.progress.render_error"))
             from ui.dialogs import show_warning
+
             show_warning(
                 self,
                 t("dashboard.dialogs.render_title"),
@@ -2100,6 +2092,7 @@ class DashboardView(QWidget):
 
     def _on_crawl_error(self, msg: str) -> None:
         from ui.dialogs import describe_error, show_warning
+
         self._worker = None
         self._refresh_btn.setEnabled(True)
         self._progress.setText(t("dashboard.progress.load_error"))
@@ -2143,7 +2136,9 @@ class DashboardView(QWidget):
                 self._on_metric_clicked(str(obj.property("accent") or ""))
                 return True
             if event.type() == QEvent.Type.KeyPress and event.key() in (
-                Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space,
+                Qt.Key.Key_Return,
+                Qt.Key.Key_Enter,
+                Qt.Key.Key_Space,
             ):
                 self._on_metric_clicked(str(obj.property("accent") or ""))
                 return True
@@ -2185,9 +2180,7 @@ class DashboardView(QWidget):
             title = title_item.text().strip() if title_item else ""
             if not pid:
                 # Fallback: match by title (titles are unique enough here)
-                match = next(
-                    (d for d in self._datasets if d.get("title") == title), None
-                )
+                match = next((d for d in self._datasets if d.get("title") == title), None)
                 if match:
                     pid = match.get("persistent_id", "")
                     title = match.get("title", title)

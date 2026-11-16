@@ -93,9 +93,7 @@ def icon_label(name: str, size: int = 16, color: str | None = None) -> QLabel:
 
     lbl = _QLabel()
     try:
-        lbl.setPixmap(
-            icon(name, color=color, size=size).pixmap(QSize(int(size), int(size)))
-        )
+        lbl.setPixmap(icon(name, color=color, size=size).pixmap(QSize(int(size), int(size))))
         lbl.setFixedSize(int(size) + 4, int(size) + 4)
         lbl.setAlignment(Qt.AlignCenter)
         lbl.setStyleSheet(transparent_qss("QLabel"))
@@ -111,23 +109,47 @@ def icon_label(name: str, size: int = 16, color: str | None = None) -> QLabel:
 
 
 _FILE_ICONS = {
-    ".csv": "file-spreadsheet", ".tsv": "file-spreadsheet",
-    ".dta": "file-spreadsheet", ".sav": "file-spreadsheet",
-    ".sas7bdat": "file-spreadsheet", ".xls": "file-spreadsheet",
+    ".csv": "file-spreadsheet",
+    ".tsv": "file-spreadsheet",
+    ".dta": "file-spreadsheet",
+    ".sav": "file-spreadsheet",
+    ".sas7bdat": "file-spreadsheet",
+    ".xls": "file-spreadsheet",
     ".xlsx": "file-spreadsheet",
-    ".txt": "file-text", ".md": "file-text", ".pdf": "file-text",
-    ".json": "file-json", ".xml": "file-code",
-    ".py": "file-code", ".r": "file-code", ".m": "file-code",
-    ".jl": "file-code", ".ipynb": "file-code", ".do": "file-code",
-    ".png": "file-image", ".jpg": "file-image", ".jpeg": "file-image",
-    ".tif": "file-image", ".tiff": "file-image", ".gif": "file-image",
+    ".txt": "file-text",
+    ".md": "file-text",
+    ".pdf": "file-text",
+    ".json": "file-json",
+    ".xml": "file-code",
+    ".py": "file-code",
+    ".r": "file-code",
+    ".m": "file-code",
+    ".jl": "file-code",
+    ".ipynb": "file-code",
+    ".do": "file-code",
+    ".png": "file-image",
+    ".jpg": "file-image",
+    ".jpeg": "file-image",
+    ".tif": "file-image",
+    ".tiff": "file-image",
+    ".gif": "file-image",
     ".bmp": "file-image",
-    ".zip": "file-archive", ".tar": "file-archive", ".gz": "file-archive",
-    ".7z": "file-archive", ".bz2": "file-archive",
-    ".nc": "database", ".h5": "database", ".hdf5": "database",
-    ".mat": "database", ".db": "database", ".sqlite": "database",
+    ".zip": "file-archive",
+    ".tar": "file-archive",
+    ".gz": "file-archive",
+    ".7z": "file-archive",
+    ".bz2": "file-archive",
+    ".nc": "database",
+    ".h5": "database",
+    ".hdf5": "database",
+    ".mat": "database",
+    ".db": "database",
+    ".sqlite": "database",
     ".sqlite3": "database",
-    ".fastq": "dna", ".fq": "dna", ".fasta": "dna", ".fa": "dna",
+    ".fastq": "dna",
+    ".fq": "dna",
+    ".fasta": "dna",
+    ".fa": "dna",
 }
 
 

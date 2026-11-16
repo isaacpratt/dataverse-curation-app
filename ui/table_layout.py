@@ -137,9 +137,7 @@ class TableLayout:
         """
         with self.suppressed():
             try:
-                return bool(
-                    restore_table_state(self.workspace, self.key, self.header)
-                )
+                return bool(restore_table_state(self.workspace, self.key, self.header))
             except Exception:
                 return False
 

@@ -102,9 +102,7 @@ def test_delegate_drops_the_dotted_focus_rect(qapp, monkeypatch):
     finally:
         painter.end()
     assert seen, "base paint ran"
-    assert not (seen[0].state & QStyle.State_HasFocus), (
-        "the dotted focus rect would still be drawn"
-    )
+    assert not (seen[0].state & QStyle.State_HasFocus), "the dotted focus rect would still be drawn"
     assert seen[0].state & QStyle.State_Selected, "the row stays selected"
 
 

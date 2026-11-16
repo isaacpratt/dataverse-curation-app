@@ -166,7 +166,10 @@ def test_show_refreshes_stale_cell_widget_geometry(qapp):
     assert cell is not None and cell.width() > 0
     assert cell.width() <= tbl.viewport().width() - 1
     # The cell content (the button) must not overflow its client rect.
-    assert cell.layout().sizeHint().width() <= cell.width() + 1 or cell.sizeHint().width() <= cell.width() + 1
+    assert (
+        cell.layout().sizeHint().width() <= cell.width() + 1
+        or cell.sizeHint().width() <= cell.width() + 1
+    )
 
 
 def test_refresh_cell_geometry_is_idempotent(qapp):

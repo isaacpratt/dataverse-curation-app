@@ -81,8 +81,15 @@ def test_cancelled_handler_resets_action_row(det, monkeypatch):
 
 def test_worker_cancel_from_client_stream_emits_cancelled(qapp, tmp_path):
     class _CancelClient:
-        def download_dataset_zip(self, identifier, dest, version="draft", progress=None,
-                                 is_cancelled=None, guestbook_response=None):
+        def download_dataset_zip(
+            self,
+            identifier,
+            dest,
+            version="draft",
+            progress=None,
+            is_cancelled=None,
+            guestbook_response=None,
+        ):
             raise DownloadCancelled("bundle")
 
         def inventory(self, persistent_id):

@@ -124,9 +124,7 @@ def derive_workflow(inp: WorkflowInput) -> Workflow:
 
     if download_done:
         hint = (
-            t("workflow.hint.no_files")
-            if no_files
-            else t("workflow.hint.all_staged", total=total)
+            t("workflow.hint.no_files") if no_files else t("workflow.hint.all_staged", total=total)
         )
         base["download"] = (DONE, hint)
     elif meta and not inv_ok:

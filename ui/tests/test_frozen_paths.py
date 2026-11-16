@@ -34,9 +34,7 @@ def test_frozen_config_found_one_level_above_build(
     dist = tmp_path / "dist"
     exe = dist / "curation-app-lite" / "curation-app-lite.exe"
     exe.parent.mkdir(parents=True)
-    (dist / "config.json").write_text(
-        '{"dataverse": {"api_token": "tok-123"}}', encoding="utf-8"
-    )
+    (dist / "config.json").write_text('{"dataverse": {"api_token": "tok-123"}}', encoding="utf-8")
     monkeypatch.chdir(exe.parent)
     _freeze(monkeypatch, exe)
     assert config_mod.resolve_config_path(None) == dist / "config.json"

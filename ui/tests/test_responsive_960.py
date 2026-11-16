@@ -219,11 +219,8 @@ def test_queue_column_titles_elide_instead_of_clipping(small_window, qapp):
         if painted == "…":
             # Qt chose ellipsis-only: nothing was clipped mid-word.
             continue
-        assert painted.startswith(title[0]), (
-            f"the {title} title lost its first letter"
-        )
+        assert painted.startswith(title[0]), f"the {title} title lost its first letter"
         if metrics > available:
             assert painted.endswith("…"), (
-                f"the {title} title must elide, not clip, in a "
-                f"{header.sectionSize(index)}px column"
+                f"the {title} title must elide, not clip, in a {header.sectionSize(index)}px column"
             )

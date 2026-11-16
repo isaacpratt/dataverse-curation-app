@@ -90,8 +90,12 @@ def _declare_dwm_signatures(dwmapi, margins_type) -> None:
 
 
 class _RECT(ctypes.Structure):
-    _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
-                ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+    _fields_ = [
+        ("left", ctypes.c_long),
+        ("top", ctypes.c_long),
+        ("right", ctypes.c_long),
+        ("bottom", ctypes.c_long),
+    ]
 
 
 class _MARGINS(ctypes.Structure):
@@ -112,14 +116,23 @@ class _POINT(ctypes.Structure):
 
 
 class _WINDOWPLACEMENT(ctypes.Structure):
-    _fields_ = [("length", ctypes.c_uint), ("flags", ctypes.c_uint),
-                ("showCmd", ctypes.c_uint), ("ptMinPosition", _POINT),
-                ("ptMaxPosition", _POINT), ("rcNormalPosition", _RECT)]
+    _fields_ = [
+        ("length", ctypes.c_uint),
+        ("flags", ctypes.c_uint),
+        ("showCmd", ctypes.c_uint),
+        ("ptMinPosition", _POINT),
+        ("ptMaxPosition", _POINT),
+        ("rcNormalPosition", _RECT),
+    ]
 
 
 class _MONITORINFO(ctypes.Structure):
-    _fields_ = [("cbSize", ctypes.c_uint), ("rcMonitor", _RECT),
-                ("rcWork", _RECT), ("dwFlags", ctypes.c_uint)]
+    _fields_ = [
+        ("cbSize", ctypes.c_uint),
+        ("rcMonitor", _RECT),
+        ("rcWork", _RECT),
+        ("dwFlags", ctypes.c_uint),
+    ]
 
 
 class _NCCALCSIZE_PARAMS(ctypes.Structure):
@@ -140,11 +153,9 @@ def _user32():
     if not existing:
         handle.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
         handle.MonitorFromWindow.restype = wintypes.HANDLE
-        handle.GetMonitorInfoW.argtypes = [wintypes.HANDLE,
-                                           ctypes.POINTER(_MONITORINFO)]
+        handle.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_MONITORINFO)]
         handle.GetMonitorInfoW.restype = wintypes.BOOL
-        handle.GetWindowPlacement.argtypes = [wintypes.HWND,
-                                              ctypes.POINTER(_WINDOWPLACEMENT)]
+        handle.GetWindowPlacement.argtypes = [wintypes.HWND, ctypes.POINTER(_WINDOWPLACEMENT)]
         handle.GetWindowPlacement.restype = wintypes.BOOL
         globals()["_USER32_CONFIGURED"] = True
     return handle
@@ -162,8 +173,7 @@ def _work_area_for_hwnd(hwnd: int):
         from ctypes import wintypes
 
         user32 = _user32()
-        monitor = user32.MonitorFromWindow(wintypes.HWND(hwnd),
-                                           _MONITOR_DEFAULTTONEAREST)
+        monitor = user32.MonitorFromWindow(wintypes.HWND(hwnd), _MONITOR_DEFAULTTONEAREST)
         if not monitor:
             return None
         info = _MONITORINFO()
@@ -194,8 +204,7 @@ def _maximized_client_rect(hwnd: int):
         user32 = _user32()
         placement = _WINDOWPLACEMENT()
         placement.length = ctypes.sizeof(_WINDOWPLACEMENT)
-        if not user32.GetWindowPlacement(wintypes.HWND(hwnd),
-                                         ctypes.byref(placement)):
+        if not user32.GetWindowPlacement(wintypes.HWND(hwnd), ctypes.byref(placement)):
             return None
         if int(placement.showCmd) != _SW_SHOWMAXIMIZED:
             return None
@@ -220,16 +229,16 @@ _WIN_BTN_QSS = (
     f"QPushButton {{ background: transparent; color: {TEXT_PRIMARY}; border: none; "
     "border-radius: 0px; }"
     # Keyboard-focus tint: before hover so hover feedback wins when both apply.
-    f"QPushButton[focusVisible=\"true\"] {{ background: {ACCENT_FOCUS_TINT}; }}"
-    f"QPushButton:hover, QPushButton[hovered=\"true\"] {{ "
+    f'QPushButton[focusVisible="true"] {{ background: {ACCENT_FOCUS_TINT}; }}'
+    f'QPushButton:hover, QPushButton[hovered="true"] {{ '
     f"background: {SURFACE_RAISED}; }}"
     f"QPushButton:pressed {{ background: {ACCENT_SECONDARY}; }}"
 )
 _WIN_CLOSE_QSS = (
     f"QPushButton {{ background: transparent; color: {TEXT_PRIMARY}; border: none; "
     "border-radius: 0px; }"
-    f"QPushButton[focusVisible=\"true\"] {{ background: {ACCENT_FOCUS_TINT}; }}"
-    f"QPushButton:hover, QPushButton[hovered=\"true\"] {{ "
+    f'QPushButton[focusVisible="true"] {{ background: {ACCENT_FOCUS_TINT}; }}'
+    f'QPushButton:hover, QPushButton[hovered="true"] {{ '
     f"background: {STATE_ERROR_GRAPHIC}; color: {TEXT_ON_ACCENT}; }}"
     f"QPushButton:pressed {{ background: {STATE_ERROR_BG}; color: {TEXT_ON_ACCENT}; }}"
 )
@@ -305,9 +314,7 @@ class _CaptionButton(QPushButton):
         self.setFixedSize(46, 48)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip(t(_CAPTION_KEYS.get(kind, _CAPTION_KEYS["close"])))
-        self.setAccessibleName(
-            t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"]))
-        )
+        self.setAccessibleName(t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"])))
         self.setIconSize(QSize(14, 14))
         # theme-allow: a frameless window's caption button is window chrome,
         # not an app button (square caption face, red close hover) — the kit's
@@ -326,17 +333,13 @@ class _CaptionButton(QPushButton):
             return
         self._kind = kind
         self.setToolTip(t(_CAPTION_KEYS.get(kind, _CAPTION_KEYS["close"])))
-        self.setAccessibleName(
-            t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"]))
-        )
+        self.setAccessibleName(t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"])))
         self._apply_icon()
 
     def _apply_icon(self) -> None:
         try:
             glyph = self.style().standardIcon(_CAPTION_GLYPHS[self._kind])
-            if self._kind == "close" and (
-                self._hovered or self.underMouse() or self.isDown()
-            ):
+            if self._kind == "close" and (self._hovered or self.underMouse() or self.isDown()):
                 glyph = _tinted_icon(glyph, TEXT_ON_ACCENT, 14)
             self.setIcon(glyph)
         except Exception:
@@ -435,9 +438,7 @@ class MainWindow(QMainWindow):
         nav_lay.setContentsMargins(12, 0, 0, 0)
         nav_lay.setSpacing(6)
 
-        self._nav_dashboard = AppButton(
-            t("main.nav.dashboard"), kind="nav-active", size=None
-        )
+        self._nav_dashboard = AppButton(t("main.nav.dashboard"), kind="nav-active", size=None)
         self._nav_dashboard.setCursor(Qt.PointingHandCursor)
         self._nav_dashboard.setFixedHeight(32)
         self._nav_dashboard.setToolTip(t("main.nav.dashboard_tip"))
@@ -543,9 +544,13 @@ class MainWindow(QMainWindow):
         # does not garbage-collect them (required on some bindings).
         try:
             self._shortcuts = [
-                QShortcut(QKeySequence("Ctrl+,", QKeySequence.PortableText), self, self._open_settings),  # type: ignore[arg-type]
+                QShortcut(
+                    QKeySequence("Ctrl+,", QKeySequence.PortableText), self, self._open_settings
+                ),  # type: ignore[arg-type]
                 QShortcut(QKeySequence("Ctrl+L", QKeySequence.PortableText), self, self._show_log),  # type: ignore[arg-type]
-                QShortcut(QKeySequence("Alt+Left", QKeySequence.PortableText), self, self._show_dashboard),  # type: ignore[arg-type]
+                QShortcut(
+                    QKeySequence("Alt+Left", QKeySequence.PortableText), self, self._show_dashboard
+                ),  # type: ignore[arg-type]
             ]
         except Exception:
             self._shortcuts = []
@@ -743,9 +748,7 @@ class MainWindow(QMainWindow):
     def _sync_nav_icons(self) -> None:
         """Match each icon's tint to the text colour its state uses."""
         try:
-            self._set_nav_icon(
-                self._nav_settings, "settings", self._nav_settings.isChecked()
-            )
+            self._set_nav_icon(self._nav_settings, "settings", self._nav_settings.isChecked())
             self._set_nav_icon(
                 self._nav_requirements,
                 "square-pen",
@@ -801,7 +804,9 @@ class MainWindow(QMainWindow):
             elif name is None:
                 # Close pane: return to previous content if we're in settings/about/log.
                 if role in ("settings", "about", "log"):
-                    self._stack.setCurrentWidget(self._role_widget(getattr(self, "_pane_return", None)))
+                    self._stack.setCurrentWidget(
+                        self._role_widget(getattr(self, "_pane_return", None))
+                    )
                     self._pane_return = None
             # Any other name: stack untouched.
         except Exception:
@@ -888,9 +893,13 @@ class MainWindow(QMainWindow):
             if len(self._open_pids) > 6:
                 self._open_pids = self._open_pids[-6:]
         cached = self._metadata_cache.get(persistent_id)
-        cached_meta, cached_inv = (cached if cached else (None, None))
+        cached_meta, cached_inv = cached if cached else (None, None)
         self._detail = DatasetDetailView(
-            self._config, persistent_id, title, cached_metadata=cached_meta, cached_inventory=cached_inv
+            self._config,
+            persistent_id,
+            title,
+            cached_metadata=cached_meta,
+            cached_inventory=cached_inv,
         )
         self._detail.backRequested.connect(self._show_dashboard)
         self._detail.metadataLoaded.connect(self._cache_metadata)
@@ -924,7 +933,10 @@ class MainWindow(QMainWindow):
         # Dashboard tab owns the highlight there.
         if self._stack.currentWidget() is self._dashboard:
             active_pid = None
-        elif getattr(self, "_review_config", None) is not None and self._stack.currentWidget() is self._review_config:
+        elif (
+            getattr(self, "_review_config", None) is not None
+            and self._stack.currentWidget() is self._review_config
+        ):
             active_pid = None
         elif self._detail is not None:
             active_pid = getattr(self._detail, "_pid", None)
@@ -1106,9 +1118,7 @@ class MainWindow(QMainWindow):
         # client nor a transient native caption can flash on screen.
         try:
             if not getattr(self, "_revealed", False):
-                self._cloaked = self._cloak_window(True) or bool(
-                    getattr(self, "_cloaked", False)
-                )
+                self._cloaked = self._cloak_window(True) or bool(getattr(self, "_cloaked", False))
         except Exception:
             pass
         try:
@@ -1188,8 +1198,7 @@ class MainWindow(QMainWindow):
                 0,
                 0,
                 0,
-                SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER
-                | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+                SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
             )
         except Exception:
             pass
@@ -1332,11 +1341,19 @@ class MainWindow(QMainWindow):
             if obj is self._topnav and not _sys.platform.startswith("win"):
                 etype = event.type()
                 if etype == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
-                    if not self.isMaximized() and not self._topnav_is_interactive(event.position().toPoint()):
-                        self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                    if not self.isMaximized() and not self._topnav_is_interactive(
+                        event.position().toPoint()
+                    ):
+                        self._drag_pos = (
+                            event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                        )
                         return True
                 elif etype == QEvent.MouseMove:
-                    if self._drag_pos is not None and event.buttons() & Qt.LeftButton and not self.isMaximized():
+                    if (
+                        self._drag_pos is not None
+                        and event.buttons() & Qt.LeftButton
+                        and not self.isMaximized()
+                    ):
                         self.move(event.globalPosition().toPoint() - self._drag_pos)
                         return True
                 elif etype == QEvent.MouseButtonRelease:
@@ -1458,7 +1475,10 @@ class MainWindow(QMainWindow):
                         try:
                             for btn in self._topnav.findChildren(QPushButton):
                                 try:
-                                    if not (btn.isVisible() and btn.rect().contains(btn.mapFromGlobal(global_pt))):
+                                    if not (
+                                        btn.isVisible()
+                                        and btn.rect().contains(btn.mapFromGlobal(global_pt))
+                                    ):
                                         continue
                                     return True, HTCLIENT
                                 except Exception:

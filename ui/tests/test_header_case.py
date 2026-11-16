@@ -9,8 +9,7 @@ def test_table_header_keeps_sentence_case(qapp):
     table = AppTable(["Dataset Title", "Persistent ID"])
     model = table.horizontalHeader().model()
     labels = [
-        model.headerData(i, Qt.Horizontal, Qt.DisplayRole)
-        for i in range(table.columnCount())
+        model.headerData(i, Qt.Horizontal, Qt.DisplayRole) for i in range(table.columnCount())
     ]
     assert labels == ["Dataset Title", "Persistent ID"]
 
@@ -28,8 +27,5 @@ def test_file_manifest_header_keeps_sentence_case(qapp):
     from ui.checks_tree import COLUMNS, build_tree_model
 
     model = build_tree_model([], None)
-    labels = [
-        model.headerData(i, Qt.Horizontal, Qt.DisplayRole)
-        for i in range(len(COLUMNS))
-    ]
+    labels = [model.headerData(i, Qt.Horizontal, Qt.DisplayRole) for i in range(len(COLUMNS))]
     assert labels == list(COLUMNS)

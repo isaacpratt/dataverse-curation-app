@@ -153,6 +153,7 @@ def human_size(n: int) -> str:
             return f"{value:.1f} {unit}"
     return f"{value:.1f} TB"
 
+
 # The kinds and the object name each paints under live in the theme,
 # next to the rules that style them.
 _BUTTON_OBJECTS = BUTTON_OBJECTS
@@ -225,9 +226,7 @@ class _HeaderTooltipFilter(QObject):
             header = obj
             try:
                 index = header.logicalIndexAt(event.pos())
-                label = header.model().headerData(
-                    index, Qt.Horizontal, Qt.DisplayRole
-                )
+                label = header.model().headerData(index, Qt.Horizontal, Qt.DisplayRole)
             except Exception:
                 return False
             if index >= 0 and label:
@@ -324,9 +323,9 @@ class SortArrowHeaderView(QHeaderView):
             name = (
                 "chevron-down" if self.sortIndicatorOrder() == Qt.DescendingOrder else "chevron-up"
             )
-            pixmap = icon(
-                name, color=ON_SURFACE_VARIANT, size=self._ARROW_PX
-            ).pixmap(QSize(self._ARROW_PX, self._ARROW_PX))
+            pixmap = icon(name, color=ON_SURFACE_VARIANT, size=self._ARROW_PX).pixmap(
+                QSize(self._ARROW_PX, self._ARROW_PX)
+            )
             if pixmap.isNull():
                 self._arrow.hide()
                 return
@@ -568,9 +567,7 @@ class AppTable(QTableWidget):
                     continue
                 mode = hdr.sectionResizeMode(i)
                 if mode == QHeaderView.Stretch:
-                    stretch_reserve += max(
-                        min_width, min(max_width, int(hdr.sectionSize(i)))
-                    )
+                    stretch_reserve += max(min_width, min(max_width, int(hdr.sectionSize(i))))
                     continue
                 if mode != QHeaderView.Interactive:
                     continue
@@ -647,7 +644,9 @@ def flush_table_style(
         "QTableWidget { background: " + SURFACE_CARD + "; border: none; "
         "border-top-left-radius: 0px; border-top-right-radius: 0px; "
         "border-bottom-left-radius: " + bottom + "; "
-        "border-bottom-right-radius: " + bottom + "; } "
+        "border-bottom-right-radius: "
+        + bottom
+        + "; } "
         + header_section_qss(flush=True)
         + selection_qss("QTableWidget")
         + scrollbar_lane_qss("QTableWidget")
@@ -671,8 +670,7 @@ def flush_list_style(last: bool = True) -> str:
         "border-top-left-radius: 0px; border-top-right-radius: 0px; "
         "border-bottom-left-radius: " + bottom + "; "
         "border-bottom-right-radius: " + bottom + "; "
-        f"font-size: {FONT_SMALL}px; color: {TEXT_MUTED}; }}"
-        + scrollbar_lane_qss("QListWidget")
+        f"font-size: {FONT_SMALL}px; color: {TEXT_MUTED}; }}" + scrollbar_lane_qss("QListWidget")
     )
 
 
@@ -689,11 +687,7 @@ def tree_style(*, flush: bool = True, row_height: int | None = 30) -> str:
     The header rules and scrollbar lanes come from the theme mixins, so
     every tree in the app wears the same header.
     """
-    frame = (
-        "border: none;"
-        if flush
-        else f"border: 1px solid {SURFACE_RAISED}; border-radius: 8px;"
-    )
+    frame = "border: none;" if flush else f"border: 1px solid {SURFACE_RAISED}; border-radius: 8px;"
     item = (
         f"QTreeView::item {{ height: {row_height}px; border: none; }} "
         if row_height
@@ -743,9 +737,7 @@ class _BranchPainting:
 
             name = "chevron-down" if self.isExpanded(index) else "chevron-right"
             size = self._BRANCH_PX
-            pixmap = icon(name, color=TEXT_MUTED, size=size).pixmap(
-                QSize(size, size)
-            )
+            pixmap = icon(name, color=TEXT_MUTED, size=size).pixmap(QSize(size, size))
             indent = self.indentation()
             # rect spans all ancestor indents; the last cell is this row's.
             cell = QRect(
@@ -985,9 +977,7 @@ def make_plain_text_view(
     view = QPlainTextEdit(parent)
     view.setPlaceholderText(placeholder)
     view.setReadOnly(True)
-    view.setStyleSheet(
-        input_qss("QPlainTextEdit", font_size=font_size, family=MONO_FAMILY)
-    )
+    view.setStyleSheet(input_qss("QPlainTextEdit", font_size=font_size, family=MONO_FAMILY))
     return view
 
 
@@ -1083,9 +1073,7 @@ def set_badge_label(
     else:
         badge.setStyleSheet(label_badge_style(label or text))
     if mono:
-        badge.setStyleSheet(
-            badge.styleSheet() + f" QLabel {{ font-family: {MONO_FAMILY}; }}"
-        )
+        badge.setStyleSheet(badge.styleSheet() + f" QLabel {{ font-family: {MONO_FAMILY}; }}")
     return badge
 
 
@@ -1161,9 +1149,7 @@ class _ElidedChipButton(QPushButton):
 
     def _apply_elide(self) -> None:
         width = max(0, self.width() - self._TEXT_INSET)
-        shown = self.fontMetrics().elidedText(
-            self._full_text, Qt.ElideRight, width
-        )
+        shown = self.fontMetrics().elidedText(self._full_text, Qt.ElideRight, width)
         if shown != self._shown_text:
             self._shown_text = shown
             self.setText(shown)
@@ -1214,9 +1200,7 @@ def make_split_chip(
     try:
         from ui.icons import icon as _chip_icon
 
-        close_btn.setIcon(
-            _chip_icon("x", color=TEXT_PRIMARY if active else TEXT_ON_TINT)
-        )
+        close_btn.setIcon(_chip_icon("x", color=TEXT_PRIMARY if active else TEXT_ON_TINT))
         close_btn.setIconSize(QSize(12, 12))
     except Exception:
         # Fallback glyph only when the SVG cannot be drawn at all; it is
@@ -1240,26 +1224,21 @@ def _split_chip_qss(active: bool, part: str) -> str:
         padding = "padding: 0 12px;"
         align = "left"
     else:
-        edges = (
-            "border-left: none; border-top-right-radius: 8px; "
-            "border-bottom-right-radius: 8px;"
-        )
+        edges = "border-left: none; border-top-right-radius: 8px; border-bottom-right-radius: 8px;"
         fg = TEXT_PRIMARY if active else TEXT_ON_TINT
         padding = "padding: 0;"
         # The x icon must sit dead-centre in the 32px square (dv-ap7):
         # left alignment (right for the title half) pushed it to the edge.
         align = "center"
     hover = (
-        f"QPushButton:hover {{ color: {TEXT_DANGER}; "
-        f"border-color: {TEXT_DANGER}; }}"
+        f"QPushButton:hover {{ color: {TEXT_DANGER}; border-color: {TEXT_DANGER}; }}"
         if part == "right"
         else f"QPushButton:hover {{ border-color: {ACCENT_PRIMARY}; }}"
     )
     return (
         f"QPushButton {{ background: {bg}; color: {fg}; text-align: {align}; "
         f"border: 1px solid {border}; {edges} {padding} "
-        f"font-size: {FONT_CAPTION}px; font-weight: 700; }}"
-        + hover
+        f"font-size: {FONT_CAPTION}px; font-weight: 700; }}" + hover
     )
 
 
@@ -1420,9 +1399,7 @@ class ElidedLabel(QLabel):
         self._apply_elide()
 
     def _apply_elide(self) -> None:
-        shown = self.fontMetrics().elidedText(
-            self._full_text, self._mode, max(0, self.width())
-        )
+        shown = self.fontMetrics().elidedText(self._full_text, self._mode, max(0, self.width()))
         if shown == self._shown:
             return
         self._shown = shown
@@ -1547,9 +1524,7 @@ def add_info_tip(header_layout, *paragraphs: str, name: str = "") -> QToolButton
     btn.setAutoRaise(True)
     btn.setCursor(Qt.WhatsThisCursor)
     btn.setToolTip(tip)
-    btn.setAccessibleName(
-        t("common.about_named", name=name) if name else t("common.section_help")
-    )
+    btn.setAccessibleName(t("common.about_named", name=name) if name else t("common.section_help"))
     btn.setAccessibleDescription(tip)
     btn.setStyleSheet(
         "QToolButton#InfoTip { background: transparent; border: none; "
@@ -1563,8 +1538,9 @@ def add_info_tip(header_layout, *paragraphs: str, name: str = "") -> QToolButton
     return btn
 
 
-def make_search_field(placeholder: str, parent: QWidget | None = None, *, height: int = 36,
-                      min_width: int = 220) -> QLineEdit:
+def make_search_field(
+    placeholder: str, parent: QWidget | None = None, *, height: int = 36, min_width: int = 220
+) -> QLineEdit:
     """Build a standard search box (SearchField style: rounded, 13px text)."""
     field = QLineEdit(parent)
     field.setObjectName("SearchField")
@@ -1586,8 +1562,13 @@ def make_search_field(placeholder: str, parent: QWidget | None = None, *, height
     return field
 
 
-def make_line_edit(placeholder: str = "", parent: QWidget | None = None, *,
-                   height: int = 36, password: bool = False) -> QLineEdit:
+def make_line_edit(
+    placeholder: str = "",
+    parent: QWidget | None = None,
+    *,
+    height: int = 36,
+    password: bool = False,
+) -> QLineEdit:
     """Build a standard form field: same height/focus ring as make_search_field."""
     field = QLineEdit(parent)
     field.setObjectName("SearchField")
@@ -1646,8 +1627,14 @@ class _NoWheelCombo(QComboBox):
             pass
 
 
-def make_combo(items=None, parent: QWidget | None = None, *, height: int = 36,
-               min_width: int = 130, tip: str = "") -> QComboBox:
+def make_combo(
+    items=None,
+    parent: QWidget | None = None,
+    *,
+    height: int = 36,
+    min_width: int = 130,
+    tip: str = "",
+) -> QComboBox:
     """Build a standard dropdown (themed chevron, 12px semibold entries).
 
     items: list of labels or (label, data) tuples. Wheel-safe: the wheel
@@ -1703,9 +1690,7 @@ class PaneFooter(QFrame):
         layout.setSpacing(8)
         self.status = QLabel("")
         self.status.setWordWrap(True)
-        self.status.setTextInteractionFlags(
-            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
-        )
+        self.status.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         self.status.setObjectName("CaptionSM")
         layout.addWidget(self.status, 1)
         self.dirty_chip = QLabel(t("common.dirty_chip"))

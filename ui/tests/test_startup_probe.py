@@ -42,10 +42,6 @@ def test_label_tabs_are_sanitized(tmp_path, monkeypatch):
     monkeypatch.setattr(startup_probe, "_HEADER_WRITTEN", False)
     startup_probe.mark("bad\tphase")
 
-    row = next(
-        line
-        for line in log.read_text(encoding="utf-8").splitlines()
-        if "bad" in line
-    )
+    row = next(line for line in log.read_text(encoding="utf-8").splitlines() if "bad" in line)
     assert len(row.split("\t")) == 3
     assert row.endswith("bad phase")

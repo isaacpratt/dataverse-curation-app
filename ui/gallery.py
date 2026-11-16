@@ -318,9 +318,7 @@ def _input_section() -> QWidget:
         )
     )
     lay.addWidget(make_field_label(t("gallery.inputs.multi_line_label")))
-    lay.addWidget(
-        make_multiline_input(t("gallery.inputs.multi_line_placeholder"), height=96)
-    )
+    lay.addWidget(make_multiline_input(t("gallery.inputs.multi_line_placeholder"), height=96))
     lay.addWidget(make_field_label(t("gallery.inputs.read_only_label")))
     lay.addWidget(make_plain_text_view(t("gallery.inputs.read_only_content")))
     lay.addWidget(make_field_label(t("gallery.inputs.check_box_label")))

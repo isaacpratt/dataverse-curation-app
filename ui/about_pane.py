@@ -113,9 +113,7 @@ class AboutPane(QWidget):
 
         card = QFrame()
         card.setObjectName("Card")
-        card.setStyleSheet(
-            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card")
-        )
+        card.setStyleSheet(surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card"))
         body = QVBoxLayout(card)
         body.setContentsMargins(20, 20, 20, 20)
         body.setSpacing(10)

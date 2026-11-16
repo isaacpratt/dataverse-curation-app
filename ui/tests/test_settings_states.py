@@ -45,8 +45,12 @@ def test_unchecked_reads_not_checked_yet(win):
 def test_profile_payload_renders_fields(win):
     pane = win._ensure_settings()
     pane._set_user_info(
-        {"identifier": "curator1", "displayName": "Ada Curator", "superuser": True,
-         "affiliation": "Example U"},
+        {
+            "identifier": "curator1",
+            "displayName": "Ada Curator",
+            "superuser": True,
+            "affiliation": "Example U",
+        },
         "Connected.",
         checked=True,
     )

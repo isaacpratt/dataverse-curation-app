@@ -130,9 +130,7 @@ def test_zero_file_dataset_skips_download_but_still_runs_checks():
 
 
 def test_unknown_inventory_is_not_mistaken_for_zero_files():
-    states = _states(
-        WorkflowInput(metadata_loaded=True, inventory_ok=False, total_files=0)
-    )
+    states = _states(WorkflowInput(metadata_loaded=True, inventory_ok=False, total_files=0))
     assert states["download"] != DONE
 
 
@@ -192,9 +190,7 @@ def test_rail_download_and_export_only_focus_their_buttons(detail, monkeypatch):
     monkeypatch.setattr(detail, "_on_export", lambda: called.append("export"))
     focused = []
     monkeypatch.setattr(detail._dl_btn, "setFocus", lambda *a, **k: focused.append("download"))
-    monkeypatch.setattr(
-        detail._history_btn, "setFocus", lambda *a, **k: focused.append("export")
-    )
+    monkeypatch.setattr(detail._history_btn, "setFocus", lambda *a, **k: focused.append("export"))
     monkeypatch.setattr(detail, "_goto_section", lambda attr: None)
 
     detail._rail.buttons["download"].click()

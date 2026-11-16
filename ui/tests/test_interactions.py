@@ -40,9 +40,7 @@ def test_tab_focus_paints_keyboard_only_focus(qapp, qtbot):
     qtbot.keyClick(first, Qt.Key_Tab)
     qtbot.wait(50)
     assert second.hasFocus(), "Tab should move focus to the next button"
-    assert second.property("focusVisible") == "true", (
-        "keyboard arrival paints the focus tint"
-    )
+    assert second.property("focusVisible") == "true", "keyboard arrival paints the focus tint"
 
     qtbot.mouseClick(second, Qt.LeftButton)
     qtbot.wait(50)
@@ -66,9 +64,7 @@ def test_header_click_sorts_the_column(qapp, qtbot):
     first = header.sortIndicatorSection()
     qtbot.mouseClick(header.viewport(), Qt.LeftButton)
     qtbot.wait(50)
-    assert header.sortIndicatorSection() == first, (
-        "a header click must engage the sort indicator"
-    )
+    assert header.sortIndicatorSection() == first, "a header click must engage the sort indicator"
 
 
 def test_disabled_primary_keeps_dark_ink(qapp, qtbot):
@@ -105,8 +101,7 @@ def test_header_label_and_tooltip_contract(qapp, qtbot):
         qapp.processEvents()
     model = table.horizontalHeader().model()
     labels = [
-        model.headerData(i, Qt.Horizontal, Qt.DisplayRole)
-        for i in range(table.columnCount())
+        model.headerData(i, Qt.Horizontal, Qt.DisplayRole) for i in range(table.columnCount())
     ]
     assert labels == ["Dataset Title", "Persistent ID"], (
         "the stored label must equal the painted (sentence-case) label"
@@ -117,7 +112,5 @@ def test_header_label_and_tooltip_contract(qapp, qtbot):
     )
     table.setColumnWidth(0, 48)
     qapp.processEvents()
-    shown = table.horizontalHeader().model().headerData(
-        0, Qt.Horizontal, Qt.DisplayRole
-    )
+    shown = table.horizontalHeader().model().headerData(0, Qt.Horizontal, Qt.DisplayRole)
     assert shown == "Dataset Title", "elision must not mutate stored data"

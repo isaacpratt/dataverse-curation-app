@@ -11,9 +11,7 @@ def _tips(widget):
 
 def test_info_tip_sits_right_after_the_title(qapp):
     card, _body, _title, header = make_card("Auto-Checks")
-    btn = add_info_tip(
-        header, "First paragraph.", "✓ pass · ✕ issue", name="Auto-Checks"
-    )
+    btn = add_info_tip(header, "First paragraph.", "✓ pass · ✕ issue", name="Auto-Checks")
 
     assert header.indexOf(btn) == 1, "the (i) belongs next to the title"
     assert btn.toolTip() == "First paragraph.\n\n✓ pass · ✕ issue"

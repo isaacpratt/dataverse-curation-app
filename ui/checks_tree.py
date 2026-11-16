@@ -50,7 +50,7 @@ def _strip_legacy_caret(text: str) -> str:
     try:
         for prefix in _CARET_PREFIXES:
             if text.startswith(prefix):
-                return text[len(prefix):]
+                return text[len(prefix) :]
     except Exception:
         pass
     return text
@@ -152,8 +152,9 @@ def _new_item(text: str, tooltip: str = "") -> QStandardItem:
     return item
 
 
-def build_tree_model(rows, report=None, is_staged=None, human_size=None,
-                     inventory=None) -> QStandardItemModel:
+def build_tree_model(
+    rows, report=None, is_staged=None, human_size=None, inventory=None
+) -> QStandardItemModel:
     """Build the folder>file>check model.
 
     rows: list of (path, size_bytes, fmt, original) like _all_file_rows.
@@ -199,9 +200,7 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
                 parent_item.setIcon(icon("folder"))
             except Exception:
                 pass
-            parent_item.setData(
-                {"kind": "folder", "dir": parent, "base": label}, _KIND_ROLE
-            )
+            parent_item.setData({"kind": "folder", "dir": parent, "base": label}, _KIND_ROLE)
             size_item = _new_item("")
             fmt_item = _new_item("")
             scan_item = _new_item("")
@@ -229,8 +228,7 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
                 ingest_error = str(inv_entry.get("ingest_error") or "").strip()
                 if ingest_status or ingest_error:
                     bits = (
-                        [t("checks.ingest_status", status=ingest_status)]
-                        if ingest_status else []
+                        [t("checks.ingest_status", status=ingest_status)] if ingest_status else []
                     )
                     if ingest_error:
                         bits.append(t("checks.ingest_error", error=ingest_error))
@@ -238,10 +236,7 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
             entry = by_path.get(path)
             checks = list(entry.checks) if entry else []
             if report is None:
-                scan = (
-                    t("checks.run_after_download") if not staged
-                    else t("common.not_checked")
-                )
+                scan = t("checks.run_after_download") if not staged else t("common.not_checked")
                 tip = path
             elif entry is None:
                 scan = t("checks.not_in_report")
@@ -251,9 +246,11 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
                 tip = f"{path}\n{t('checks.no_auto_format')}"
             else:
                 scan = status_text(checks)
-                tip = path + "\n" + "\n".join(
-                    f"[{c.level}] {c.check_id}: {c.message}" for c in checks
-                )[:2000]
+                tip = (
+                    path
+                    + "\n"
+                    + "\n".join(f"[{c.level}] {c.check_id}: {c.message}" for c in checks)[:2000]
+                )
             # Append restriction/ingest notes to the Scan tooltip too.
             if note:
                 tip = tip + note
@@ -270,9 +267,12 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
             file_row = [name_item, size_item, fmt_item, scan_item]
             for check in checks:
                 badge = check_badge_text(check)
-                kind = {"passed": "pass", "failed-warning": "warn",
-                        "failed-error": "fail", "skipped": "skip"}.get(
-                            classify(check), "pass")
+                kind = {
+                    "passed": "pass",
+                    "failed-warning": "warn",
+                    "failed-error": "fail",
+                    "skipped": "skip",
+                }.get(classify(check), "pass")
                 c_name = _new_item(
                     check.check_id,
                     format_details_tooltip(check),

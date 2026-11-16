@@ -171,9 +171,9 @@ def test_version_reset_lives_on_the_tools_row(detail):
 
 def test_auto_checks_title_row_keeps_the_summary(detail):
     title_row = _title_row(detail._auto_card)
-    assert _buttons_in(title_row) == [] or [
-        b.objectName() for b in _buttons_in(title_row)
-    ] == ["InfoTip"]
+    assert _buttons_in(title_row) == [] or [b.objectName() for b in _buttons_in(title_row)] == [
+        "InfoTip"
+    ]
     assert _layout_holds(title_row, detail._auto_summary)
 
 

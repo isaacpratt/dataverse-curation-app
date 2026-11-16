@@ -222,17 +222,14 @@ def _format_metadata(metadata: dict) -> str:
                             str(x.get("value") if isinstance(x, dict) and "value" in x else x)
                             for x in v[:5]
                         )
-                    lines.append(
-                        t("detail.meta.field_format", type=type_name, value=v)
-                    )
+                    lines.append(t("detail.meta.field_format", type=type_name, value=v))
                 lines.append("")
         lines.append(t("detail.meta.full_json"))
         lines.append(json.dumps(metadata, indent=2, ensure_ascii=False)[:12000])
         return "\n".join(lines)
     except Exception as exc:
-        return (
-            json.dumps(metadata, indent=2, ensure_ascii=False)[:12000]
-            + t("detail.meta.format_error", exc=exc)
+        return json.dumps(metadata, indent=2, ensure_ascii=False)[:12000] + t(
+            "detail.meta.format_error", exc=exc
         )
 
 
@@ -447,7 +444,9 @@ class DatasetDetailView(QWidget):
         actions_col.setAlignment(Qt.AlignTop)
         actions_row = QHBoxLayout()
         actions_row.setSpacing(8)
-        self._dl_btn = make_action_button(t("detail.header.download_all"), kind="secondary", size="md")
+        self._dl_btn = make_action_button(
+            t("detail.header.download_all"), kind="secondary", size="md"
+        )
         # Inline button style: app-level QSS fails to paint button faces inside
         # some main-window subtrees, so critical actions carry their own CSS.
         self._dl_btn.clicked.connect(self._on_download)
@@ -460,19 +459,21 @@ class DatasetDetailView(QWidget):
         self._dl_cancel_btn.clicked.connect(self._on_download_cancel_click)
         self._dl_cancel_btn.setVisible(False)
         actions_row.addWidget(self._dl_cancel_btn)
-        self._history_btn = make_action_button(t("detail.header.export_reports"), kind="secondary", size="md")
+        self._history_btn = make_action_button(
+            t("detail.header.export_reports"), kind="secondary", size="md"
+        )
         self._history_btn.setToolTip(t("detail.header.export_reports_tip"))
         self._history_btn.clicked.connect(self._on_export)
         actions_row.addWidget(self._history_btn)
-        self._load_meta_btn = make_action_button(t("detail.header.load_metadata"), kind="secondary", size="md")
+        self._load_meta_btn = make_action_button(
+            t("detail.header.load_metadata"), kind="secondary", size="md"
+        )
         self._load_meta_btn.setToolTip(t("detail.header.load_metadata_tip"))
         self._load_meta_btn.clicked.connect(self._on_load_metadata)
         actions_row.addWidget(self._load_meta_btn)
         # Sections menu: the sidebar's navigation, reachable even when
         # the sidebar itself is folded away on a narrow window.
-        self._sections_btn = make_action_button(
-            t("detail.sections.title"), kind="chip"
-        )
+        self._sections_btn = make_action_button(t("detail.sections.title"), kind="chip")
         self._sections_btn.setToolTip(t("detail.sidebar.sections_tip"))
         self._sections_menu = QMenu(self._sections_btn)
         self._sections_btn.setMenu(self._sections_menu)
@@ -481,7 +482,9 @@ class DatasetDetailView(QWidget):
         actions_row.addWidget(self._sections_btn)
         actions_col.addLayout(actions_row)
         # Run checks as primary (always enabled; warns when nothing is staged)
-        self._check_btn = make_action_button(t("detail.header.run_checks"), kind="primary", size="lg")
+        self._check_btn = make_action_button(
+            t("detail.header.run_checks"), kind="primary", size="lg"
+        )
         self._check_btn.setToolTip(t("detail.header.run_checks_tip"))
         self._check_btn.clicked.connect(self._on_run_checks)
         actions_col.addWidget(self._check_btn)
@@ -505,9 +508,7 @@ class DatasetDetailView(QWidget):
         # was the smallest, least readable line in the app.
         self._status = QLabel("")
         self._status.setStyleSheet(
-            status_strip_qss(
-                SURFACE_CARD, BORDER_SUBTLE, TEXT_MUTED, font_size=FONT_BODY
-            )
+            status_strip_qss(SURFACE_CARD, BORDER_SUBTLE, TEXT_MUTED, font_size=FONT_BODY)
         )
         self._status.setWordWrap(True)
         self._status.setVisible(False)
@@ -549,7 +550,9 @@ class DatasetDetailView(QWidget):
         main_wrap.addWidget(self._version_card)
 
         # Raw metadata expandable (minimal)
-        self._raw_btn = make_action_button(t("detail.header.show_raw_metadata"), kind="ghost", size=None)
+        self._raw_btn = make_action_button(
+            t("detail.header.show_raw_metadata"), kind="ghost", size=None
+        )
         self._raw_btn.clicked.connect(self._toggle_raw)
         try:
             from ui.icons import icon as _rw_icon
@@ -863,12 +866,8 @@ class DatasetDetailView(QWidget):
             return mapped
         import re as _re
 
-        words = _re.sub(
-            r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", raw
-        ).split()
-        cleaned = [
-            w.upper() if w.lower() in self._META_ACRONYMS else w.lower() for w in words
-        ]
+        words = _re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", raw).split()
+        cleaned = [w.upper() if w.lower() in self._META_ACRONYMS else w.lower() for w in words]
         text = " ".join(cleaned).strip()
         return text[:1].upper() + text[1:] if text else raw
 
@@ -893,9 +892,7 @@ class DatasetDetailView(QWidget):
         keys = [k for k in value.keys() if k != "typeName"]
         return any(k != "value" for k in keys)
 
-    def _meta_subfields(
-        self, entry: dict, prefix: str = ""
-    ) -> list[tuple[str, str]]:
+    def _meta_subfields(self, entry: dict, prefix: str = "") -> list[tuple[str, str]]:
         """(label, display) pairs for one compound metadata entry.
 
         The entry's own noun is stripped from each subfield label, so an
@@ -912,7 +909,7 @@ class DatasetDetailView(QWidget):
                 shown = self._meta_display(value)
             label = self._pretty_meta_key(key)
             if prefix and label.lower().startswith(prefix.lower() + " "):
-                trimmed = label[len(prefix) + 1:]
+                trimmed = label[len(prefix) + 1 :]
                 if trimmed:
                     label = trimmed[:1].upper() + trimmed[1:]
             rows.append((label, shown))
@@ -970,7 +967,10 @@ class DatasetDetailView(QWidget):
     # affiliation first. Falls back to the first non-em-dash subfield for
     # compounds we do not know (publication, keyword, contributor, ...).
     _META_ENTRY_IDENTITY_KEYS = (
-        "authorName", "contributorName", "publicationCitation", "keywordValue",
+        "authorName",
+        "contributorName",
+        "publicationCitation",
+        "keywordValue",
     )
 
     def _entry_identity_summary(self, item: dict, subs: list[tuple[str, str]]) -> str:
@@ -1055,11 +1055,14 @@ class DatasetDetailView(QWidget):
             )
             value_item = _item(
                 value_text,
-                tooltip=requirement
-                + t("detail.metadata_check.value_tooltip", value=value_text),
+                tooltip=requirement + t("detail.metadata_check.value_tooltip", value=value_text),
             )
-            status_item = _item(status_text, tooltip=requirement, bold=True,
-                                color=TEXT_SUCCESS if ok else TEXT_DANGER)
+            status_item = _item(
+                status_text,
+                tooltip=requirement,
+                bold=True,
+                color=TEXT_SUCCESS if ok else TEXT_DANGER,
+            )
             try:
                 status_item.setIcon(
                     _icon("check", color=STATE_SUCCESS_GRAPHIC)
@@ -1079,9 +1082,7 @@ class DatasetDetailView(QWidget):
                         sub_value,
                         tooltip=sub_value,
                         italic=sub_value == t("common.em_dash"),
-                        color=TEXT_SUBTLE
-                        if sub_value == t("common.em_dash")
-                        else None,
+                        color=TEXT_SUBTLE if sub_value == t("common.em_dash") else None,
                     ),
                     _item(""),
                 ]
@@ -1120,11 +1121,14 @@ class DatasetDetailView(QWidget):
         try:
             layout = self._layout_for("dataset_meta", tree.header())
             with layout.suppressed():
-                for col, floor, ceiling in ((0, 170, 320), (1, 88, 130), (2, 100, 220), (4, 90, 160)):
+                for col, floor, ceiling in (
+                    (0, 170, 320),
+                    (1, 88, 130),
+                    (2, 100, 220),
+                    (4, 90, 160),
+                ):
                     tree.resizeColumnToContents(col)
-                    tree.setColumnWidth(
-                        col, max(floor, min(ceiling, tree.columnWidth(col)))
-                    )
+                    tree.setColumnWidth(col, max(floor, min(ceiling, tree.columnWidth(col))))
         except Exception:
             pass
         self._fit_meta_value_column()
@@ -1241,9 +1245,7 @@ class DatasetDetailView(QWidget):
         # into the top bar's Sections menu.
         self._sidebar_collapse_btn = make_action_button("", kind="ghost", size="sm")
         try:
-            self._sidebar_collapse_btn.setIcon(
-                _nav_icon("chevron-right", color=ACCENT_PRIMARY)
-            )
+            self._sidebar_collapse_btn.setIcon(_nav_icon("chevron-right", color=ACCENT_PRIMARY))
         except Exception:
             pass
         self._sidebar_collapse_btn.setToolTip(t("detail.sidebar.collapse_tip"))
@@ -1481,9 +1483,7 @@ class DatasetDetailView(QWidget):
             # Findings may have changed; keep the editor, nudge to regenerate.
             try:
                 n = sum(1 for s in (self._response_sections or []) if s.get("included"))
-                self._response_hint.setText(
-                    t("detail.response.findings_changed", count=n)
-                )
+                self._response_hint.setText(t("detail.response.findings_changed", count=n))
             except Exception:
                 pass
             self._rebuild_findings_list(keep_checks=True)
@@ -1509,8 +1509,11 @@ class DatasetDetailView(QWidget):
                 ruleset = _rr.get_ruleset(key, pool)
                 self._ruleset = ruleset
             md, sections = build_response(
-                ruleset, self._completeness_full or [], self._report,
-                self._title, self._pid,
+                ruleset,
+                self._completeness_full or [],
+                self._report,
+                self._title,
+                self._pid,
             )
             self._response_sections = sections
             self._rebuild_findings_list(keep_checks=False)
@@ -1541,7 +1544,7 @@ class DatasetDetailView(QWidget):
                         prev[str(item.data(Qt.UserRole) or "")] = item.checkState() == Qt.Checked
             self._response_list.blockSignals(True)
             self._response_list.clear()
-            for s in (self._response_sections or []):
+            for s in self._response_sections or []:
                 kind = (
                     t("detail.response.kind_metadata")
                     if s.get("kind") == "metadata"
@@ -1634,13 +1637,15 @@ class DatasetDetailView(QWidget):
                 item = self._response_list.item(i)
                 if item is not None:
                     states[str(item.data(Qt.UserRole) or "")] = item.checkState() == Qt.Checked
-            for s in (self._response_sections or []):
+            for s in self._response_sections or []:
                 sid = str(s.get("id") or "")
                 if sid in states:
                     s["included"] = states[sid]
             from response_draft import render_response
 
-            md = render_response(self._ruleset or {}, self._response_sections or [], self._title, self._pid)
+            md = render_response(
+                self._ruleset or {}, self._response_sections or [], self._title, self._pid
+            )
             self._response_loading = True
             try:
                 self._response_edit.setPlainText(md)
@@ -1891,9 +1896,7 @@ class DatasetDetailView(QWidget):
             self._sections_menu.addSeparator()
             for key, attr in _SECTION_LINKS:
                 action = self._sections_menu.addAction(t(key))
-                action.triggered.connect(
-                    lambda _checked=False, a=attr: self._goto_section(a)
-                )
+                action.triggered.connect(lambda _checked=False, a=attr: self._goto_section(a))
         except Exception:
             pass
 
@@ -1943,6 +1946,7 @@ class DatasetDetailView(QWidget):
         """Open the workspace state.db (best-effort; returns None on failure)."""
         try:
             from storage import open_state
+
             return open_state(self._config.app.workspace)
         except Exception:
             return None
@@ -2132,7 +2136,7 @@ class DatasetDetailView(QWidget):
             else:
                 events.append(("0000", t("common.em_dash") + " " + text))
 
-        for h in ((self._curation or {}).get("history") or []):
+        for h in (self._curation or {}).get("history") or []:
             if not isinstance(h, dict):
                 continue
             label = str(h.get("label") or "").strip()
@@ -2351,9 +2355,7 @@ class DatasetDetailView(QWidget):
 
         n_versions = len(versions) if versions else 1
         if not diff:
-            self._version_summary.setText(
-                t("detail.version_log.version_count", count=n_versions)
-            )
+            self._version_summary.setText(t("detail.version_log.version_count", count=n_versions))
             _apply_flush_corners()
             return
         old_num = (diff.get("old") or {}).get("number") or "published"
@@ -2369,12 +2371,13 @@ class DatasetDetailView(QWidget):
             )
         )
         if total == 0:
-            self._version_placeholder(
-                t("detail.version_log.no_changes", num=old_num)
-            )
+            self._version_placeholder(t("detail.version_log.no_changes", num=old_num))
             return
         # Metadata + terms field changes
-        rows = [(c.get("field", ""), c.get("block", ""), c.get("old", ""), c.get("new", "")) for c in meta]
+        rows = [
+            (c.get("field", ""), c.get("block", ""), c.get("old", ""), c.get("new", ""))
+            for c in meta
+        ]
         rows += [
             (
                 t("detail.version_log.terms_row", field=c.get("field", "")),
@@ -2417,6 +2420,7 @@ class DatasetDetailView(QWidget):
             table.fit_columns_to_content()
             self._version_body.addWidget(table)
             flush_widgets.append((table, "table"))
+
         # File changes
         def _fname(f: dict) -> str:
             path, name = (f.get("path") or "").strip(), (f.get("name") or "").strip()
@@ -2429,11 +2433,21 @@ class DatasetDetailView(QWidget):
         entries: list[tuple[str, str, str, str]] = []
         for f in diff.get("files_added") or []:
             entries.append(
-                (t("detail.version_log.file_added", file=_fname(f)), TEXT_SUCCESS, STATE_SUCCESS_GRAPHIC, "plus")
+                (
+                    t("detail.version_log.file_added", file=_fname(f)),
+                    TEXT_SUCCESS,
+                    STATE_SUCCESS_GRAPHIC,
+                    "plus",
+                )
             )
         for f in diff.get("files_removed") or []:
             entries.append(
-                (t("detail.version_log.file_removed", file=_fname(f)), TEXT_DANGER, STATE_ERROR_GRAPHIC, "minus")
+                (
+                    t("detail.version_log.file_removed", file=_fname(f)),
+                    TEXT_DANGER,
+                    STATE_ERROR_GRAPHIC,
+                    "minus",
+                )
             )
         for pair in diff.get("files_replaced") or []:
             old_f, new_f = pair.get("old") or {}, pair.get("new") or {}
@@ -2490,11 +2504,15 @@ class DatasetDetailView(QWidget):
         _body_unused.setSpacing(0)
         # Actions are tools: they live on the tools row under the title bar,
         # never in the title bar (title + tooltip + summary only).
-        self._open_folder_btn = make_action_button(t("detail.files.open_folder"), kind="secondary", size="md")
+        self._open_folder_btn = make_action_button(
+            t("detail.files.open_folder"), kind="secondary", size="md"
+        )
         self._open_folder_btn.setToolTip(t("detail.files.open_folder_tip"))
         self._open_folder_btn.clicked.connect(self._on_open_folder)
         # Expand/Collapse all toggle for the folder > file > check tree.
-        self._expand_btn = make_action_button(t("detail.files.expand_all"), kind="secondary", size="md")
+        self._expand_btn = make_action_button(
+            t("detail.files.expand_all"), kind="secondary", size="md"
+        )
         self._expand_btn.setToolTip(t("detail.files.expand_tip"))
         self._expand_btn.clicked.connect(self._on_toggle_expand_all)
         lay = QVBoxLayout()
@@ -2516,15 +2534,18 @@ class DatasetDetailView(QWidget):
         self._file_filter.textChanged.connect(self._on_file_filter)
         tools_lay.addWidget(self._file_filter, 1)
         self._scan_filter = make_combo(
-            [(label, key) for label, key in [
-                (t("detail.files.filter_all"), "all"),
-                (t("detail.files.filter_issues"), "issues"),
-                (t("detail.files.filter_errors"), "errors"),
-                (t("detail.files.filter_warnings"), "warnings"),
-                (t("detail.files.filter_skipped"), "skipped"),
-                (t("detail.files.filter_clean"), "clean"),
-                (t("detail.files.filter_no_check"), "unchecked"),
-            ]],
+            [
+                (label, key)
+                for label, key in [
+                    (t("detail.files.filter_all"), "all"),
+                    (t("detail.files.filter_issues"), "issues"),
+                    (t("detail.files.filter_errors"), "errors"),
+                    (t("detail.files.filter_warnings"), "warnings"),
+                    (t("detail.files.filter_skipped"), "skipped"),
+                    (t("detail.files.filter_clean"), "clean"),
+                    (t("detail.files.filter_no_check"), "unchecked"),
+                ]
+            ],
             height=36,
             min_width=130,
         )
@@ -2575,9 +2596,7 @@ class DatasetDetailView(QWidget):
         # the Dataverse file list." is a long sentence, and a label that
         # cannot wrap would set the card's minimum width for the whole
         # card (the page then scrolls sideways).
-        self._file_footer_left = make_elided_label(
-            t("detail.files.no_files"), object_name="BodySM"
-        )
+        self._file_footer_left = make_elided_label(t("detail.files.no_files"), object_name="BodySM")
         fl.addWidget(self._file_footer_left, 1)
         fl.addStretch()
         self._file_footer_right = make_small_body_label("", wrap=False)
@@ -2631,12 +2650,17 @@ class DatasetDetailView(QWidget):
                     v = f.get("value", [])
                     if isinstance(v, list) and v:
                         first = v[0]
-                        name = first.get("datasetContactName", {}).get("value", "") if isinstance(first.get("datasetContactName"), dict) else ""
+                        name = (
+                            first.get("datasetContactName", {}).get("value", "")
+                            if isinstance(first.get("datasetContactName"), dict)
+                            else ""
+                        )
                         depositor = name or t("common.em_dash")
                     break
             # Prefer the real Dataverse title when metadata arrives (TopNav chips use it)
             try:
                 from dataverse_client import extract_title
+
                 real_title = extract_title(latest) if isinstance(latest, dict) else ""
                 if real_title and real_title != self._title:
                     self._title = real_title
@@ -2657,10 +2681,11 @@ class DatasetDetailView(QWidget):
             date = (latest.get("createTime") or latest.get("lastUpdateTime") or "")[:10]
             if date:
                 depositor_lbl.setText(
-                    depositor_lbl.text()
-                    + t("detail.header.depositor_date", date=date)
+                    depositor_lbl.text() + t("detail.header.depositor_date", date=date)
                 )
-        url = f"{self._config.dataverse.base_url}/dataset.xhtml?persistentId={self._pid}" + ("&version=DRAFT" if version_state == "DRAFT" else "")
+        url = f"{self._config.dataverse.base_url}/dataset.xhtml?persistentId={self._pid}" + (
+            "&version=DRAFT" if version_state == "DRAFT" else ""
+        )
         header_link = getattr(self, "_header_link", None)
         if header_link is not None:
             link_text = (
@@ -2712,6 +2737,7 @@ class DatasetDetailView(QWidget):
         try:
             from engine.runner import list_planned_checks
             from engine.status import summarize
+
             staged = self._dl_mgr.files_dir(self._pid)
             if staged.exists():
                 files = sorted(p for p in staged.rglob("*") if p.is_file())
@@ -2727,7 +2753,11 @@ class DatasetDetailView(QWidget):
                 if w is not None:
                     w.deleteLater()
             if not files:
-                if self._inventory is not None and len(self._inventory) == 0 and self._metadata is not None:
+                if (
+                    self._inventory is not None
+                    and len(self._inventory) == 0
+                    and self._metadata is not None
+                ):
                     ph = make_small_body_label(t("detail.auto_checks.no_files_in_dataverse"))
                     # A measured zero, not a placeholder — name it (2026-10-02 P2).
                     self._auto_summary.setText(t("detail.auto_checks.no_file_checks"))
@@ -2820,9 +2850,16 @@ class DatasetDetailView(QWidget):
                         continue
                     # lib_map check
                     lib_map = {
-                        "format.spss": "pyreadstat", "format.stata": "pyreadstat", "format.sas": "pyreadstat",
-                        "format.netcdf": "netCDF4", "format.hdf5": "h5py", "format.tiff": "tifffile",
-                        "format.images": "Pillow", "format.pdf": "pypdf", "format.xml": "lxml", "format.xlsx": "openpyxl",
+                        "format.spss": "pyreadstat",
+                        "format.stata": "pyreadstat",
+                        "format.sas": "pyreadstat",
+                        "format.netcdf": "netCDF4",
+                        "format.hdf5": "h5py",
+                        "format.tiff": "tifffile",
+                        "format.images": "Pillow",
+                        "format.pdf": "pypdf",
+                        "format.xml": "lxml",
+                        "format.xlsx": "openpyxl",
                     }
                     pip_pkg = lib_map.get(p["check_id"], "")
                     missing = ""
@@ -2859,7 +2896,9 @@ class DatasetDetailView(QWidget):
         except Exception:
             pass
 
-    def _auto_row(self, check_id: str, desc: str, passed: bool, level: str, badge: str | None = None) -> QFrame:
+    def _auto_row(
+        self, check_id: str, desc: str, passed: bool, level: str, badge: str | None = None
+    ) -> QFrame:
         frame = QFrame()
         # Scope the row face to the row itself. A bare `QFrame` selector
         # would also style every QLabel inside it (QLabel subclasses
@@ -2869,13 +2908,19 @@ class DatasetDetailView(QWidget):
         # renders grey so it is never confused with a real pass.
         from ui.icons import icon_label as _icon_label
 
-        if passed and level == "warning" and (
-            (badge or "").upper() in ("SKIPPED", "MISSING")
-            or "skipped" in (badge or desc).lower()
-            or "not executed" in desc.lower()
-            or "Missing" in (badge or desc)
+        if (
+            passed
+            and level == "warning"
+            and (
+                (badge or "").upper() in ("SKIPPED", "MISSING")
+                or "skipped" in (badge or desc).lower()
+                or "not executed" in desc.lower()
+                or "Missing" in (badge or desc)
+            )
         ):
-            frame.setStyleSheet(surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow"))
+            frame.setStyleSheet(
+                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+            )
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = (
                 t("status.badges.skipped")
@@ -2885,28 +2930,41 @@ class DatasetDetailView(QWidget):
             badge_bg = SURFACE_ALT
             badge_fg = TEXT_MUTED
         elif not passed and level in ("error", "warning"):
-            frame.setStyleSheet(surface_frame_qss(STATE_ERROR_BG, STATE_ERROR_BORDER, selector="QFrame#AutoCheckRow"))
+            frame.setStyleSheet(
+                surface_frame_qss(
+                    STATE_ERROR_BG, STATE_ERROR_BORDER, selector="QFrame#AutoCheckRow"
+                )
+            )
             icon_name, icon_color = (
-                ("octagon-x", STATE_ERROR_GRAPHIC) if level == "error"
+                ("octagon-x", STATE_ERROR_GRAPHIC)
+                if level == "error"
                 else ("octagon-alert", STATE_WARNING_GRAPHIC)
             )
             badge_text = badge or t("status.badges.error")
             badge_bg = STATE_ERROR_BG
             badge_fg = STATE_ERROR_TEXT
         elif passed and level == "warning" and "Missing" in (badge or desc):
-            frame.setStyleSheet(surface_frame_qss(STATE_ERROR_SURFACE, STATE_ERROR_BORDER, selector="QFrame#AutoCheckRow"))
+            frame.setStyleSheet(
+                surface_frame_qss(
+                    STATE_ERROR_SURFACE, STATE_ERROR_BORDER, selector="QFrame#AutoCheckRow"
+                )
+            )
             icon_name, icon_color = "octagon-alert", STATE_WARNING_GRAPHIC
             badge_text = badge or t("status.badges.warning")
             badge_bg = STATE_ERROR_BG
             badge_fg = STATE_ERROR_TEXT
         elif passed:
-            frame.setStyleSheet(surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow"))
+            frame.setStyleSheet(
+                surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+            )
             icon_name, icon_color = "check", ACCENT_PRIMARY
             badge_text = badge or t("status.badges.passed")
             badge_bg = ACCENT_PRIMARY
             badge_fg = TEXT_ON_ACCENT
         else:
-            frame.setStyleSheet(surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow"))
+            frame.setStyleSheet(
+                surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+            )
             icon_name, icon_color = "minus", TEXT_MUTED
             badge_text = badge or t("common.em_dash")
             badge_bg = SURFACE_ALT
@@ -2946,7 +3004,9 @@ class DatasetDetailView(QWidget):
         if self._inventory:
             self._populate_from_inventory()
             try:
-                n_staged = sum(1 for _r in getattr(self, "_all_file_rows", []) if self._is_staged(_r[0]))
+                n_staged = sum(
+                    1 for _r in getattr(self, "_all_file_rows", []) if self._is_staged(_r[0])
+                )
                 if staged.exists():
                     self._set_status(
                         t(
@@ -2961,9 +3021,7 @@ class DatasetDetailView(QWidget):
         elif staged.exists():
             files = sorted(p for p in staged.rglob("*") if p.is_file())
             self._populate_file_table_staged(files)
-            self._set_status(
-                t("detail.status.staged", count=len(files), path=staged)
-            )
+            self._set_status(t("detail.status.staged", count=len(files), path=staged))
         else:
             from ui.checks_tree import build_tree_model
 
@@ -2979,7 +3037,11 @@ class DatasetDetailView(QWidget):
         self._all_file_rows = []
         for path in files:
             try:
-                rel = path.relative_to(self._dl_mgr.files_dir(self._pid)).as_posix() if path.is_relative_to(self._dl_mgr.files_dir(self._pid)) else path.name
+                rel = (
+                    path.relative_to(self._dl_mgr.files_dir(self._pid)).as_posix()
+                    if path.is_relative_to(self._dl_mgr.files_dir(self._pid))
+                    else path.name
+                )
             except (ValueError, OSError):
                 rel = path.name
             mime = mimetypes.guess_type(path.name)[0] or ""
@@ -2987,7 +3049,11 @@ class DatasetDetailView(QWidget):
                 size = path.stat().st_size
             except OSError:
                 continue
-            ext = Path(rel).suffix.lower().lstrip(".").upper() or mime.split("/")[-1].upper() or "FILE"
+            ext = (
+                Path(rel).suffix.lower().lstrip(".").upper()
+                or mime.split("/")[-1].upper()
+                or "FILE"
+            )
             self._all_file_rows.append((rel, size, ext, rel))
         self._staged_files = files
         self._apply_file_filter_internal()
@@ -3016,7 +3082,9 @@ class DatasetDetailView(QWidget):
             self._all_file_rows.append((display, size, fmt, inv_path))
         self._apply_file_filter_internal()
 
-    def _set_file_row(self, row: int, path: str, size: int, fmt: str, scan: str, downloaded: bool = False) -> None:
+    def _set_file_row(
+        self, row: int, path: str, size: int, fmt: str, scan: str, downloaded: bool = False
+    ) -> None:
         # Legacy table API removed with the tree view; kept as a no-op guard
         # so any external callers fail gracefully during migration.
         return None
@@ -3114,7 +3182,8 @@ class DatasetDetailView(QWidget):
             except Exception:
                 pass
             n_staged = sum(
-                1 for (path, _s, _f, _o) in rows
+                1
+                for (path, _s, _f, _o) in rows
                 if (path in staged_paths) or (Path(path).name in staged_names)
             )
             total = len(rows)
@@ -3211,8 +3280,7 @@ class DatasetDetailView(QWidget):
                 # Keep a file if one of its check messages matches.
                 entry = by_path.get(path)
                 hay = " ".join(
-                    (c.check_id + " " + c.message).lower()
-                    for c in (entry.checks if entry else [])
+                    (c.check_id + " " + c.message).lower() for c in (entry.checks if entry else [])
                 )
                 if filt not in hay:
                     continue
@@ -3414,14 +3482,27 @@ class DatasetDetailView(QWidget):
             )
         except Exception:
             _collection = ""
-        self._meta_worker = MetadataWorker(self._config.dataverse.base_url, self._config.dataverse.api_token, self._pid, self, collection=_collection)
+        self._meta_worker = MetadataWorker(
+            self._config.dataverse.base_url,
+            self._config.dataverse.api_token,
+            self._pid,
+            self,
+            collection=_collection,
+        )
         self._meta_worker.finished.connect(self._on_metadata_finished)
         self._meta_worker.error.connect(self._on_metadata_error)
         self._meta_worker.finished.connect(self._meta_worker.deleteLater)
         self._meta_worker.error.connect(self._meta_worker.deleteLater)
         self._meta_worker.start()
 
-    def _on_metadata_finished(self, metadata: dict, inventory: list[dict], curation: dict | None = None, version_diff: dict | None = None, extra: dict | None = None) -> None:
+    def _on_metadata_finished(
+        self,
+        metadata: dict,
+        inventory: list[dict],
+        curation: dict | None = None,
+        version_diff: dict | None = None,
+        extra: dict | None = None,
+    ) -> None:
         # Drop the reference before the worker's deleteLater runs; a stale
         # reference made the next Load metadata click crash with
         # "Internal C++ object (MetadataWorker) already deleted".
@@ -3439,8 +3520,14 @@ class DatasetDetailView(QWidget):
         account = extra.get("account")
         self._account = account if isinstance(account, dict) else {}
         self._versions = extra.get("versions") if isinstance(extra.get("versions"), list) else []
-        self._timestamps = extra.get("timestamps") if isinstance(extra.get("timestamps"), dict) else {}
-        self._review_submissions = extra.get("review_submissions") if isinstance(extra.get("review_submissions"), list) else []
+        self._timestamps = (
+            extra.get("timestamps") if isinstance(extra.get("timestamps"), dict) else {}
+        )
+        self._review_submissions = (
+            extra.get("review_submissions")
+            if isinstance(extra.get("review_submissions"), list)
+            else []
+        )
         self._in_review = bool(extra.get("in_review", False))
         self._update_header_link(metadata)
         self._update_curation_pill()
@@ -3501,7 +3588,9 @@ class DatasetDetailView(QWidget):
             # say so plainly instead of implying a fetch failure.
             version_state = ""
             try:
-                version_state = ((metadata.get("latestVersion") or {}).get("versionState") or "").upper()
+                version_state = (
+                    (metadata.get("latestVersion") or {}).get("versionState") or ""
+                ).upper()
             except Exception:
                 pass
             ver_note = (
@@ -3527,9 +3616,7 @@ class DatasetDetailView(QWidget):
 
     def _on_reset_meta_view(self) -> None:
         try:
-            self._reset_table_view(
-                "dataset_meta", self._meta_check_tree.header()
-            )
+            self._reset_table_view("dataset_meta", self._meta_check_tree.header())
             if self._metadata is not None:
                 self._populate_completeness(self._metadata)
         except Exception:
@@ -3541,9 +3628,7 @@ class DatasetDetailView(QWidget):
 
             table = self._version_body.findChild(QTableWidget)
             if table is not None:
-                self._reset_table_view(
-                    "dataset_version", table.horizontalHeader()
-                )
+                self._reset_table_view("dataset_version", table.horizontalHeader())
             self._populate_version_diff()
         except Exception:
             pass
@@ -3570,9 +3655,12 @@ class DatasetDetailView(QWidget):
                 try:
                     from dataverse_client import read_metadata_fields_cache
 
-                    for f in read_metadata_fields_cache(
-                        self._config.app.workspace, self._config.dataverse.base_url
-                    ) or []:
+                    for f in (
+                        read_metadata_fields_cache(
+                            self._config.app.workspace, self._config.dataverse.base_url
+                        )
+                        or []
+                    ):
                         if isinstance(f, dict) and f.get("block") and f.get("block_label"):
                             cache.setdefault(str(f["block"]), str(f["block_label"]))
                 except Exception:
@@ -3598,15 +3686,28 @@ class DatasetDetailView(QWidget):
         except Exception:
             from metadata_check import check_metadata_completeness
 
-            results = check_metadata_completeness(metadata, profile=self._profile, inventory=self._inventory)
+            results = check_metadata_completeness(
+                metadata, profile=self._profile, inventory=self._inventory
+            )
             self._completeness_full = [
-                {**r, "rule_id": r.get("field", ""), "level": "required", "pending": False,
-                 "response_template": ""}
+                {
+                    **r,
+                    "rule_id": r.get("field", ""),
+                    "level": "required",
+                    "pending": False,
+                    "response_template": "",
+                }
                 for r in results
             ]
         complete = sum(1 for r in results if r["status"] == "complete")
         total = len(results)
-        color = TEXT_SUCCESS if complete == total else TEXT_AMBER if complete > total / 2 else TEXT_DANGER
+        color = (
+            TEXT_SUCCESS
+            if complete == total
+            else TEXT_AMBER
+            if complete > total / 2
+            else TEXT_DANGER
+        )
         # Header carries just the count (profile name is already visible in
         # the header combo; the old in-body summary line was removed).
         self._meta_summary.setText(
@@ -3646,14 +3747,10 @@ class DatasetDetailView(QWidget):
         vis = not self._raw_view.isVisible()
         self._raw_view.setVisible(vis)
         self._raw_btn.setText(
-            t("detail.header.hide_raw_metadata")
-            if vis
-            else t("detail.header.show_raw_metadata")
+            t("detail.header.hide_raw_metadata") if vis else t("detail.header.show_raw_metadata")
         )
         try:
-            self._raw_btn.setIcon(
-                _icon("chevron-up" if vis else "chevron-right")
-            )
+            self._raw_btn.setIcon(_icon("chevron-up" if vis else "chevron-right"))
         except Exception:
             pass
 
@@ -3663,13 +3760,22 @@ class DatasetDetailView(QWidget):
         self._load_meta_btn.setEnabled(True)
         self._set_status("")
         headline, details = describe_error(msg)
-        show_critical(self, t("detail.metadata_load.title"), headline, details=details,
-                     retry=self._on_load_metadata)
+        show_critical(
+            self,
+            t("detail.metadata_load.title"),
+            headline,
+            details=details,
+            retry=self._on_load_metadata,
+        )
 
     def _decision_choices(self) -> tuple[list[str], bool]:
         """(options, from_labels): instance curation labels when known."""
         try:
-            allowed = [str(lbl).strip() for lbl in ((self._curation or {}).get("allowed") or []) if str(lbl).strip()]
+            allowed = [
+                str(lbl).strip()
+                for lbl in ((self._curation or {}).get("allowed") or [])
+                if str(lbl).strip()
+            ]
         except Exception:
             allowed = []
         if allowed:
@@ -3749,9 +3855,7 @@ class DatasetDetailView(QWidget):
             if help_lbl is not None:
                 if choice:
                     _options, from_labels = self._decision_choices()
-                    help_lbl.setText(
-                        self._decision_consequence(choice, from_labels)
-                    )
+                    help_lbl.setText(self._decision_consequence(choice, from_labels))
                 else:
                     help_lbl.setText(t("detail.decision.pick_action"))
             commit = getattr(self, "_commit_btn", None)
@@ -3809,8 +3913,7 @@ class DatasetDetailView(QWidget):
             )
         self._log_action(
             "decision",
-            f"{decision}"
-            + (t("detail.decision.log_notes", notes=notes[:200]) if notes else ""),
+            f"{decision}" + (t("detail.decision.log_notes", notes=notes[:200]) if notes else ""),
             {"decision": decision, "notes": notes[:2000]},
         )
         # A recorded decision closes the last workflow step (the Dataverse
@@ -3872,9 +3975,7 @@ class DatasetDetailView(QWidget):
             self._refresh_files_placeholder()
             self._check_btn.setEnabled(True)
             self._check_btn.setToolTip(t("detail.header.run_checks_tip_staged"))
-            self._set_status(
-                t("detail.download.all_verified_skip", count=len(inventory))
-            )
+            self._set_status(t("detail.download.all_verified_skip", count=len(inventory)))
             self._log_action(
                 "downloaded",
                 t("detail.download.already_staged", count=len(inventory)),
@@ -3902,11 +4003,7 @@ class DatasetDetailView(QWidget):
         guestbook = self._guestbook
         if not (isinstance(guestbook, dict) and guestbook.get("id")):
             guestbook = None
-            gb_id = (
-                self._metadata.get("guestbookId")
-                if isinstance(self._metadata, dict)
-                else None
-            )
+            gb_id = self._metadata.get("guestbookId") if isinstance(self._metadata, dict) else None
             if gb_id:
                 try:
                     guestbook = self._client.get_guestbook(gb_id)
@@ -3922,9 +4019,7 @@ class DatasetDetailView(QWidget):
                     return
         if isinstance(guestbook, dict) and guestbook.get("enabled") is False:
             guestbook = None
-        dlg = DownloadApprovalDialog(
-            quote, self, guestbook=guestbook, account=self._account
-        )
+        dlg = DownloadApprovalDialog(quote, self, guestbook=guestbook, account=self._account)
         if dlg.exec() != QDialog.Accepted:
             return
         guestbook_response = dlg.guestbook_response() if guestbook else None
@@ -3939,7 +4034,9 @@ class DatasetDetailView(QWidget):
             self,
             guestbook_response=guestbook_response,
         )
-        self._dl_worker.progress.connect(lambda n: self._progress.setFormat(f"{n / 1024**2:.1f} MB"))
+        self._dl_worker.progress.connect(
+            lambda n: self._progress.setFormat(f"{n / 1024**2:.1f} MB")
+        )
         self._dl_worker.progressFraction.connect(self._on_ring_fraction)
         self._dl_worker.finished.connect(self._on_download_finished)
         self._dl_worker.error.connect(self._on_download_error)
@@ -3974,7 +4071,11 @@ class DatasetDetailView(QWidget):
         self._check_btn.setEnabled(self._dl_mgr.files_dir(self._pid).exists())
         self._check_btn.setToolTip(t("detail.header.run_checks_tip_staged"))
         self._set_status(t("detail.status.downloaded_to", path=staged))
-        self._log_action("downloaded", t("detail.status.staged_to", path=staged), {"staged": str(staged), "ok": ok})
+        self._log_action(
+            "downloaded",
+            t("detail.status.staged_to", path=staged),
+            {"staged": str(staged), "ok": ok},
+        )
         # Staged content may resolve file-content text rules — re-evaluate.
         try:
             if self._metadata is not None:
@@ -3989,8 +4090,9 @@ class DatasetDetailView(QWidget):
         self._dl_btn.setEnabled(True)
         self._set_status("")
         headline, details = describe_error(msg)
-        show_critical(self, t("detail.download.title"), headline, details=details,
-                     retry=self._on_download)
+        show_critical(
+            self, t("detail.download.title"), headline, details=details, retry=self._on_download
+        )
 
     def _on_download_cancel_click(self) -> None:
         """Ask the worker to stop; stay disabled until it acknowledges."""
@@ -4175,8 +4277,9 @@ class DatasetDetailView(QWidget):
         # "nothing happened" once the dialog was closed. The strip now
         # carries the reason and stays until the next run replaces it.
         self._set_status(t("detail.status.checks_failed", reason=headline))
-        show_critical(self, t("detail.checks.title"), headline, details=details,
-                     retry=self._on_run_checks)
+        show_critical(
+            self, t("detail.checks.title"), headline, details=details, retry=self._on_run_checks
+        )
 
     def _on_tree_clicked(self, index) -> None:
         try:
@@ -4252,6 +4355,7 @@ class DatasetDetailView(QWidget):
             )
             return
         from PySide6.QtWidgets import QFileDialog
+
         try:
             self._dl_mgr.reports_dir(self._pid).mkdir(parents=True, exist_ok=True)
             start_dir = str(

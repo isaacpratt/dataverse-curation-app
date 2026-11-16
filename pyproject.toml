@@ -114,15 +114,13 @@ type = "simple"
   help = "Lint with ruff"
   cmd = "ruff check ."
 
-  # Phase-1 scope (dv-hcg.2/.3): engine + root modules + tools. Flip to
-  # ["."] when the ui/ format phase lands.
   [tool.poe.tasks.format-check]
-  help = "Verify ruff formatting of the phase-1 file set (engine, root modules, tools)"
-  cmd = "ruff format --check engine main.py applog.py config.py dataverse_client.py download_manager.py metadata_check.py response_draft.py review_rules.py startup_probe.py storage.py tools/"
+  help = "Verify ruff formatting of the whole tree"
+  cmd = "ruff format --check ."
 
   [tool.poe.tasks.fmt]
-  help = "Apply ruff formatting (phase-1 set; use --check via format-check)"
-  cmd = "ruff format engine main.py applog.py config.py dataverse_client.py download_manager.py metadata_check.py response_draft.py review_rules.py startup_probe.py storage.py tools/"
+  help = "Apply ruff formatting to the whole tree (format-check verifies)"
+  cmd = "ruff format ."
 
   [tool.poe.tasks.audit]
   help = "Vulnerability scan of the locked dependency set (uv.lock via pip-audit/OSV)"

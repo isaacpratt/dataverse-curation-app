@@ -85,11 +85,7 @@ def test_one_app_level_rule_per_button_kind():
     rules = _blocks(global_qss())
     for object_name in set(BUTTON_OBJECTS.values()):
         expected = f"QPushButton#{object_name}"
-        count = sum(
-            1
-            for selector, _props in rules
-            if selector == expected and ":" not in selector
-        )
+        count = sum(1 for selector, _props in rules if selector == expected and ":" not in selector)
         assert count <= 1, f"{object_name}: found {count} app-level rules, want <= 1"
 
 
@@ -136,10 +132,6 @@ def test_gallery_builds_and_exhibits_every_kind(qapp):
         {b.objectName() for b in buttons if b.objectName() and b.objectName() not in names}
     )
     assert not unknown, f"every gallery button wears a kit object name (unknown: {unknown})"
-    assert SURFACE_PAGE in (window.styleSheet() or ""), (
-        "the gallery paints the theme's page role"
-    )
-    assert any(not b.isEnabled() for b in buttons), (
-        "the gallery shows a disabled button"
-    )
+    assert SURFACE_PAGE in (window.styleSheet() or ""), "the gallery paints the theme's page role"
+    assert any(not b.isEnabled() for b in buttons), "the gallery shows a disabled button"
     window.close()

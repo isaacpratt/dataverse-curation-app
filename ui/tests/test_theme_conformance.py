@@ -171,13 +171,13 @@ def _is_style_expression(
             return False
         return _is_style_expression(bound, bindings, seen | {expr.id})
     if isinstance(expr, ast.IfExp):
-        return _is_style_expression(
-            expr.body, bindings, seen
-        ) and _is_style_expression(expr.orelse, bindings, seen)
+        return _is_style_expression(expr.body, bindings, seen) and _is_style_expression(
+            expr.orelse, bindings, seen
+        )
     if isinstance(expr, ast.BinOp):
-        return _is_style_expression(
-            expr.left, bindings, seen
-        ) and _is_style_expression(expr.right, bindings, seen)
+        return _is_style_expression(expr.left, bindings, seen) and _is_style_expression(
+            expr.right, bindings, seen
+        )
     return False
 
 
@@ -231,8 +231,7 @@ def test_no_view_writes_its_own_stylesheet():
             )
     assert not failures, (
         "a view may not write its own stylesheet - use a theme mixin or a "
-        "kit builder (or mark the line '# theme-allow:'):\n  "
-        + "\n  ".join(failures)
+        "kit builder (or mark the line '# theme-allow:'):\n  " + "\n  ".join(failures)
     )
 
 
@@ -264,11 +263,7 @@ def test_no_view_names_a_raw_palette_entry():
 def test_the_role_layer_covers_every_palette_entry_the_views_use():
     """The roles must be able to express what the views need."""
     palette = _palette_names()
-    roles = {
-        name
-        for name in dir_names(THEME_PATH)
-        if name not in palette
-    }
+    roles = {name for name in dir_names(THEME_PATH) if name not in palette}
     assert "TEXT_PRIMARY" in roles
     assert "SURFACE_CARD" in roles
     assert "ACCENT_PRIMARY" in roles
@@ -306,8 +301,7 @@ def test_no_view_builds_a_raw_input_widget():
     assert not failures, (
         "the standard inputs come from the kit (make_line_edit, "
         "make_multiline_input, make_list, make_checkbox, "
-        "make_progress_bar, make_combo, make_action_button):\n  "
-        + "\n  ".join(failures)
+        "make_progress_bar, make_combo, make_action_button):\n  " + "\n  ".join(failures)
     )
 
 
@@ -355,11 +349,7 @@ def test_the_guards_would_notice_a_violation(tmp_path):
     }
     assert "PRIMARY" in imported & _palette_names()
 
-    built = {
-        _callee_name(node.func)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-    }
+    built = {_callee_name(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)}
     assert "QLineEdit" in built & _RAW_INPUT_WIDGETS
 
 

@@ -157,9 +157,7 @@ class DownloadApprovalDialog(QDialog):
         required: bool,
         prefill: str = "",
     ) -> None:
-        caption = QLabel(
-            f"{label}{t('download.required_marker') if required else ''}"
-        )
+        caption = QLabel(f"{label}{t('download.required_marker') if required else ''}")
         form.addWidget(caption)
         edit = make_line_edit(t("download.account_placeholder"))
         if prefill:
@@ -219,9 +217,7 @@ class DownloadApprovalDialog(QDialog):
                 if q.get("required") and not self._value(widget)
             ]
             if missing:
-                self._error.setText(
-                    t("download.missing_fields", fields=", ".join(missing))
-                )
+                self._error.setText(t("download.missing_fields", fields=", ".join(missing)))
                 self._error.setVisible(True)
                 return
         super().accept()

@@ -147,7 +147,8 @@ class LogPage(QWidget):
         try:
             self._live_btn.setIcon(
                 _live_icon("circle-dot", color=ACCENT_PRIMARY_DEEP)
-                if live else _live_icon("circle", color=TEXT_SUBTLE)
+                if live
+                else _live_icon("circle", color=TEXT_SUBTLE)
             )
         except Exception:
             pass
@@ -195,9 +196,7 @@ class LogPage(QWidget):
                         )
                     )
                 else:
-                    self._live_btn.setToolTip(
-                        t("log.buffered_tip", total=total)
-                    )
+                    self._live_btn.setToolTip(t("log.buffered_tip", total=total))
             except Exception:
                 pass
 
@@ -260,20 +259,12 @@ class LogHighlighter(QSyntaxHighlighter):
         import re
 
         self._regex = re
-        self._re_time = re.compile(
-            r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?"
-        )
-        self._re_level = re.compile(
-            r"\b(CRITICAL|ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE)\b"
-        )
-        self._re_method = re.compile(
-            r"\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b(?=\s+\S)"
-        )
+        self._re_time = re.compile(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?")
+        self._re_level = re.compile(r"\b(CRITICAL|ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE)\b")
+        self._re_method = re.compile(r"\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b(?=\s+\S)")
         self._re_url_base = re.compile(r"\bhttps?://[^\s/\"'<>]+")
         self._re_status = re.compile(self._STATUS_RE)
-        self._re_doi = re.compile(
-            r"\bdoi:\s*10\.\d{4,9}/[^\s\"'<>,;)\]}]+", re.IGNORECASE
-        )
+        self._re_doi = re.compile(r"\bdoi:\s*10\.\d{4,9}/[^\s\"'<>,;)\]}]+", re.IGNORECASE)
         self._re_string = re.compile(r'"(?:[^"\\]|\\.)*"')
 
     def _severity(self, text: str) -> str | None:
@@ -343,7 +334,7 @@ class LogHighlighter(QSyntaxHighlighter):
             if any(s <= m.start() < e for s, e in url_spans):
                 continue
             # A string followed by a colon is a JSON key, not a value.
-            if text[m.end():m.end() + 2].lstrip().startswith(":"):
+            if text[m.end() : m.end() + 2].lstrip().startswith(":"):
                 self._apply(m, self.key_format)
             elif severity == "error":
                 self._apply(m, self.line_error_format)

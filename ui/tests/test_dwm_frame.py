@@ -33,12 +33,12 @@ def test_dwm_signatures_use_full_width_hwnd():
         ]
 
     dwmapi = ctypes.windll.dwmapi
-    old_extend = (dwmapi.DwmExtendFrameIntoClientArea.argtypes,
-                  dwmapi.DwmExtendFrameIntoClientArea.restype)
-    old_attr = (dwmapi.DwmSetWindowAttribute.argtypes,
-                dwmapi.DwmSetWindowAttribute.restype)
-    old_get = (dwmapi.DwmGetWindowAttribute.argtypes,
-               dwmapi.DwmGetWindowAttribute.restype)
+    old_extend = (
+        dwmapi.DwmExtendFrameIntoClientArea.argtypes,
+        dwmapi.DwmExtendFrameIntoClientArea.restype,
+    )
+    old_attr = (dwmapi.DwmSetWindowAttribute.argtypes, dwmapi.DwmSetWindowAttribute.restype)
+    old_get = (dwmapi.DwmGetWindowAttribute.argtypes, dwmapi.DwmGetWindowAttribute.restype)
     try:
         _declare_dwm_signatures(dwmapi, _MARGINS)
         assert dwmapi.DwmExtendFrameIntoClientArea.argtypes[0] is wintypes.HWND
@@ -47,12 +47,12 @@ def test_dwm_signatures_use_full_width_hwnd():
         assert dwmapi.DwmSetWindowAttribute.restype == ctypes.HRESULT
         assert dwmapi.DwmGetWindowAttribute.argtypes[0] is wintypes.HWND
     finally:
-        dwmapi.DwmExtendFrameIntoClientArea.argtypes, \
-            dwmapi.DwmExtendFrameIntoClientArea.restype = old_extend
-        dwmapi.DwmSetWindowAttribute.argtypes, \
-            dwmapi.DwmSetWindowAttribute.restype = old_attr
-        dwmapi.DwmGetWindowAttribute.argtypes, \
-            dwmapi.DwmGetWindowAttribute.restype = old_get
+        (
+            dwmapi.DwmExtendFrameIntoClientArea.argtypes,
+            dwmapi.DwmExtendFrameIntoClientArea.restype,
+        ) = old_extend
+        dwmapi.DwmSetWindowAttribute.argtypes, dwmapi.DwmSetWindowAttribute.restype = old_attr
+        dwmapi.DwmGetWindowAttribute.argtypes, dwmapi.DwmGetWindowAttribute.restype = old_get
 
 
 @win32_only

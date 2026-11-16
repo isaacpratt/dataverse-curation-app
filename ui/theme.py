@@ -38,7 +38,7 @@ OUTLINE_VARIANT = "#c3c6d8"
 OUTLINE = "#737687"
 # Interactive control edge: heavier than a decorative card edge so an
 # input or button boundary clears the 3:1 WCAG 1.4.11 floor on white.
-CONTROL_OUTLINE = "#8b90a3"        # 3.2:1 on a card
+CONTROL_OUTLINE = "#8b90a3"  # 3.2:1 on a card
 
 ON_SURFACE = "#131b2e"
 ON_SURFACE_VARIANT = "#424656"
@@ -49,19 +49,19 @@ SECONDARY = "#515f74"
 
 # --- State / accent additions (token pass: every ui colour lives here) ---
 SUCCESS = "#16a34a"
-SUCCESS_DARK = "#15803d"          # green-700 — "string" tone in the log
-WARNING = "#d97706"               # amber-600
-WARNING_DARK = "#b45309"          # amber-700 — large-download caution
-AMBER_700 = "#a16207"             # log java tokens, identifier palette
-PRIMARY_DEEP = "#00174c"          # deepest brand blue — live badge text
+SUCCESS_DARK = "#15803d"  # green-700 — "string" tone in the log
+WARNING = "#d97706"  # amber-600
+WARNING_DARK = "#b45309"  # amber-700 — large-download caution
+AMBER_700 = "#a16207"  # log java tokens, identifier palette
+PRIMARY_DEEP = "#00174c"  # deepest brand blue — live badge text
 PRIMARY_PRESSED = "#002a78"
 PRIMARY_DISABLED = "#8aa9e8"
-ERROR_OUTLINE = "#ffb4ab"         # light-red borders (pill / fail rows)
-ERROR_SURFACE = "#fff0ef"         # fail-row face
-MUTED_BG = "#f4f5f7"              # disabled cell-button face
-MUTED_TEXT = "#7d8598"       # disabled text: 3.7:1 on a card (was 2.5)
+ERROR_OUTLINE = "#ffb4ab"  # light-red borders (pill / fail rows)
+ERROR_SURFACE = "#fff0ef"  # fail-row face
+MUTED_BG = "#f4f5f7"  # disabled cell-button face
+MUTED_TEXT = "#7d8598"  # disabled text: 3.7:1 on a card (was 2.5)
 MUTED_BORDER = "#dfe3ea"
-PILL_BLUE_TEXT = "#1a2e4a"        # in-review pill text
+PILL_BLUE_TEXT = "#1a2e4a"  # in-review pill text
 PILL_BLUE_BORDER = "#b9c7df"
 
 # Deterministic identifier-colour palette for the syntax-highlighting log
@@ -97,67 +97,67 @@ LOG_IDENTIFIER_PALETTE = (
 # would resolve to a different one in a second theme.
 
 # --- Text roles ---
-TEXT_PRIMARY = ON_SURFACE              # body copy, headings, values
-TEXT_MUTED = ON_SURFACE_VARIANT        # captions, hints, timestamps, metadata
-TEXT_SUBTLE = ON_SECONDARY_CONTAINER   # de-emphasised hints, field help
+TEXT_PRIMARY = ON_SURFACE  # body copy, headings, values
+TEXT_MUTED = ON_SURFACE_VARIANT  # captions, hints, timestamps, metadata
+TEXT_SUBTLE = ON_SECONDARY_CONTAINER  # de-emphasised hints, field help
 # A field's placeholder is the example text ("Search datasets..."). It
 # has to read as text (WCAG 1.4.3) without pretending to be the value
 # the curator typed: 5.9:1 on a white field, a step below the muted
 # body colour.
 TEXT_PLACEHOLDER = ON_SECONDARY_CONTAINER
-TEXT_ON_ACCENT = ON_PRIMARY            # text on the brand fill
+TEXT_ON_ACCENT = ON_PRIMARY  # text on the brand fill
 TEXT_ON_TINT = ON_SECONDARY_CONTAINER  # text on a tinted surface
-TEXT_ON_SECONDARY = ON_SECONDARY_FIXED # text on the secondary fill (nav)
-TEXT_ON_ERROR = ON_ERROR               # text on the error fill
-TEXT_DANGER = ERROR                    # error copy
-TEXT_SUCCESS = SUCCESS_DARK            # success copy (5.0:1 on a card)
-TEXT_WARNING = WARNING_DARK            # warning copy (5.0:1 on a card)
-TEXT_AMBER = AMBER_700                 # amber copy (log tokens, caution notes)
-TEXT_DISABLED = MUTED_TEXT             # disabled control text (3.7:1 on a card)
+TEXT_ON_SECONDARY = ON_SECONDARY_FIXED  # text on the secondary fill (nav)
+TEXT_ON_ERROR = ON_ERROR  # text on the error fill
+TEXT_DANGER = ERROR  # error copy
+TEXT_SUCCESS = SUCCESS_DARK  # success copy (5.0:1 on a card)
+TEXT_WARNING = WARNING_DARK  # warning copy (5.0:1 on a card)
+TEXT_AMBER = AMBER_700  # amber copy (log tokens, caution notes)
+TEXT_DISABLED = MUTED_TEXT  # disabled control text (3.7:1 on a card)
 # A workflow step that cannot run yet is still a step the user reads and
 # clicks: it carries body-legible text (8.9:1 on a card), never the
 # disabled grey. The lock mark says "blocked"; the text says what.
 TEXT_BLOCKED = ON_SURFACE_VARIANT
 
 # --- Surface roles ---
-SURFACE_PAGE = BACKGROUND              # the page behind everything
+SURFACE_PAGE = BACKGROUND  # the page behind everything
 SURFACE_CARD = SURFACE_CONTAINER_LOWEST  # cards, tables, sheets
-SURFACE_TINT = SURFACE_CONTAINER       # a tinted panel (header band, hover)
+SURFACE_TINT = SURFACE_CONTAINER  # a tinted panel (header band, hover)
 SURFACE_SUBTLE = SURFACE_CONTAINER_LOW  # quiet rows, inset panels
-SURFACE_ROW = SURFACE_CONTAINER_LOW    # alternating / separated rows
-SURFACE_HEADER = SURFACE_CONTAINER     # table and tree header bands
+SURFACE_ROW = SURFACE_CONTAINER_LOW  # alternating / separated rows
+SURFACE_HEADER = SURFACE_CONTAINER  # table and tree header bands
 SURFACE_RAISED = SURFACE_CONTAINER_HIGH  # a raised panel (hover, metric card)
-SURFACE_ALT = SURFACE_VARIANT          # an alternate surface (divider band)
-SURFACE_DISABLED = MUTED_BG            # a disabled control's face
+SURFACE_ALT = SURFACE_VARIANT  # an alternate surface (divider band)
+SURFACE_DISABLED = MUTED_BG  # a disabled control's face
 
 # --- Border roles ---
-BORDER_SUBTLE = OUTLINE_VARIANT        # card and section edges
-BORDER_STRONG = OUTLINE                # dividers that carry meaning
-BORDER_CONTROL = CONTROL_OUTLINE       # input / button edges (>= 3:1)
-BORDER_DISABLED = MUTED_BORDER         # a disabled control's edge
+BORDER_SUBTLE = OUTLINE_VARIANT  # card and section edges
+BORDER_STRONG = OUTLINE  # dividers that carry meaning
+BORDER_CONTROL = CONTROL_OUTLINE  # input / button edges (>= 3:1)
+BORDER_DISABLED = MUTED_BORDER  # a disabled control's edge
 
 # --- Accent roles ---
 ACCENT_PRIMARY = PRIMARY
 ACCENT_PRIMARY_HOVER = ON_PRIMARY_FIXED_VARIANT
 ACCENT_PRIMARY_PRESSED = PRIMARY_PRESSED
 ACCENT_PRIMARY_DISABLED = PRIMARY_DISABLED
-ACCENT_TINT = PRIMARY_FIXED            # selected row / pressed fill
+ACCENT_TINT = PRIMARY_FIXED  # selected row / pressed fill
 ACCENT_FOCUS_TINT = PRIMARY_FIXED_DIM  # the focus tint's fill
-ACCENT_FOCUS_RING = PRIMARY            # the focus ring's stroke (7.2:1 on a card)
-ACCENT_PRIMARY_DEEP = PRIMARY_DEEP     # the deepest brand blue (a live badge)
-ACCENT_SECONDARY = SECONDARY_CONTAINER # the secondary fill (nav, selection)
-ACCENT_TERTIARY = TERTIARY             # the tertiary accent
+ACCENT_FOCUS_RING = PRIMARY  # the focus ring's stroke (7.2:1 on a card)
+ACCENT_PRIMARY_DEEP = PRIMARY_DEEP  # the deepest brand blue (a live badge)
+ACCENT_SECONDARY = SECONDARY_CONTAINER  # the secondary fill (nav, selection)
+ACCENT_TERTIARY = TERTIARY  # the tertiary accent
 
 # --- State roles ---
 STATE_ERROR_BG = ERROR_CONTAINER
 STATE_ERROR_SURFACE = ERROR_SURFACE
 STATE_ERROR_BORDER = ERROR_OUTLINE
 STATE_ERROR_TEXT = ON_ERROR_CONTAINER
-STATE_ERROR_GRAPHIC = ERROR            # an error icon or mark (6.5:1 on a card)
+STATE_ERROR_GRAPHIC = ERROR  # an error icon or mark (6.5:1 on a card)
 STATE_SUCCESS_TEXT = SUCCESS_DARK
-STATE_SUCCESS_GRAPHIC = SUCCESS        # a success icon or mark (3.3:1 on a card)
+STATE_SUCCESS_GRAPHIC = SUCCESS  # a success icon or mark (3.3:1 on a card)
 STATE_WARNING_TEXT = WARNING_DARK
-STATE_WARNING_GRAPHIC = WARNING        # a warning icon or mark (3.2:1 on a card)
+STATE_WARNING_GRAPHIC = WARNING  # a warning icon or mark (3.2:1 on a card)
 
 # --- Badge roles (a status label's fill, text and border) ---
 BADGE_NEUTRAL_BG = "#e4e7f2"
@@ -166,7 +166,7 @@ BADGE_NEUTRAL_BORDER = "#c3c6d8"
 BADGE_BLUE_BG = "#d5e3fc"
 BADGE_BLUE_TEXT = "#1a2e4a"
 BADGE_BLUE_BORDER = "#b9c7df"
-BADGE_GREEN_BG = "#15803d"      # SUCCESS_DARK: white on it clears 5:1
+BADGE_GREEN_BG = "#15803d"  # SUCCESS_DARK: white on it clears 5:1
 BADGE_GREEN_TEXT = "#ffffff"
 BADGE_GREEN_BORDER = "#15803d"
 BADGE_RED_BG = "#ba1a1a"
@@ -232,12 +232,12 @@ SP_XL = 20
 SP_XXL = 24
 
 # --- Standard margins ---
-MARGIN_PAGE = 24      # outer view padding
-MARGIN_CARD_H = 16    # card header/body horizontal padding
-MARGIN_CARD_V = 12    # card header/body vertical padding
+MARGIN_PAGE = 24  # outer view padding
+MARGIN_CARD_H = 16  # card header/body horizontal padding
+MARGIN_CARD_V = 12  # card header/body vertical padding
 
 # --- Type scale (px) ---
-FONT_MICRO = 11      # log level badges (the smallest text in the app; dv-vw0)
+FONT_MICRO = 11  # log level badges (the smallest text in the app; dv-vw0)
 FONT_HEADLINE = 22
 FONT_TITLE = 16
 FONT_SECTION = 15
@@ -747,10 +747,7 @@ def workflow_step_qss(state: str = "todo") -> str:
     state, so the state shows in the colour and the weight, never in
     whether the step can be pressed.
     """
-    hover = (
-        "QPushButton#WorkflowStep:hover { background: "
-        f"{SURFACE_TINT}; border-radius: 8px; }}"
-    )
+    hover = f"QPushButton#WorkflowStep:hover {{ background: {SURFACE_TINT}; border-radius: 8px; }}"
     if state == "done":
         return (
             f"QPushButton#WorkflowStep {{ color: {TEXT_SUCCESS}; font-size: 12px; "
@@ -1349,9 +1346,11 @@ QSplitter::handle:horizontal {{ width: 1px; }}
 QSplitter::handle:vertical {{ height: 1px; }}
 """
 
+
 def apply_theme(app) -> None:
     """Apply global QSS and default font."""
     from PySide6.QtGui import QFont
+
     # Prefer Inter if installed; fall back to Segoe UI
     font = QFont("Inter")
     if font.family() != "Inter":
@@ -1376,10 +1375,7 @@ def action_button_style(primary: bool = False) -> str:
     Views do not call this: they build the button with the kit's
     ``make_action_button()``.
     """
-    return button_qss(
-        "primary" if primary else "secondary", selector="QPushButton"
-    )
-
+    return button_qss("primary" if primary else "secondary", selector="QPushButton")
 
 
 # The badge roles: (background, text, border) per role. Every distinct
@@ -1450,9 +1446,7 @@ def label_badge_colors(label: str) -> tuple[str, str, str]:
         import hashlib
 
         digest = hashlib.md5(lowered.encode("utf-8")).digest()
-        role = _LABEL_BADGE_FALLBACK_ROLES[
-            digest[0] % len(_LABEL_BADGE_FALLBACK_ROLES)
-        ]
+        role = _LABEL_BADGE_FALLBACK_ROLES[digest[0] % len(_LABEL_BADGE_FALLBACK_ROLES)]
         return _BADGE_ROLES[role]
     except Exception:
         return _BADGE_ROLES["teal"]
@@ -1495,9 +1489,16 @@ def _install_interaction_tracking(app) -> None:
 
         state = {"kbd": False}
         nav_keys = {
-            Qt.Key_Tab, Qt.Key_Backtab, Qt.Key_Left, Qt.Key_Right,
-            Qt.Key_Up, Qt.Key_Down, Qt.Key_Home, Qt.Key_End,
-            Qt.Key_PageUp, Qt.Key_PageDown,
+            Qt.Key_Tab,
+            Qt.Key_Backtab,
+            Qt.Key_Left,
+            Qt.Key_Right,
+            Qt.Key_Up,
+            Qt.Key_Down,
+            Qt.Key_Home,
+            Qt.Key_End,
+            Qt.Key_PageUp,
+            Qt.Key_PageDown,
         }
 
         def _paint(w, on: bool) -> None:
@@ -1642,9 +1643,7 @@ def enable_list_copy(list_widget) -> None:
                     if event.type() == QEvent.KeyPress and event.matches(Qt.Key_Copy):
                         items = list_widget.selectedItems()
                         if items:
-                            QApplication.clipboard().setText(
-                                "\n".join(i.text() for i in items)
-                            )
+                            QApplication.clipboard().setText("\n".join(i.text() for i in items))
                             return True
                 except Exception:
                     pass

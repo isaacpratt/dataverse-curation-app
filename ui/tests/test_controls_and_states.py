@@ -35,8 +35,7 @@ def test_a_field_placeholder_is_readable(qapp):
     )
     field = make_search_field("Search datasets")
     assert "placeholder-text" in field.styleSheet(), (
-        "the field's own sheet replaces the app sheet - it must carry "
-        "the placeholder colour itself"
+        "the field's own sheet replaces the app sheet - it must carry the placeholder colour itself"
     )
 
 
@@ -47,13 +46,9 @@ def test_field_edges_are_control_edges(qapp):
 
     assert contrast_ratio(BORDER_CONTROL, SURFACE_CARD) >= 3.0
     for field in (make_search_field("Search datasets"), make_line_edit("Name")):
-        assert BORDER_CONTROL in field.styleSheet(), (
-            "a text field's edge must clear the 3:1 floor"
-        )
+        assert BORDER_CONTROL in field.styleSheet(), "a text field's edge must clear the 3:1 floor"
     box = make_checkbox("Required")
-    assert BORDER_CONTROL in box.styleSheet(), (
-        "a checkbox's edge must clear the 3:1 floor"
-    )
+    assert BORDER_CONTROL in box.styleSheet(), "a checkbox's edge must clear the 3:1 floor"
 
 
 def test_icon_only_buttons_are_square_and_big_enough(qapp):
@@ -84,9 +79,7 @@ def test_a_blocked_step_is_readable_and_carries_a_lock(qapp):
     assert not btn.icon().isNull(), (
         "a blocked step must carry a lock mark - colour alone is not a state"
     )
-    assert contrast_ratio(TEXT_BLOCKED, SURFACE_CARD) >= 4.5, (
-        "a blocked step must stay readable"
-    )
+    assert contrast_ratio(TEXT_BLOCKED, SURFACE_CARD) >= 4.5, "a blocked step must stay readable"
 
 
 def test_a_done_step_wears_a_check_icon(qapp):
@@ -164,9 +157,7 @@ def test_the_completion_text_is_body_size(det):
     from ui.theme import FONT_BODY
 
     sheet = det._status.styleSheet()
-    assert f"font-size: {FONT_BODY}px" in sheet, (
-        "the run commentary must be body-sized"
-    )
+    assert f"font-size: {FONT_BODY}px" in sheet, "the run commentary must be body-sized"
 
 
 def test_check_worker_emits_cancelled_when_interrupted(qapp, tmp_path, monkeypatch):

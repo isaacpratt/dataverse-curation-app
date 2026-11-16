@@ -21,9 +21,7 @@ def dash(win, qapp):
 
 def _visible_total(header) -> int:
     return sum(
-        header.sectionSize(i)
-        for i in range(header.count())
-        if not header.isSectionHidden(i)
+        header.sectionSize(i) for i in range(header.count()) if not header.isSectionHidden(i)
     )
 
 

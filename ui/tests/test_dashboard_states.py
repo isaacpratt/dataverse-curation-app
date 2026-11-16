@@ -25,9 +25,7 @@ def _mval(card):
     # The value label carries its theme token as its object name
     # (DisplayLG / StateMD), so it is found by type, not by a fixed name.
     labels = [
-        lbl
-        for lbl in card.findChildren(QLabel)
-        if lbl.objectName() in ("DisplayLG", "StateMD")
+        lbl for lbl in card.findChildren(QLabel) if lbl.objectName() in ("DisplayLG", "StateMD")
     ]
     return labels[0].text() if labels else None
 
@@ -128,9 +126,7 @@ def test_status_bar_honours_filter(seeded_dash):
 
 
 def test_status_bar_shows_alias_when_configured(seeded_dash, monkeypatch):
-    monkeypatch.setattr(
-        seeded_dash._config.dataverse, "collection", "mcmaster", raising=False
-    )
+    monkeypatch.setattr(seeded_dash._config.dataverse, "collection", "mcmaster", raising=False)
     seeded_dash._sync_status_bar()
     text = seeded_dash._status_lbl.text()
     assert re.match(r"^https?://\S+/mcmaster: \d+/\d+ datasets shown$", text), text
@@ -155,8 +151,7 @@ def test_footer_open_settings_link_removed(win):
     near = [
         b
         for b in dash.findChildren(QAbstractButton)
-        if b.text() == "Open Settings"
-        and abs(b.mapTo(dash, QPoint(0, 0)).y() - prog_y) < 40
+        if b.text() == "Open Settings" and abs(b.mapTo(dash, QPoint(0, 0)).y() - prog_y) < 40
     ]
     assert near == []
 

@@ -116,9 +116,7 @@ def test_no_raw_font_sizes_outside_the_theme():
     for path in sorted(_UI_DIR.glob("*.py")):
         if path.name == "theme.py":
             continue
-        for number, line in enumerate(
-            path.read_text(encoding="utf-8").splitlines(), start=1
-        ):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if _RAW_SIZE.search(line):
                 hits.append(f"{path.name}:{number}")
     assert hits == [], f"raw font sizes outside the theme: {hits}"

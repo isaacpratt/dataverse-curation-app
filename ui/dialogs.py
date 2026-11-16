@@ -28,10 +28,17 @@ _ICON_COLORS = {
 # Each entry carries the catalogue key for its headline.
 _NETWORK_HINTS = (
     (
-        ("max retries exceeded", "failed to establish a new connection",
-         "name or service not known", "getaddrinfo", "network is unreachable",
-         "temporary failure in name resolution", "connection refused",
-         "connectionreset", "connection aborted"),
+        (
+            "max retries exceeded",
+            "failed to establish a new connection",
+            "name or service not known",
+            "getaddrinfo",
+            "network is unreachable",
+            "temporary failure in name resolution",
+            "connection refused",
+            "connectionreset",
+            "connection aborted",
+        ),
         "dialogs.network.unreachable",
     ),
     (
@@ -39,8 +46,11 @@ _NETWORK_HINTS = (
         "dialogs.network.timeout",
     ),
     (
-        ("rejected the guestbook response", "guestbook response entry is required",
-         "guestbookresponse"),
+        (
+            "rejected the guestbook response",
+            "guestbook response entry is required",
+            "guestbookresponse",
+        ),
         "dialogs.network.guestbook_rejected",
     ),
     (
@@ -48,8 +58,15 @@ _NETWORK_HINTS = (
         "dialogs.network.guestbook_missing",
     ),
     (
-        ("401", "403", "unauthorized", "forbidden", "invalid api token",
-         "api token", "authentication"),
+        (
+            "401",
+            "403",
+            "unauthorized",
+            "forbidden",
+            "invalid api token",
+            "api token",
+            "authentication",
+        ),
         "dialogs.network.auth",
     ),
     (
@@ -103,9 +120,7 @@ def _show(
         header_row = QHBoxLayout()
         header_row.setSpacing(8)
         try:
-            header_row.addWidget(
-                _dlg_icon(icon, size=18, color=_ICON_COLORS.get(icon))
-            )
+            header_row.addWidget(_dlg_icon(icon, size=18, color=_ICON_COLORS.get(icon)))
         except Exception:
             pass
         header = QLabel(f"<b>{title}</b>")

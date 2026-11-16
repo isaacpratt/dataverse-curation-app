@@ -73,7 +73,7 @@ repos:
         types_or: [python, pyi]
         pass_filenames: true
       - id: ruff-format-check
-        name: ruff format --check (phase-1 set)
+        name: ruff format --check
         entry: uv run --group dev poe format-check
         language: system
         pass_filenames: false

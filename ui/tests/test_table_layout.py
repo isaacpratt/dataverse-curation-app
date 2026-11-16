@@ -109,9 +109,7 @@ def test_a_layout_for_another_column_count_is_ignored(header):
     table, hdr, ws = header
     path = ws / "table_layout.json"
     path.write_text(
-        json.dumps(
-            {"probe": {"v": TABLE_LAYOUT_VERSION, "widths": [10, 20, 30, 40, 50]}}
-        ),
+        json.dumps({"probe": {"v": TABLE_LAYOUT_VERSION, "widths": [10, 20, 30, 40, 50]}}),
         encoding="utf-8",
     )
     layout = TableLayout(ws, "probe", hdr)
