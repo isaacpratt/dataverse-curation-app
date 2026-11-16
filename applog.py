@@ -6,6 +6,7 @@ Bridged to stdlib `logging` so `pytest -q` and file handlers work.
 """
 
 import logging
+import re
 import threading
 from collections import deque
 from datetime import datetime
@@ -16,23 +17,31 @@ _BUFFER: deque[str] = deque(maxlen=2000)
 _logger = logging.getLogger("curation_app")
 
 
+_REDACT_PATTERNS = [
+    # Header-shaped credentials: X-Dataverse-key / Authorization / Api-Key.
+    (re.compile(r"(X-Dataverse-key['\":\s=]+)([^\s'\"&]+)", re.IGNORECASE), r"\1***"),
+    (re.compile(r"(Authorization['\":\s=]+[Bb]earer\s+)([^\s'\"&]+)", re.IGNORECASE), r"\1***"),
+    (re.compile(r"(Api-Key['\":\s=]+)([^\s'\"&]+)", re.IGNORECASE), r"\1***"),
+    # key=/token=.../password=... style secrets anywhere in the line.
+    (
+        re.compile(
+            r"((?:API[_-]?KEY|api_token|token|password|secret)['\":\s=]+)([^\s'\"&]+)",
+            re.IGNORECASE,
+        ),
+        r"\1***",
+    ),
+    (re.compile(r"(persistentId=[^\s&]*key=[^\s&]*)", re.IGNORECASE), "***"),
+    # URLs with ?key=/token=/api_key= query params.
+    (re.compile(r"([?&](?:key|token|api_key)=)[^&\s]*", re.IGNORECASE), r"\1***"),
+]
+
+
 def _redact(message: str) -> str:
     """Redact API tokens / keys from log lines (never persist secrets)."""
     try:
-        import re
-
         text = str(message or "")
-        # X-Dataverse-key header values, API_KEY=..., key=..., token=...
-        text = re.sub(
-            r"(X-Dataverse-key['\":\s=]+)([^\s'\"&]+)", r"\1***", text, flags=re.IGNORECASE
-        )
-        text = re.sub(
-            r"((?:API[_-]?KEY|api_token|token)['\":\s=]+)([^\s'\"&]+)",
-            r"\1***",
-            text,
-            flags=re.IGNORECASE,
-        )
-        text = re.sub(r"(persistentId=[^\s&]*key=[^\s&]*)", "***", text, flags=re.IGNORECASE)
+        for pattern, replacement in _REDACT_PATTERNS:
+            text = pattern.sub(replacement, text)
         return text
     except Exception:
         return str(message or "")
@@ -69,6 +78,14 @@ def get_app_log() -> type["AppLog"]:
 
 class AppLog:
     """Namespace used by dataverse_client for structured logging."""
+
+    @staticmethod
+    def warn(message: str) -> None:
+        log(f"WARN: {message}")
+        try:
+            _logger.warning(_redact(message))
+        except Exception:
+            pass
 
     @staticmethod
     def info(message: str) -> None:

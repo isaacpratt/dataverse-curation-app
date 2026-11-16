@@ -9,6 +9,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 import applog
 import config as _config_module
 from config import AppConfig, Config, DataverseConfig
@@ -59,6 +61,39 @@ def test_applog_redact_standalone():
     out = applog._redact("api_token=sekret&persistentId=doi:10.1234/x")
     assert "sekret" not in out
     assert "***" in out
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Authorization: Bearer token-abc123",
+        "Authorization: bearer token-abc123",
+        "X-Dataverse-key: dvc-secret-456",
+        "Api-Key: 9876543210",
+        "api_key='legacy'",
+        "password=hunter2",
+        "secret=topsecret-1",
+        "https://x.test/api?key=querykey123&other=1",
+        "https://x.test/api?token=querykey123&key=two",
+    ],
+)
+def test_applog_redacts_header_shaped_secrets(line):
+    assert "***" in applog._redact(line)
+    for leaked in (
+        "token-abc123",
+        "dvc-secret-456",
+        "9876543210",
+        "legacy",
+        "hunter2",
+        "topsecret-1",
+        "querykey123",
+    ):
+        assert leaked not in applog._redact(line)
+
+
+def test_applog_keeps_ordinary_lines():
+    ordinary = "GET https://x.test/api/search q=* type=dataset per_page=1000 start=0"
+    assert applog._redact(ordinary) == ordinary
 
 
 # -- config save -------------------------------------------------------------

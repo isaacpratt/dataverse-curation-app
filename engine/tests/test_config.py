@@ -8,6 +8,7 @@ stale-credential deletion when the token is cleared.
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -317,3 +318,44 @@ def test_config_wrong_base_url_type_fails_loudly(tmp_path):
     )
     with pytest.raises(ValueError, match=r"dataverse\.base_url"):
         Config.load(tmp_path / "config.json")
+
+
+def test_chmod_failure_logs_warning_without_token(store, tmp_path, monkeypatch):
+    import os
+
+    import applog
+
+    def _boom(_path, _mode):
+        raise OSError("read-only filesystem")
+
+    monkeypatch.setattr(os, "chmod", _boom)
+    applog.clear()
+    cfg = Config()
+    cfg.dataverse.base_url = "https://example.test"
+    cfg.dataverse.api_token = "tok-secret-marker-999"
+    cfg.save(tmp_path / "config.json")
+    joined = "\n".join(applog.lines())
+    assert "could not be locked down" in joined
+    assert "tok-secret-marker-999" not in joined
+
+
+@pytest.mark.skipif(os.name != "nt", reason="icacls is Windows-only")
+def test_icacls_failure_logs_warning_without_token(store, tmp_path, monkeypatch):
+    import subprocess
+
+    import applog
+
+    class _Out:
+        returncode = 1
+        stderr = b"Access denied"
+        stdout = b""
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _Out())
+    applog.clear()
+    cfg = Config()
+    cfg.dataverse.base_url = "https://example.test"
+    cfg.dataverse.api_token = "tok-secret-marker-999"
+    cfg.save(tmp_path / "config.json")
+    joined = "\n".join(applog.lines())
+    assert "could not be locked down" in joined
+    assert "tok-secret-marker-999" not in joined

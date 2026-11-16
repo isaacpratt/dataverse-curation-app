@@ -37,6 +37,20 @@ PRESETS: dict[str, str] = {
     "Custom…": "",
 }
 
+
+def _warn_acl_failure(reason: str) -> None:
+    """Config was written without owner-only protection; say so (no secrets)."""
+    try:
+        from applog import get_app_log
+
+        get_app_log().warn(
+            f"config.json could not be locked down ({reason}); the file is stored with "
+            "best-effort permissions only"
+        )
+    except Exception:
+        pass
+
+
 DEFAULT_CONFIG_PATH = Path("config.json")
 
 
@@ -289,24 +303,21 @@ class Config:
             cfg.app.workspace = env_ws
         return cfg
 
-    def save(self, path: Path | None = None) -> None:
-        import tempfile
+    def _persist_token(self, kr_key: str) -> tuple[str, str]:
+        """Write the in-memory token to the credential store when possible.
 
-        cfg_path = resolve_config_path(path)
-        # Credential-store persistence: the in-memory token never lands on
-        # disk when the store can hold it (migration path for legacy
-        # plaintext configs: they become keyring-backed on first save).
+        Returns (persisted_value, source): ("", "keyring") when the token was
+        stored, (token, "config") as fallback, or ("", source) when the token
+        was cleared (a stale credential is deleted instead).
+        """
         token = self.dataverse.api_token
         persisted = token
         source = self.dataverse.api_token_source or "config"
-        kr_key = self.dataverse.base_url.rstrip("/") or "token"
         if token and _keyring is not None:
             try:
                 _keyring.set_password(KEYRING_SERVICE, kr_key, token)
-                persisted = ""
-                source = "keyring"
+                return "", "keyring"
             except Exception:
-                source = "config"
                 try:
                     from applog import get_app_log
 
@@ -315,12 +326,24 @@ class Config:
                     )
                 except Exception:
                     pass
-        elif not token and _keyring is not None:
+                return token, "config"
+        if not token and _keyring is not None:
             # Token cleared in Settings: drop the stale credential too.
             try:
                 _keyring.delete_password(KEYRING_SERVICE, kr_key)
             except Exception:
                 pass
+        return persisted, source
+
+    def save(self, path: Path | None = None) -> None:
+        import tempfile
+
+        cfg_path = resolve_config_path(path)
+        # Credential-store persistence: the in-memory token never lands on
+        # disk when the store can hold it (migration path for legacy
+        # plaintext configs: they become keyring-backed on first save).
+        kr_key = self.dataverse.base_url.rstrip("/") or "token"
+        persisted, source = self._persist_token(kr_key)
         payload = {
             "version": CONFIG_SCHEMA_VERSION,
             "dataverse": {
@@ -360,8 +383,8 @@ class Config:
         # Token at rest: restrict to owner where the OS supports it.
         try:
             os.chmod(cfg_path, 0o600)
-        except OSError:
-            pass
+        except OSError as exc:
+            _warn_acl_failure(f"chmod(cfg_path, 0600) failed: {exc}")
         # Windows: chmod is a no-op for ACLs — apply a user-only ACL so
         # other local accounts cannot read the API token.
         if os.name == "nt" and self.dataverse.api_token:
@@ -369,7 +392,7 @@ class Config:
                 import subprocess
 
                 # Remove inheritance + grant only the current user.
-                subprocess.run(
+                acl = subprocess.run(
                     [
                         "icacls",
                         str(cfg_path),
@@ -381,8 +404,11 @@ class Config:
                     timeout=10,
                     check=False,
                 )
-            except Exception:
-                pass
+                if acl.returncode != 0:
+                    stderr = acl.stderr.decode("utf-8", "replace").strip() or "no stderr"
+                    _warn_acl_failure(f"icacls exited {acl.returncode}: {stderr}")
+            except Exception as exc:
+                _warn_acl_failure(f"icacls could not be run: {exc}")
 
     def preset_label(self) -> str:
         for label, url in PRESETS.items():
