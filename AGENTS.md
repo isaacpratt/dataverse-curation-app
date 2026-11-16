@@ -97,6 +97,8 @@ bd dolt push          # Push beads data to remote
 
 Gate before handoff; run from the repository root when code (not docs-only) changed:
 
+- **Module sizes**: view modules aim for ≤ ~1,000 lines and engine modules ≤ ~1,500; oversize view modules are missing a subcomponent. Exceptions carry a dated comment naming the reason. `poe check` (format + C90 budget) is the mechanical backstop, this line is the expectation for reviewers.
+
 - `uv run pytest -q` — must exit 0
 - `uv run poe typecheck` — must report `Success: no issues found`; scope is the engine contract (`[tool.mypy] files`), so run bare `uv run mypy`
 - `python tools/probes/run_all.py` — must end with `all N probes passed`; mandatory for UI/theme changes, and cheap enough to always run
