@@ -34,14 +34,16 @@ dataverse-curation-app/
 uv sync                   # create .venv and install everything incl. dev group (from uv.lock; no pip needed)
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
 uv run pytest             # 513 tests (218 engine + 295 UI; run uv run pytest --collect-only -q for current count)
-pre-commit run --all-files # optional local gate (CI runs it too); needs uv on PATH. core.hooksPath is beads-managed, so hooks are not auto-installed — run it manually or rely on CI
+pre-commit run --all-files # optional local gate (CI runs it too); needs uv on PATH. core.hooksPath is beads-managed, so hooks are not auto-installed — run it manually or rely on CI (uv run poe hooks wraps the same thing)
+uv run poe audit        # OSV vulnerability scan of the locked dependency set (fails on any advisory)
+uv run poe hooks        # pre-commit run --all-files (wrapped for uv users)
 uv run python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
 uv run python main.py --gallery      # the component gallery: every kit component on one page
 # headless against a staged directory (--dataverse/--config are GUI-only):
 uv run python main.py --headless <staged_dir> --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE
 ```
 
-Requirements: Python 3.10+ (Windows recommended); builds pin Python 3.11 via `.python-version` and `uv.lock`. Earlier `pip install -r requirements.txt` workflow is gone — dependencies live only in `pyproject.toml` + `uv.lock` (pip escape hatch: `uv export --format requirements-txt`). Headless exit codes: 0 clean, 1 error-level findings, 2 usage/IO failure. R is only needed for parity verification against the original scripts during the port phase, not at runtime.
+Requirements: Python 3.11+ (Windows recommended); builds pin Python 3.11 via `.python-version` and `uv.lock`. Earlier `pip install -r requirements.txt` workflow is gone — dependencies live only in `pyproject.toml` + `uv.lock` (pip escape hatch: `uv export --format requirements-txt`). Headless exit codes: 0 clean, 1 error-level findings, 2 usage/IO failure. R is only needed for parity verification against the original scripts during the port phase, not at runtime.
 
 ## Packaging (portable)
 

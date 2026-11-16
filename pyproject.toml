@@ -108,6 +108,36 @@ type = "simple"
   help = "Lint with ruff"
   cmd = "ruff check ."
 
+  # Phase-1 scope (dv-hcg.2/.3): engine + root modules + tools. Flip to
+  # ["."] when the ui/ format phase lands.
+  [tool.poe.tasks.format-check]
+  help = "Verify ruff formatting of the phase-1 file set (engine, root modules, tools)"
+  cmd = "ruff format --check engine main.py applog.py config.py dataverse_client.py download_manager.py metadata_check.py response_draft.py review_rules.py startup_probe.py storage.py tools/"
+
+  [tool.poe.tasks.fmt]
+  help = "Apply ruff formatting (phase-1 set; use --check via format-check)"
+  cmd = "ruff format engine main.py applog.py config.py dataverse_client.py download_manager.py metadata_check.py response_draft.py review_rules.py startup_probe.py storage.py tools/"
+
+  [tool.poe.tasks.audit]
+  help = "Vulnerability scan of the locked dependency set (uv.lock via pip-audit/OSV)"
+  cmd = "python tools/audit_deps.py"
+
+  [tool.poe.tasks.hooks]
+  help = "Run pre-commit hooks against all files"
+  cmd = "pre-commit run --all-files"
+
+  [tool.poe.tasks.license-report]
+  help = "Write dist/licenses.md - license inventory of the locked environment"
+  cmd = "python tools/make_licenses.py"
+
+  [tool.poe.tasks.sbom]
+  help = "Write dist/sbom.cdx.json - CycloneDX SBOM of the project venv"
+  cmd = "python tools/make_sbom.py"
+
+  [tool.poe.tasks.docs-links]
+  help = "Offline link/anchor check for docs/html/*.html"
+  cmd = "python tools/check_doc_links.py"
+
   [tool.poe.tasks.typecheck]
   help = "Type-check the engine (mypy; scope from [tool.mypy] files/exclude)"
   cmd = "mypy"
