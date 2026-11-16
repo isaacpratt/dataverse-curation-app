@@ -52,7 +52,7 @@ from ui.widgets import (
     make_search_field,
     make_small_body_label,
 )
-from ui.workers import CrawlWorker
+from ui.workers import BulkCheckWorker, CrawlWorker
 
 
 class _BarLabel(QLabel):
@@ -630,6 +630,12 @@ class DashboardView(QWidget):
         # Decision set cache: refreshed per crawl / on return from detail so
         # per-keystroke filtering never touches sqlite (_update_metrics).
         self._decided_cache: set[str] | None = None
+        # Bulk "Run checks for visible rows" (dv-9m2): at most the painting
+        # window is enqueued, never the full crawl. The worker is a
+        # sequential file-checks pass; a second trigger while it runs asks
+        # to cancel instead of starting an overlapping batch.
+        self._bulk_worker: BulkCheckWorker | None = None
+        self._bulk_enqueued: list[tuple[str, str]] = []
         # Debounced search: rebuild the 12-col table 200 ms after the last
         # keystroke instead of on every keystroke.
         self._filter_timer = QTimer(self)
@@ -798,6 +804,12 @@ class DashboardView(QWidget):
         # (double-click alone locks out keyboard-only users), F5 refreshes,
         # Escape clears the search. See _on_table_key.
         self._table.installEventFilter(self)
+        # Right-click on the queue: "Run checks for visible rows" capped at
+        # the painting window (dv-9m2).
+        self._table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(
+            self._show_queue_context_menu
+        )
         # The viewport is watched too: its width changes when the vertical
         # scrollbar appears (the columns must keep filling it).
         try:
@@ -1619,6 +1631,159 @@ class DashboardView(QWidget):
         reset_action.triggered.connect(self._reset_queue_layout)
         menu.addAction(reset_action)
         menu.exec(pos)
+
+    def _visible_check_jobs(self) -> list[tuple[str, str]]:
+        """pid+title of the rows the table paints, capped at the painting window."""
+        jobs = []
+        for ds in list(getattr(self, "_datasets", []))[: self._MAX_PAINTED_ROWS]:
+            pid = str(ds.get("persistent_id") or "").strip()
+            if pid:
+                jobs.append((pid, str(ds.get("title") or "")))
+        return jobs
+
+    def _build_queue_context_menu(self) -> QMenu:
+        """The queue's right-click menu (dv-9m2).
+
+        One item while idle: bulk-run file checks for the visible rows
+        (the painting window, never beyond). While a bulk run is in
+        flight, the same menu offers to cancel it.
+        """
+        menu = QMenu(self)
+        if self._bulk_worker is not None:
+            cancel = menu.addAction(t("dashboard.context.cancel_bulk_checks"))
+            cancel.triggered.connect(self._on_cancel_bulk_checks)
+            return menu
+        count = len(self._visible_check_jobs())
+        action = menu.addAction(
+            t("dashboard.context.run_checks_visible", count=count)
+        )
+        action.setEnabled(count > 0)
+        action.setToolTip(t("dashboard.context.run_checks_visible_tip"))
+        action.triggered.connect(self._enqueue_visible_checks)
+        return menu
+
+    def _show_queue_context_menu(self, pos) -> None:  # type: ignore[no-untyped-def]
+        menu = self._build_queue_context_menu()
+        menu.exec(self._table.viewport().mapToGlobal(pos))
+
+    def _enqueue_visible_checks(self) -> None:
+        """Enqueue the visible rows for a bulk file-checks pass.
+
+        Capped at the painting window by construction; the enqueued count
+        is logged. The worker runs sequentially in the background and
+        writes each report to the same checks-report.json the detail view
+        auto-loads — open the dataset afterwards and the results are
+        already there.
+        """
+        jobs = self._visible_check_jobs()
+        count = len(jobs)
+        self._bulk_enqueued = list(jobs)
+        try:
+            from applog import get_app_log
+
+            get_app_log().info(
+                t("dashboard.log.bulk_checks_enqueued", count=count)
+            )
+        except Exception:
+            pass
+        self._progress.setText(
+            t("dashboard.progress.bulk_checks_enqueued", count=count)
+        )
+        if not jobs:
+            return
+        if self._bulk_worker is not None:
+            return
+        self._bulk_worker = BulkCheckWorker(
+            jobs, self._config.app.workspace, self
+        )
+        self._bulk_worker.progress.connect(self._progress.setText)
+        self._bulk_worker.progressFraction.connect(self._on_bulk_fraction)
+        self._bulk_worker.finished.connect(self._on_bulk_checks_finished)
+        self._bulk_worker.cancelled.connect(self._on_bulk_checks_cancelled)
+        self._bulk_worker.error.connect(self._on_bulk_checks_error)
+        try:
+            self._ring.reset()
+            self._ring.setFraction(0.0)
+            self._ring.show()
+        except Exception:
+            pass
+        self._bulk_worker.start()
+
+    def _on_bulk_fraction(self, fraction: float) -> None:
+        try:
+            self._ring.setFraction(fraction)
+        except Exception:
+            pass
+
+    def _bulk_wrap_up(self) -> None:
+        try:
+            self._ring.setFraction(1.0)
+        except Exception:
+            pass
+        self._hide_ring()
+        self._bulk_worker = None
+        self._sync_status_bar()
+
+    def _on_bulk_checks_finished(self, summary) -> None:  # type: ignore[no-untyped-def]
+        total = int(summary.get("total", 0)) if isinstance(summary, dict) else 0
+        completed = int(summary.get("completed", 0)) if isinstance(summary, dict) else 0
+        skipped = int(summary.get("skipped", 0)) if isinstance(summary, dict) else 0
+        failed = int(summary.get("failed", 0)) if isinstance(summary, dict) else 0
+        try:
+            from applog import get_app_log
+
+            get_app_log().info(
+                t(
+                    "dashboard.log.bulk_checks_done",
+                    completed=completed,
+                    skipped=skipped,
+                    failed=failed,
+                    total=total,
+                )
+            )
+        except Exception:
+            pass
+        self._progress.setText(
+            t(
+                "dashboard.progress.bulk_checks_done",
+                completed=completed,
+                skipped=skipped,
+                failed=failed,
+                total=total,
+            )
+        )
+        self._bulk_wrap_up()
+
+    def _on_bulk_checks_cancelled(self) -> None:
+        try:
+            from applog import get_app_log
+
+            get_app_log().info(t("dashboard.log.bulk_checks_cancelled"))
+        except Exception:
+            pass
+        self._progress.setText(t("dashboard.progress.bulk_checks_cancelled"))
+        self._bulk_wrap_up()
+
+    def _on_bulk_checks_error(self, message: str) -> None:
+        from ui.dialogs import describe_error, show_warning
+
+        headline, details = describe_error(message)
+        self._progress.setText(t("dashboard.progress.bulk_checks_error"))
+        self._bulk_wrap_up()
+        show_warning(
+            self,
+            t("dashboard.dialogs.bulk_checks_title"),
+            headline,
+            details=details,
+        )
+
+    def _on_cancel_bulk_checks(self) -> None:
+        worker = self._bulk_worker
+        if worker is not None:
+            try:
+                worker.cancel()
+            except Exception:
+                pass
 
     def _reset_queue_layout(self) -> None:
         """Reset the queue table to its construction view, then repaint."""

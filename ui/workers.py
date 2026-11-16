@@ -737,6 +737,101 @@ class CheckWorker(QThread):
             self.error.emit(f"{exc}\n\n{traceback.format_exc()}")
 
 
+class BulkCheckWorker(QThread):
+    """Run the engine over the staged files of many datasets, one at a time.
+
+    The detail view checks one dataset; the queue wants the same report
+    written for each visible row, so opening a dataset paints results
+    without a re-run. Strictly sequential and never touches the network:
+    non-staged pids are counted as skipped, and a failed dataset never
+    stops the batch. Reads no inventory or metadata (both are
+    per-dataset caches); the file checks run as-is.
+    """
+
+    # Human line for the status pill: "Bulk checks: 3 of 12 — <title>".
+    progress = Signal(str)
+    progressFraction = Signal(float)
+    # {"completed": n, "skipped": n, "failed": n, "total": m}
+    finished = Signal(object)
+    cancelled = Signal()
+    error = Signal(str)
+
+    def __init__(self, jobs: list, workspace, parent=None):
+        """jobs: list of (persistent_id, title) in paint order."""
+        super().__init__(parent)
+        register_worker(self)
+        self._jobs = [(str(pid), str(title)) for pid, title in jobs]
+        self._workspace = Path(workspace)
+        self._cancel_requested = False
+
+    def cancel(self) -> None:
+        """Stop after the current dataset finishes (engine checks finish first)."""
+        self._cancel_requested = True
+        self.requestInterruption()
+
+    def _stop_requested(self) -> bool:
+        return self._cancel_requested or self.isInterruptionRequested()
+
+    def run(self) -> None:
+        import traceback
+
+        try:
+            from download_manager import DownloadManager
+            from engine.runner import run_report
+
+            dl = DownloadManager(None, self._workspace)
+            summary = {"completed": 0, "skipped": 0, "failed": 0, "total": len(self._jobs)}
+            for index, (pid, title) in enumerate(self._jobs):
+                if self._stop_requested():
+                    self.cancelled.emit()
+                    return
+                try:
+                    files_dir = dl.files_dir(pid)
+                except Exception:
+                    files_dir = None
+                if files_dir is None or not files_dir.is_dir():
+                    summary["skipped"] += 1
+                else:
+                    self.progress.emit(
+                        t(
+                            "workers.bulk_checks.progress",
+                            current=index + 1,
+                            total=len(self._jobs),
+                            title=title,
+                        )
+                    )
+                    try:
+                        report = run_report(
+                            files_dir,
+                            persistent_id=pid,
+                            label=title,
+                            max_workers=2,
+                            is_cancelled=self._stop_requested,
+                        )
+                        if self._stop_requested():
+                            self.cancelled.emit()
+                            return
+                        try:
+                            # Atomic write in run_report land; same contract as the
+                            # detail view's auto-cache (checks-report.json).
+                            report.save(dl.dataset_dir(pid) / "checks-report.json")
+                        except Exception:
+                            pass
+                        summary["completed"] += 1
+                    except Exception:
+                        summary["failed"] += 1
+                try:
+                    self.progressFraction.emit((index + 1) / len(self._jobs))
+                except Exception:
+                    pass
+            self.finished.emit(summary)
+        except Exception as exc:
+            if self._stop_requested():
+                self.cancelled.emit()
+                return
+            self.error.emit(f"{exc}\n\n{traceback.format_exc()}")
+
+
 class MetadataBlocksWorker(QThread):
     """Fetch the instance's metadata-field catalog (metadatablocks API)."""
 

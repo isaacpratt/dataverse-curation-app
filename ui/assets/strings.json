@@ -203,7 +203,10 @@
     "curation_labels": "Curation labels: {labels}",
     "no_curation_labels": "No curation labels found — none configured, or the token lacks PublishDataset permission (see log for 403s)",
     "received": "Received {total} dataset(s), {in_review} in review — use the filter bar to narrow by status/text",
-    "download": {}
+    "download": {},
+    "bulk_checks": {
+      "progress": "Bulk checks: {current} of {total} — {title}"
+    }
   },
   "dashboard": {
     "columns": {
@@ -278,6 +281,11 @@
       "reset": "Reset columns && sorting",
       "reset_tip": "Restore default widths, order, visibility and sort"
     },
+    "context": {
+      "run_checks_visible": "Run checks for {count:,} visible rows",
+      "run_checks_visible_tip": "Queue a file-checks pass for exactly the rows the table paints (up to the painting window), writing each result where the dataset page will find it",
+      "cancel_bulk_checks": "Cancel bulk checks"
+    },
     "progress": {
       "api_key": "Enter an API key in Settings (top nav) to load datasets.",
       "api_key_suffix": " — enter an API key in Settings to check for updates.",
@@ -298,7 +306,11 @@
       "open_hint": "Double-click a row to open it",
       "no_datasets": "No datasets found in this collection. Check the collection alias or add an API token for drafts.",
       "no_match": "No datasets match filter — {total} total. Clear the filter to see all.",
-      "painted_cap": "Showing {shown:,} of {matching:,} matching ({total:,} total) — narrow the filter to see more"
+      "painted_cap": "Showing {shown:,} of {matching:,} matching ({total:,} total) — narrow the filter to see more",
+      "bulk_checks_enqueued": "Queued {count:,} visible datasets for checks — open a dataset and the results are ready",
+      "bulk_checks_done": "Bulk checks complete — {completed:,} done · {skipped:,} skipped · {failed:,} failed (of {total:,})",
+      "bulk_checks_cancelled": "Bulk checks cancelled",
+      "bulk_checks_error": "Bulk checks failed — details in dialog"
     },
     "table": {
       "size_pending": "Beyond the enrichment cap — open the dataset to load its file inventory",
@@ -309,10 +321,14 @@
     "dialogs": {
       "render_title": "Dashboard",
       "render_text": "Couldn't display the dataset list.",
-      "load_title": "Can't load datasets"
+      "load_title": "Can't load datasets",
+      "bulk_checks_title": "Bulk checks"
     },
     "log": {
-      "label_filter_options": "Curation label filter options: {labels}"
+      "label_filter_options": "Curation label filter options: {labels}",
+      "bulk_checks_enqueued": "Bulk checks enqueued for {count:,} visible rows",
+      "bulk_checks_done": "Bulk checks finished: {completed:,} done, {skipped:,} skipped, {failed:,} failed of {total:,}",
+      "bulk_checks_cancelled": "Bulk checks cancelled"
     },
     "display_state": {
       "review": "In Review",
@@ -676,8 +692,8 @@
       "load_metadata": "Load metadata",
       "load_metadata_tip": "Fetch the dataset's file list and all metadata fields from the Dataverse (no download)",
       "run_checks": "Run checks",
-      "run_checks_tip": "Download the dataset first — checks run on the staged files",
-      "run_checks_tip_staged": "Run the automated curation checks on the staged files",
+      "run_checks_tip": "Download the dataset first — checks run on the staged files\n\nShortcuts: Ctrl+Enter — run checks (commits on the Response page) · Ctrl+D — download all · Ctrl+Shift+O — open the staged folder",
+      "run_checks_tip_staged": "Run the automated curation checks on the staged files\n\nShortcuts: Ctrl+Enter — run checks (commits on the Response page) · Ctrl+D — download all · Ctrl+Shift+O — open the staged folder",
       "cancel_checks": "Cancel checks",
       "cancel_checks_tip": "Stop the running checks — the report is not written",
       "cancel_checks_a11y": "Cancel the running checks",
@@ -795,7 +811,8 @@
       "notes_placeholder": "Enter findings, issues, or specific instructions for the author...",
       "decision_label": "Decision State",
       "decision_tip": "Curation labels from this Dataverse instance (falls back to generic states when labels are unavailable)",
-      "commit": "Commit Decision"
+      "commit": "Commit Decision",
+      "commit_tip": "Record the decision for this dataset — the chosen label was written to Dataverse when the instance exposes curation labels, plus a line in the Dataset log. Ctrl+Enter on the Response page commits."
     },
     "response": {
       "intro": "Response — draft the message for the dataset depositor. The checklist on the left is pulled from the active ruleset (incomplete checks) plus failed file checks; uncheck items to drop them, then edit the draft on the right freely and copy or export it.",

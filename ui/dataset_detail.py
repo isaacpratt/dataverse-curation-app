@@ -756,6 +756,40 @@ class DatasetDetailView(QWidget):
         except Exception:
             pass
 
+        self._install_shortcuts()
+
+    # ---- Keyboard shortcuts (dv-9m2) ----------------------------------------
+    def _install_shortcuts(self) -> None:
+        """Power-path accelerators for the per-dataset loop.
+
+        Scoped to this view (WidgetWithChildrenShortcut): the chords fire
+        only while focus is inside the detail view, never from the dashboard
+        or a pane. Consistent with the app-level shortcuts in main_window.py.
+        """
+        from PySide6.QtGui import QKeySequence, QShortcut
+
+        def _sc(seq: str, handler):
+            sc = QShortcut(QKeySequence(seq, QKeySequence.PortableText), self, handler)
+            sc.setContext(Qt.WidgetWithChildrenShortcut)
+            return sc
+
+        self._shortcuts = [
+            _sc("Ctrl+Return", self._on_ctrl_enter),
+            _sc("Ctrl+Enter", self._on_ctrl_enter),
+            _sc("Ctrl+D", self._on_download),
+            _sc("Ctrl+Shift+O", self._on_open_folder),
+        ]
+
+    def _on_ctrl_enter(self) -> None:
+        """One chord, two contexts: Commit on the Response page, else Run checks."""
+        try:
+            if self._pages.currentIndex() == 1:
+                self._on_commit()
+                return
+        except Exception:
+            pass
+        self._on_run_checks()
+
     # ---- Builders ----
     def _build_verdict_card(self) -> QFrame:
         """Readiness banner (dv-6nv): one synthesized answer, top of page."""
@@ -1656,6 +1690,8 @@ class DatasetDetailView(QWidget):
         row = QHBoxLayout()
         row.addStretch()
         commit = make_action_button(t("detail.assessment.commit"), kind="primary", size="md")
+        commit.setToolTip(t("detail.assessment.commit_tip"))
+        commit.setAccessibleName(t("detail.assessment.commit"))
         commit.clicked.connect(self._on_commit)
         self._commit_btn = commit
         row.addWidget(commit)
