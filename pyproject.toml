@@ -149,6 +149,10 @@ type = "simple"
   help = "Offline link/anchor check for docs/html/*.html"
   cmd = "python tools/check_doc_links.py"
 
+  [tool.poe.tasks.complexity]
+  help = "Advisory cyclomatic-complexity report (radon) -> reports/complexity.md"
+  cmd = "python tools/complexity_report.py"
+
   [tool.poe.tasks.typecheck]
   help = "Type-check the engine (mypy; scope from [tool.mypy] files/exclude)"
   cmd = "mypy"
