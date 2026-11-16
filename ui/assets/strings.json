@@ -847,6 +847,10 @@
       "summary_suffix": " · {resolved} of {total} findings resolved",
       "tree_note": "Disposition: {label}"
     },
+    "copy_finding": {
+      "action": "Copy this finding's text",
+      "copied": "Finding copied to clipboard"
+    },
     "dictionary": {
       "action": "Draft dictionary",
       "tip": "Write a CSV variable-dictionary draft (name, label, type) for a tabular file from its Dataverse variable metadata, for the depositor to complete.",

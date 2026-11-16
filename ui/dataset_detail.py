@@ -1261,6 +1261,40 @@ class DatasetDetailView(QWidget):
     # caption line). Rules the ruleset marks "unchecked" surface only in
     # the Not checked filter (status "skipped", no verdict, no controls).
 
+    def _finding_overflow_button(self, text: str):
+        """⋯ ghost button opening the copy-this-finding menu (dv-18z).
+
+        One item, one job: copy a single line a curator can paste into a
+        comment or the depositor letter. No state, no log entry.
+        """
+        btn = make_action_button("⋯", kind="ghost", size="sm")
+        btn.setToolTip(t("detail.copy_finding.action"))
+        btn.setAccessibleName(t("detail.copy_finding.action"))
+        btn.clicked.connect(
+            lambda _c=False, b=btn, s=text: self._show_copy_menu(b, s)
+        )
+        return btn
+
+    def _build_copy_menu(self, text: str):
+        """Build the one-item copy menu for a finding row (dv-18z)."""
+        from PySide6.QtWidgets import QApplication, QMenu
+
+        menu = QMenu(self)
+        action = menu.addAction(t("detail.copy_finding.action"))
+
+        def _copy():
+            QApplication.clipboard().setText(text)
+            try:
+                self._set_status(t("detail.copy_finding.copied"))
+            except Exception:
+                pass
+
+        action.triggered.connect(_copy)
+        return menu
+
+    def _show_copy_menu(self, btn, text: str) -> None:
+        self._build_copy_menu(text).exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+
     def _meta_required_bar(self) -> QFrame:
         bar = QFrame()
         bar.setObjectName("MetaRequiredBar")
@@ -1572,6 +1606,10 @@ class DatasetDetailView(QWidget):
         )
         badge.setAlignment(Qt.AlignCenter)
         lay.addWidget(badge)
+        copy_text = f"{label} — {value_text}"
+        if requirement:
+            copy_text += f"  ({requirement})"
+        lay.addWidget(self._finding_overflow_button(copy_text))
 
         if requirement:
             frame.setToolTip(
@@ -3761,6 +3799,11 @@ class DatasetDetailView(QWidget):
         badge_lbl.setFixedHeight(20)
         badge_lbl.setMinimumWidth(56)
         lay.addWidget(badge_lbl)
+        lay.addWidget(
+            self._finding_overflow_button(
+                t("detail.auto_checks.file_result_format", path=title, message=desc)
+            )
+        )
         return frame
 
     def _refresh_files_placeholder(self) -> None:

@@ -93,12 +93,21 @@ def main() -> int:
             disposition_label("wontfix") == "Won't fix",
             "the kit labels the token",
         )
+    from ui.i18n import t
+
+    note_label = t("detail.disposition.note_action")
+    overflow_buttons = [
+        b for b in row.findChildren(QPushButton) if b.text() == "⋯"
+    ]
+    report.check(
+        len(overflow_buttons) == 1, "the row carries one overflow (ellipsis) action",
+    )
     note_buttons = [
-        b for b in row.findChildren(QPushButton) if b.text()
+        b for b in row.findChildren(QPushButton) if b.text() == note_label
     ]
     report.check(
         len(note_buttons) == 1, "the row carries one Note affordance",
-        f"buttons={[b.text() for b in note_buttons]}",
+        f"buttons={ascii([b.text() for b in row.findChildren(QPushButton)])}",
     )
     # A pass row carries no disposition controls.
     clean = view._auto_row("format.csv.content", "a.csv: parsed (utf-8)", True, "info")
