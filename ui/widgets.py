@@ -1318,6 +1318,7 @@ def make_text_label(
     object_name: str = "BodySM",
     tip: str = "",
     wrap: bool = False,
+    selectable: bool = False,
 ) -> QLabel:
     """Plain text label wearing a body token, optionally recoloured.
 
@@ -1327,6 +1328,8 @@ def make_text_label(
     lbl = QLabel(text)
     lbl.setObjectName(object_name)
     lbl.setWordWrap(wrap)
+    if selectable:
+        lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
     if color:
         lbl.setStyleSheet(f"QLabel#{object_name} {{ color: {color}; }}")
     if tip:

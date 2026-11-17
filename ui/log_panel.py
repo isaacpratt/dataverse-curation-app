@@ -75,7 +75,7 @@ class LogPage(QWidget):
             (t("log.warn_chip"), STATE_WARNING_GRAPHIC, t("log.warn_tip")),
             (t("log.plain_chip"), TEXT_MUTED, t("log.plain_tip")),
         ):
-            legend.addWidget(make_text_label(text, color=colour, tip=tip))
+            legend.addWidget(make_text_label(text, color=colour, tip=tip, selectable=True))
         header.addLayout(legend)
         header.addStretch(1)
         # Search box: filter visible lines (case-insensitive substring).
