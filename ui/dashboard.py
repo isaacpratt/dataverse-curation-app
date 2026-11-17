@@ -347,6 +347,13 @@ class DashboardView(QWidget):
     # unusable. Filtering/sorting still cover the full set; only the
     # painted rows are capped, and the status line says how many are
     # hidden so the cap is never silent.
+    #
+    # Measured, not guessed (dv-fjr; tools/bench_paint_window.py, 25k
+    # synthetic rows, Windows offscreen, median of 5 runs): filtering all
+    # 25k rows costs ~13 ms, painting costs ~0.45 ms per row, so a full
+    # repaint is ~0.9 s at 2,000 painted rows, ~2.0 s at 5,000, ~4.0 s
+    # at 10,000 and ~7.6 s uncapped. 2,000 is the highest cap whose
+    # repaint stays inside a second, so the cap is confirmed, not raised.
     _MAX_PAINTED_ROWS = 2000
 
     def __init__(self, config: Config) -> None:
