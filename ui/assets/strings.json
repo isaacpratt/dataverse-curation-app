@@ -449,6 +449,7 @@
       "columns": {
         "package": "Package",
         "installed": "Installed",
+        "version": "Version",
         "size": "Size",
         "used_for": "Used for",
         "action": "Action"
