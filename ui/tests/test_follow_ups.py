@@ -102,7 +102,7 @@ def view(qapp, tmp_path):
             return tmp_path / "dataset"
 
     v._dl_mgr = _StubDl()
-    v._set_status = lambda msg: None
+    v._set_status = lambda msg, **_kw: None
     v._state = lambda: __import__("storage").open_state(cfg.app.workspace)
 
     def _log(action, notes="", details=None):

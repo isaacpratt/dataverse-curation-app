@@ -218,6 +218,10 @@ class SettingsPane(QWidget):
         conn_row.setContentsMargins(0, 0, 0, 0)
         conn_row.setSpacing(8)
         conn_row.addWidget(test_btn, 0)
+        # Icon + verdict: a success reads as unmissable at a glance (dv-3wc).
+        self._conn_icon = QLabel()
+        self._conn_icon.hide()
+        conn_row.addWidget(self._conn_icon, 0)
         self._conn_status = QLabel("")
         self._conn_status.setWordWrap(True)
         self._conn_status.setTextInteractionFlags(
@@ -231,6 +235,7 @@ class SettingsPane(QWidget):
         form.addRow("", conn_row)
         # A stale verdict must not survive a URL edit.
         self.url_edit.textChanged.connect(lambda _t: self._conn_status.setText(""))
+        self.url_edit.textChanged.connect(lambda _t: self._conn_icon.hide())
         self.url_edit.textChanged.connect(lambda _t: self._clear_user_info())
         self.token_edit.textChanged.connect(lambda _t: self._clear_user_info())
         self.subtree_edit.textChanged.connect(lambda _t: self._clear_collection_role())
@@ -1236,7 +1241,22 @@ class SettingsPane(QWidget):
         in-progress tone. No dialog — the result lives where the test ran.
         """
         try:
-            token = "SuccessSM" if ok is True else ("DangerSM" if ok is False else "HintSM")
+            token = "SuccessMD" if ok is True else ("DangerMD" if ok is False else "HintSM")
+            from ui.icons import icon as _icon
+            from ui.theme import TEXT_DANGER, TEXT_SUCCESS
+
+            if ok is True:
+                self._conn_icon.setPixmap(
+                    _icon("check", color=TEXT_SUCCESS, size=16).pixmap(16, 16)
+                )
+                self._conn_icon.show()
+            elif ok is False:
+                self._conn_icon.setPixmap(
+                    _icon("x", color=TEXT_DANGER, size=16).pixmap(16, 16)
+                )
+                self._conn_icon.show()
+            else:
+                self._conn_icon.hide()
             self._conn_status.setObjectName(token)
             self._conn_status.setText(text)
             self._conn_status.setToolTip(tip or text)

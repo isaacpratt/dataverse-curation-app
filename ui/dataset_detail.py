@@ -563,10 +563,19 @@ class DatasetDetailView(QWidget):
         header_row.addLayout(actions_col, 0)
         top_lay.addLayout(header_row)
 
-        # Status + progress (subtle). The strip carries body-size text
-        # (13px): it is the page's only running commentary - "Checks
-        # complete - 3 findings across 42 files" - and at caption size it
-        # was the smallest, least readable line in the app.
+        # Status + progress: a composed strip (icon slot + message) so a
+        # confirmation reads as unmissable success at a glance (dv-3wc).
+        # Info messages keep a quiet face; success/error wear the body-size
+        # high-contrast text and an icon.
+        self._status_row = QWidget()
+        self._status_row.setObjectName("StatusStrip")
+        self._status_row.setStyleSheet(transparent_surface_qss("StatusStrip"))
+        _status_lay = QHBoxLayout(self._status_row)
+        _status_lay.setContentsMargins(0, 0, 0, 0)
+        _status_lay.setSpacing(8)
+        self._status_icon = QLabel(self._status_row)
+        self._status_icon.hide()
+        _status_lay.addWidget(self._status_icon)
         self._status = QLabel("")
         self._status.setStyleSheet(
             status_strip_qss(
@@ -575,7 +584,9 @@ class DatasetDetailView(QWidget):
         )
         self._status.setWordWrap(True)
         self._status.setVisible(False)
-        top_lay.addWidget(self._status)
+        _status_lay.addWidget(self._status, 1)
+        self._status_row.hide()
+        top_lay.addWidget(self._status_row)
         self._progress = make_progress_bar(height=6)
         self._progress.setVisible(False)
         top_lay.addWidget(self._progress)
@@ -1333,7 +1344,7 @@ class DatasetDetailView(QWidget):
         def _copy():
             QApplication.clipboard().setText(text)
             try:
-                self._set_status(t("detail.copy_finding.copied"))
+                self._set_status(t("detail.copy_finding.copied"), tone="success")
             except Exception:
                 pass
 
@@ -2232,7 +2243,7 @@ class DatasetDetailView(QWidget):
             from PySide6.QtWidgets import QApplication
 
             QApplication.clipboard().setText(self._response_edit.toPlainText())
-            self._set_status(t("detail.status.response_copied"))
+            self._set_status(t("detail.status.response_copied"), tone="success")
         except Exception:
             pass
 
@@ -2295,7 +2306,7 @@ class DatasetDetailView(QWidget):
             t("detail.status.response_saved_log", name=out.name),
             {"path": str(out)},
         )
-        self._set_status(t("detail.status.response_saved", name=out.name))
+        self._set_status(t("detail.status.response_saved", name=out.name), tone="success")
 
     def _layout_for(self, name: str, header) -> "TableLayout":
         """Return the persisted-layout controller for a header (one per header).
@@ -3415,9 +3426,45 @@ class DatasetDetailView(QWidget):
         return card
 
     # ---- Helpers ----
-    def _set_status(self, msg: str) -> None:
-        self._status.setText(msg)
-        self._status.setVisible(bool(msg))
+    def _set_status(self, msg: str, tone: str = "info") -> None:
+        """Set the status strip. tone: info (quiet) | success | error.
+
+        Success/error wear body-size high-contrast text and an icon so a
+        confirmation reads at a glance (dv-3wc); the message persists
+        until the next _set_status call (no timers).
+        """
+        text = str(msg or "")
+        visible = bool(text)
+        self._status.setText(text)
+        try:
+            from ui.icons import icon as _icon
+
+            if tone == "success":
+                color, name = TEXT_SUCCESS, "check"
+            elif tone == "error":
+                color, name = TEXT_DANGER, "x"
+            else:
+                color, name = None, None
+            if name is not None:
+                self._status_icon.setPixmap(
+                    _icon(name, color=color, size=16).pixmap(16, 16)
+                )
+                self._status_icon.show()
+            else:
+                self._status_icon.hide()
+            self._status.setStyleSheet(
+                status_strip_qss(
+                    SURFACE_CARD,
+                    BORDER_SUBTLE,
+                    color or TEXT_MUTED,
+                    font_size=FONT_BODY,
+                    weight=600 if name is not None else None,
+                )
+            )
+        except Exception:
+            pass
+        self._status.setVisible(visible)
+        self._status_row.setVisible(visible)
 
     @staticmethod
     def _dress_pill(pill: QLabel, text: str, label: str) -> None:
@@ -4185,7 +4232,7 @@ class DatasetDetailView(QWidget):
                 t("detail.dictionary.failed", exc=exc),
             )
             return
-        self._set_status(t("detail.dictionary.saved", path=str(out)))
+        self._set_status(t("detail.dictionary.saved", path=str(out)), tone="success")
         self._log_action(
             "dictionary_drafted",
             t("detail.dictionary.saved_log", name=out.name),
@@ -4561,7 +4608,7 @@ class DatasetDetailView(QWidget):
                 )
                 self._file_footer_right.setText("")
             else:
-                self._set_status(t("detail.status.file_list_failed"))
+                self._set_status(t("detail.status.file_list_failed"), tone="error")
                 self._file_tree.setModel(_btm([], None))
                 self._all_file_rows = []
                 self._file_footer_left.setText(t("detail.status.file_list_failed_footer"))
@@ -4951,7 +4998,8 @@ class DatasetDetailView(QWidget):
             self._check_btn.setEnabled(True)
             self._check_btn.setToolTip(t("detail.header.run_checks_tip_staged"))
             self._set_status(
-                t("detail.download.all_verified_skip", count=len(inventory))
+                t("detail.download.all_verified_skip", count=len(inventory)),
+                tone="success",
             )
             self._log_action(
                 "downloaded",
@@ -5051,7 +5099,9 @@ class DatasetDetailView(QWidget):
         # Belt-and-braces: staged files exist now, so checks are available.
         self._check_btn.setEnabled(self._dl_mgr.files_dir(self._pid).exists())
         self._check_btn.setToolTip(t("detail.header.run_checks_tip_staged"))
-        self._set_status(t("detail.status.downloaded_to", path=staged))
+        self._set_status(
+            t("detail.status.downloaded_to", path=staged), tone="success"
+        )
         self._log_action("downloaded", t("detail.status.staged_to", path=staged), {"staged": str(staged), "ok": ok})
         # Staged content may resolve file-content text rules — re-evaluate.
         try:
@@ -5214,7 +5264,8 @@ class DatasetDetailView(QWidget):
                 if cache_path is not None
                 else t("detail.status.report_auto_save_failed")
             )
-            + t("detail.status.use_export_for_markdown")
+            + t("detail.status.use_export_for_markdown"),
+            tone="success",
         )
         self._log_action(
             "checks_run",
@@ -5256,7 +5307,7 @@ class DatasetDetailView(QWidget):
         # The failure stays on the page: an empty status strip read as
         # "nothing happened" once the dialog was closed. The strip now
         # carries the reason and stays until the next run replaces it.
-        self._set_status(t("detail.status.checks_failed", reason=headline))
+        self._set_status(t("detail.status.checks_failed", reason=headline), tone="error")
         show_critical(self, t("detail.checks.title"), headline, details=details,
                      retry=self._on_run_checks)
 
@@ -5394,7 +5445,7 @@ class DatasetDetailView(QWidget):
                 t("detail.status.record_saved_log", name=record_dir.name),
                 {"path": str(record_dir)},
             )
-            self._set_status(t("detail.status.record_saved", path=record_dir))
+            self._set_status(t("detail.status.record_saved", path=record_dir), tone="success")
         except Exception as exc:
             show_warning(
                 self,
@@ -5463,6 +5514,7 @@ class DatasetDetailView(QWidget):
                 "detail.status.reports_saved",
                 markdown=md_path.name,
                 json=json_path.name,
-            )
+            ),
+            tone="success",
         )
         self._refresh_workflow()

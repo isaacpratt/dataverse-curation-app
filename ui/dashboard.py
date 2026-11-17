@@ -941,7 +941,7 @@ class DashboardView(QWidget):
         pill_lay.setContentsMargins(14, 6, 14, 6)
         pill_lay.setSpacing(8)
         self._status_lbl = _BarLabel("")
-        self._status_lbl.setObjectName("CaptionSM")
+        self._status_lbl.setObjectName("ValueMD")
         pill_lay.addWidget(self._status_lbl)
         pill_lay.setAlignment(self._status_lbl, Qt.AlignVCenter)
         self._status_sep = make_caption_label("·")
