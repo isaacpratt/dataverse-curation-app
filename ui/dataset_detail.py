@@ -1343,17 +1343,6 @@ class DatasetDetailView(QWidget):
     def _show_copy_menu(self, btn, text: str) -> None:
         self._build_copy_menu(text).exec(btn.mapToGlobal(btn.rect().bottomLeft()))
 
-    def _meta_required_bar(self) -> QFrame:
-        bar = QFrame()
-        bar.setObjectName("MetaRequiredBar")
-        bar.setFixedWidth(3)
-        bar.setStyleSheet(
-            surface_frame_qss(TEXT_DANGER, TEXT_DANGER, radius="1px",
-                              selector="QFrame#MetaRequiredBar")
-        )
-        bar.setToolTip(t("detail.metadata_check.level_tip"))
-        return bar
-
     def _meta_pending_row(self) -> QFrame:
         """Return the placeholder shown until completeness has been evaluated."""
         frame = QFrame()
@@ -1573,8 +1562,10 @@ class DatasetDetailView(QWidget):
         lay = QHBoxLayout(frame)
         lay.setContentsMargins(10, 8, 10, 8)
         lay.setSpacing(8)
-        if level_required and not pending:
-            lay.addWidget(self._meta_required_bar())
+        if not pending:
+            # dv-onk: no coloured bar; the required/optional distinction
+            # stays on the tooltip (both levels described).
+            frame.setToolTip(t("detail.metadata_check.level_tip"))
         lay.addWidget(_icon_label(icon_name, size=16, color=icon_color))
 
         txt = QVBoxLayout()
