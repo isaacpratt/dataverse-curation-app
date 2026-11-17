@@ -5,10 +5,6 @@ __pycache__/
 build/
 dist/
 *.spec
-# Local full-build copy used for fast testing (hundreds of MB, regenerable
-# via `make build-full` — never commit).
-curation-app-lite-win/
-curation-app-full/
 *.db
 *.sqlite
 *.sqlite-journal

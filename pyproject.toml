@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dataverse-curation-app"
+name = "dataverse-docent"
 dynamic = ["version"]
-description = "Desktop app to curate datasets submitted for review in Dataverse"
+description = "Dataverse Docent - desktop app to curate datasets submitted for review in Dataverse"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
@@ -116,34 +116,28 @@ type = "simple"
   help = "Remove build/, dist/, .pyi-cache/ and stray .spec files"
   cmd = "python tools/clean_tree.py"
 
-  # PyInstaller flags live in tools/build_app.py (one list, both variants,
-  # shared safe excludes). That script prints wall time + artefact size.
-  [tool.poe.tasks.build-lite]
-  help = "Build dist/curation-app-lite (lite onedir; all format libs excluded)"
-  cmd = "python tools/build_app.py --variant lite"
-
-  [tool.poe.tasks.build-full]
-  help = "Build dist/curation-app-full (full onedir; the installer payload)"
-  cmd = "python tools/build_app.py --variant full"
-
-  [tool.poe.tasks.copy-example-config]
-  help = "Copy config.example.json into dist/curation-app-full/ (no-op if absent)"
-  cmd = "python tools/copy_example_config.py"
-
-  # `build` is the loop you run while developing: only the artefact you
-  # actually ship (the full onedir that becomes the installer), plus the
-  # example config. `build-all` adds the lite portable folder (~60 s more).
+  # PyInstaller flags live in tools/build_app.py (one list, one artefact:
+  # dist/DataverseDocent, with config.example.json copied in). That script
+  # prints wall time + artefact size.
   [tool.poe.tasks.build]
-  help = "Build the shipped artefact (full) + example config"
-  sequence = ["build-full", "copy-example-config"]
-
-  [tool.poe.tasks.build-all]
-  help = "Build both artefacts (lite + full + example config)"
-  sequence = ["build-lite", "build-full", "copy-example-config"]
+  help = "Build dist/DataverseDocent (the app folder `poe pack` packages)"
+  cmd = "python tools/build_app.py"
 
   [tool.poe.tasks.smoke]
-  help = "Headless smoke: lite exe exists, --headless --help works, frozen run reports no 'inspection failed'"
-  cmd = "python tools/smoke_lite.py"
+  help = "Headless smoke: the app exe exists, --headless --help works, frozen run reports no 'inspection failed'"
+  cmd = "python tools/smoke_app.py"
+
+  # Velopack packaging: turns dist/DataverseDocent into dist/releases
+  # (Setup.exe, portable zip, nupkg, feed) and verifies the result with
+  # tools/check_pack.py. Build-time only: needs the .NET 8 SDK plus
+  # `dotnet tool install -g vpk` on the machine. Never publishes.
+  [tool.poe.tasks.pack]
+  help = "Pack dist/DataverseDocent into a Velopack release (dist/releases)"
+  cmd = "python tools/pack_app.py"
+
+  [tool.poe.tasks.check-pack]
+  help = "Verify an existing dist/releases without rebuilding it"
+  cmd = "python tools/check_pack.py"
 
   # NOTE on exe icons: ui/assets/16x16.png is the source for every shipped
   # exe icon (docent-mark.ico); the 64x64 docent.png is About-art only.

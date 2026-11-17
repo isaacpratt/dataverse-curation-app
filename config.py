@@ -62,8 +62,9 @@ def is_installed_build() -> bool:
     Velopack unpacks each version into `<root>/current/` next to its own
     `Update.exe` and swaps that folder on every update. Its runtime answers
     authoritatively when it is importable; the folder shape answers when it
-    is not, because a plain PyInstaller onedir or an unzipped portable build
-    has neither marker and must keep the beside-the-exe behaviour.
+    is not. A plain PyInstaller onedir has neither marker and keeps the
+    beside-the-exe behaviour, and the portable zip - same `current/` shape as
+    an install - is recognised by the `.portable` marker at its root.
     """
     exe_dir = _frozen_exe_dir()
     if exe_dir is None:
@@ -76,7 +77,14 @@ def is_installed_build() -> bool:
             return not portable
     except Exception:
         pass
-    return exe_dir.name == "current" or (exe_dir.parent / "Update.exe").exists()
+    # Layout fallback. An install and the portable zip share the shape
+    # `<root>/current/<exe>` plus `<root>/Update.exe`, so the folder alone
+    # cannot tell them apart: the portable package marks its root `.portable`
+    # instead of registering an uninstall entry.
+    root = exe_dir.parent if exe_dir.name == "current" else exe_dir
+    if (root / ".portable").exists():
+        return False
+    return exe_dir.name == "current" or (root / "Update.exe").exists()
 
 
 def _legacy_candidates(name: str, exe_dir: Path) -> list[Path]:

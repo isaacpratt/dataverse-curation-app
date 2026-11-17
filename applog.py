@@ -13,7 +13,7 @@ from datetime import datetime
 _LOCK = threading.Lock()
 _BUFFER: deque[str] = deque(maxlen=2000)
 
-_logger = logging.getLogger("curation_app")
+_logger = logging.getLogger("dataverse_docent")
 
 
 def _redact(message: str) -> str:

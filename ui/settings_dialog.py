@@ -119,9 +119,9 @@ class SettingsPane(QWidget):
     configurationChanged = Signal()
 
     # Format-check libraries (pip name, import name, description).
-    # Heavy binary libs are excluded from the lite build; pure-Python format
-    # helpers ship in lite. Required scanners (piigex, hush-scan) are bundled
-    # in both builds and listed here so install status stays visible.
+    # The shipped build carries all of them; the list keeps install status
+    # visible in Settings. Required scanners (piigex, hush-scan) are bundled
+    # too and shown here for the same reason.
     EXTENSIONS = [
         ("pyreadstat", "pyreadstat", t("settings.extensions.used_pyreadstat")),
         ("netCDF4", "netCDF4", t("settings.extensions.used_netcdf4")),
