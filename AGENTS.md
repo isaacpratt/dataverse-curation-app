@@ -33,7 +33,7 @@ dataverse-curation-app/
 ```bash
 uv sync                   # create .venv and install everything incl. dev group (from uv.lock; no pip needed)
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
-uv run pytest             # 779 tests (372 engine + 407 UI; run uv run pytest --collect-only -q for current count)
+uv run pytest             # 830 tests (398 engine + 432 UI; run uv run pytest --collect-only -q for current count)
 pre-commit run --all-files # optional local gate (CI runs it too); needs uv on PATH. core.hooksPath is beads-managed, so hooks are not auto-installed — run it manually or rely on CI
 uv run python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
 uv run python main.py --gallery      # the component gallery: every kit component on one page
@@ -50,6 +50,8 @@ poe build          # the shipped artefact: full onedir + example config (~55 s)
 poe build-all      # both artefacts (lite + full + example config, ~110 s)
 poe build-lite     # lite folder only (~50 s; the portable zip artefact)
 poe build-full     # full folder only (~55 s; the installer payload)
+poe pack           # Velopack release directory in dist/releases (~15 s; needs .NET 8 SDK + vpk)
+poe check-pack     # verify an existing dist/releases (same check poe pack runs)
 poe smoke          # lite smoke test: --headless --help + frozen CSV/PII probe
 ```
 

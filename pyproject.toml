@@ -145,6 +145,18 @@ type = "simple"
   help = "Headless smoke: lite exe exists, --headless --help works, frozen run reports no 'inspection failed'"
   cmd = "python tools/smoke_lite.py"
 
+  # Velopack packaging: turns dist/curation-app-full into dist/releases
+  # (Setup.exe, portable zip, nupkg, feed) and verifies the result with
+  # tools/check_pack.py. Build-time only: needs the .NET 8 SDK plus
+  # `dotnet tool install -g vpk` on the machine. Never publishes.
+  [tool.poe.tasks.pack]
+  help = "Pack dist/curation-app-full into a Velopack release (dist/releases)"
+  cmd = "python tools/pack_app.py"
+
+  [tool.poe.tasks.check-pack]
+  help = "Verify an existing dist/releases without rebuilding it"
+  cmd = "python tools/check_pack.py"
+
   # NOTE on exe icons: ui/assets/16x16.png is the source for every shipped
   # exe icon (docent-mark.ico); the 64x64 docent.png is About-art only.
 
