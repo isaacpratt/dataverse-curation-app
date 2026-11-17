@@ -1,0 +1,172 @@
+name: Release
+
+# Publishes one GitHub release carrying the installer: push a vX.Y.Z tag,
+# or dispatch this workflow with a version (it publishes whatever the build
+# already contains - so re-running a failed run does not need a new tag).
+# Every gate CI runs happens first; a version that does not match
+# engine.__version__ stops before anything is built or published.
+#
+# Channels: a plain vX.Y.Z builds for the `win` channel and publishes a
+# stable release; a prerelease vX.Y.Z-rc.N (or -beta.N) builds for `win-beta`
+# and publishes a pre-release. The in-app updater asks for one channel, so
+# the two feeds never mix. The portable zip and SHA256SUMS are attached with
+# `gh release upload` (vpk owns the Setup.exe and .nupkg files).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.2.0 (or 0.2.0-rc.1 for a prerelease). Must match engine.__version__."
+        required: true
+        type: string
+
+# Least privilege: the publish job elevates to write for its own release,
+# the gate runs read-only.
+permissions:
+  contents: read
+
+# Publishing is not a race: two runs at once would publish succeeding
+# versions over each other.
+concurrency:
+  group: release-${{ github.ref_name || inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/gate.yml
+
+  publish:
+    needs: gate
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Lockfile check
+        run: uv lock --check
+      - name: Install
+        run: uv sync --group dev
+
+      - name: Resolve version and channel
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "push") {
+            $tag = "${{ github.ref_name }}"
+          } else {
+            $raw = "${{ inputs.version }}".Trim().TrimStart("v", "V")
+            if (-not $raw) { throw "version input is empty" }
+            $tag = "v$raw"
+          }
+          $version = $tag.Substring(1)
+          $semver = "^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$"
+          if ($version -notmatch $semver) { throw "version '$version' (tag '$tag') is not semver" }
+          $prerelease = $version -match "-"
+          $channel = if ($prerelease) { "win-beta" } else { "win" }
+          # These are read by later steps via $env:, which is what
+          # GITHUB_ENV provides; workflow-level `env:` is not involved.
+          $values = @{
+            TAG = $tag
+            VERSION = $version
+            CHANNEL = $channel
+            PRERELEASE = $prerelease.ToString().ToLowerInvariant()
+          }
+          foreach ($key in $values.Keys) {
+            "$key=$($values[$key])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          Write-Output "tag=$tag version=$version channel=$channel prerelease=$prerelease"
+
+      # The one thing a tag can never survive: disagreeing with the build.
+      - name: Version matches engine.__version__
+        shell: pwsh
+        run: uv run python tools/check_version.py --tag "$env:TAG"
+
+      - name: Build
+        run: uv run poe build
+
+      # vpk is a .NET tool; build time only, nothing for the published app.
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install vpk
+        run: dotnet tool install --global vpk --version 1.2.161
+
+      # The previous release is the delta base. A missing one (the first
+      # release) is expected, not fatal: vpk packs a full package only.
+      - name: Download previous release
+        shell: pwsh
+        run: |
+          $preArgs = @()
+          if ($env:PRERELEASE -eq "true") { $preArgs += "--pre" }
+          $vpk = Join-Path $env:USERPROFILE ".dotnet\tools\vpk.exe"
+          & $vpk download github -o dist/releases --repoUrl "https://github.com/${{ github.repository }}" --token "${{ secrets.GITHUB_TOKEN }}" --channel "$env:CHANNEL" @preArgs
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::warning::no previous $env:CHANNEL release to use as a delta base (first release?) - packing full package only"
+          } else {
+            Get-ChildItem dist/releases -Filter "*.nupkg" | ForEach-Object { Write-Output "delta base: $($_.Name)" }
+          }
+
+      # Same entry point a developer uses, so CI packs exactly what you pack.
+      - name: Pack
+        shell: pwsh
+        run: uv run python tools/pack_app.py --no-replace --version "$env:VERSION"
+
+      - name: SHA256SUMS
+        shell: pwsh
+        run: |
+          $current = "-$env:VERSION-"
+          Push-Location dist/releases
+          Get-ChildItem -File | Where-Object {
+            $_.Name -eq 'DataverseDocent-win-Setup.exe' -or
+            $_.Name -eq 'DataverseDocent-win-Portable.zip' -or
+            $_.Name.Contains($current)
+          } | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
+          } | Set-Content SHA256SUMS.txt -Encoding ASCII
+          Get-Content SHA256SUMS.txt
+          Pop-Location
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $preArgs = @()
+          if ($env:PRERELEASE -eq "true") { $preArgs += "--pre" }
+          $vpk = Join-Path $env:USERPROFILE ".dotnet\tools\vpk.exe"
+          & $vpk upload github -o dist/releases --repoUrl "https://github.com/${{ github.repository }}" --token "${{ secrets.GITHUB_TOKEN }}" --publish --channel "$env:CHANNEL" --releaseName "Dataverse Docent $env:VERSION" --tag "$env:TAG" --targetCommitish "${{ github.sha }}" @preArgs
+          if ($LASTEXITCODE -ne 0) { throw "vpk upload failed ($LASTEXITCODE)" }
+          gh release upload "$env:TAG" dist/releases/DataverseDocent-win-Portable.zip dist/releases/SHA256SUMS.txt --clobber
+
+      - name: Job summary
+        shell: pwsh
+        run: |
+          $lines = @("## Release $env:TAG (channel $env:CHANNEL)", "")
+          $current = "-$env:VERSION-"
+          Get-ChildItem dist/releases -File | Where-Object {
+            $_.Name.Contains($current) -or $_.Name -in @('DataverseDocent-win-Setup.exe', 'DataverseDocent-win-Portable.zip', 'SHA256SUMS.txt')
+          } | Sort-Object Name | ForEach-Object {
+            $lines += "- ``$($_.Name)`` — $([math]::Round($_.Length / 1e6, 1)) MB"
+          }
+          $delta = Get-ChildItem dist/releases -Name "*-delta.nupkg" | Select-Object -First 1
+          if ($delta) {
+            $full = [double]((Get-ChildItem dist/releases -Filter "*-full.nupkg" | Select-Object -First 1).Length)
+            $lines += ""
+            $lines += "Delta package: $delta (full package: $([math]::Round($full / 1e6, 1)) MB)"
+          }
+          $lines += ""
+          $lines += "https://github.com/${{ github.repository }}/releases/tag/$env:TAG"
+          $lines -join "`n" | Add-Content $env:GITHUB_STEP_SUMMARY

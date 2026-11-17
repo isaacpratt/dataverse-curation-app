@@ -1,0 +1,75 @@
+name: Gate
+
+# The compile/lint/test/probe gate, callable from CI (on master pushes and
+# pull requests) and from the release workflow (before anything publishes).
+# One definition so a release cannot skip what CI enforces.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      # checkout v5 and setup-python v6 run on Node 24; the v4/v5 pair
+      # targeted Node 20, which GitHub now forces onto a newer runtime and
+      # reports as a deprecation warning on every run.
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Lockfile check
+        run: uv lock --check
+      - name: Install
+        run: uv sync --group dev
+      - name: Commit hygiene (pre-commit)
+        run: uv run --group dev pre-commit run --all-files
+      - name: Lint
+        run: uv run --group dev python -m ruff check .
+      - name: Type check
+        run: uv run --group dev mypy
+      - name: Tests
+        run: uv run --group dev python -m pytest -q --cov=engine --cov-report=term-missing
+      - name: Compile check
+        run: uv run --group dev python -m compileall -q engine dataverse_client.py download_manager.py storage.py config.py main.py
+      - name: Headless smoke
+        run: uv run --group dev python main.py --headless --help
+
+  probes:
+    # The checks pytest cannot see: a pixel at a card's corner, a column
+    # geometry after a drag. Each probe prints PASS/FAIL per check and
+    # exits non-zero when one fails. The button-sheet and gallery
+    # contracts moved into pytest (test_gallery_contract.py).
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      # Same action versions as the test job (Node 24).
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Lockfile check
+        run: uv lock --check
+      - name: Install
+        run: uv sync --group dev
+      - name: UI probes
+        run: uv run --group dev python tools/probes/run_all.py
