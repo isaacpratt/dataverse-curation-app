@@ -736,7 +736,7 @@ class DashboardView(QWidget):
         self._metrics_row.setSpacing(16)
         self._metric_cards: list[QFrame] = []
         self._metric_value_labels: list[QLabel] = []
-        self._needs_action_only: bool = False
+        self._labelled_only: bool = False
         for accent, label, sub_text in [
             (
                 "tertiary",
@@ -749,7 +749,7 @@ class DashboardView(QWidget):
                 t("dashboard.metrics.review.sub"),
             ),
             (
-                "error",
+                "progress",
                 t("dashboard.metrics.action.label"),
                 t("dashboard.metrics.action.sub"),
             ),
@@ -1441,6 +1441,7 @@ class DashboardView(QWidget):
         border_color = {
             "tertiary": ACCENT_TERTIARY,
             "primary": ACCENT_PRIMARY,
+            "progress": ACCENT_TERTIARY,
             "error": STATE_ERROR_GRAPHIC,
         }[accent]
         # No widget-level sheet: the global #MetricCard rule in theme.py paints
@@ -1454,7 +1455,7 @@ class DashboardView(QWidget):
         lay.setSpacing(8)
         from ui.icons import icon_label as _metric_icon
 
-        icon_map = {"tertiary": "clock", "primary": "eye", "error": "octagon-alert"}
+        icon_map = {"tertiary": "clock", "primary": "eye", "progress": "pencil", "error": "octagon-alert"}
         icon = _metric_icon(icon_map.get(accent, "circle"), size=18, color=border_color)
         # The whole chip must be the click target: mouse-transparent
         # children let press/enter/leave reach the card's eventFilter.
@@ -1484,27 +1485,28 @@ class DashboardView(QWidget):
         return card, v
 
     def _on_metric_clicked(self, accent: str) -> None:
-        """Apply a metric card's filter (dv-896)."""
+        """Apply a metric card's filter (dv-896, dv-is4)."""
         if accent == "primary":
-            self._needs_action_only = False
+            self._labelled_only = False
             self._state_filter.setCurrentIndex(4)
-        elif accent == "error":
-            self._needs_action_only = True
-            self._state_filter.setCurrentIndex(1)
+        elif accent == "progress":
+            # In Progress card: rows carrying any curation label, any state.
+            self._labelled_only = True
+            self._state_filter.setCurrentIndex(0)
         else:
-            self._needs_action_only = False
+            self._labelled_only = False
             self._state_filter.setCurrentIndex(1)
         self._apply_filter()
 
     def _on_state_filter_changed(self) -> None:
-        if getattr(self, "_needs_action_only", False):
-            # User changed the combo themselves: clear the needs-action flag.
+        if getattr(self, "_labelled_only", False):
+            # User changed the combo themselves: clear the In Progress flag.
             try:
                 idx = self._state_filter.currentIndex()
             except Exception:
                 idx = -1
-            if idx != 1:
-                self._needs_action_only = False
+            if idx != 0:
+                self._labelled_only = False
         self._apply_filter()
 
     def _on_columns_fitted(self) -> None:
@@ -2171,7 +2173,7 @@ class DashboardView(QWidget):
 
         - Pending Datasets: versionState DRAFT (plain drafts awaiting triage)
         - In Review: locked for review (confirmed via the locks endpoint)
-        - Needs Action: drafts + in-review items with no logged decision yet
+        - In Progress: rows carrying any curation label (any state)
 
         Before the first crawl finishes each card states its condition in
         words ("Checking…" while the crawl runs, "Not fetched" when idle)
@@ -2200,22 +2202,11 @@ class DashboardView(QWidget):
         pending = sum(
             1 for d in self._all_datasets if (d.get("state") or "").upper() == "DRAFT"
         )
-        try:
-            ws = getattr(getattr(self._config, "app", None), "workspace", Path.home())
-            decided = self._decided_cache
-            if decided is None:
-                # No crawl yet (or cache cleared): one live query, then keep it.
-                decided = _decided_ids(Path(ws))
-                self._decided_cache = decided
-        except Exception:
-            decided = set()
-        needs_action = 0
-        if self._all_datasets:
-            for d in self._all_datasets:
-                st = (d.get("state") or "").upper()
-                if (st == "DRAFT" or "REVIEW" in st) and d.get("persistent_id") not in decided:
-                    needs_action += 1
-        vals = [pending, in_review, needs_action]
+        labelled = sum(
+            1 for d in self._all_datasets
+            if str(d.get("curation_label") or "").strip()
+        )
+        vals = [pending, in_review, labelled]
         for val, v_lbl in zip(vals, self._metric_value_labels, strict=False):
             if v_lbl:
                 v_lbl.setText(str(val))
@@ -2316,10 +2307,9 @@ class DashboardView(QWidget):
                         continue
                     elif wanted not in ("PENDING", "PUBLISHED", "DRAFT", "IN REVIEW", "DEACCESSIONED") and wanted != ds_state:
                         continue
-                if wanted == "PENDING" and getattr(self, "_needs_action_only", False):
-                    # Needs Action card: pending items with no logged decision.
-                    decided = getattr(self, "_decided_cache", None) or set()
-                    if ds.get("persistent_id") in decided:
+                if getattr(self, "_labelled_only", False):
+                    # In Progress card: rows with any curation label, any state.
+                    if not str(ds.get("curation_label") or "").strip():
                         continue
                 if wanted_label == _NO_LABEL_SENTINEL:
                     if str(ds.get("curation_label") or "").strip():

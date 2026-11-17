@@ -254,8 +254,8 @@
         "sub": "locked for review"
       },
       "action": {
-        "label": "Needs Action",
-        "sub": "awaiting decision"
+        "label": "In Progress",
+        "sub": "curation label applied"
       },
       "checking": "Checking…",
       "not_fetched": "Not fetched",
