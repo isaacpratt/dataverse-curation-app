@@ -478,6 +478,15 @@ class MainWindow(QMainWindow):
         self._nav_log.toggled.connect(self._on_log_toggled)
         nav_lay.addWidget(self._nav_log)
 
+        self._nav_help_index = AppButton("", kind="nav", size=None)
+        self._nav_help_index.setCheckable(True)
+        self._nav_help_index.setCursor(Qt.PointingHandCursor)
+        self._nav_help_index.setFixedSize(32, 32)
+        self._nav_help_index.setToolTip(t("main.nav.help"))
+        self._nav_help_index.setAccessibleName(t("main.nav.help"))
+        self._nav_help_index.toggled.connect(self._on_help_toggled)
+        nav_lay.addWidget(self._nav_help_index)
+
         self._nav_help = AppButton("", kind="nav", size=None)
         self._nav_help.setCheckable(True)
         self._nav_help.setFixedSize(32, 32)
@@ -572,8 +581,10 @@ class MainWindow(QMainWindow):
         self._settings_page = None
         self._about = None
         self._about_page = None
+        self._help = None
+        self._help_page = None
         self._log_page = None
-        # Content role to return to when a settings/about page closes.
+        # Content role to return to when a settings/about/help page closes.
         self._pane_return: str | None = None
         self._detail = None
 
@@ -644,6 +655,16 @@ class MainWindow(QMainWindow):
             self._stack.addWidget(self._about_page)
         return self._about
 
+    def _ensure_help(self):
+        """Build the Help page on first use and return it."""
+        if self._help is None:
+            from ui.help_page import HelpPane
+
+            self._help = HelpPane(self)
+            self._help_page = self._wrap_pane_page(self._help)
+            self._stack.addWidget(self._help_page)
+        return self._help
+
     def _ensure_log(self):
         """Build the full-page log view on first use and return it."""
         if self._log_page is None:
@@ -668,7 +689,7 @@ class MainWindow(QMainWindow):
     # -- slots ----------------------------------------------------------
 
     def _content_role(self) -> str:
-        """Which content the stack shows: dashboard/detail/review/settings/about/log."""
+        """Which content the stack shows: dashboard/detail/review/settings/about/help/log."""
         try:
             cur = self._stack.currentWidget()
         except Exception:
@@ -677,6 +698,8 @@ class MainWindow(QMainWindow):
             return "settings"
         if cur is getattr(self, "_about_page", None):
             return "about"
+        if cur is getattr(self, "_help_page", None):
+            return "help"
         if cur is getattr(self, "_log_page", None):
             return "log"
         if getattr(self, "_review_config", None) is not None and cur is self._review_config:
@@ -718,6 +741,7 @@ class MainWindow(QMainWindow):
             (self._nav_log, role == "log"),
             (self._nav_settings, role == "settings"),
             (self._nav_help, role == "about"),
+            (self._nav_help_index, role == "help"),
         ):
             try:
                 btn.blockSignals(True)
@@ -753,6 +777,11 @@ class MainWindow(QMainWindow):
             )
             self._set_nav_icon(self._nav_log, "square-text", self._nav_log.isChecked())
             self._set_nav_icon(self._nav_help, "info", self._nav_help.isChecked())
+            self._set_nav_icon(
+                self._nav_help_index,
+                "file-text",
+                self._nav_help_index.isChecked(),
+            )
         except Exception:
             pass
 
@@ -769,7 +798,7 @@ class MainWindow(QMainWindow):
             return True
 
     def _show_pane(self, name) -> bool:
-        """Show one pane exclusively (settings/about) or switch to log page.
+        """Show one pane exclusively (settings/about/help) or switch to log page.
 
         Returns False when a dirty Settings pane cancelled the switch.
         """
@@ -779,13 +808,16 @@ class MainWindow(QMainWindow):
                 if not self._can_leave_settings():
                     self._refresh_nav_state()
                     return False
-            if name in ("settings", "about"):
+            if name in ("settings", "about", "help"):
                 # Exclusive like before: opening a page switches stack.
-                if role not in ("settings", "about"):
+                if role not in ("settings", "about", "help"):
                     self._pane_return = role
                 if name == "settings":
                     self._ensure_settings()
                     target = self._settings_page
+                elif name == "help":
+                    self._ensure_help()
+                    target = self._help_page
                 else:
                     self._ensure_about()
                     target = self._about_page
@@ -793,14 +825,14 @@ class MainWindow(QMainWindow):
                     self._stack.setCurrentWidget(target)
             elif name == "log":
                 # Switch to log page; remember where we came from.
-                if role not in ("log", "settings", "about"):
+                if role not in ("log", "settings", "about", "help"):
                     self._pane_return = role
                 page = self._ensure_log()
                 if self._stack.currentWidget() is not page:
                     self._stack.setCurrentWidget(page)
             elif name is None:
-                # Close pane: return to previous content if we're in settings/about/log.
-                if role in ("settings", "about", "log"):
+                # Close pane: return to previous content if we're in settings/about/help/log.
+                if role in ("settings", "about", "help", "log"):
                     self._stack.setCurrentWidget(self._role_widget(getattr(self, "_pane_return", None)))
                     self._pane_return = None
             # Any other name: stack untouched.
@@ -836,6 +868,12 @@ class MainWindow(QMainWindow):
 
     def _show_about(self) -> None:
         self._show_pane("about")
+
+    def _on_help_toggled(self, checked: bool) -> None:
+        self._show_pane("help" if checked else None)
+
+    def _show_help(self) -> None:
+        self._show_pane("help")
 
     def _open_settings(self) -> None:
         try:
@@ -1042,7 +1080,7 @@ class MainWindow(QMainWindow):
             self._detail = None
             if was_showing:
                 # Detail was on screen: fall back to the dashboard. A
-                # settings/about page stays put (only its return updates).
+                # settings/about/help page stays put (only its return updates).
                 self._stack.setCurrentWidget(self._dashboard)
                 self._pane_return = None
             elif getattr(self, "_pane_return", None) == "detail":

@@ -1055,6 +1055,7 @@ class DatasetDetailView(QWidget):
             t("detail.auto_checks.intro"),
             t("detail.auto_checks.legend"),
             name=t("detail.sections.auto_checks"),
+            group="Checks",
         )
         # Named pre-run state, never "—" (2026-10-02 P2); refreshed to
         # "N check(s) will run"/counts/"No file checks" as data lands.
@@ -1075,6 +1076,7 @@ class DatasetDetailView(QWidget):
             header_lay,
             t("detail.metadata_check.tip"),
             name=t("detail.sections.metadata_check"),
+            group="Checks",
         )
         # Rows read like the Auto-Checks card; its horizontal inset matches.
         body.setContentsMargins(0, 0, 0, 0)
@@ -1676,6 +1678,7 @@ class DatasetDetailView(QWidget):
             _header,
             t("detail.assessment.tip"),
             name=t("detail.sections.assessment_action"),
+            group="Respond",
         )
         body.setContentsMargins(16, 16, 16, 16)
         body.setSpacing(12)
@@ -1767,6 +1770,7 @@ class DatasetDetailView(QWidget):
             _h,
             t("detail.response.findings_tip"),
             name=t("detail.response.findings_card"),
+            group="Respond",
         )
         self._response_list = make_list()
         self._response_list.setMinimumHeight(240)
@@ -1779,6 +1783,7 @@ class DatasetDetailView(QWidget):
             _h2,
             t("detail.response.draft_tip"),
             name=t("detail.response.draft_a11y"),
+            group="Respond",
         )
         self._response_edit = make_multiline_input(
             t("detail.response.draft_placeholder"),
@@ -2457,6 +2462,7 @@ class DatasetDetailView(QWidget):
             _header,
             t("detail.dataset_log.tip"),
             name=t("detail.sections.dataset_log"),
+            group="Queue",
         )
         self._dataset_log = make_list()
         # Tall timeline: minimum keeps it readable on short screens, the
@@ -2663,6 +2669,7 @@ class DatasetDetailView(QWidget):
             header,
             t("detail.sensitivity.tip"),
             name=t("detail.sensitivity.title"),
+            group="General",
         )
         body.setContentsMargins(16, 12, 16, 12)
         body.setSpacing(8)
@@ -3043,6 +3050,7 @@ class DatasetDetailView(QWidget):
             header_lay,
             t("detail.version_log.tip"),
             name=t("detail.sections.version_log"),
+            group="General",
         )
         # Flush card (manifest-tree pattern): dynamic children are edge to
         # edge and paint their own corners in _populate_version_diff.
@@ -3308,6 +3316,7 @@ class DatasetDetailView(QWidget):
             header_lay,
             t("detail.files.tip"),
             name=t("detail.sections.file_manifest"),
+            group="Queue",
         )
         _body_unused.setContentsMargins(0, 0, 0, 0)
         _body_unused.setSpacing(0)

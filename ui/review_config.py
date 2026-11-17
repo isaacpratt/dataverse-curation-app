@@ -361,7 +361,7 @@ class ReviewConfigView(QWidget):
         # pattern the dataset page uses — not a permanent paragraph that
         # pushed the tree down.
         add_info_tip(
-            header_lay, t("review.checks_hint"), name=t("review.card_checks")
+            header_lay, t("review.checks_hint"), name=t("review.card_checks"), group="Checks"
         )
         # The title bar keeps title + (i) only; the filters and actions are
         # tools, so they sit on their own row under it (file-manifest pattern).

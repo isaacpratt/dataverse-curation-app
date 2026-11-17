@@ -1528,16 +1528,23 @@ def _wrap_tip(*paragraphs: str, width: int = 76) -> str:
     return "\n\n".join(chunks)
 
 
-def add_info_tip(header_layout, *paragraphs: str, name: str = "") -> QToolButton:
+def add_info_tip(header_layout, *paragraphs: str, name: str = "", group: str = "") -> QToolButton:
     """Add a small Lucide (i) button right after a card title.
 
     The explanation lives in the tooltip, so section headers read as
     "Auto-Checks (i)" instead of carrying a permanent help paragraph.
-    Clicking shows the same text, for touch and pen input.
+    Clicking shows the same text, for touch and pen input. The tip is
+    also registered into ui.help_index for the searchable Help page
+    (dv-o8k); ``group=`` places it under a curator task.
     """
+    from ui.help_index import register_help
     from ui.icons import icon as _icon
 
     tip = _wrap_tip(*paragraphs)
+    try:
+        register_help(group, name, tip)
+    except Exception:
+        pass
     btn = QToolButton()
     btn.setObjectName("InfoTip")
     try:

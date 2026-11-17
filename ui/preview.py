@@ -493,7 +493,7 @@ class PreviewCard(QFrame):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
         card, body, _title, _header = make_card(t("detail.preview.title"))
-        add_info_tip(_header, t("detail.preview.tip"), name=t("detail.preview.title"))
+        add_info_tip(_header, t("detail.preview.tip"), name=t("detail.preview.title"), group="Queue")
         lay.addWidget(card)
 
         self._placeholder = make_caption_label(t("detail.preview.select_file"))
