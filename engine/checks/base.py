@@ -18,15 +18,25 @@ class CheckResult:
     passed: bool
     message: str
     details: dict[str, Any] = field(default_factory=dict)
+    # Optional bespoke guidance (dv-lfn): checks may carry their own
+    # "why it matters / how to fix" text; otherwise the shared registry
+    # in engine.checks.guidance supplies it at render time.
+    rationale: str = ""
+    remediation: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "check_id": self.check_id,
             "level": self.level,
             "passed": self.passed,
             "message": self.message,
             "details": self.details,
         }
+        if self.rationale:
+            out["rationale"] = self.rationale
+        if self.remediation:
+            out["remediation"] = self.remediation
+        return out
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CheckResult":
@@ -49,6 +59,8 @@ class CheckResult:
             passed=passed,
             message=message,
             details=details,
+            rationale=str(data.get("rationale", "") or ""),
+            remediation=str(data.get("remediation", "") or ""),
         )
 
 

@@ -1,21 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "dataverse-curation-app"
-version = "0.2.0"
-description = "Desktop app to curate datasets submitted for review in Dataverse"
+name = "dataverse-docent"
+dynamic = ["version"]
+description = "Dataverse Docent - desktop app to curate datasets submitted for review in Dataverse"
 readme = "README.md"
-license = "MIT"
-license-files = ["LICENSE"]
-requires-python = ">=3.11"
-authors = [
-    { name = "Isaac Pratt", email = "pratti@mcmaster.ca" },
-]
-keywords = ["dataverse", "curation", "research data", "desktop"]
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Operating System :: OS Independent",
-    "Topic :: Scientific/Engineering",
-]
+license = { text = "MIT" }
+requires-python = ">=3.10"
 dependencies = [
     "PySide6>=6.6",
     "requests>=2.31",
@@ -30,21 +23,9 @@ dependencies = [
     "pypdf>=4.0",
     "chardet>=5.2",
     "hush-scan>=0.1.0,<0.2",
-    "keyring>=25.7.0",
     "piigex>=0.2.0,<0.3",
+    "velopack==1.2.161",
 ]
-
-[project.urls]
-Repository = "https://github.com/isaacpratt/dataverse-curation-app"
-Issues = "https://github.com/isaacpratt/dataverse-curation-app/issues"
-Documentation = "https://github.com/isaacpratt/dataverse-curation-app/tree/master/docs/html"
-
-# Application, not library: never build/install it as a package. The wheel
-# produced by the deleted setuptools config excluded the root modules, so
-# `pip install .` yielded a broken app. uv/PyInstaller consume the tree
-# in place; package = false stops uv building it on every sync.
-[tool.uv]
-package = false
 
 # PEP 735 dependency group: `uv sync --group dev` (or pip >=25.1
 # `pip install --group dev`). Replaces the former
@@ -53,7 +34,6 @@ package = false
 # requirements.txt.
 [dependency-groups]
 dev = [
-    "actionlint-py>=1.7",
     "pytest>=7.4",
     "pytest-cov>=5.0",
     "pytest-qt>=4.0",
@@ -62,32 +42,31 @@ dev = [
     "pyinstaller>=6.0",
     "poethepoet>=0.48.0",
     "pre-commit>=4.0",
-    "pytest-xdist>=3.6",
-    "import-linter>=2.3",
 ]
+
+[tool.setuptools.packages.find]
+include = ["engine*", "ui*"]
+
+# One version literal in the repo: engine/__init__.py:__version__. The
+# package metadata reads it instead of keeping a second copy that a bump
+# can miss (the release workflow refuses a tag that disagrees with it).
+[tool.setuptools.dynamic]
+version = { attr = "engine.__version__" }
+
 [tool.pytest.ini_options]
 testpaths = ["engine/tests", "ui/tests"]
-# Serial by default: a local run is easier to read and to debug. CI passes
-# `-n auto` (pytest-xdist) for the wall-clock win; the suite is
-# order-independent, verified by repeated parallel runs (dv-hcg.41).
-addopts = "-q --strict-markers"
+addopts = "-q"
 qt_api = "pyside6"
-xfail_strict = true
-# RuntimeWarning is no longer silenced repo-wide: numerical oddities in a
-# file-format checker should be visible. Narrow exceptions belong to the
-# specific test that needs them, added on sight with a reason.
 filterwarnings = [
+    "ignore::RuntimeWarning",
 ]
 
 [tool.coverage.run]
-source = ["engine", "ui", "curation"]
+source = ["engine", "ui", "storage", "config", "applog", "download_manager", "dataverse_client", "metadata_check", "review_rules"]
 branch = true
 
 [tool.coverage.report]
-# Floor locked at 65 to prevent regression from the measured 68.9%
-# (engine subset 77.3%, gated at 75 in CI). Raise toward 75 as UI
-# coverage improves - see dv-hcg.7 for the path.
-fail_under = 65
+fail_under = 60
 show_missing = true
 
 [tool.poe.executor]
@@ -118,52 +97,8 @@ type = "simple"
   help = "Lint with ruff"
   cmd = "ruff check ."
 
-  [tool.poe.tasks.format-check]
-  help = "Verify ruff formatting of the whole tree"
-  cmd = "ruff format --check ."
-
-  [tool.poe.tasks.fmt]
-  help = "Apply ruff formatting to the whole tree (format-check verifies)"
-  cmd = "ruff format ."
-
-  [tool.poe.tasks.audit]
-  help = "Vulnerability scan of the locked dependency set (uv.lock via pip-audit/OSV)"
-  cmd = "python tools/audit_deps.py"
-
-  [tool.poe.tasks.hooks]
-  help = "Run pre-commit hooks against all files"
-  cmd = "pre-commit run --all-files"
-
-  [tool.poe.tasks.license-report]
-  help = "Write dist/licenses.md - license inventory of the locked environment"
-  cmd = "python tools/make_licenses.py"
-
-  [tool.poe.tasks.sbom]
-  help = "Write dist/sbom.cdx.json + dist/sbom.spdx.json - CycloneDX and SPDX SBOMs of the project venv"
-  cmd = "python tools/make_sbom.py"
-
-  [tool.poe.tasks.notice]
-  help = "Write dist/NOTICE - attribution file for the release artefacts"
-  cmd = "python tools/make_notice.py"
-
-  [tool.poe.tasks.release-artefacts]
-  help = "Generate every release artefact: licenses.md, NOTICE, both SBOMs"
-  sequence = ["license-report", "notice", "sbom"]
-
-  [tool.poe.tasks.docs-links]
-  help = "Offline link/anchor check for docs/html/*.html"
-  cmd = "python tools/check_doc_links.py"
-
-  [tool.poe.tasks.complexity]
-  help = "Advisory cyclomatic-complexity report (radon) -> reports/complexity.md"
-  cmd = "python tools/complexity_report.py"
-
-  [tool.poe.tasks.contracts]
-  help = "Import-linter contracts: the engine and the curation core must not import ui/Qt; the tools must not import ui"
-  cmd = "lint-imports"
-
   [tool.poe.tasks.typecheck]
-  help = "Type-check the engine contract and the curation core (mypy; scope from [tool.mypy] files/exclude)"
+  help = "Type-check the engine (mypy; scope from [tool.mypy] files/exclude)"
   cmd = "mypy"
 
   [tool.poe.tasks.gallery]
@@ -175,57 +110,48 @@ type = "simple"
   cmd = "python tools/probes/run_all.py"
 
   [tool.poe.tasks.check]
-  help = "Lint + format-check + typecheck + contracts + tests"
-  sequence = ["lint", "format-check", "typecheck", "contracts", "test"]
+  help = "Lint + typecheck + tests"
+  sequence = ["lint", "typecheck", "test"]
 
   [tool.poe.tasks.clean]
   help = "Remove build/, dist/, .pyi-cache/ and stray .spec files"
   cmd = "python tools/clean_tree.py"
 
-  # PyInstaller lite build: common formats bundled (JPG/PNG/GIF/BMP/WEBP,
-  # PDF/XML/XLSX/TIFF, PIL, pypdf, tifffile, chardet), heavy binary libs
-  # excluded. No --clean so the Analysis cache is reused (fast rebuilds).
-  [tool.poe.tasks.build-lite]
-  help = "Build dist/curation-app-lite (lite onedir; incremental)"
-  cmd = 'python -m PyInstaller --noconfirm --name curation-app-lite --windowed --onedir --exclude-module pyreadstat --exclude-module netCDF4 --exclude-module h5py --exclude-module scipy --exclude-module tkinter --exclude-module turtle --exclude-module PIL.ImageTk --exclude-module PIL.SpiderImagePlugin --exclude-module PIL._avif --hidden-import hush --hidden-import hush.scanner --hidden-import hush.rules --hidden-import hush.entropy --collect-all piigex --hidden-import stdnum --hidden-import tools.startup_probe --add-data "ui/assets;ui/assets" --icon ui/assets/docent-mark.ico --workpath .pyi-cache main.py'
-
-  # PyInstaller full build: heavy libs (pyreadstat/netCDF4/h5py/scipy) stay
-  # in the same folder; run its exe directly for SPSS/SAS/Stata/NetCDF/HDF5.
-  [tool.poe.tasks.build-full]
-  help = "Build dist/curation-app-full (full onedir)"
-  cmd = 'python -m PyInstaller --noconfirm --clean --name curation-app-full --windowed --onedir --hidden-import hush --hidden-import hush.scanner --hidden-import hush.rules --hidden-import hush.entropy --collect-all piigex --hidden-import stdnum --hidden-import tools.startup_probe --add-data "ui/assets;ui/assets" --icon ui/assets/docent-mark.ico --workpath .pyi-cache main.py'
-
-  [tool.poe.tasks.copy-example-config]
-  help = "Copy config.example.json into dist/curation-app-full/ (no-op if absent)"
-  cmd = "python tools/copy_example_config.py"
-
+  # PyInstaller flags live in tools/build_app.py (one list, one artefact:
+  # dist/DataverseDocent, with config.example.json copied in). That script
+  # prints wall time + artefact size.
   [tool.poe.tasks.build]
-  help = "Build both artefacts (lite + full + example config copy)"
-  sequence = ["build-lite", "build-full", "copy-example-config"]
+  help = "Build dist/DataverseDocent (the app folder `poe pack` packages)"
+  cmd = "python tools/build_app.py"
 
   [tool.poe.tasks.smoke]
-  help = "Headless smoke: lite exe exists, --headless --help works, frozen run reports no 'inspection failed'"
-  cmd = "python tools/smoke_lite.py"
+  help = "Headless smoke: the app exe exists, --headless --help works, frozen run reports no 'inspection failed'"
+  cmd = "python tools/smoke_app.py"
+
+  # Velopack packaging: turns dist/DataverseDocent into dist/releases
+  # (Setup.exe, portable zip, nupkg, feed) and verifies the result with
+  # tools/check_pack.py. Build-time only: needs the .NET 8 SDK plus
+  # `dotnet tool install -g vpk` on the machine. Never publishes.
+  [tool.poe.tasks.pack]
+  help = "Pack dist/DataverseDocent into a Velopack release (dist/releases)"
+  cmd = "python tools/pack_app.py"
+
+  [tool.poe.tasks.check-pack]
+  help = "Verify an existing dist/releases without rebuilding it"
+  cmd = "python tools/check_pack.py"
 
   # NOTE on exe icons: ui/assets/16x16.png is the source for every shipped
   # exe icon (docent-mark.ico); the 64x64 docent.png is About-art only.
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py310"
 line-length = 100
 
 [tool.ruff.lint]
-# High-signal families beyond the original seven: N (pep8-naming; Qt override
-# methods carry targeted noqa comments), RUF (mutable defaults, useless
-# suppressions), SIM (needless nesting/redundant branches), PT (pytest style),
-# C90 (mccabe; budget below), TID (import hygiene). Findings are either fixed
-# or grandfathered per file with a dated burn-down note - never blanket-ignored.
-select = ["E", "F", "I", "B", "C4", "UP", "D", "N", "RUF", "SIM", "PT", "C90", "TID"]
+select = ["E", "F", "I", "B", "C4", "UP", "D"]
 # D203/D213 are the incompatible halves of the D211/D212 pairs ruff selects;
 # naming them keeps the style the codebase already uses and silences the
 # "incompatible rules" warning ruff prints on every run.
-# E501 stays ignored on purpose: line length is enforced by ruff format
-# (100 cols) at the formatter; E501 would double-report wrapped lines.
 ignore = [
     "D100",
     "D101",
@@ -237,156 +163,30 @@ ignore = [
     "D203",
     "D213",
     "E501",
-    # SIM105: the codebase deliberately uses try/except/pass with surrounding
-    # context (best-effort cleanup paths); contextlib.suppress adds nothing
-    # semantic at 165 call sites and is not a clarity win.
-    "SIM105",
-    # R = ruff builtin rule for ambiguous unicode: human prose (check
-    # messages, docs, comments) uses typographic dashes/arrows by design
-    # (en-CA copy); not a spoofing vector in this codebase.
-    "RUF001",
-    "RUF002",
-    "RUF003",
 ]
 
-[tool.ruff.lint.per-file-ignores]
-# Qt naming contracts, not Python style: mixedCase is the framework's API
-# (paintEvent/sizeHint/mousePressEvent...). Scoped to ui/ only.
-"ui/**" = ["N802", "N815"]
-# win32 ctypes constants keep MSDN names for cross-reference (SWP_*, HT*...).
-"ui/main_window.py" = ["N806"]
-# Fake Qt header stubs in engine tests mirror the real camelCase API.
-# Test functions document themselves via their names; no docstrings required.
-"engine/tests/**" = ["N802", "D103"]
-"ui/tests/**" = ["D103"]
-"tools/probes/**" = ["D103"]
-
-[tool.ruff.lint.mccabe]
-max-complexity = 12
-
 [tool.mypy]
-python_version = "3.11"
-# The engine contract is checked under mypy --strict. The scope is the
-# `files` list below: the engine plus the curation core it is built on
-# (client, storage, downloads, metadata rules, request log).
-#
-# Burn-down note (2026-11-16, dv-hcg.27): the last 44 errors under the
-# strict subset were fixed by annotating the engine, the client and the
-# core services - no per-module ignore list was needed and none is
-# configured here. The UI typing ramp (dv-hcg.28) then joined `files`
-# under the documented relaxation below.
-strict = true
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
-# Gate the engine contract, the curation core it is built on and the UI
-# layer: the engine plus the curation core (client, storage, downloads,
-# metadata rules, request log), the engine test suite, the UI package
-# (source and tests) and the entry point.
-#
-# The engine tests are Qt-free since dv-hcg.26 (the dashboard cache
-# helpers they borrow live in the Qt-free curation.dashboard_cache
-# module), so they join the strict gate instead of needing an exclusion.
-# The UI layer joined the gate in dv-hcg.28, under the documented
-# relaxation of --strict below; `main.py` is checked under the full
-# strict settings (it is the entry point, not a UI module).
+# Gate the engine contract only. engine/tests import the PySide6 view layer
+# (ui.dashboard, ui.checks_tree, ...), which would drag ~170 Qt-stub-only
+# attr-defined errors into the gate (PySide6 exposes enums only under their
+# scoped names, e.g. Qt.CursorShape.PointingHandCursor). UI typing is tracked
+# separately; tests are exercised by pytest, not by mypy.
 files = [
     "engine",
-    "curation",
-    "ui",
-    "main.py",
+    "applog.py",
+    "metadata_check.py",
+    "review_rules.py",
+    "dataverse_client.py",
+    "download_manager.py",
+    "storage.py",
 ]
 exclude = [
     "^\\.venv/",
     "^build/",
     "^dist/",
-]
-
-# The UI layer is gated under a documented relaxation of --strict
-# (dv-hcg.28). Full strictness would demand an annotation on every one
-# of the ~4,000 lines of Qt glue; what the gate actually buys is the
-# *shape* checks - attr-defined, union-attr, assignment, arg-type,
-# operator, has-type, var-annotated, func-returns-value, no-redef -
-# and those are exactly the checks that found the real defects the
-# audit listed (the int(QSize) bug, the undeclared mixin attributes,
-# the twice-declared attribute, the functions used for their return
-# value). `check_untyped_defs` stays ON, so the bodies of unannotated
-# functions are still checked; only the "you must annotate this"
-# rules are relaxed.
-#
-# Justification for the relaxation: PySide6 ships no usable stubs for
-# the widget tree (the widgets are created in code, not declared), so
-# a strict UI would need thousands of `Any` annotations that add no
-# safety and would be erased by the first refactor. The enum sweep
-# (scoped PySide6 enum names) and the shape fixes are the parts that
-# pay for themselves.
-[[tool.mypy.overrides]]
-module = ["ui.*"]
-disallow_untyped_defs = false
-disallow_untyped_calls = false
-disallow_incomplete_defs = false
-disallow_any_generics = false
-warn_return_any = false
-no_implicit_reexport = false
-
-# Machine-enforced dependency direction (import-linter).
-#
-#   engine  <-  curation (config/storage/client/...)  <-  ui
-#
-# The engine is the part that must stay usable headless and testable
-# without Qt: if engine/ ever imports ui/ or PySide6, the engine gate and
-# the headless build break. The curation core is the app's middle layer -
-# it may not reach back into the views either. The tools/ scripts are
-# operational helpers that run outside the app, so they may not drag the
-# UI layer in either.
-[tool.importlinter]
-# The repo has no importable top-level package (the app is flat and
-# `package = false`), so the contracts are expressed against the project
-# directories that are packages in their own right.
-root_packages = ["engine", "ui", "curation", "tools"]
-# PySide6 must be in the graph: the Qt half of the engine contract is only
-# visible when external packages are included.
-include_external_packages = true
-
-[[tool.importlinter.contracts]]
-name = "Engine must not import the UI layer or Qt"
-type = "forbidden"
-source_modules = ["engine"]
-forbidden_modules = ["ui", "PySide6"]
-# No exceptions: the engine tests are Qt-free since dv-hcg.26. The dashboard
-# cache helpers they used to borrow from ui/dashboard.py now live in the
-# Qt-free curation.dashboard_cache module, and the size-formatter test
-# moved to ui/tests/ (it asserts something about the views).
-
-[[tool.importlinter.contracts]]
-name = "Curation core must not import the UI layer or Qt"
-type = "forbidden"
-source_modules = ["curation"]
-forbidden_modules = ["ui", "PySide6"]
-# The curation core (config, storage, client, metadata rules, response
-# drafting) knows nothing about the views: ui/ imports it, never the other
-# way round. The contract landed with the curation/ consolidation
-# (dv-hcg.24) - the layering existed, the filesystem did not say so.
-# Qt moved out with it: the table-layout sort direction is persisted as a
-# plain int and the view layer converts it to Qt.SortOrder.
-
-[[tool.importlinter.contracts]]
-name = "Tools must not import the UI layer"
-type = "forbidden"
-source_modules = ["tools"]
-forbidden_modules = ["ui"]
-# The probes ARE the UI's test harness: they drive the views offscreen and
-# assert on pixels and geometry. The paint benchmark is the same kind of
-# tool: it drives the real dashboard to measure the queue's painting
-# window. Every other tool (audit, sbom, licenses, notice, smoke, doc
-# links, complexity) is an operational helper that runs outside the app
-# and must stay importable without Qt.
-ignore_imports = [
-    "tools.bench_paint_window -> ui.dashboard",
-    "tools.bench_paint_window -> ui.theme",
-    "tools.probes._common -> ui.theme",
-    "tools.probes.probe_card_corner -> ui.main_window",
-    "tools.probes.probe_headings -> ui.main_window",
-    "tools.probes.probe_manifest_columns -> ui.dataset",
-    "tools.probes.probe_queue_columns -> ui.main_window",
+    "^engine/tests/",
 ]

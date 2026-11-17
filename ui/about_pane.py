@@ -25,6 +25,7 @@ from ui.widgets import (
     make_action_button,
     make_body_label,
     make_page_heading,
+    make_progress_bar,
 )
 
 
@@ -143,6 +144,13 @@ class AboutPane(QWidget):
         self.setObjectName("AboutPane")
         self.setStyleSheet(page_background_qss("AboutPane"))
 
+        # Updates section state (the feed logic lives in ui/updater.py).
+        self._update_state = "idle"  # idle|checking|unavailable|up_to_date|available|downloading|ready|failed
+        self._update_version: str | None = None
+        self._update_pending_info = None  # velopack UpdateInfo after a successful download
+        self._check_worker = None
+        self._download_worker = None
+
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 24, 24, 24)
         outer.setSpacing(16)
@@ -225,6 +233,9 @@ class AboutPane(QWidget):
 
         body.addLayout(cols)
 
+        updates = self._build_updates_section()
+        body.addWidget(updates)
+
         try:
             from ui.theme import selectable_labels
 
@@ -249,6 +260,59 @@ class AboutPane(QWidget):
         row.addStretch(1)
         outer.addLayout(row)
 
+    def _build_updates_section(self) -> QFrame:
+        """Build the Updates block: status, last check, one action button, a bar."""
+        import ui.updater as _updater
+        from ui.theme import BORDER_SUBTLE
+
+        card = QFrame()
+        card.setObjectName("UpdatesCard")
+        card.setStyleSheet(transparent_surface_qss("UpdatesCard"))
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(0, 12, 0, 0)
+        layout.setSpacing(6)
+
+        divider = QFrame()
+        divider.setObjectName("UpdatesDivider")
+        divider.setFixedHeight(1)
+        # theme-allow: hairline divider tinted with the shared border role,
+        # nothing the kit owns (no card/badge/label mixin matches a bare rule)
+        divider.setStyleSheet(f"background: {BORDER_SUBTLE}; border: none;")
+        layout.addWidget(divider)
+
+        head = QLabel(t("about.updates.title"))
+        head.setObjectName("LabelMD")
+        layout.addWidget(head)
+
+        self._update_status = make_body_label("")
+        self._update_status.setObjectName("BodySM")
+        layout.addWidget(self._update_status)
+
+        self._update_last_checked = make_body_label("")
+        self._update_last_checked.setObjectName("CaptionSM")
+        layout.addWidget(self._update_last_checked)
+
+        self._update_progress = make_progress_bar(height=6)
+        self._update_progress.setVisible(False)
+        self._update_progress.setRange(0, 100)
+        layout.addWidget(self._update_progress)
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        row.setContentsMargins(0, 0, 0, 0)
+        self._update_button = make_action_button(t("about.updates.check_now"), kind="primary")
+        self._update_button.clicked.connect(self._on_update_button)
+        row.addWidget(self._update_button)
+        row.addStretch(1)
+        layout.addLayout(row)
+
+        try:
+            _updater.bus().stateChanged.connect(self._refresh_update_ui)
+        except Exception:
+            pass
+        self._refresh_update_ui()
+        return card
+
     def _copy_diagnostics(self, btn: AppButton) -> None:
         """Copy the diagnostics block to the clipboard, with brief feedback."""
         try:
@@ -264,3 +328,188 @@ class AboutPane(QWidget):
             QTimer.singleShot(1600, _restore)
         except Exception:
             pass
+    # -- Updates section -----------------------------------------------
+
+    _REASON_KEYS = {
+        "network": "about.updates.reason_network",
+        "timeout": "about.updates.reason_timeout",
+        "rate_limited": "about.updates.reason_rate_limited",
+        "feed": "about.updates.reason_feed",
+        "unknown": "about.updates.reason_unknown",
+    }
+
+    def _reason_text(self, reason: str | None) -> str:
+        key = self._REASON_KEYS.get(reason or "unknown", self._REASON_KEYS["unknown"])
+        try:
+            return t(key)
+        except Exception:
+            return t("about.updates.reason_unknown")
+
+    def _format_checked(self) -> str:
+        import time as _time
+
+        import ui.updater as _updater
+
+        stamp = _updater.last_checked_at()
+        if stamp is None:
+            return t("about.updates.never_checked")
+        shown = _time.strftime("%Y-%m-%d %H:%M", _time.localtime(stamp))
+        return t("about.updates.last_checked", when=shown)
+
+    def _set_update_controls(self, *, status: str, button: str | None, button_enabled: bool = True, show_progress: bool = False, progress: int | None = None) -> None:
+        self._update_status.setText(status)
+        self._update_last_checked.setText(self._format_checked())
+        if progress is not None:
+            self._update_progress.setValue(progress)
+        self._update_progress.setVisible(show_progress)
+        if button is None:
+            self._update_button.setVisible(False)
+        else:
+            self._update_button.setVisible(True)
+            self._update_button.setText(button)
+            self._update_button.setEnabled(button_enabled)
+
+    def _refresh_update_ui(self) -> None:
+        import ui.updater as _updater
+
+        if self._update_state == "downloading":
+            return  # the download owns the bar until it finishes
+        pending = _updater.pending_version()
+        if pending or self._update_state == "ready":
+            version = pending or self._update_version or ""
+            self._update_state = "ready"
+            self._update_version = version
+            self._set_update_controls(
+                status=t("about.updates.ready", version=version),
+                button=t("about.updates.restart_now", version=version),
+            )
+            return
+        if self._update_state == "unavailable":
+            self._set_update_controls(status=t("about.updates.unavailable"), button=None)
+            return
+        if self._update_state == "failed":
+            # The status line already shows details; only refresh the clock.
+            self._update_last_checked.setText(self._format_checked())
+            return
+        if self._update_state in ("available", "checking"):
+            return
+        if self._update_state == "idle":
+            status = t("about.updates.up_to_date")
+            if _updater.last_checked_at() is None:
+                status = t("about.updates.never_checked")
+            self._set_update_controls(
+                status=status,
+                button=t("about.updates.check_now"),
+            )
+
+    def _on_update_button(self) -> None:
+        state = self._update_state
+        if state == "available":
+            self._start_download()
+            return
+        if state == "ready":
+            self._restart_and_install()
+            return
+        self._start_check(force=True)
+
+    def _start_check(self, *, force: bool) -> None:
+        import ui.updater as _updater
+
+        if self._check_worker is not None and self._check_worker.isRunning():
+            return
+        self._update_state = "checking"
+        self._set_update_controls(
+            status=t("about.updates.checking"),
+            button=t("about.updates.checking"),
+            button_enabled=False,
+        )
+        worker = _updater.UpdateCheckWorker(force=force)
+        worker.finished.connect(self._on_check_finished)
+        self._check_worker = worker
+        worker.start()
+
+    def _on_check_finished(self, outcome: dict) -> None:
+        import ui.updater as _updater
+
+        status = outcome.get("status")
+        version = outcome.get("version")
+        try:
+            if status == "update_available":
+                self._update_state = "available"
+                self._update_version = version
+                self._set_update_controls(
+                    status=t("about.updates.available", version=version),
+                    button=t("about.updates.download", version=version),
+                )
+            elif status == "unavailable":
+                self._update_state = "unavailable"
+                self._set_update_controls(status=t("about.updates.unavailable"), button=None)
+            elif status == "failed":
+                self._update_state = "failed"
+                self._set_update_controls(
+                    status=t("about.updates.failed", reason=self._reason_text(outcome.get("reason"))),
+                    button=t("about.updates.check_now"),
+                )
+            else:  # up_to_date | cached
+                self._update_state = "up_to_date"
+                self._set_update_controls(
+                    status=t("about.updates.up_to_date"),
+                    button=t("about.updates.check_now"),
+                )
+        finally:
+            _updater.notify_state_changed()
+
+    def _start_download(self) -> None:
+        import ui.updater as _updater
+
+        self._update_state = "downloading"
+        version = self._update_version or ""
+        self._set_update_controls(
+            status=t("about.updates.downloading", version=version, percent="0"),
+            button=None,
+            show_progress=True,
+            progress=0,
+        )
+        worker = _updater.UpdateDownloadWorker(info=None)
+        worker.progress.connect(self._on_download_progress)
+        worker.finished.connect(self._on_download_finished)
+        self._download_worker = worker
+        worker.start()
+
+    def _on_download_progress(self, percent: int) -> None:
+        version = self._update_version or ""
+        self._update_progress.setValue(percent)
+        self._update_status.setText(t("about.updates.downloading", version=version, percent=percent))
+
+    def _on_download_finished(self, ok: bool) -> None:
+        import ui.updater as _updater
+
+        version = self._update_version or ""
+        self._update_pending_info = self._download_worker.info if self._download_worker else None
+        if ok:
+            self._update_state = "ready"
+            self._update_progress.setVisible(False)
+            self._set_update_controls(
+                status=t("about.updates.ready", version=version),
+                button=t("about.updates.restart_now", version=version),
+            )
+        else:
+            self._update_state = "failed"
+            self._update_progress.setVisible(False)
+            self._set_update_controls(
+                status=t("about.updates.check_failed_download"),
+                button=t("about.updates.check_now"),
+            )
+        _updater.notify_state_changed()
+
+    def _restart_and_install(self) -> None:
+        from PySide6.QtWidgets import QApplication
+
+        import ui.updater as _updater
+
+        manager = _updater.make_update_manager()
+        if manager is not None:
+            _updater.apply_update_on_restart(manager, self._update_pending_info)
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()

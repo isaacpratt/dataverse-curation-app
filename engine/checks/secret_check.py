@@ -1,8 +1,8 @@
 """Secret/credential scan of code, text and config files.
 
 Uses hush-scan (regex rules + Shannon entropy) over a bounded sample so a
-multi-GB blob renamed .py/.md is never read whole. Bundled in lite and full
-PyInstaller builds — not an optional/excluded dependency.
+multi-GB blob renamed .py/.md is never read whole. Bundled in the shipped
+PyInstaller build — not an optional/excluded dependency.
 """
 
 from pathlib import Path

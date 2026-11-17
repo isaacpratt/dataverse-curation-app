@@ -21,12 +21,14 @@ from engine.checks import (
     json_check,
     nc_check,
     pdf_check,
+    readme_check,
     sas7bdat_check,
     sav_check,
     secret_check,
     sqlite_check,
     text_check,
     tiff_check,
+    varmeta_check,
     xlsx_check,
     xml_check,
 )
@@ -55,6 +57,8 @@ _MODULES = (
     secret_check,
     containers_check,
     fastq_check,
+    varmeta_check,
+    readme_check,
 )
 
 registry: dict[str, Any] = {}

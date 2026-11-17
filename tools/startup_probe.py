@@ -3,7 +3,7 @@ r"""Opt-in startup timing for the desktop app (``DOCENT_STARTUP_LOG``).
 Set the variable to a file path before launching::
 
     $env:DOCENT_STARTUP_LOG = "$env:TEMP\\docent-startup.log"
-    dist\\curation-app-lite\\curation-app-lite.exe
+    dist\\DataverseDocent\\DataverseDocent.exe
 
 Every :func:`mark` call appends one tab-separated line::
 

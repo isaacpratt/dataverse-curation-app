@@ -1,113 +1,182 @@
 name: Release
 
+# Publishes one GitHub release carrying the installer: push a vX.Y.Z tag,
+# or dispatch this workflow with a version (it publishes whatever the build
+# already contains - so re-running a failed run does not need a new tag).
+# Every gate CI runs happens first; a version that does not match
+# engine.__version__ stops before anything is built or published.
+#
+# Channels: a plain vX.Y.Z builds for the `win` channel and publishes a
+# stable release; a prerelease vX.Y.Z-rc.N (or -beta.N) builds for `win-beta`
+# and publishes a pre-release. The in-app updater asks for one channel, so
+# the two feeds never mix. The portable zip and SHA256SUMS are attached with
+# `gh release upload` (vpk owns the Setup.exe and .nupkg files).
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.2.0 (or 0.2.0-rc.1 for a prerelease). Must match engine.__version__."
+        required: true
+        type: string
 
-# Tag-only workflow. It builds both artefacts, smokes them, and attaches
-# the windows build to a GitHub Release. ci.yml is untouched (read-only).
-#
-# Signing policy (decision 2026-11-17, bead dv-hcg.39): distributed builds
-# are signed through SignPath Foundation; the signing step lands with
-# dv-4t6.6 and skips cleanly when the SIGNPATH_* secrets are absent, so
-# this workflow publishes unsigned artefacts until then. The policy and
-# the interim checksum-verification guidance live in SECURITY.md; every
-# release publishes SHA256SUMS.txt so an unsigned artefact can still be
-# verified.
+# Least privilege: the publish job elevates to write for its own release,
+# the gate runs read-only.
 permissions:
   contents: read
 
-# Concurrency: never cancel a release build midway.
+# Publishing is not a race: two runs at once would publish succeeding
+# versions over each other.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.ref_name || inputs.version }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  gate:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/gate.yml
+
+  publish:
+    needs: gate
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
-      contents: write   # this job creates the GitHub Release
-    env:
-      QT_QPA_PLATFORM: offscreen
+      contents: write
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-
       - name: Lockfile check
         run: uv lock --check
       - name: Install
-        run: uv sync --locked --group dev
-      - name: Tag must match pyproject version
+        run: uv sync --group dev
+
+      - name: Resolve version and channel
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
-          $version = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches.Groups[1].Value
-          if ("v$version" -ne $tag) {
-            throw "Tag $tag does not match pyproject version v$version"
-          }
-
-      - name: Build both artefacts
-        run: uv run --group dev poe build
-      - name: Smoke the lite exe
-        run: uv run --group dev poe smoke
-      - name: License inventory, NOTICE and SBOMs
-        run: uv run --group dev poe release-artefacts
-
-      - name: Zip release artefacts
-        # The checksums are the interim integrity guarantee for unsigned
-        # builds (SECURITY.md, signing policy 2026-11-17).
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist_release | Out-Null
-          Compress-Archive -Path dist/curation-app-lite -DestinationPath dist_release/curation-app-lite.zip -Force
-          Compress-Archive -Path dist/curation-app-full -DestinationPath dist_release/curation-app-full.zip -Force
-          Copy-Item dist/sbom.cdx.json dist_release/sbom.cdx.json -Force
-          Copy-Item dist/sbom.spdx.json dist_release/sbom.spdx.json -Force
-          Copy-Item dist/licenses.md dist_release/licenses.md -Force
-          Copy-Item dist/NOTICE dist_release/NOTICE -Force
-          $checksums = Get-ChildItem dist_release -File | ForEach-Object {
-            $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower()
-            "$hash  $($_.Name)"
-          }
-          $checksums | Set-Content -Encoding ASCII dist_release/SHA256SUMS.txt
-          Get-Content dist_release/SHA256SUMS.txt
-
-      - name: Release notes from CHANGELOG
-        id: notes
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}"
-          $changelog = Get-Content CHANGELOG.md -Raw
-          $pattern = "(?ms)## \[$([regex]::Escape($tag.TrimStart('v')))\].*?(?=^## \[|\z)"
-          $match = [regex]::Match($changelog, $pattern)
-          if ($match.Success) {
-            $body = $match.Value.Trim()
+          if ("${{ github.event_name }}" -eq "push") {
+            $tag = "${{ github.ref_name }}"
           } else {
-            $body = "Release $tag. See CHANGELOG.md for details."
+            $raw = "${{ inputs.version }}".Trim().TrimStart("v", "V")
+            if (-not $raw) { throw "version input is empty" }
+            $tag = "v$raw"
           }
-          $body | Out-File -FilePath dist_release/RELEASE_NOTES.md -Encoding utf8
-          Write-Host "notes ready ($($body.Length) chars)"
+          $version = $tag.Substring(1)
+          $semver = "^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$"
+          if ($version -notmatch $semver) { throw "version '$version' (tag '$tag') is not semver" }
+          $prerelease = $version -match "-"
+          $channel = if ($prerelease) { "win-beta" } else { "win" }
+          # These are read by later steps via $env:, which is what
+          # GITHUB_ENV provides; workflow-level `env:` is not involved.
+          $values = @{
+            TAG = $tag
+            VERSION = $version
+            CHANNEL = $channel
+            PRERELEASE = $prerelease.ToString().ToLowerInvariant()
+          }
+          foreach ($key in $values.Keys) {
+            "$key=$($values[$key])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          Write-Output "tag=$tag version=$version channel=$channel prerelease=$prerelease"
 
-      - name: Create GitHub Release
+      # The one thing a tag can never survive: disagreeing with the build.
+      - name: Version matches engine.__version__
+        shell: pwsh
+        run: uv run python tools/check_version.py --tag "$env:TAG"
+
+      - name: Build
+        run: uv run poe build
+
+      # vpk is a .NET tool; build time only, nothing for the published app.
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install vpk
+        run: dotnet tool install --global vpk --version 1.2.161
+
+      # The previous release is the delta base. A missing one (the first
+      # release) is expected, not fatal: vpk packs a full package only.
+      - name: Download previous release
+        shell: pwsh
+        run: |
+          $preArgs = @()
+          if ($env:PRERELEASE -eq "true") { $preArgs += "--pre" }
+          $vpk = Join-Path $env:USERPROFILE ".dotnet\tools\vpk.exe"
+          & $vpk download github -o dist/releases --repoUrl "https://github.com/${{ github.repository }}" --token "${{ secrets.GITHUB_TOKEN }}" --channel "$env:CHANNEL" @preArgs
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::warning::no previous $env:CHANNEL release to use as a delta base (first release?) - packing full package only"
+          } elseif (Test-Path "dist/releases") {
+            Get-ChildItem dist/releases -Filter "*.nupkg" | ForEach-Object { Write-Output "delta base: $($_.Name)" }
+          } else {
+            Write-Output "no previous release downloaded; packing full package only"
+          }
+
+      # Same entry point a developer uses, so CI packs exactly what you pack.
+      - name: Pack
+        shell: pwsh
+        run: uv run python tools/pack_app.py --no-replace --version "$env:VERSION" --channel "$env:CHANNEL"
+
+      - name: Verify the pack
+        shell: pwsh
+        run: uv run python tools/check_pack.py --version "$env:VERSION" --channel "$env:CHANNEL"
+
+      - name: SHA256SUMS
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist/releases -Filter "DataverseDocent-$env:CHANNEL-Setup.exe" | Select-Object -First 1
+          $current = "-$env:VERSION-"
+          Push-Location dist/releases
+          if ($setup) { "" } else { throw "no $env:CHANNEL Setup.exe in dist/releases" }
+          Get-ChildItem -File | Where-Object {
+            $_.Name -eq $setup.Name -or
+            $_.Name -eq "DataverseDocent-$env:CHANNEL-Portable.zip" -or
+            $_.Name.Contains($current)
+          } | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
+          } | Set-Content SHA256SUMS.txt -Encoding ASCII
+          Get-Content SHA256SUMS.txt
+          Pop-Location
+
+      - name: Publish release
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $preArgs = @()
+          if ($env:PRERELEASE -eq "true") { $preArgs += "--pre" }
+          $vpk = Join-Path $env:USERPROFILE ".dotnet\tools\vpk.exe"
+          & $vpk upload github -o dist/releases --repoUrl "https://github.com/${{ github.repository }}" --token "${{ secrets.GITHUB_TOKEN }}" --publish --channel "$env:CHANNEL" --releaseName "Dataverse Docent $env:VERSION" --tag "$env:TAG" --targetCommitish "${{ github.sha }}" @preArgs
+          if ($LASTEXITCODE -ne 0) { throw "vpk upload failed ($LASTEXITCODE)" }
+          # vpk attaches Setup.exe, the portable zip and the nupkg from the pack's
+          # assets file; only SHA256SUMS is attached by hand.
+          gh release upload "$env:TAG" dist/releases/SHA256SUMS.txt --clobber
+
+      - name: Job summary
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
-          gh release create $tag `
-            dist_release/curation-app-lite.zip `
-            dist_release/curation-app-full.zip `
-            dist_release/sbom.cdx.json `
-            dist_release/sbom.spdx.json `
-            dist_release/licenses.md `
-            dist_release/NOTICE `
-            dist_release/SHA256SUMS.txt `
-            --title "Dataverse Docent $tag" `
-            --notes-file dist_release/RELEASE_NOTES.md
+          $lines = @("## Release $env:TAG (channel $env:CHANNEL)", "")
+          $current = "-$env:VERSION-"
+          Get-ChildItem dist/releases -File | Where-Object {
+            $_.Name.Contains($current) -or $_.Name -in @('DataverseDocent-win-Setup.exe', 'DataverseDocent-win-Portable.zip', 'SHA256SUMS.txt')
+          } | Sort-Object Name | ForEach-Object {
+            $lines += "- ``$($_.Name)`` — $([math]::Round($_.Length / 1e6, 1)) MB"
+          }
+          $delta = Get-ChildItem dist/releases -Name "*-delta.nupkg" | Select-Object -First 1
+          if ($delta) {
+            $full = [double]((Get-ChildItem dist/releases -Filter "*-full.nupkg" | Select-Object -First 1).Length)
+            $lines += ""
+            $lines += "Delta package: $delta (full package: $([math]::Round($full / 1e6, 1)) MB)"
+          }
+          $lines += ""
+          $lines += "https://github.com/${{ github.repository }}/releases/tag/$env:TAG"
+          $lines -join "`n" | Add-Content $env:GITHUB_STEP_SUMMARY

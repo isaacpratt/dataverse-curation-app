@@ -14,6 +14,7 @@ python tools/probes/probe_queue_columns.py    # the queue's columns fill the vie
 python tools/probes/probe_manifest_columns.py  # the manifest fits, persists the user's widths, resets
 python tools/probes/probe_headings.py          # every full-page heading wears the same token
 python tools/probes/probe_card_corner.py       # a card's bottom-right corner stays connected
+python tools/probes/probe_metadata_rows.py    # the Metadata card's rows, drawer, ghost rows and no-scrollbar rule
 ```
 
 `run_all.py` runs each `probe_*.py` in turn and exits non-zero when any
@@ -68,6 +69,7 @@ at columns.
 | `probe_manifest_columns.py` | The file manifest fits every column to its content (Name keeps a 260px floor), the user's width survives a refresh, the saved entry carries the schema version, and the reset button restores the fitted widths and clears the entry. |
 | `probe_headings.py` | Settings, About, Log and Review configuration each have exactly one `HeadlineLG` heading, no inline stylesheet, and the same 22px semibold metrics. |
 | `probe_card_corner.py` | A table card's bottom-right corner has no page-coloured notch: the scrollbar lanes are transparent, so the card's border curve stays unbroken. |
+| `probe_metadata_rows.py` | The Metadata card renders the Auto-Checks-style rows: the Title row and its required bar, the author drawer expands and collapses, the Not-checked filter shows its ghost rows, and the card carries no inner scroll area and no visible inner scrollbar. |
 
 ## The same contracts in pytest
 

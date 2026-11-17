@@ -152,7 +152,7 @@ def test_metadata_title_row_keeps_title_tip_and_summary(detail):
         "the completeness summary belongs in the metadata title row"
     )
     tools = _tools_row(card, "MetadataCheckTools")
-    for widget in (detail._meta_filter, detail._profile_combo, detail._meta_reset_btn):
+    for widget in (detail._meta_filter, detail._profile_combo):
         assert _layout_holds(tools.layout(), widget)
 
 

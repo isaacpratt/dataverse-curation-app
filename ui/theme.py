@@ -999,6 +999,7 @@ def status_strip_qss(
     font_size: int = FONT_CAPTION,
     padding: str = "6px 10px",
     selector: str = "QLabel",
+    weight: int | None = None,
 ) -> str:
     """Build a one-line status strip: a message on a card face.
 
@@ -1006,10 +1007,11 @@ def status_strip_qss(
     own text colour, because a widget-level sheet replaces the app
     sheet for that widget - the label's type token would not reach it.
     """
+    weight_rule = f" font-weight: {int(weight)};" if weight else ""
     return (
         f"{selector} {{ background: {background}; color: {text_color}; "
         f"border: 1px solid {border}; border-radius: {RADIUS_LG}; "
-        f"padding: {padding}; font-size: {font_size}px; }}"
+        f"padding: {padding}; font-size: {font_size}px;{weight_rule} }}"
     )
 
 
@@ -1405,6 +1407,26 @@ QLabel#DangerSM {{
     font-size: {FONT_SMALL}px;
     color: {ERROR};
 }}
+/* A result line at body size: a confirmation reads as unmissable at a
+   glance (success pair already in the contrast contract). */
+QLabel#SuccessMD {{
+    font-size: {FONT_BODY}px;
+    font-weight: 600;
+    color: {SUCCESS_DARK};
+}}
+/* An error line at body size, distinct from success at the same glance. */
+QLabel#DangerMD {{
+    font-size: {FONT_BODY}px;
+    font-weight: 600;
+    color: {ERROR};
+}}
+/* The dashboard counter: the data it is — body size, primary ink (the
+   CaptionSM it wore read as chrome). */
+QLabel#ValueMD {{
+    font-size: {FONT_BODY}px;
+    font-weight: 600;
+    color: {ON_SURFACE};
+}}
 QLabel#BodySM {{
     font-size: {FONT_SMALL}px;
     color: {ON_SURFACE_VARIANT};
@@ -1566,7 +1588,6 @@ QProgressBar {{
     border: 1px solid {OUTLINE_VARIANT};
     border-radius: {RADIUS_LG};
     background: {SURFACE_CONTAINER_LOW};
-    text-visible: false;
     height: 6px;
 }}
 QProgressBar::chunk {{

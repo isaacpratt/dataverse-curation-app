@@ -4,7 +4,7 @@ Carbon Tree View-inspired behavior (caret-left expanders, indented children,
 arrow-key navigation via QTreeView) implemented natively in PySide6 with the
 app's existing palette — Carbon web components are not available on desktop.
 
-Node kinds (Qt.ItemDataRole.UserRole dict on column-0 item):
+Node kinds (Qt.UserRole dict on column-0 item):
   folder: {"kind": "folder", "dir": str, "base": str}
   file:   {"kind": "file", "path": str, "base": str}
   check:  {"kind": "check", "path": str, "check_id": str}
@@ -16,7 +16,7 @@ octagon-alert (warnings), check (passes) or circle-dashed (skipped).
 Expand affordance itself is painted by the tree's own branch pass
 (Lucide chevrons via ui.widgets._BranchPainting); update_carets() keeps
 folder icons in sync with live expanded state and must run after every
-expand/collapse (see the dataset detail page, ui/dataset/).
+expand/collapse (see dataset_detail).
 
 Columns: Name | Size | Format | Scan. Folder rows aggregate children counts;
 file rows show the scan aggregate (engine.status.status_label); check rows
@@ -28,9 +28,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 from engine.status import classify
+from storage import finding_key
+from ui.check_titles import check_summary, check_title
 from ui.i18n import t
 from ui.icons import file_icon, icon, status_icon
-from ui.status_text import badge_text, status_text
+from ui.status_text import status_text
+from ui.widgets import disposition_label
 
 COLUMNS = [
     t("checks.columns.name"),
@@ -39,7 +42,7 @@ COLUMNS = [
     t("checks.columns.scan"),
 ]
 
-_KIND_ROLE = Qt.ItemDataRole.UserRole + 1
+_KIND_ROLE = Qt.UserRole + 1
 
 # Legacy text glyphs (pre-Lucide). Kept so update_carets() can strip them
 # from any model built before the icon switch; nothing emits them anymore.
@@ -50,13 +53,13 @@ def _strip_legacy_caret(text: str) -> str:
     try:
         for prefix in _CARET_PREFIXES:
             if text.startswith(prefix):
-                return text[len(prefix) :]
+                return text[len(prefix):]
     except Exception:
         pass
     return text
 
 
-def update_carets(model, is_expanded) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+def update_carets(model, is_expanded) -> None:
     """Sync folder icons + names with the tree's live expanded state.
 
     model: QStandardItemModel built by build_tree_model.
@@ -113,30 +116,13 @@ def update_carets(model, is_expanded) -> None:  # noqa: C901 - grandfathered; co
         pass
 
 
-def check_badge_text(result) -> str:
-    """Short badge text for a check result (e.g. PASS/FAIL)."""
-    return badge_text(result)
+def format_details_tooltip(result, path: str = "") -> str:
+    """Prose tooltip for a check result (dv-r0z); see ui.check_titles."""
+    from ui.check_titles import format_details_tooltip as _tooltip
 
-
-def format_details_tooltip(result) -> str:
-    """Details-tooltip text summarizing one check result for hover."""
-    parts = [
-        f"{result.check_id} [{result.level}]",
-        result.message,
-    ]
-    details = result.details or {}
-    shown = {k: v for k, v in details.items() if k != "skipped"}
-    if details.get("skipped"):
-        reason = details.get("reason") or details.get("required", "")
-        parts.append(t("checks.skipped_reason", reason=reason) if reason else t("checks.skipped"))
-    if shown:
-        import json as _json
-
-        try:
-            parts.append(_json.dumps(shown, indent=1)[:2000])
-        except Exception:
-            parts.append(str(shown)[:2000])
-    return "\n".join(parts)
+    if not path:
+        path = str(getattr(result, "path", "") or "")
+    return _tooltip(result, path)
 
 
 def _human_size(n: int) -> str:
@@ -144,6 +130,35 @@ def _human_size(n: int) -> str:
     from ui.widgets import human_size as _shared
 
     return _shared(n)
+
+
+def variable_coverage(report) -> dict[str, dict[str, int]]:
+    """Per-file ``{labeled, total}`` from the report's var-coverage check.
+
+    The check (dv-tfy) rides its coverage map on the first result's details;
+    returns {} when the check did not run or carried no map.
+    """
+    if report is None:
+        return {}
+    try:
+        results = list(getattr(report, "dataset_checks", []) or [])
+    except Exception:
+        return {}
+    for result in results:
+        if getattr(result, "check_id", "") != "metadata.var_coverage":
+            continue
+        details = getattr(result, "details", None)
+        if not isinstance(details, dict):
+            return {}
+        coverage = details.get("coverage")
+        if isinstance(coverage, dict):
+            return {
+                str(path): dict(cov)
+                for path, cov in coverage.items()
+                if isinstance(cov, dict)
+            }
+        return {}
+    return {}
 
 
 def _new_item(text: str, tooltip: str = "") -> QStandardItem:
@@ -154,15 +169,17 @@ def _new_item(text: str, tooltip: str = "") -> QStandardItem:
     return item
 
 
-def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-    rows, report=None, is_staged=None, human_size=None, inventory=None
-) -> QStandardItemModel:
+def build_tree_model(rows, report=None, is_staged=None, human_size=None,
+                     inventory=None, dispositions=None) -> QStandardItemModel:
     """Build the folder>file>check model.
 
     rows: list of (path, size_bytes, fmt, original) like _all_file_rows.
     report: DatasetReport or None (pre-run: file nodes only, no checks).
     is_staged: callable(path) -> bool (staged files render ink, others muted).
     inventory: optional raw inventory list (adds restricted/embargo/ingest notes).
+    dispositions: optional {finding_key: {disposition, note}} (dv-32x) —
+    check nodes with a recorded disposition carry its label in the Scan
+    column and tooltip, and the context menu in dataset_detail edits them.
     """
     model = QStandardItemModel()
     # Titles stay in sentence case, like every other table in the app.
@@ -170,6 +187,7 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
     # text it paints and a narrow column elides instead of clipping.
     model.setHorizontalHeaderLabels([str(c) for c in COLUMNS])
     hs = human_size or _human_size
+    coverage = variable_coverage(report)
     by_path = {}
     if report is not None:
         by_path = {f.path: f for f in report.files}
@@ -202,7 +220,9 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
                 parent_item.setIcon(icon("folder"))
             except Exception:
                 pass
-            parent_item.setData({"kind": "folder", "dir": parent, "base": label}, _KIND_ROLE)
+            parent_item.setData(
+                {"kind": "folder", "dir": parent, "base": label}, _KIND_ROLE
+            )
             size_item = _new_item("")
             fmt_item = _new_item("")
             scan_item = _new_item("")
@@ -230,7 +250,8 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
                 ingest_error = str(inv_entry.get("ingest_error") or "").strip()
                 if ingest_status or ingest_error:
                     bits = (
-                        [t("checks.ingest_status", status=ingest_status)] if ingest_status else []
+                        [t("checks.ingest_status", status=ingest_status)]
+                        if ingest_status else []
                     )
                     if ingest_error:
                         bits.append(t("checks.ingest_error", error=ingest_error))
@@ -238,7 +259,10 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
             entry = by_path.get(path)
             checks = list(entry.checks) if entry else []
             if report is None:
-                scan = t("checks.run_after_download") if not staged else t("common.not_checked")
+                scan = (
+                    t("checks.run_after_download") if not staged
+                    else t("common.not_checked")
+                )
                 tip = path
             elif entry is None:
                 scan = t("checks.not_in_report")
@@ -248,14 +272,30 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
                 tip = f"{path}\n{t('checks.no_auto_format')}"
             else:
                 scan = status_text(checks)
-                tip = (
-                    path
-                    + "\n"
-                    + "\n".join(f"[{c.level}] {c.check_id}: {c.message}" for c in checks)[:2000]
-                )
+                tip = path + "\n" + "\n".join(
+                    f"[{c.level}] {c.check_id}: {c.message}" for c in checks
+                )[:2000]
             # Append restriction/ingest notes to the Scan tooltip too.
             if note:
                 tip = tip + note
+            # Variable-metadata coverage (dv-tfy): a short suffix on the Scan
+            # column plus the exact counts in the tooltip.
+            cov = coverage.get(path)
+            if isinstance(cov, dict):
+                try:
+                    labeled = int(cov.get("labeled") or 0)
+                    total = int(cov.get("total") or 0)
+                except (TypeError, ValueError):
+                    # A stale/hand-written report may carry non-numeric
+                    # coverage; never take down the manifest-tree build.
+                    labeled = total = 0
+                if total or labeled:
+                    scan = scan + t(
+                        "checks.var_coverage_suffix", labeled=labeled, total=total
+                    )
+                    tip = tip + "\n" + t(
+                        "checks.var_coverage_tip", labeled=labeled, total=total
+                    )
             base = path.split("/")[-1]
             name_item = _new_item(base, tip)
             try:
@@ -268,30 +308,49 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
             scan_item = _new_item(scan, tip)
             file_row = [name_item, size_item, fmt_item, scan_item]
             for check in checks:
-                badge = check_badge_text(check)
-                kind = {
-                    "passed": "pass",
-                    "failed-warning": "warn",
-                    "failed-error": "fail",
-                    "skipped": "skip",
-                }.get(classify(check), "pass")
+                kind = {"passed": "pass", "failed-warning": "warn",
+                        "failed-error": "fail", "skipped": "skip"}.get(
+                            classify(check), "pass")
+                # Disposition reflection (dv-32x): the label joins the Scan
+                # text so a resolved finding reads as dealt-with at a glance.
+                token = ""
+                try:
+                    token = str(
+                        (dispositions or {})
+                        .get(finding_key(check.check_id, path, check.message), {})
+                        .get("disposition")
+                        or ""
+                    )
+                except Exception:
+                    token = ""
+                # dv-r0z: the row is named for a person ("CSV Openable"), and
+                # the Scan column is a sentence about what was verified — no
+                # check_id, no PASS/WARN badge, no filename the row already
+                # shows. The status still rides on the name cell's icon.
+                scan_text = check_summary(check, path)
+                tip = format_details_tooltip(check, path)
+                if token:
+                    label = disposition_label(token)
+                    scan_text += t("common.separator") + label
+                    tip += "\n" + t("detail.disposition.tree_note", label=label)
                 c_name = _new_item(
-                    check.check_id,
-                    format_details_tooltip(check),
+                    check_title(check.check_id),
+                    tip,
                 )
                 try:
                     c_name.setIcon(status_icon(kind))
                 except Exception:
                     pass
                 c_name.setData(
-                    {"kind": "check", "path": path, "check_id": check.check_id},
+                    {"kind": "check", "path": path, "check_id": check.check_id,
+                     "msg": check.message},
                     _KIND_ROLE,
                 )
                 c_size = _new_item("")
                 c_fmt = _new_item("")
                 c_scan = _new_item(
-                    f"{badge}{t('common.separator')}{check.message}",
-                    format_details_tooltip(check),
+                    scan_text,
+                    tip,
                 )
                 name_item.appendRow([c_name, c_size, c_fmt, c_scan])
             if parent_item is not None:
@@ -344,17 +403,12 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
 
 
 def node_kind(index) -> dict:
-    """Node descriptor (kind, icons, labels) for a tree item index."""
     try:
         from PySide6.QtCore import QModelIndex
 
         if not isinstance(index, QModelIndex) or not index.isValid():
             return {}
         model = index.model()
-        if not isinstance(model, QStandardItemModel):
-            # itemFromIndex lives on QStandardItemModel, not the
-            # QAbstractItemModel base (dv-hcg.28).
-            return {}
         item = model.itemFromIndex(model.index(index.row(), 0, index.parent()))
         data = item.data(_KIND_ROLE) if item else None
         return data if isinstance(data, dict) else {}

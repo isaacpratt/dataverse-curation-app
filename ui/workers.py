@@ -417,11 +417,17 @@ class CrawlWorker(QThread):
             else:
 
                 def _read_status(ds: dict) -> tuple:
+                    # The refusal (if any) is kept: a curation status this
+                    # account may not read is an expected answer, and the
+                    # dashboard says so instead of showing an empty column.
+                    refusal: dict = {}
                     try:
-                        status = client.get_curation_status(ds.get("persistent_id", ""))
+                        status = client.get_curation_status(
+                            ds.get("persistent_id", ""), refusal=refusal
+                        )
                     except Exception:
                         status = None
-                    return ds, status or {}
+                    return ds, status or {}, refusal
 
                 # Drafts only — non-drafts have no readable curation status.
                 drafts: list = []
@@ -442,10 +448,21 @@ class CrawlWorker(QThread):
                             for f in futures:
                                 f.cancel()
                             return
-                        ds, status = fut.result()
+                        ds, status, refusal = fut.result()
                         ds["curation_label"] = status.get("label", "")
                         ds["curation_time"] = status.get("time", "")
                         ds["curation_assigner"] = status.get("assigner", "")
+                        if refusal:
+                            # Curation state exists only for datasets under
+                            # curation, and only for accounts in their
+                            # curation scope — record why it is missing.
+                            ds["curation_access"] = {
+                                "state": "unreadable",
+                                "reason": str(refusal.get("code") or "not_under_curation"),
+                                "detail": str(refusal.get("detail") or ""),
+                                "status": int(refusal.get("status") or 0),
+                            }
+                        done_n += 1
                         if done_n % 10 == 0 or done_n == total:
                             self.progress.emit(
                                 t("workers.reading_labels", done=done_n, total=total)
@@ -636,15 +653,9 @@ class CheckWorker(QThread):
     # Overall check fraction (0..1) for a progress ring.
     progressFraction = Signal(float)
 
-    def __init__(
-        self,
-        dataset_dir: Path,
-        persistent_id: str,
-        label: str,
-        inventory: list | None = None,
-        metadata: dict | None = None,
-        parent=None,
-    ):
+    def __init__(self, dataset_dir: Path, persistent_id: str, label: str,
+                 inventory: list | None = None, metadata: dict | None = None,
+                 client=None, ruleset: dict | None = None, parent=None):
         super().__init__(parent)
         register_worker(self)
         self._dataset_dir = dataset_dir
@@ -652,6 +663,12 @@ class CheckWorker(QThread):
         self._label = label
         self._inventory = inventory
         self._metadata = metadata
+        # Optional Dataverse client (dv-tfy): used to fetch per-file DDI
+        # variable metadata for the coverage check. Never required.
+        self._client = client
+        # Optional ruleset (dv-81q): a dataset-level check honours its
+        # README section rules. None falls back to the built-in defaults.
+        self._ruleset = ruleset
         self._cancel_requested = False
 
     def cancel(self) -> None:
@@ -684,6 +701,26 @@ class CheckWorker(QThread):
                     pass
 
             workers = max(1, min(8, (os.cpu_count() or 4)))
+            # Variable metadata for tabular files (dv-tfy): best-effort DDI
+            # fetch, capped so a large deposit never stalls the check pass.
+            variable_metadata: dict | None = None
+            if self._client is not None and isinstance(self._inventory, list):
+                variable_metadata = {}
+                tabular = [
+                    e for e in self._inventory
+                    if isinstance(e, dict) and e.get("tabular") and e.get("id")
+                ][:50]
+                for entry in tabular:
+                    if self._stop_requested():
+                        break
+                    try:
+                        meta = self._client.get_variable_metadata(str(entry["id"]))
+                    except Exception:
+                        meta = None
+                    if meta:
+                        variable_metadata[
+                            str(entry.get("path") or entry.get("label") or "")
+                        ] = meta
             report = run_report(
                 self._dataset_dir,
                 persistent_id=self._pid,
@@ -694,6 +731,8 @@ class CheckWorker(QThread):
                 is_cancelled=self._stop_requested,
                 inventory=self._inventory,
                 metadata=self._metadata,
+                variable_metadata=variable_metadata,
+                ruleset=self._ruleset,
             )
             if self._stop_requested():
                 self.cancelled.emit()
@@ -703,6 +742,101 @@ class CheckWorker(QThread):
             except Exception:
                 pass
             self.finished.emit(report)
+        except Exception as exc:
+            if self._stop_requested():
+                self.cancelled.emit()
+                return
+            self.error.emit(f"{exc}\n\n{traceback.format_exc()}")
+
+
+class BulkCheckWorker(QThread):
+    """Run the engine over the staged files of many datasets, one at a time.
+
+    The detail view checks one dataset; the queue wants the same report
+    written for each visible row, so opening a dataset paints results
+    without a re-run. Strictly sequential and never touches the network:
+    non-staged pids are counted as skipped, and a failed dataset never
+    stops the batch. Reads no inventory or metadata (both are
+    per-dataset caches); the file checks run as-is.
+    """
+
+    # Human line for the status pill: "Bulk checks: 3 of 12 — <title>".
+    progress = Signal(str)
+    progressFraction = Signal(float)
+    # {"completed": n, "skipped": n, "failed": n, "total": m}
+    finished = Signal(object)
+    cancelled = Signal()
+    error = Signal(str)
+
+    def __init__(self, jobs: list, workspace, parent=None):
+        """jobs: list of (persistent_id, title) in paint order."""
+        super().__init__(parent)
+        register_worker(self)
+        self._jobs = [(str(pid), str(title)) for pid, title in jobs]
+        self._workspace = Path(workspace)
+        self._cancel_requested = False
+
+    def cancel(self) -> None:
+        """Stop after the current dataset finishes (engine checks finish first)."""
+        self._cancel_requested = True
+        self.requestInterruption()
+
+    def _stop_requested(self) -> bool:
+        return self._cancel_requested or self.isInterruptionRequested()
+
+    def run(self) -> None:
+        import traceback
+
+        try:
+            from download_manager import DownloadManager
+            from engine.runner import run_report
+
+            dl = DownloadManager(None, self._workspace)
+            summary = {"completed": 0, "skipped": 0, "failed": 0, "total": len(self._jobs)}
+            for index, (pid, title) in enumerate(self._jobs):
+                if self._stop_requested():
+                    self.cancelled.emit()
+                    return
+                try:
+                    files_dir = dl.files_dir(pid)
+                except Exception:
+                    files_dir = None
+                if files_dir is None or not files_dir.is_dir():
+                    summary["skipped"] += 1
+                else:
+                    self.progress.emit(
+                        t(
+                            "workers.bulk_checks.progress",
+                            current=index + 1,
+                            total=len(self._jobs),
+                            title=title,
+                        )
+                    )
+                    try:
+                        report = run_report(
+                            files_dir,
+                            persistent_id=pid,
+                            label=title,
+                            max_workers=2,
+                            is_cancelled=self._stop_requested,
+                        )
+                        if self._stop_requested():
+                            self.cancelled.emit()
+                            return
+                        try:
+                            # Atomic write in run_report land; same contract as the
+                            # detail view's auto-cache (checks-report.json).
+                            report.save(dl.dataset_dir(pid) / "checks-report.json")
+                        except Exception:
+                            pass
+                        summary["completed"] += 1
+                    except Exception:
+                        summary["failed"] += 1
+                try:
+                    self.progressFraction.emit((index + 1) / len(self._jobs))
+                except Exception:
+                    pass
+            self.finished.emit(summary)
         except Exception as exc:
             if self._stop_requested():
                 self.cancelled.emit()
@@ -759,15 +893,35 @@ class MetadataWorker(QThread):
     finished = Signal(dict, list, dict, dict, dict)
     error = Signal(str)
 
-    def __init__(
-        self, base_url: str, api_token: str, persistent_id: str, parent=None, collection: str = ""
-    ):
+    def __init__(self, base_url: str, api_token: str, persistent_id: str, parent=None,
+                 collection: str = "", draft_hint: bool | None = None):
         super().__init__(parent)
         register_worker(self)
         self._base_url = base_url
         self._api_token = api_token
         self._pid = persistent_id
         self._collection = collection or ""
+        # What the search payload already told us: False means the dataset
+        # is not under curation, so the curation status, the label history
+        # and the version comparison cannot exist — those calls are skipped
+        # instead of being sent to be refused. None = unknown, fetch them.
+        self._draft_hint = draft_hint
+
+    def _fetch_names(self) -> list[str]:
+        """Return the reads this dataset needs.
+
+        Curation state, label history and the version comparison exist
+        only for datasets under curation. When the queue row says this
+        dataset has no draft, those reads are skipped instead of being
+        sent to be refused.
+        """
+        names = [
+            "metadata", "inventory", "curation", "version_diff",
+            "versions", "history", "allowed", "in_review",
+        ]
+        if self._draft_hint is False:
+            return [n for n in names if n not in ("curation", "version_diff", "history")]
+        return names
 
     def run(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         import time as _time
@@ -780,6 +934,8 @@ class MetadataWorker(QThread):
             client = DataverseClient(self._base_url, self._api_token)
 
             # Parallel independent fetches (was serial sum of 8x RTT).
+            refusals: dict = {}
+
             def _fetch(name: str):
                 try:
                     if name == "metadata":
@@ -787,7 +943,11 @@ class MetadataWorker(QThread):
                     if name == "inventory":
                         return ("inventory", client.get_file_inventory(self._pid))
                     if name == "curation":
-                        return ("curation", client.get_curation_status(self._pid) or {})
+                        refusal: dict = {}
+                        status = client.get_curation_status(self._pid, refusal=refusal)
+                        if refusal:
+                            refusals["curation"] = refusal
+                        return ("curation", status or {})
                     if name == "version_diff":
                         return ("version_diff", client.compare_versions(self._pid) or {})
                     if name == "versions":
@@ -806,21 +966,27 @@ class MetadataWorker(QThread):
                         )
                     if name == "in_review":
                         return ("in_review", bool(client.dataset_in_review(self._pid)))
-                except Exception:
+                except Exception as exc:
+                    # Keep the refusal code: "this account may not read the
+                    # draft" is an expected answer, not a broken read.
+                    try:
+                        code = str(getattr(exc, "refusal_code", "") or "")
+                        if code:
+                            refusals[name] = {
+                                "state": "unreadable",
+                                "reason": code,
+                                "detail": str(getattr(exc, "refusal_detail", "") or ""),
+                                "status": int(
+                                    getattr(getattr(exc, "response", None), "status_code", 0) or 0
+                                ),
+                            }
+                    except Exception:
+                        pass
                     return (name, None)
                 return (name, None)
 
             results: dict = {}
-            names = [
-                "metadata",
-                "inventory",
-                "curation",
-                "version_diff",
-                "versions",
-                "history",
-                "allowed",
-                "in_review",
-            ]
+            names = self._fetch_names()
             with ThreadPoolExecutor(max_workers=5) as pool:
                 futures = {pool.submit(_fetch, n): n for n in names}
                 for fut in as_completed(futures):
@@ -841,30 +1007,11 @@ class MetadataWorker(QThread):
             if not isinstance(inventory, list):
                 inventory = []
                 inventory_failed = True
-            # Enrich tabular inventory rows with live ingest status/errors
-            # (GET /api/files/{id}/ingestStatus) — best effort, never fails
-            # the metadata load.
-            try:
-                tab_rows = [
-                    e for e in inventory if isinstance(e, dict) and e.get("tabular") and e.get("id")
-                ]
-                if tab_rows:
-
-                    def _ingest(row):
-                        try:
-                            return client.get_tabular_ingest_status(str(row.get("id") or ""))
-                        except Exception:
-                            return None
-
-                    with ThreadPoolExecutor(max_workers=4) as pool:
-                        for row, st in zip(tab_rows, pool.map(_ingest, tab_rows), strict=True):
-                            if isinstance(st, dict):
-                                if st.get("status"):
-                                    row["ingest_status"] = str(st["status"])
-                                if st.get("error"):
-                                    row["ingest_error"] = str(st["error"])
-            except Exception:
-                pass
+            # No live ingest-status call: the API has no ingestStatus
+            # endpoint (the dataset file-list payload already carries
+            # ingestStatus/ingestErrorMessage, parsed into the inventory
+            # rows at ingest time). The old best-effort call here hit a
+            # nonexistent endpoint and 404ed once per tabular file.
             curation = results.get("curation")
             if not isinstance(curation, dict):
                 curation = {}
@@ -929,6 +1076,9 @@ class MetadataWorker(QThread):
                 "inventory_failed": inventory_failed,
                 "guestbook": guestbook,
                 "account": account,
+                # Expected refusals (a draft this account may not read, a
+                # curation status that does not exist) with their reason.
+                "refusals": refusals,
             }
             self.finished.emit(metadata, inventory, curation, version_diff, extra)
         except Exception as exc:

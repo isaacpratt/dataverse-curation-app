@@ -35,7 +35,6 @@ from curation.dashboard_cache import (
     merge_enriched_rows as _merge_enriched_rows,
 )
 from ui.i18n import t
-from ui.ring import RingProgress
 from ui.table_layout import TableLayout
 from ui.theme import (
     ACCENT_PRIMARY,
@@ -53,6 +52,7 @@ from ui.theme import (
 from ui.widgets import (
     AppTable,
     ElidedLabel,
+    RingProgress,
     flush_table_style,
     make_action_button,
     make_caption_label,
@@ -62,7 +62,7 @@ from ui.widgets import (
     make_search_field,
     make_small_body_label,
 )
-from ui.workers import CrawlWorker
+from ui.workers import BulkCheckWorker, CrawlWorker
 
 
 class _BarLabel(QLabel):
@@ -109,7 +109,9 @@ COLUMNS: list[tuple[str, str, bool]] = [
     ("file_count", t("dashboard.columns.file_count"), True),
     ("total_size_bytes", t("dashboard.columns.total_size_bytes"), True),
     ("state", t("dashboard.columns.state"), True),
+    ("access", t("dashboard.columns.access"), True),
     ("curation_label", t("dashboard.columns.curation_label"), True),
+    ("follow_up", t("dashboard.columns.follow_up"), True),
     ("downloaded_at", t("dashboard.columns.downloaded_at"), True),
 ]
 
@@ -130,8 +132,38 @@ _COLUMN_WIDTHS = {
     "file_count": 60,
     "total_size_bytes": 90,
     "state": 110,
+    "access": 130,
     "curation_label": 150,
+    "follow_up": 170,
     "downloaded_at": 130,
+}
+
+# What the account could read for one dataset, in the queue's Access column.
+# The machine codes come from dataverse_client (the refusal classifier);
+# the wording comes from the catalogue. A row that was read fine shows
+# nothing — the column speaks only when there is something to say.
+_ACCESS_LABEL_KEYS = {
+    "draft_not_readable": "dashboard.access.draft_not_readable",
+    "versions_not_readable": "dashboard.access.not_readable",
+    "version_not_readable": "dashboard.access.not_readable",
+    "not_readable": "dashboard.access.not_readable",
+    "no_published_version": "dashboard.access.no_published_version",
+    "no_readable_version": "dashboard.access.no_readable_version",
+    "no_draft_version": "dashboard.access.no_readable_version",
+    "no_versions_to_compare": "dashboard.access.no_readable_version",
+    "not_under_curation": "dashboard.access.not_under_curation",
+}
+
+_ACCESS_TIP_KEYS = {
+    "draft_not_readable": "dashboard.access.tip_draft_not_readable",
+    "versions_not_readable": "dashboard.access.tip_not_readable",
+    "version_not_readable": "dashboard.access.tip_not_readable",
+    "not_readable": "dashboard.access.tip_not_readable",
+    "no_published_version": "dashboard.access.tip_no_published_version",
+    "no_readable_version": "dashboard.access.tip_no_readable_version",
+    "no_draft_version": "dashboard.access.tip_no_readable_version",
+    "no_versions_to_compare": "dashboard.access.tip_no_readable_version",
+    "not_under_curation": "dashboard.access.tip_not_under_curation",
 }
 
 
@@ -278,6 +310,62 @@ def _local_downloaded(workspace: Path, persistent_id: str) -> str:
         return ""
 
 
+def local_follow_ups(workspace: Path) -> dict[str, dict]:
+    """{persistent_id: follow-up} for every open depositor follow-up (dv-5eg).
+
+    One sqlite connect for the whole queue; never raises.
+    """
+    try:
+        from storage import open_state
+
+        if not (Path(workspace) / "state.db").exists():
+            return {}
+        st = open_state(Path(workspace))
+        try:
+            return st.list_follow_ups()
+        finally:
+            st.close()
+    except Exception:
+        return {}
+
+
+def attach_follow_ups(datasets: list, follow_ups: dict[str, dict] | None) -> None:
+    """Stamp each dataset with its follow-up state for the queue column.
+
+    The state is recomputed against the row's ``draft_updated_at`` (the
+    server draft lastUpdateTime enrichment attached), so a newer draft flips
+    an awaiting follow-up to "depositor updated" without another store read.
+    """
+    if not follow_ups:
+        for ds in datasets or []:
+            try:
+                ds.pop("follow_up", None)
+            except Exception:
+                continue
+        return
+    try:
+        import follow_ups as _fu
+    except Exception:  # pragma: no cover - module is part of the app
+        _fu = None
+    for ds in datasets or []:
+        try:
+            pid = str(ds.get("persistent_id") or "")
+            row = follow_ups.get(pid)
+            if not row:
+                ds.pop("follow_up", None)
+                continue
+            state = str(row.get("state") or "")
+            if _fu is not None:
+                state = _fu.state_for(row.get("opened_at"), ds.get("draft_updated_at"))
+            ds["follow_up"] = {
+                "opened_at": str(row.get("opened_at") or ""),
+                "decision_label": str(row.get("decision_label") or ""),
+                "state": state,
+            }
+        except Exception:
+            continue
+
+
 def _decided_ids(workspace: Path) -> set[str]:
     """Return persistent IDs with a logged decision/export (best-effort)."""
     try:
@@ -336,9 +424,11 @@ def _display_state(state: str) -> str:
 
 
 class DashboardView(QWidget):
-    """Lists datasets. Emits openRequested(pid, title) on double-click."""
+    """Lists datasets. Emits openRequested(pid, title, row) on double-click."""
 
-    openRequested = Signal(str, str)
+    # The third argument is the queue row (a dict) — what the search
+    # payload already knows about the dataset travels with the request.
+    openRequested = Signal(str, str, object)
     # Empty-state CTA: "Open Settings" reaches the main window's pane switch.
     settingsRequested = Signal()
 
@@ -375,6 +465,12 @@ class DashboardView(QWidget):
         # Decision set cache: refreshed per crawl / on return from detail so
         # per-keystroke filtering never touches sqlite (_update_metrics).
         self._decided_cache: set[str] | None = None
+        # Bulk "Run checks for visible rows" (dv-9m2): at most the painting
+        # window is enqueued, never the full crawl. The worker is a
+        # sequential file-checks pass; a second trigger while it runs asks
+        # to cancel instead of starting an overlapping batch.
+        self._bulk_worker: BulkCheckWorker | None = None
+        self._bulk_enqueued: list[tuple[str, str]] = []
         # Debounced search: rebuild the 12-col table 200 ms after the last
         # keystroke instead of on every keystroke.
         self._filter_timer = QTimer(self)
@@ -395,7 +491,7 @@ class DashboardView(QWidget):
         self._metrics_row.setSpacing(16)
         self._metric_cards: list[QFrame] = []
         self._metric_value_labels: list[QLabel] = []
-        self._needs_action_only: bool = False
+        self._labelled_only: bool = False
         for accent, label, sub_text in [
             (
                 "tertiary",
@@ -408,7 +504,7 @@ class DashboardView(QWidget):
                 t("dashboard.metrics.review.sub"),
             ),
             (
-                "error",
+                "progress",
                 t("dashboard.metrics.action.label"),
                 t("dashboard.metrics.action.sub"),
             ),
@@ -537,6 +633,12 @@ class DashboardView(QWidget):
         # (double-click alone locks out keyboard-only users), F5 refreshes,
         # Escape clears the search. See _on_table_key.
         self._table.installEventFilter(self)
+        # Right-click on the queue: "Run checks for visible rows" capped at
+        # the painting window (dv-9m2).
+        self._table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(
+            self._show_queue_context_menu
+        )
         # The viewport is watched too: its width changes when the vertical
         # scrollbar appears (the columns must keep filling it).
         try:
@@ -588,7 +690,7 @@ class DashboardView(QWidget):
         pill_lay.setContentsMargins(14, 6, 14, 6)
         pill_lay.setSpacing(8)
         self._status_lbl = _BarLabel("")
-        self._status_lbl.setObjectName("CaptionSM")
+        self._status_lbl.setObjectName("ValueMD")
         pill_lay.addWidget(self._status_lbl)
         pill_lay.setAlignment(self._status_lbl, Qt.AlignmentFlag.AlignVCenter)
         self._status_sep = make_caption_label("·")
@@ -857,6 +959,7 @@ class DashboardView(QWidget):
                         ds["downloaded_at"] = stamps.get(ds.get("persistent_id", ""), "")
                     except Exception:
                         pass
+                attach_follow_ups(self._all_datasets, local_follow_ups(Path(ws)))
                 self._decided_cache = _decided_ids(Path(ws))
             except Exception:
                 pass
@@ -1083,6 +1186,7 @@ class DashboardView(QWidget):
         border_color = {
             "tertiary": ACCENT_TERTIARY,
             "primary": ACCENT_PRIMARY,
+            "progress": ACCENT_TERTIARY,
             "error": STATE_ERROR_GRAPHIC,
         }[accent]
         # No widget-level sheet: the global #MetricCard rule in theme.py paints
@@ -1096,7 +1200,7 @@ class DashboardView(QWidget):
         lay.setSpacing(8)
         from ui.icons import icon_label as _metric_icon
 
-        icon_map = {"tertiary": "clock", "primary": "eye", "error": "octagon-alert"}
+        icon_map = {"tertiary": "clock", "primary": "eye", "progress": "pencil", "error": "octagon-alert"}
         icon = _metric_icon(icon_map.get(accent, "circle"), size=18, color=border_color)
         # The whole chip must be the click target: mouse-transparent
         # children let press/enter/leave reach the card's eventFilter.
@@ -1126,27 +1230,28 @@ class DashboardView(QWidget):
         return card, v
 
     def _on_metric_clicked(self, accent: str) -> None:
-        """Apply a metric card's filter (dv-896)."""
+        """Apply a metric card's filter (dv-896, dv-is4)."""
         if accent == "primary":
-            self._needs_action_only = False
+            self._labelled_only = False
             self._state_filter.setCurrentIndex(4)
-        elif accent == "error":
-            self._needs_action_only = True
-            self._state_filter.setCurrentIndex(1)
+        elif accent == "progress":
+            # In Progress card: rows carrying any curation label, any state.
+            self._labelled_only = True
+            self._state_filter.setCurrentIndex(0)
         else:
-            self._needs_action_only = False
+            self._labelled_only = False
             self._state_filter.setCurrentIndex(1)
         self._apply_filter()
 
     def _on_state_filter_changed(self) -> None:
-        if getattr(self, "_needs_action_only", False):
-            # User changed the combo themselves: clear the needs-action flag.
+        if getattr(self, "_labelled_only", False):
+            # User changed the combo themselves: clear the In Progress flag.
             try:
                 idx = self._state_filter.currentIndex()
             except Exception:
                 idx = -1
-            if idx != 1:
-                self._needs_action_only = False
+            if idx != 0:
+                self._labelled_only = False
         self._apply_filter()
 
     def _on_columns_fitted(self) -> None:
@@ -1354,6 +1459,159 @@ class DashboardView(QWidget):
         menu.addAction(reset_action)
         menu.exec(pos)
 
+    def _visible_check_jobs(self) -> list[tuple[str, str]]:
+        """pid+title of the rows the table paints, capped at the painting window."""
+        jobs = []
+        for ds in list(getattr(self, "_datasets", []))[: self._MAX_PAINTED_ROWS]:
+            pid = str(ds.get("persistent_id") or "").strip()
+            if pid:
+                jobs.append((pid, str(ds.get("title") or "")))
+        return jobs
+
+    def _build_queue_context_menu(self) -> QMenu:
+        """Build the queue's right-click menu (dv-9m2).
+
+        One item while idle: bulk-run file checks for the visible rows
+        (the painting window, never beyond). While a bulk run is in
+        flight, the same menu offers to cancel it.
+        """
+        menu = QMenu(self)
+        if self._bulk_worker is not None:
+            cancel = menu.addAction(t("dashboard.context.cancel_bulk_checks"))
+            cancel.triggered.connect(self._on_cancel_bulk_checks)
+            return menu
+        count = len(self._visible_check_jobs())
+        action = menu.addAction(
+            t("dashboard.context.run_checks_visible", count=count)
+        )
+        action.setEnabled(count > 0)
+        action.setToolTip(t("dashboard.context.run_checks_visible_tip"))
+        action.triggered.connect(self._enqueue_visible_checks)
+        return menu
+
+    def _show_queue_context_menu(self, pos) -> None:  # type: ignore[no-untyped-def]
+        menu = self._build_queue_context_menu()
+        menu.exec(self._table.viewport().mapToGlobal(pos))
+
+    def _enqueue_visible_checks(self) -> None:
+        """Enqueue the visible rows for a bulk file-checks pass.
+
+        Capped at the painting window by construction; the enqueued count
+        is logged. The worker runs sequentially in the background and
+        writes each report to the same checks-report.json the detail view
+        auto-loads — open the dataset afterwards and the results are
+        already there.
+        """
+        jobs = self._visible_check_jobs()
+        count = len(jobs)
+        self._bulk_enqueued = list(jobs)
+        try:
+            from applog import get_app_log
+
+            get_app_log().info(
+                t("dashboard.log.bulk_checks_enqueued", count=count)
+            )
+        except Exception:
+            pass
+        self._progress.setText(
+            t("dashboard.progress.bulk_checks_enqueued", count=count)
+        )
+        if not jobs:
+            return
+        if self._bulk_worker is not None:
+            return
+        self._bulk_worker = BulkCheckWorker(
+            jobs, self._config.app.workspace, self
+        )
+        self._bulk_worker.progress.connect(self._progress.setText)
+        self._bulk_worker.progressFraction.connect(self._on_bulk_fraction)
+        self._bulk_worker.finished.connect(self._on_bulk_checks_finished)
+        self._bulk_worker.cancelled.connect(self._on_bulk_checks_cancelled)
+        self._bulk_worker.error.connect(self._on_bulk_checks_error)
+        try:
+            self._ring.reset()
+            self._ring.setFraction(0.0)
+            self._ring.show()
+        except Exception:
+            pass
+        self._bulk_worker.start()
+
+    def _on_bulk_fraction(self, fraction: float) -> None:
+        try:
+            self._ring.setFraction(fraction)
+        except Exception:
+            pass
+
+    def _bulk_wrap_up(self) -> None:
+        try:
+            self._ring.setFraction(1.0)
+        except Exception:
+            pass
+        self._hide_ring()
+        self._bulk_worker = None
+        self._sync_status_bar()
+
+    def _on_bulk_checks_finished(self, summary) -> None:  # type: ignore[no-untyped-def]
+        total = int(summary.get("total", 0)) if isinstance(summary, dict) else 0
+        completed = int(summary.get("completed", 0)) if isinstance(summary, dict) else 0
+        skipped = int(summary.get("skipped", 0)) if isinstance(summary, dict) else 0
+        failed = int(summary.get("failed", 0)) if isinstance(summary, dict) else 0
+        try:
+            from applog import get_app_log
+
+            get_app_log().info(
+                t(
+                    "dashboard.log.bulk_checks_done",
+                    completed=completed,
+                    skipped=skipped,
+                    failed=failed,
+                    total=total,
+                )
+            )
+        except Exception:
+            pass
+        self._progress.setText(
+            t(
+                "dashboard.progress.bulk_checks_done",
+                completed=completed,
+                skipped=skipped,
+                failed=failed,
+                total=total,
+            )
+        )
+        self._bulk_wrap_up()
+
+    def _on_bulk_checks_cancelled(self) -> None:
+        try:
+            from applog import get_app_log
+
+            get_app_log().info(t("dashboard.log.bulk_checks_cancelled"))
+        except Exception:
+            pass
+        self._progress.setText(t("dashboard.progress.bulk_checks_cancelled"))
+        self._bulk_wrap_up()
+
+    def _on_bulk_checks_error(self, message: str) -> None:
+        from ui.dialogs import describe_error, show_warning
+
+        headline, details = describe_error(message)
+        self._progress.setText(t("dashboard.progress.bulk_checks_error"))
+        self._bulk_wrap_up()
+        show_warning(
+            self,
+            t("dashboard.dialogs.bulk_checks_title"),
+            headline,
+            details=details,
+        )
+
+    def _on_cancel_bulk_checks(self) -> None:
+        worker = self._bulk_worker
+        if worker is not None:
+            try:
+                worker.cancel()
+            except Exception:
+                pass
+
     def _reset_queue_layout(self) -> None:
         """Reset the queue table to its construction view, then repaint."""
         try:
@@ -1504,6 +1762,7 @@ class DashboardView(QWidget):
                     ds["downloaded_at"] = stamps.get(ds.get("persistent_id", ""), "")
                 except Exception:
                     pass
+            attach_follow_ups(self._all_datasets, local_follow_ups(Path(ws)))
             self._decided_cache = _decided_ids(Path(ws))
             self._apply_size_cache(self._all_datasets)
             self._apply_filter()
@@ -1593,6 +1852,7 @@ class DashboardView(QWidget):
                     ds["downloaded_at"] = stamps.get(ds.get("persistent_id", ""), "")
                 except Exception:
                     pass
+            attach_follow_ups(datasets, local_follow_ups(Path(ws)))
             try:
                 self._decided_cache = _decided_ids(Path(ws))
             except Exception:
@@ -1658,7 +1918,7 @@ class DashboardView(QWidget):
 
         - Pending Datasets: versionState DRAFT (plain drafts awaiting triage)
         - In Review: locked for review (confirmed via the locks endpoint)
-        - Needs Action: drafts + in-review items with no logged decision yet
+        - In Progress: rows carrying any curation label (any state)
 
         Before the first crawl finishes each card states its condition in
         words ("Checking…" while the crawl runs, "Not fetched" when idle)
@@ -1714,6 +1974,18 @@ class DashboardView(QWidget):
             return _human_size(raw)
         if key == "state":
             return _display_state(ds.get("state") or "")
+        if key == "access":
+            return _access_text(ds)
+        if key == "follow_up":
+            fu = ds.get("follow_up")
+            if not isinstance(fu, dict) or not fu:
+                return ""
+            if str(fu.get("state") or "") == "depositor_updated":
+                return t("dashboard.follow_up.updated")
+            return t(
+                "dashboard.follow_up.awaiting",
+                date=str(fu.get("opened_at") or "")[:10],
+            )
         v = ds.get(key, "")
         return "" if v is None else str(v)
 
@@ -1733,6 +2005,13 @@ class DashboardView(QWidget):
             except Exception:
                 pass
             return epoch
+        if key == "follow_up":
+            fu = ds.get("follow_up")
+            if not isinstance(fu, dict) or not fu:
+                return 0.0
+            if str(fu.get("state") or "") == "depositor_updated":
+                return 2.0
+            return 1.0
         raw = ds.get(key, "")
         if key in ("file_count", "total_size_bytes"):
             if raw is None or raw == "":
@@ -1782,10 +2061,9 @@ class DashboardView(QWidget):
                         )
                     ):
                         continue
-                if wanted == "PENDING" and getattr(self, "_needs_action_only", False):
-                    # Needs Action card: pending items with no logged decision.
-                    decided = getattr(self, "_decided_cache", None) or set()
-                    if ds.get("persistent_id") in decided:
+                if getattr(self, "_labelled_only", False):
+                    # In Progress card: rows with any curation label, any state.
+                    if not str(ds.get("curation_label") or "").strip():
                         continue
                 if wanted_label == _NO_LABEL_SENTINEL:
                     if str(ds.get("curation_label") or "").strip():
@@ -1852,6 +2130,11 @@ class DashboardView(QWidget):
                     text_val = self._cell_text(ds, key)
                     item = _SortItem(text_val)
                     item.setToolTip(text_val)
+                    if key == "access":
+                        # The reason the server refused something, in full.
+                        tip = _access_tooltip(ds)
+                        if tip:
+                            item.setToolTip(tip)
                     if key == "total_size_bytes":
                         if text_val == t("dashboard.display_state.unknown"):
                             if ds.get("size_pending"):
@@ -1980,13 +2263,21 @@ class DashboardView(QWidget):
             title_item = self._table.item(row, title_col)
             pid = pid_item.text().strip() if pid_item else ""
             title = title_item.text().strip() if title_item else ""
+            row_data: dict = {}
             if not pid:
                 # Fallback: match by title (titles are unique enough here)
                 match = next((d for d in self._datasets if d.get("title") == title), None)
                 if match:
                     pid = match.get("persistent_id", "")
                     title = match.get("title", title)
+            for ds in self._datasets:
+                if pid and str(ds.get("persistent_id") or "") == pid:
+                    row_data = ds
+                    break
             if pid:
-                self.openRequested.emit(pid, title or pid)
+                # The row travels with the request: what the search payload
+                # already knows (draft or no draft) saves the detail view
+                # from asking for versions that cannot exist.
+                self.openRequested.emit(pid, title or pid, row_data)
         except Exception:
             pass

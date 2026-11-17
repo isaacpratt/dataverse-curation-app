@@ -15,7 +15,6 @@ import importlib.metadata
 import subprocess
 import sys
 from pathlib import Path
-from typing import ClassVar
 
 import requests
 from PySide6.QtCore import Qt, QThread, Signal
@@ -34,8 +33,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from curation.client import DataverseClient
-from curation.config import PRESETS, Config
+from config import PRESETS, Config
+from dataverse_client import DataverseClient
 from ui.dialogs import (
     confirm,
     confirm_save_discard_cancel,
@@ -120,10 +119,10 @@ class SettingsPane(QWidget):
     configurationChanged = Signal()
 
     # Format-check libraries (pip name, import name, description).
-    # Heavy binary libs are excluded from the lite build; pure-Python format
-    # helpers ship in lite. Required scanners (piigex, hush-scan) are bundled
-    # in both builds and listed here so install status stays visible.
-    EXTENSIONS: ClassVar[list[tuple[str, str, str]]] = [
+    # The shipped build carries all of them; the list keeps install status
+    # visible in Settings. Required scanners (piigex, hush-scan) are bundled
+    # too and shown here for the same reason.
+    EXTENSIONS = [
         ("pyreadstat", "pyreadstat", t("settings.extensions.used_pyreadstat")),
         ("netCDF4", "netCDF4", t("settings.extensions.used_netcdf4")),
         ("h5py", "h5py", t("settings.extensions.used_h5py")),
@@ -164,6 +163,7 @@ class SettingsPane(QWidget):
         if sub is not None:
             outer.addWidget(sub)
 
+
         tabs = QTabWidget()
 
         # General tab
@@ -173,10 +173,10 @@ class SettingsPane(QWidget):
         form.setSpacing(12)
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(12)
-        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
+        form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        form.setRowWrapPolicy(QFormLayout.DontWrapRows)
+        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        form.setFormAlignment(Qt.AlignTop)
 
         # Field labels wear the LabelStrongSM token: small and semibold on
         # the primary text colour, so each label scans before its field.
@@ -186,10 +186,14 @@ class SettingsPane(QWidget):
         self.url_edit = make_line_edit(t("settings.fields.url_placeholder"))
         form.addRow(make_field_label(t("settings.fields.url")), self.url_edit)
 
-        self.token_edit = make_line_edit(t("settings.fields.token_placeholder"), password=True)
+        self.token_edit = make_line_edit(
+            t("settings.fields.token_placeholder"), password=True
+        )
         form.addRow(make_field_label(t("settings.fields.token")), self.token_edit)
 
-        self.subtree_edit = make_line_edit(t("settings.fields.collection_placeholder"))
+        self.subtree_edit = make_line_edit(
+            t("settings.fields.collection_placeholder")
+        )
         form.addRow(make_field_label(t("settings.fields.collection")), self.subtree_edit)
 
         ws_row = QHBoxLayout()
@@ -214,11 +218,14 @@ class SettingsPane(QWidget):
         conn_row.setContentsMargins(0, 0, 0, 0)
         conn_row.setSpacing(8)
         conn_row.addWidget(test_btn, 0)
+        # Icon + verdict: a success reads as unmissable at a glance (dv-3wc).
+        self._conn_icon = QLabel()
+        self._conn_icon.hide()
+        conn_row.addWidget(self._conn_icon, 0)
         self._conn_status = QLabel("")
         self._conn_status.setWordWrap(True)
         self._conn_status.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
         )
         # The verdict's colour changes at runtime, so the widget wears a
         # token (SuccessSM / DangerSM / HintSM) rather than a painted
@@ -228,6 +235,7 @@ class SettingsPane(QWidget):
         form.addRow("", conn_row)
         # A stale verdict must not survive a URL edit.
         self.url_edit.textChanged.connect(lambda _t: self._conn_status.setText(""))
+        self.url_edit.textChanged.connect(lambda _t: self._conn_icon.hide())
         self.url_edit.textChanged.connect(lambda _t: self._clear_user_info())
         self.token_edit.textChanged.connect(lambda _t: self._clear_user_info())
         self.subtree_edit.textChanged.connect(lambda _t: self._clear_collection_role())
@@ -273,11 +281,12 @@ class SettingsPane(QWidget):
             [
                 t("settings.extensions.columns.package"),
                 t("settings.extensions.columns.installed"),
+                t("settings.extensions.columns.version"),
                 t("settings.extensions.columns.size"),
                 t("settings.extensions.columns.used_for"),
                 t("settings.extensions.columns.action"),
             ],
-            widths={0: 110, 1: 130, 2: 90, 3: 200, 4: 300},
+            widths={0: 110, 1: 80, 2: 90, 3: 90, 4: 200, 5: 300},
             row_height=34,
             stretch_last=False,
             # NOTE: sorting stays OFF here on purpose — per-row action
@@ -287,7 +296,7 @@ class SettingsPane(QWidget):
             sortable=False,
         )
         # Used-for column absorbs leftover width.
-        self.ext_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.ext_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
         # Qt derives CELL-WIDGET geometry from the item content box whenever
         # a stylesheet is active: the app's `QTableWidget::item` rule
         # (padding 10px 12px + 1px border-bottom) shrank every action cell to
@@ -296,7 +305,9 @@ class SettingsPane(QWidget):
         # vertical padding here (12px horizontal inset kept, item text stays
         # centered at the same y) lets the cell fill the row; the row
         # separator still comes from the app rule's border-bottom.
-        self.ext_table.setStyleSheet(flush_table_style(last=False, item_padding="0px 12px"))
+        self.ext_table.setStyleSheet(
+            flush_table_style(last=False, item_padding="0px 12px")
+        )
         # Remember the user's column widths/order across sessions. The
         # controller owns the persistence: it saves user gestures only.
         try:
@@ -305,6 +316,18 @@ class SettingsPane(QWidget):
                 "extensions",
                 self.ext_table.horizontalHeader(),
                 view=self.ext_table,
+            )
+            # The Extensions table gained a Version column at index 2
+            # (dv-bld): re-key a layout saved before that onto the new
+            # shape so it still applies; entries already in the new shape
+            # are left alone.
+            from storage import remap_table_layout_entry
+
+            remap_table_layout_entry(
+                self._config.app.workspace,
+                "extensions",
+                [0, 1, None, 2, 3, 4],
+                default_width=90,
             )
             if self._ext_layout.restore():
                 self.ext_table.disable_auto_fit()
@@ -319,12 +342,15 @@ class SettingsPane(QWidget):
         bottom_lay.addWidget(ext_hint)
         ext_btn_row = QHBoxLayout()
         self.ext_status = QLabel("")
+        self.ext_status.setObjectName("CaptionSM")
         ext_btn_row.addWidget(self.ext_status, 1)
         refresh_ext_btn = make_action_button(t("common.refresh"), kind="secondary")
         refresh_ext_btn.setToolTip(t("settings.extensions.refresh_tip"))
         refresh_ext_btn.clicked.connect(self._refresh_sizes)
         ext_btn_row.addWidget(refresh_ext_btn)
-        install_all_btn = make_action_button(t("settings.extensions.install_all"), kind="secondary")
+        install_all_btn = make_action_button(
+            t("settings.extensions.install_all"), kind="secondary"
+        )
         install_all_btn.clicked.connect(self._install_all)
         ext_btn_row.addWidget(install_all_btn)
         reset_cols_btn = make_action_button(
@@ -371,13 +397,10 @@ class SettingsPane(QWidget):
         layout.addLayout(outer)
 
         try:
-            from PySide6.QtGui import QKeySequence, QShortcut
+            from PySide6.QtGui import QKeySequence as _QKS
+            from PySide6.QtGui import QShortcut as _QSC
 
-            QShortcut(
-                QKeySequence("Ctrl+S", QKeySequence.SequenceFormat.PortableText),
-                self,
-                self._on_save,
-            )
+            _QSC(_QKS("Ctrl+S", _QKS.PortableText), self, self._on_save)  # type: ignore[arg-type]
         except Exception:
             pass
 
@@ -400,8 +423,7 @@ class SettingsPane(QWidget):
 
     def _start_size_worker(self) -> None:
         """Compute package sizes off the GUI thread; patch rows when done."""
-        size_worker = self._size_worker
-        if size_worker is not None and size_worker.isRunning():
+        if getattr(self, "_size_worker", None) is not None and self._size_worker.isRunning():
             return
         rows = list(self.EXTENSIONS)
 
@@ -438,15 +460,15 @@ class SettingsPane(QWidget):
         self._size_worker = None
 
     def _apply_size_cache(self) -> None:
-        """Write cached sizes into the extensions table Size column (index 2)."""
+        """Write cached sizes into the extensions table Size column (index 3)."""
         for row, (pip_name, import_name, _desc) in enumerate(self.EXTENSIONS):
             key = import_name or pip_name
             size = self._size_cache.get(key)
             if size:
-                item = self.ext_table.item(row, 2)
+                item = self.ext_table.item(row, 3)
                 if item is None:
                     item = QTableWidgetItem(size)
-                    self.ext_table.setItem(row, 2, item)
+                    self.ext_table.setItem(row, 3, item)
                 else:
                     item.setText(size)
 
@@ -465,14 +487,13 @@ class SettingsPane(QWidget):
     def _on_reset_ext_view(self) -> None:
         """Reset the extensions table to its construction view."""
         try:
-            from curation.storage import apply_table_view, clear_table_state
-            from ui.table_layout import _qt_sort_order
+            from storage import apply_table_view, clear_table_state
 
             snap = getattr(self, "_ext_snap", None)
             clear_table_state(self._config.app.workspace, "extensions")
             self.ext_table.enable_auto_fit()
             if isinstance(snap, dict):
-                apply_table_view(self.ext_table.horizontalHeader(), snap, _qt_sort_order)
+                apply_table_view(self.ext_table.horizontalHeader(), snap)
             self._refresh_extensions()
         except Exception:
             pass
@@ -483,9 +504,7 @@ class SettingsPane(QWidget):
             self.preset_combo.setCurrentText(self._config.preset_label())
             self.url_edit.setText(self._config.dataverse.base_url)
             self.token_edit.setText(self._config.dataverse.api_token)
-            collection = getattr(self._config.dataverse, "collection", "") or getattr(
-                self._config.dataverse, "subtree", ""
-            )
+            collection = getattr(self._config.dataverse, "collection", "") or getattr(self._config.dataverse, "subtree", "")
             self.subtree_edit.setText(collection)
             self.workspace_edit.setText(str(self._config.app.workspace))
             self._tool_paths = {
@@ -562,12 +581,14 @@ class SettingsPane(QWidget):
             self.url_edit.setText(preset_url)
 
     def _browse_workspace(self) -> None:
-        chosen = QFileDialog.getExistingDirectory(self, t("settings.extensions.choose_workspace"))
+        chosen = QFileDialog.getExistingDirectory(
+            self, t("settings.extensions.choose_workspace")
+        )
         if chosen:
             self.workspace_edit.setText(chosen)
 
     # External binaries shown as table rows (not pip packages)
-    TOOLS: ClassVar[list[tuple[str, str, str]]] = [
+    TOOLS = [
         (
             "tesseract",
             t("settings.extensions.tool_tesseract"),
@@ -609,7 +630,7 @@ class SettingsPane(QWidget):
         return human_size(total)
 
     @staticmethod
-    def _package_size(pip_name: str, import_name: str = "") -> str:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    def _package_size(pip_name: str, import_name: str = "") -> str:
         """Installed size of a distribution (humanized) or '—'.
 
         Fast path first: sum the dist RECORD via importlib.metadata (no
@@ -628,9 +649,7 @@ class SettingsPane(QWidget):
                 total = 0
                 for f in files:
                     try:
-                        # locate() returns a PathLike; Path() gives it the
-                        # is_file()/stat() surface the stub does not have.
-                        loc = Path(f.locate())
+                        loc = f.locate()
                     except Exception:
                         continue
                     try:
@@ -678,7 +697,7 @@ class SettingsPane(QWidget):
             pass
         return "—"
 
-    def _refresh_extensions(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    def _refresh_extensions(self) -> None:
         from ui.icons import icon as _ext_icon  # hoisted: also used in TOOLS rows below
 
         frozen = bool(getattr(sys, "frozen", False))
@@ -688,7 +707,7 @@ class SettingsPane(QWidget):
         # ghost button copies over the Used-for column in any capture (or
         # one-frame flash) taken between the replacement and that turn.
         for _r in range(self.ext_table.rowCount()):
-            _old = self.ext_table.cellWidget(_r, 4)
+            _old = self.ext_table.cellWidget(_r, 5)
             if _old is not None:
                 _old.hide()
         self.ext_table.setRowCount(len(self.EXTENSIONS))
@@ -697,28 +716,32 @@ class SettingsPane(QWidget):
 
             try:
                 ver = importlib.metadata.version(pip_name if pip_name != "Pillow" else "Pillow")
-                installed, is_installed = ver, True
+                is_installed = True
+                version_text = str(ver)
+                state_tip = t("settings.extensions.installed_lower")
             except importlib.metadata.PackageNotFoundError:
                 try:
                     __import__(import_name)
-                    installed, is_installed = (
-                        t("settings.extensions.installed_lower"),
-                        True,
-                    )
+                    is_installed = True
+                    version_text = "—"
+                    state_tip = t("settings.extensions.installed_lower")
                 except ImportError:
-                    installed, is_installed = (
-                        t("settings.extensions.not_installed"),
-                        False,
-                    )
+                    is_installed = False
+                    version_text = "—"
+                    state_tip = t("settings.extensions.not_installed")
             except Exception:
-                installed, is_installed = "?", False
-            inst_item = QTableWidgetItem(installed)
-            if not is_installed and installed != "?":
+                is_installed = None  # unknown — minus glyph
+                version_text = "?"
+                state_tip = "?"
+            # Installed column: icon only (check / X / minus); words live in
+            # the tooltip/accessible text so the state isn't colour-only.
+            inst_item = QTableWidgetItem("")
+            if is_installed is False:
                 inst_item.setForeground(QColor(TEXT_DANGER))
             elif is_installed:
                 inst_item.setForeground(QColor(ACCENT_PRIMARY))
             try:
-                if not is_installed and installed != "?":
+                if is_installed is False:
                     inst_item.setIcon(_ext_icon("x", color=STATE_ERROR_GRAPHIC))
                 elif is_installed:
                     inst_item.setIcon(_ext_icon("check", color=ACCENT_PRIMARY))
@@ -726,13 +749,17 @@ class SettingsPane(QWidget):
                     inst_item.setIcon(_ext_icon("minus", color=TEXT_ON_TINT))
             except Exception:
                 pass
+            inst_item.setToolTip(state_tip)
             self.ext_table.setItem(row, 1, inst_item)
+            self.ext_table.setItem(row, 2, QTableWidgetItem(version_text))
             # Sizes come from the background _SizeWorker — never walk here
             # (importlib.metadata + os.walk on the GUI thread froze Settings).
             size_key = import_name or pip_name
             cached = self._size_cache.get(size_key, "…")
-            self.ext_table.setItem(row, 2, QTableWidgetItem(cached if is_installed else "—"))
-            self.ext_table.setItem(row, 3, QTableWidgetItem(desc))
+            self.ext_table.setItem(
+                row, 3, QTableWidgetItem(cached if is_installed else "—")
+            )
+            self.ext_table.setItem(row, 4, QTableWidgetItem(desc))
             # Action cell: padded container so buttons never clip ("mangled" text fix)
             cell = QWidget()
             cell.setObjectName("ExtActionCell")
@@ -749,7 +776,9 @@ class SettingsPane(QWidget):
                 if is_installed
                 else t("settings.extensions.install")
             )
-            install_btn = make_action_button(install_label, kind="cell", size="sm")
+            install_btn = make_action_button(
+                install_label, kind="cell", size="sm"
+            )
             install_btn.clicked.connect(lambda _checked, n=pip_name: self._install_package(n))
             uninstall_btn = make_action_button(
                 t("settings.extensions.uninstall"), kind="cell", size="sm"
@@ -764,12 +793,12 @@ class SettingsPane(QWidget):
                 uninstall_btn.setToolTip(tip)
             # Buttons keep their sizeHint width: a layout-driven shrink
             # clips their labels symmetrically (see dv-dm3).
-            install_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-            uninstall_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            install_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            uninstall_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             cell_lay.addWidget(install_btn)
             cell_lay.addWidget(uninstall_btn)
             cell_lay.addStretch()
-            self.ext_table.setCellWidget(row, 4, cell)
+            self.ext_table.setCellWidget(row, 5, cell)
             self.ext_table.setRowHeight(row, 34)
         # External binaries as table rows (same columns, Browse… action)
         base_row = len(self.EXTENSIONS)
@@ -779,29 +808,28 @@ class SettingsPane(QWidget):
             configured = (self._tool_paths or {}).get(key, "")
             resolved = self._detect_tool(key, configured)
             self.ext_table.setItem(row, 0, QTableWidgetItem(label))
-            status_item = QTableWidgetItem(
-                t("settings.extensions.installed_lower")
-                if resolved
-                else t("settings.extensions.not_installed")
-            )
+            status_item = QTableWidgetItem("")
             status_item.setForeground(QColor(ACCENT_PRIMARY if resolved else TEXT_DANGER))
             try:
                 status_item.setIcon(
-                    _ext_icon("check", color=ACCENT_PRIMARY)
-                    if resolved
+                    _ext_icon("check", color=ACCENT_PRIMARY) if resolved
                     else _ext_icon("x", color=STATE_ERROR_GRAPHIC)
                 )
             except Exception:
                 pass
             status_item.setToolTip(
-                resolved
-                or (
+                f"{t('settings.extensions.installed_lower')}: {resolved}"
+                if resolved
+                else f"{t('settings.extensions.not_installed')}\n"
+                + (
                     t("settings.extensions.configured", configured=configured)
                     if configured
                     else t("settings.extensions.add_path_tip")
                 )
             )
             self.ext_table.setItem(row, 1, status_item)
+            # Version: external binaries have no package version.
+            self.ext_table.setItem(row, 2, QTableWidgetItem("—"))
             if resolved:
                 try:
                     _size = Path(resolved).stat().st_size
@@ -810,8 +838,8 @@ class SettingsPane(QWidget):
                     tool_size = "—"
             else:
                 tool_size = "—"
-            self.ext_table.setItem(row, 2, QTableWidgetItem(tool_size))
-            self.ext_table.setItem(row, 3, QTableWidgetItem(desc))
+            self.ext_table.setItem(row, 3, QTableWidgetItem(tool_size))
+            self.ext_table.setItem(row, 4, QTableWidgetItem(desc))
             tool_cell = QWidget()
             tool_cell.setObjectName("ToolActionCell")
             tool_cell.setStyleSheet(transparent_surface_qss("ToolActionCell"))
@@ -822,12 +850,14 @@ class SettingsPane(QWidget):
             browse_btn = make_action_button(
                 t("settings.extensions.locate_button"), kind="cell", size="sm"
             )
-            browse_btn.setToolTip(t("settings.extensions.locate_tip", label=label))
+            browse_btn.setToolTip(
+                t("settings.extensions.locate_tip", label=label)
+            )
             browse_btn.clicked.connect(lambda _checked, k=key: self._browse_tool(k))
-            browse_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            browse_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             tool_lay.addWidget(browse_btn)
             tool_lay.addStretch()
-            self.ext_table.setCellWidget(row, 4, tool_cell)
+            self.ext_table.setCellWidget(row, 5, tool_cell)
             self.ext_table.setRowHeight(row, 34)
         # Content-width columns (Used-for stays Stretch); no-op when a
         # saved view was restored or the user already resized. The action
@@ -886,9 +916,7 @@ class SettingsPane(QWidget):
     def _pip_run(args: list, pip_name: str, verb: str) -> tuple:
         result = subprocess.run(
             [sys.executable, "-m", "pip", *args],
-            capture_output=True,
-            text=True,
-            timeout=600,
+            capture_output=True, text=True, timeout=600,
         )
         if result.returncode == 0:
             return (
@@ -918,7 +946,9 @@ class SettingsPane(QWidget):
                 t("settings.extensions.dialog_title"),
                 t("settings.extensions.install_frozen", package=pip_name),
             )
-            self.ext_status.setText(t("settings.extensions.install_frozen_status"))
+            self.ext_status.setText(
+                t("settings.extensions.install_frozen_status")
+            )
             return
         self._run_shell(
             lambda: self._pip_run(["install", pip_name], pip_name, "installed"),
@@ -932,7 +962,9 @@ class SettingsPane(QWidget):
                 t("settings.extensions.dialog_title"),
                 t("settings.extensions.uninstall_frozen", package=pip_name),
             )
-            self.ext_status.setText(t("settings.extensions.uninstall_frozen_status"))
+            self.ext_status.setText(
+                t("settings.extensions.uninstall_frozen_status")
+            )
             return
         # Removing a package changes what the app can do, and the
         # extension may be the one an optional check depends on. Ask
@@ -995,8 +1027,7 @@ class SettingsPane(QWidget):
         lbl = QLabel(t("settings.user.not_checked"))
         lbl.setWordWrap(True)
         lbl.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
         )
         lbl.setObjectName("BodySM")
         return lbl
@@ -1060,10 +1091,7 @@ class SettingsPane(QWidget):
         """Reset the identity rows (stale identity must not survive edits)."""
         try:
             for attr in (
-                "_user_identifier",
-                "_user_display",
-                "_user_super",
-                "_user_affil",
+                "_user_identifier", "_user_display", "_user_super", "_user_affil",
                 "_user_role",
             ):
                 lbl = getattr(self, attr, None)
@@ -1084,7 +1112,8 @@ class SettingsPane(QWidget):
         named, never a bare "—" (2026-10-02 P2).
         """
         try:
-            if not isinstance(me, dict) or not me:
+            ok = isinstance(me, dict) and bool(me)
+            if not ok:
                 empty = (
                     t("settings.user.no_user_returned")
                     if checked
@@ -1100,13 +1129,14 @@ class SettingsPane(QWidget):
                 self._user_affil.setObjectName("BodySM")
                 self._user_status.setText(status)
                 return
-            self._user_identifier.setText(str(me.get("identifier") or t("settings.user.not_set")))
+            self._user_identifier.setText(
+                str(me.get("identifier") or t("settings.user.not_set"))
+            )
             self._user_identifier.setObjectName("ValueSM")
             display = str(
                 me.get("displayName")
                 or " ".join(
-                    p
-                    for p in (
+                    p for p in (
                         str(me.get("firstName") or "").strip(),
                         str(me.get("lastName") or "").strip(),
                     )
@@ -1117,9 +1147,13 @@ class SettingsPane(QWidget):
             self._user_display.setText(display)
             self._user_display.setObjectName("ValueSM")
             is_super = bool(me.get("superuser"))
-            self._user_super.setText(t("settings.user.yes") if is_super else t("settings.user.no"))
+            self._user_super.setText(
+                t("settings.user.yes") if is_super else t("settings.user.no")
+            )
             self._user_super.setObjectName("SuccessSM" if is_super else "HintSM")
-            self._user_affil.setText(str(me.get("affiliation") or t("settings.user.not_set")))
+            self._user_affil.setText(
+                str(me.get("affiliation") or t("settings.user.not_set"))
+            )
             self._user_affil.setObjectName("ValueSM")
             self._user_status.setText(status)
         except Exception:
@@ -1127,13 +1161,7 @@ class SettingsPane(QWidget):
 
     def _set_user_rows(self, text: str) -> None:
         """Put every identity row in the same named state (in-flight check)."""
-        for attr in (
-            "_user_identifier",
-            "_user_display",
-            "_user_super",
-            "_user_affil",
-            "_user_role",
-        ):
+        for attr in ("_user_identifier", "_user_display", "_user_super", "_user_affil", "_user_role"):
             lbl = getattr(self, attr, None)
             if lbl is not None:
                 lbl.setText(text)
@@ -1148,7 +1176,9 @@ class SettingsPane(QWidget):
             return
         if not base or not token:
             # Nothing was queried: every row keeps its named unfetched state.
-            self._set_user_info(None, t("settings.user.tip_enter_credentials"))
+            self._set_user_info(
+                None, t("settings.user.tip_enter_credentials")
+            )
             self._set_collection_role(None, alias, checked=False)
             return
         if self._shell_worker is not None and self._shell_worker.isRunning():
@@ -1168,11 +1198,7 @@ class SettingsPane(QWidget):
                 roles = client.get_collection_roles(alias) if alias else None
             except Exception:
                 roles = None
-            return (
-                True,
-                t("settings.user.identity_title"),
-                _json.dumps({"me": me or {}, "roles": roles}),
-            )
+            return True, t("settings.user.identity_title"), _json.dumps({"me": me or {}, "roles": roles})
 
         worker = _ShellWorker(_fetch, self)
         self._shell_worker = worker
@@ -1204,7 +1230,9 @@ class SettingsPane(QWidget):
                 t("settings.user.verify_failed"),
                 checked=True,
             )
-        self._set_collection_role(list(roles) if isinstance(roles, list) else None, alias)
+        self._set_collection_role(
+            list(roles) if isinstance(roles, list) else None, alias
+        )
 
     def _set_conn_status(self, ok: bool | None, text: str, tip: str = "") -> None:
         """Inline connection verdict next to the Test connection button.
@@ -1213,7 +1241,22 @@ class SettingsPane(QWidget):
         in-progress tone. No dialog — the result lives where the test ran.
         """
         try:
-            token = "SuccessSM" if ok is True else ("DangerSM" if ok is False else "HintSM")
+            token = "SuccessMD" if ok is True else ("DangerMD" if ok is False else "HintSM")
+            from ui.icons import icon as _icon
+            from ui.theme import TEXT_DANGER, TEXT_SUCCESS
+
+            if ok is True:
+                self._conn_icon.setPixmap(
+                    _icon("check", color=TEXT_SUCCESS, size=16).pixmap(16, 16)
+                )
+                self._conn_icon.show()
+            elif ok is False:
+                self._conn_icon.setPixmap(
+                    _icon("x", color=TEXT_DANGER, size=16).pixmap(16, 16)
+                )
+                self._conn_icon.show()
+            else:
+                self._conn_icon.hide()
             self._conn_status.setObjectName(token)
             self._conn_status.setText(text)
             self._conn_status.setToolTip(tip or text)
@@ -1255,7 +1298,9 @@ class SettingsPane(QWidget):
             self._test_btn.setEnabled(False)
         except Exception:
             pass
-        self._set_conn_status(None, t("settings.connection.contacting", base=base))
+        self._set_conn_status(
+            None, t("settings.connection.contacting", base=base)
+        )
         if self._shell_worker is not None and self._shell_worker.isRunning():
             self._set_conn_status(None, t("settings.extensions.busy"))
             try:
@@ -1280,7 +1325,11 @@ class SettingsPane(QWidget):
         self._set_conn_status(
             bool(ok),
             first
-            or (t("settings.connection.connected") if ok else t("settings.connection.failed")),
+            or (
+                t("settings.connection.connected")
+                if ok
+                else t("settings.connection.failed")
+            ),
             message,
         )
         if ok:
@@ -1297,10 +1346,7 @@ class SettingsPane(QWidget):
                 t("settings.save.base_url_error"),
             )
             return False
-        ws = Path(
-            self.workspace_edit.text().strip()
-            or str(Path.home() / "Documents" / "curation-workspace")
-        )
+        ws = Path(self.workspace_edit.text().strip() or str(Path.home() / "Documents" / "curation-workspace"))
         self._config.dataverse.base_url = base
         self._config.dataverse.api_token = self.token_edit.text().strip()
         collection = self.subtree_edit.text().strip()

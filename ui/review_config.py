@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import copy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -28,13 +28,15 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QListWidgetItem,
+    QScrollArea,
+    QSpinBox,
     QSplitter,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from curation.config import Config
+from config import Config
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.i18n import t
 from ui.table_layout import TableLayout
@@ -43,6 +45,7 @@ from ui.widgets import (
     AppTreeWidget,
     PaneFooter,
     add_info_tip,
+    fit_tree_height,
     make_action_button,
     make_card,
     make_checkbox,
@@ -56,10 +59,27 @@ from ui.widgets import (
     transparent_surface_qss,
 )
 
-if TYPE_CHECKING:
-    from ui.workers import MetadataBlocksWorker
-
 _LEVELS = ["required", "optional", "unchecked"]
+
+# dv-5id: friendly names for the rule handlers that ship in the ruleset
+# JSON. The Check picker only offers nonempty/looks_correct; any other
+# handler a curator drops in via JSON is shown through this map.
+_HANDLER_LABEL_KEYS = {
+    "nonempty": "review.handler_nonempty",
+    "looks_correct": "review.handler_looks_correct",
+    "orcid": "review.handler_orcid",
+    "author_affiliation": "review.handler_author_affiliation",
+    "author_count": "review.handler_author_count",
+    "license": "review.handler_license",
+    "license_terms": "review.handler_license_terms",
+    "terms_of_use": "review.handler_terms_of_use",
+    "terms_of_access": "review.handler_terms_of_access",
+    "access_conditions": "review.handler_access_conditions",
+    "related_pub": "review.handler_related_pub",
+    "related_pub_id": "review.handler_related_pub_id",
+    "time_anyof": "review.handler_time_anyof",
+    "geo": "review.handler_geo",
+}
 
 
 class ContentRuleDialog(QDialog):
@@ -85,8 +105,7 @@ class ContentRuleDialog(QDialog):
         lvl = str(rule.get("level") or "required")
         self._level.setCurrentIndex(0 if lvl != "optional" else 1)
         form.addRow(t("review.rule_dialog.level"), self._level)
-        raw_scope = rule.get("scope")
-        scope: list[Any] = raw_scope if isinstance(raw_scope, list) else ["filenames"]
+        scope = rule.get("scope") if isinstance(rule.get("scope"), list) else ["filenames"]
         self._cb_files = make_checkbox(t("review.rule_dialog.scope_files"))
         self._cb_meta = make_checkbox(t("review.rule_dialog.scope_metadata"))
         self._cb_content = make_checkbox(t("review.rule_dialog.scope_content"))
@@ -125,9 +144,7 @@ class ContentRuleDialog(QDialog):
         self._template = make_multiline_input(fixed=False, min_height=120)
         self._template.setPlainText(str(rule.get("response_template") or ""))
         lay.addWidget(self._template, 1)
-        btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
         lay.addWidget(btns)
@@ -179,9 +196,9 @@ class ReviewConfigView(QWidget):
     def __init__(self, config: Config, parent=None) -> None:
         super().__init__(parent)
         self._config = config
-        self._worker: MetadataBlocksWorker | None = None
+        self._worker = None
         try:
-            from curation import review_rules as _rr
+            import review_rules as _rr
 
             self._rr = _rr
             self._rulesets: dict[str, dict[str, Any]] = copy.deepcopy(_rr.load_rulesets())
@@ -213,9 +230,20 @@ class ReviewConfigView(QWidget):
 
         outer.addWidget(self._build_topbar())
 
-        split = QSplitter(Qt.Orientation.Horizontal)
-        split.addWidget(self._build_rules_card())
-        split.addWidget(self._build_templates_card())
+        split = QSplitter(Qt.Horizontal)
+        # Two scroll areas: Checks (stretch 3) and Response (stretch 2).
+        # Each holds a card that grows to its content, moving the scrollbar
+        # to the pane's own right edge — the dataset page's two-column idiom.
+        def make_pane(card_builder):
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            card = card_builder()
+            scroll.setWidget(card)
+            return scroll
+
+        split.addWidget(make_pane(self._build_rules_card))
+        split.addWidget(make_pane(self._build_templates_card))
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 2)
         # A 16px gap between the Checks card and the Response text card,
@@ -254,17 +282,13 @@ class ReviewConfigView(QWidget):
         try:
             base = (self._config.dataverse.base_url or "").rstrip("/").lower()
             for key, rs in (self._rulesets or {}).items():
-                dvs = {
-                    (d or "").rstrip("/").lower()
-                    for d in (rs.get("dataverses") or [])
-                    if isinstance(d, str)
-                }
+                dvs = {(d or "").rstrip("/").lower() for d in (rs.get("dataverses") or []) if isinstance(d, str)}
                 if base and base in dvs:
                     return key
         except Exception:
             pass
         if getattr(self, "_current", "") in (self._rulesets or {}):
-            return str(self._current)
+            return self._current  # type: ignore[no-any-return]
         if "mcmaster-default" in (self._rulesets or {}):
             return "mcmaster-default"
         try:
@@ -274,7 +298,7 @@ class ReviewConfigView(QWidget):
 
     def _load_cached_schema(self) -> list[dict[str, str]] | None:
         try:
-            from curation.client import read_metadata_fields_cache
+            from dataverse_client import read_metadata_fields_cache
 
             ws = Path(getattr(getattr(self._config, "app", None), "workspace", Path.home()))
             hit = read_metadata_fields_cache(Path(ws), self._config.dataverse.base_url)
@@ -289,15 +313,9 @@ class ReviewConfigView(QWidget):
         if isinstance(rs, dict):
             return rs
         # Defensive: never edit a missing ruleset.
-        fallback = {
-            "label": self._current,
-            "dataverses": ["*"],
-            "field_rules": [],
-            "content_rules": [],
-            "filecheck_templates": {},
-            "response_header": "",
-            "response_footer": "",
-        }
+        fallback = {"label": self._current, "dataverses": ["*"], "field_rules": [],
+                    "content_rules": [], "filecheck_templates": {},
+                    "response_header": "", "response_footer": ""}
         self._rulesets[self._current] = fallback
         return fallback
 
@@ -323,11 +341,15 @@ class ReviewConfigView(QWidget):
         row2 = QHBoxLayout()
         row2.setSpacing(8)
         row2.addWidget(QLabel(t("review.dataverses_label")))
-        self._dataverses_edit = make_line_edit(t("review.dataverses_placeholder"))
+        self._dataverses_edit = make_line_edit(
+            t("review.dataverses_placeholder")
+        )
         self._dataverses_edit.setToolTip(t("review.dataverses_tip"))
         self._dataverses_edit.editingFinished.connect(self._on_dataverses_edited)
         row2.addWidget(self._dataverses_edit, 1)
-        self._fields_btn = make_action_button(t("review.load_fields"), kind="secondary", size="sm")
+        self._fields_btn = make_action_button(
+            t("review.load_fields"), kind="secondary", size="sm"
+        )
         self._fields_btn.clicked.connect(self._on_load_fields)
         row2.addWidget(self._fields_btn)
         body.addLayout(row2)
@@ -338,7 +360,9 @@ class ReviewConfigView(QWidget):
         # The checks help lives in the header's (i) tooltip, the same
         # pattern the dataset page uses — not a permanent paragraph that
         # pushed the tree down.
-        add_info_tip(header_lay, t("review.checks_hint"), name=t("review.card_checks"))
+        add_info_tip(
+            header_lay, t("review.checks_hint"), name=t("review.card_checks"), group="Checks"
+        )
         # The title bar keeps title + (i) only; the filters and actions are
         # tools, so they sit on their own row under it (file-manifest pattern).
         checks_tools = QWidget()
@@ -373,7 +397,9 @@ class ReviewConfigView(QWidget):
         )
         self._level_filter.currentIndexChanged.connect(lambda _i: self._refresh_field_table())
         tools_lay.addWidget(self._level_filter)
-        self._blocks_btn = make_action_button(t("review.collapse_all"), kind="secondary", size="md")
+        self._blocks_btn = make_action_button(
+            t("review.collapse_all"), kind="secondary", size="md"
+        )
         self._blocks_btn.setToolTip(t("review.blocks_tip"))
         self._blocks_btn.clicked.connect(self._on_toggle_blocks)
         tools_lay.addWidget(self._blocks_btn)
@@ -399,18 +425,21 @@ class ReviewConfigView(QWidget):
         # *widgets*, which Qt does not move when rows sort.
         self._field_tree = AppTreeWidget(row_height=40, flush=True)
         self._field_tree.setColumnCount(2)
-        self._field_tree.setHeaderLabels([t("review.column_field"), t("review.column_check")])
+        self._field_tree.setHeaderLabels(
+            [t("review.column_field"), t("review.column_check")]
+        )
         self._field_tree.setRootIsDecorated(True)
         self._field_tree.setExpandsOnDoubleClick(True)
         self._field_tree.setAnimated(True)
         self._field_tree.setIndentation(18)
-        self._field_tree.setMinimumHeight(160)
+        # No fixed floor; height is fit to content to move scroll to the pane.
+        self._field_tree.setMinimumHeight(0)
         # The standard tree chrome comes with the widget (flush: the tree
         # sits edge-to-edge inside the card, header meeting the top bar).
         _fld_header = self._field_tree.header()
         _fld_header.setStretchLastSection(False)
-        _fld_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        _fld_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        _fld_header.setSectionResizeMode(0, QHeaderView.Stretch)
+        _fld_header.setSectionResizeMode(1, QHeaderView.Interactive)
         self._field_tree.setColumnWidth(1, 150)
         # Remember the user's column widths/order across sessions. The
         # controller owns the persistence: it saves user gestures only.
@@ -428,19 +457,29 @@ class ReviewConfigView(QWidget):
         self._field_tree.itemSelectionChanged.connect(self._on_field_selected)
         # The Collapse/Expand button follows manual expand/collapse too:
         # without these, collapsing one block left the button reading
-        # "Collapse all" and clicking it expanded everything.
-        self._field_tree.itemExpanded.connect(lambda _i: self._update_blocks_btn())
-        self._field_tree.itemCollapsed.connect(lambda _i: self._update_blocks_btn())
-        body.addWidget(self._field_tree, 1)
+        # "Collapse all" and clicking it expanded everything. The tree is
+        # content-fitted, so a manual toggle must refit too.
+        self._field_tree.itemExpanded.connect(
+            lambda _i: (self._update_blocks_btn(), fit_tree_height(self._field_tree, row_height=40))
+        )
+        self._field_tree.itemCollapsed.connect(
+            lambda _i: (self._update_blocks_btn(), fit_tree_height(self._field_tree, row_height=40))
+        )
+        # The tree and text rules are now stacked in a single vertical flow
+        # inside the scroll pane, so the tree doesn't compete for height.
+        scroll_content = QWidget()
+        content_lay = QVBoxLayout(scroll_content)
+        content_lay.setContentsMargins(0, 0, 0, 0)
+        content_lay.setSpacing(0)
 
-        # Text rules: their own section under a divider, inset like a card
-        # body, so an expanded metadata block can never run behind them.
+        content_lay.addWidget(self._field_tree)
+
         divider = QFrame()
         divider.setObjectName("ReviewSectionDivider")
         divider.setFixedHeight(1)
         # theme-allow: simple divider colour is a one-off
         divider.setStyleSheet(f"background: {BORDER_SUBTLE};")
-        body.addWidget(divider)
+        content_lay.addWidget(divider)
 
         rules_section = QWidget()
         rules_lay = QVBoxLayout(rules_section)
@@ -464,7 +503,9 @@ class ReviewConfigView(QWidget):
             row.addWidget(b)
         row.addStretch(1)
         rules_lay.addLayout(row)
-        body.addWidget(rules_section, 1)
+
+        content_lay.addWidget(rules_section)
+        body.addWidget(scroll_content)
         return card
 
     def _build_templates_card(self) -> QWidget:
@@ -473,6 +514,83 @@ class ReviewConfigView(QWidget):
         self._sel_label.setWordWrap(True)
         self._sel_label.setObjectName("LabelStrongSM")
         body.addWidget(self._sel_label)
+        # Check picker (dv-5id): only field rules have one. The specialized
+        # checks ship in the ruleset JSON; this row is how a field moves
+        # from “non-empty” to the entry-correctness check, whose params
+        # panel appears right below it.
+        self._check_row = QWidget()
+        check_lay = QHBoxLayout(self._check_row)
+        check_lay.setContentsMargins(0, 0, 0, 0)
+        check_lay.setSpacing(8)
+        check_label = QLabel(t("review.check_label"))
+        check_label.setObjectName("LabelStrongSM")
+        check_lay.addWidget(check_label)
+        self._handler_combo = make_combo(
+            [
+                (t("review.handler_nonempty"), "nonempty"),
+                (t("review.handler_looks_correct"), "looks_correct"),
+            ],
+            height=32,
+            min_width=220,
+        )
+        self._handler_combo.currentIndexChanged.connect(self._on_handler_changed)
+        check_lay.addWidget(self._handler_combo, 1)
+        self._check_row.hide()
+        body.addWidget(self._check_row)
+        # Entry-check params (dv-5id): shown only while the “looks
+        # plausibly correct” check is picked. Every edit writes straight
+        # back into the rule's params dict.
+        self._params_panel = QWidget()
+        params_lay = QVBoxLayout(self._params_panel)
+        params_lay.setContentsMargins(0, 0, 0, 0)
+        params_lay.setSpacing(6)
+        params_title = QLabel(t("review.params_title"))
+        params_title.setObjectName("LabelStrongSM")
+        params_lay.addWidget(params_title)
+        form = QFormLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(6)
+        self._p_min = QSpinBox()
+        self._p_min.setRange(0, 10000)
+        self._p_min.setValue(0)
+        self._p_min.setFixedHeight(32)
+        self._p_min.valueChanged.connect(self._on_params_edited)
+        form.addRow(self._params_label(t("review.params_min_length")), self._p_min)
+        regex_row = QHBoxLayout()
+        regex_row.setContentsMargins(0, 0, 0, 0)
+        regex_row.setSpacing(8)
+        self._p_regex = make_line_edit(height=32)
+        self._p_regex.textChanged.connect(self._on_params_edited)
+        regex_row.addWidget(self._p_regex, 1)
+        self._p_regex_full = make_checkbox(t("review.params_regex_full"))
+        self._p_regex_full.toggled.connect(self._on_params_edited)
+        regex_row.addWidget(self._p_regex_full)
+        form.addRow(self._params_label(t("review.params_regex")), regex_row)
+        self._p_blocklist = make_multiline_input("", fixed=False, min_height=64)
+        self._p_blocklist.textChanged.connect(self._on_params_edited)
+        form.addRow(self._params_label(t("review.params_blocklist")), self._p_blocklist)
+        self._p_vocab = make_multiline_input("", fixed=False, min_height=64)
+        self._p_vocab.textChanged.connect(self._on_params_edited)
+        form.addRow(self._params_label(t("review.params_vocabulary")), self._p_vocab)
+        params_lay.addLayout(form)
+        for key, label_key in [
+            ("not_common_placeholders", "review.params_placeholders"),
+            ("not_all_caps", "review.params_all_caps"),
+            ("date", "review.params_date"),
+            ("date_order", "review.params_date_order"),
+            ("url", "review.params_url"),
+        ]:
+            box = make_checkbox(t(label_key))
+            box.toggled.connect(self._on_params_edited)
+            box.setProperty("param_key", key)
+            setattr(self, f"_p_{key}", box)
+            params_lay.addWidget(box)
+        hint = QLabel(t("review.params_hint"))
+        hint.setWordWrap(True)
+        hint.setObjectName("CaptionSM")
+        params_lay.addWidget(hint)
+        self._params_panel.hide()
+        body.addWidget(self._params_panel)
         self._template_edit = make_multiline_input(
             t("review.template_placeholder"),
             fixed=False,
@@ -494,6 +612,229 @@ class ReviewConfigView(QWidget):
         body.addWidget(note)
         return card
 
+    # -- check picker + entry-check params (dv-5id) --------------------------
+
+    @staticmethod
+    def _params_label(text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("LabelStrongSM")
+        label.setWordWrap(True)
+        return label
+
+    @staticmethod
+    def _handler_label(handler: str) -> str:
+        key = _HANDLER_LABEL_KEYS.get(str(handler or ""))
+        return t(key) if key else t("review.check_other", handler=handler)
+
+    def _field_rule_for_selection(self):
+        """(fr, block, field, handler) for the current field selection."""
+        try:
+            parts = str(self._sel_key or "").split("\x1f")
+            if len(parts) == 3:
+                fr = self._find_field_rule(parts[0], parts[1], parts[2])
+                if fr is not None:
+                    return fr, parts[0], parts[1], str(fr.get("handler") or "nonempty")
+        except Exception:
+            pass
+        return None, "", "", ""
+
+    @staticmethod
+    def _params_lines(value) -> str:
+        if isinstance(value, list):
+            return "\n".join(str(v) for v in value)
+        if isinstance(value, str):
+            return value
+        return ""
+
+    def _sync_field_extras(self, fr, block: str, field: str, handler: str) -> None:
+        """Fill the Check picker; show the params panel for looks_correct."""
+        try:
+            self._check_row.show()
+        except Exception:
+            return
+        try:
+            items = [
+                (t("review.handler_nonempty"), "nonempty"),
+                (t("review.handler_looks_correct"), "looks_correct"),
+            ]
+            if handler not in ("nonempty", "looks_correct"):
+                items.append((self._handler_label(handler), handler))
+            self._handler_combo.blockSignals(True)
+            try:
+                self._handler_combo.clear()
+                for label, key in items:
+                    self._handler_combo.addItem(label, key)
+                idx = self._handler_combo.findData(handler)
+                self._handler_combo.setCurrentIndex(idx if idx >= 0 else 0)
+            finally:
+                self._handler_combo.blockSignals(False)
+            self._handler_combo.setProperty("block", block)
+            self._handler_combo.setProperty("field", field)
+            self._handler_combo.setProperty("handler", handler)
+            if handler == "looks_correct":
+                self._params_panel.show()
+                self._load_params(fr)
+            else:
+                self._params_panel.hide()
+        except Exception:
+            pass
+
+    def _hide_field_extras(self) -> None:
+        try:
+            self._check_row.hide()
+            self._params_panel.hide()
+        except Exception:
+            pass
+
+    def _load_params(self, fr) -> None:
+        p = fr.get("params") if isinstance(fr.get("params"), dict) else {}
+        widgets = (
+            self._p_min, self._p_regex, self._p_regex_full,
+            self._p_blocklist, self._p_vocab,
+            self._p_not_common_placeholders, self._p_not_all_caps,
+            self._p_date, self._p_date_order, self._p_url,
+        )
+        for w in widgets:
+            try:
+                w.blockSignals(True)
+            except Exception:
+                pass
+        try:
+            try:
+                self._p_min.setValue(int(p.get("min_length") or 0))
+            except (TypeError, ValueError):
+                self._p_min.setValue(0)
+            self._p_regex.setText(str(p.get("regex") or ""))
+            self._p_regex_full.setChecked(str(p.get("regex_mode") or "").strip().lower() == "full")
+            self._p_blocklist.setPlainText(self._params_lines(p.get("blocklist")))
+            self._p_vocab.setPlainText(self._params_lines(p.get("controlled_vocabulary")))
+            for key in ("not_common_placeholders", "not_all_caps", "date", "date_order", "url"):
+                getattr(self, f"_p_{key}").setChecked(bool(p.get(key)))
+        finally:
+            for w in widgets:
+                try:
+                    w.blockSignals(False)
+                except Exception:
+                    pass
+
+    def _on_params_edited(self, *_args) -> None:
+        if getattr(self, "_loading", False):
+            return
+        fr, _block, _field, handler = self._field_rule_for_selection()
+        if fr is None or handler != "looks_correct":
+            return
+        p: dict[str, Any] = {}
+        if self._p_min.value() > 0:
+            p["min_length"] = int(self._p_min.value())
+        rx = self._p_regex.text().strip()
+        if rx:
+            p["regex"] = rx
+        if self._p_regex_full.isChecked():
+            p["regex_mode"] = "full"
+        blocklist = [line.strip() for line in self._p_blocklist.toPlainText().splitlines() if line.strip()]
+        if blocklist:
+            p["blocklist"] = blocklist
+        vocab = [line.strip() for line in self._p_vocab.toPlainText().splitlines() if line.strip()]
+        if vocab:
+            p["controlled_vocabulary"] = vocab
+        for key in ("not_common_placeholders", "not_all_caps", "date", "date_order", "url"):
+            if getattr(self, f"_p_{key}").isChecked():
+                p[key] = True
+        if p:
+            fr["params"] = p
+        else:
+            fr.pop("params", None)
+        self._mark_dirty()
+
+    def _on_handler_changed(self, _i: int) -> None:
+        if getattr(self, "_loading", False):
+            return
+        combo = self._handler_combo
+        new_handler = combo.currentData()
+        if not new_handler:
+            return
+        block = str(combo.property("block") or "")
+        field = str(combo.property("field") or "")
+        old = str(combo.property("handler") or "nonempty")
+        new = str(new_handler)
+        if new == old:
+            return
+        fr = self._find_field_rule(block, field, old)
+        if fr is None:
+            # No rule exists yet (level is “unchecked”): revert the picker
+            # and point the curator at the level combo instead.
+            self._loading = True
+            try:
+                idx = combo.findData(old)
+                combo.setCurrentIndex(idx if idx >= 0 else 0)
+            finally:
+                self._loading = False
+            try:
+                self._status.setText(t("review.messages.set_level_first"))
+            except Exception:
+                pass
+            return
+        if self._find_field_rule(block, field, new) is not None:
+            # A rule with this check already exists for the field — do not
+            # create a duplicate (block, field, handler) triple; the first
+            # match would silently win the params panel.
+            self._loading = True
+            try:
+                idx = combo.findData(old)
+                combo.setCurrentIndex(idx if idx >= 0 else 0)
+            finally:
+                self._loading = False
+            try:
+                self._status.setText(t("review.messages.duplicate_rule"))
+            except Exception:
+                pass
+            return
+        fr["handler"] = new
+        if new == "looks_correct" and not isinstance(fr.get("params"), dict):
+            # Sensible default: catch the obvious placeholder entries first.
+            fr["params"] = {"not_common_placeholders": True}
+        self._sel_key = self._rule_sel_key(block, field, new)
+        combo.setProperty("handler", new)
+        self._update_field_row_handler(block, field, old, new, str(fr.get("requirement") or ""))
+        self._mark_dirty()
+        self._show_template_for_selection()
+
+    def _update_field_row_handler(self, block: str, field: str,
+                                  old_handler: str, new_handler: str,
+                                  req: str = "") -> None:
+        """Re-point the tree row's level combo at the new handler (no rebuild)."""
+        tree = self._field_tree
+
+        def _tip() -> str:
+            return (
+                t(
+                    "review.messages.field_rule_tip",
+                    block=block,
+                    field=field,
+                    handler=new_handler,
+                )
+                + (f"\n{req}" if req else "")
+            )
+
+        def _fix(item) -> bool:
+            combo = tree.itemWidget(item, 1)
+            if isinstance(combo, QComboBox):
+                if (str(combo.property("block") or "") == block
+                        and str(combo.property("field") or "") == field
+                        and str(combo.property("handler") or "nonempty") == old_handler):
+                    combo.setProperty("handler", new_handler)
+                    item.setToolTip(0, _tip())
+                    return True
+                return False
+            for i in range(item.childCount()):
+                if _fix(item.child(i)):
+                    return True
+            return False
+
+        for i in range(tree.topLevelItemCount()):
+            if _fix(tree.topLevelItem(i)):
+                return
+
     # -- data -> ui --------------------------------------------------------
 
     def _schema_fields(self) -> list[dict[str, str]]:
@@ -503,44 +844,39 @@ class ReviewConfigView(QWidget):
         # gaps (composite children only). This keeps the review page useful
         # offline and upgrades stale on-disk caches silently.
         if self._schema:
-            live = [dict(f) for f in self._schema if isinstance(f, dict) and f.get("field")]
+            live = [
+                dict(f) for f in self._schema
+                if isinstance(f, dict) and f.get("field")
+            ]
             try:
-                from curation.review_rules import FIELD_CATALOG
+                from review_rules import FIELD_CATALOG as _FC
             except Exception:
-                FIELD_CATALOG = []  # noqa: N806 - fallback for the upstream constant import above
-            seen_live = {
-                (str(f.get("block") or "citation"), str(f.get("field") or "")) for f in live
-            }
-            fallback = [dict(f) for f in FIELD_CATALOG if isinstance(f, dict) and f.get("field")]
+                _FC = []
+            seen = {(str(f.get("block") or "citation"), str(f.get("field") or "")) for f in live}
+            fallback = [dict(f) for f in _FC if isinstance(f, dict) and f.get("field")]
             for f in fallback:
                 key = (str(f.get("block") or "citation"), str(f.get("field") or ""))
-                if key not in seen_live:
-                    seen_live.add(key)
+                if key not in seen:
+                    seen.add(key)
                     live.append(f)
             base = live
         else:
             try:
-                from curation.review_rules import FIELD_CATALOG
+                from review_rules import FIELD_CATALOG
 
                 base = [dict(f) for f in FIELD_CATALOG]
             except Exception:
                 base = []
         # Union with fields referenced by any ruleset so custom fields persist.
-        # The key space is the normalized one the loop below builds, so a
-        # catalog entry and a rule that name the same field agree (dv-hcg.28).
-        seen: set[tuple[str, str]] = {
-            (str(f.get("block") or "citation"), str(f.get("field") or "")) for f in base
-        }
+        seen = {(f.get("block"), f.get("field")) for f in base}
         for rs in (self._rulesets or {}).values():
-            for fr in rs.get("field_rules") or []:
+            for fr in (rs.get("field_rules") or []):
                 if not isinstance(fr, dict):
                     continue
                 key = (str(fr.get("block") or "citation"), str(fr.get("field") or ""))
                 if key[1] and key not in seen:
                     seen.add(key)
-                    base.append(
-                        {"block": key[0], "field": key[1], "label": str(fr.get("label") or key[1])}
-                    )
+                    base.append({"block": key[0], "field": key[1], "label": str(fr.get("label") or key[1])})
         return sorted(base, key=lambda f: (f.get("block") or "", f.get("field") or ""))
 
     def _rule_entries(self) -> list[dict[str, Any]]:
@@ -556,7 +892,7 @@ class ReviewConfigView(QWidget):
             (str(f.get("block") or ""), str(f.get("field") or "")): str(f.get("block_label") or "")
             for f in self._schema_fields()
         }
-        for fr in self._current_ruleset().get("field_rules") or []:
+        for fr in (self._current_ruleset().get("field_rules") or []):
             if not isinstance(fr, dict) or not fr.get("field"):
                 continue
             block = str(fr.get("block") or "citation")
@@ -564,40 +900,25 @@ class ReviewConfigView(QWidget):
             handler = str(fr.get("handler") or "nonempty")
             covered.add((block, field, handler))
             parent = field.split(".", 1)[0] if "." in field else ""
-            entries.append(
-                {
-                    "kind": "rule",
-                    "label": str(fr.get("label") or field),
-                    "block": block,
-                    "field": field,
-                    "handler": handler,
-                    "block_label": schema_labels.get((block, field), ""),
-                    "level": fr.get("level")
-                    if fr.get("level") in ("required", "optional")
-                    else "required",
-                    "req": str(fr.get("requirement") or ""),
-                    "parent": parent if parent and parent != field else "",
-                }
-            )
+            entries.append({
+                "kind": "rule", "label": str(fr.get("label") or field),
+                "block": block, "field": field, "handler": handler,
+                "block_label": schema_labels.get((block, field), ""),
+                "level": fr.get("level") if fr.get("level") in ("required", "optional") else "required",
+                "req": str(fr.get("requirement") or ""),
+                "parent": parent if parent and parent != field else "",
+            })
         for f in self._schema_fields():
             block, field = str(f.get("block") or ""), str(f.get("field") or "")
             if not field or any((block, field) == (b, fl) for b, fl, _h in covered):
                 continue
-            entries.append(
-                {
-                    "kind": "new",
-                    "label": str(f.get("label") or field),
-                    "block": block,
-                    "field": field,
-                    "handler": "nonempty",
-                    "block_label": str(f.get("block_label") or ""),
-                    "level": "unchecked",
-                    "req": "",
-                    "parent": str(
-                        f.get("parent") or (field.split(".", 1)[0] if "." in field else "")
-                    ),
-                }
-            )
+            entries.append({
+                "kind": "new", "label": str(f.get("label") or field),
+                "block": block, "field": field, "handler": "nonempty",
+                "block_label": str(f.get("block_label") or ""),
+                "level": "unchecked", "req": "",
+                "parent": str(f.get("parent") or (field.split(".", 1)[0] if "." in field else "")),
+            })
         return entries
 
     @staticmethod
@@ -642,7 +963,7 @@ class ReviewConfigView(QWidget):
         self._refresh_content_list()
         self._loading = False
 
-    def _refresh_field_table(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    def _refresh_field_table(self) -> None:
         """Rebuild the block-grouped field tree (text + status filters apply)."""
         try:
             filt = (self._field_filter.text() or "").strip().lower()
@@ -657,15 +978,13 @@ class ReviewConfigView(QWidget):
         for e in self._rule_entries():
             if status != "all" and str(e.get("level") or "") != status:
                 continue
-            hay = f"{e.get('label', '')} {e.get('block', '')} {e.get('field', '')} {e.get('handler', '')}".lower()
+            hay = f"{e.get('label','')} {e.get('block','')} {e.get('field','')} {e.get('handler','')}".lower()
             if filt and filt not in hay:
                 continue
             block = str(e.get("block") or "citation")
             groups.setdefault(block, []).append(e)
             if block not in group_labels:
-                group_labels[block] = self._block_display_name(
-                    block, str(e.get("block_label") or "")
-                )
+                group_labels[block] = self._block_display_name(block, str(e.get("block_label") or ""))
         tree = self._field_tree
         try:
             # Block the header too (not just the tree): adding/clearing rows
@@ -675,32 +994,28 @@ class ReviewConfigView(QWidget):
             tree.header().blockSignals(True)
             tree.clear()
             n_fields = 0
-
             # Citation block always first; the rest alphabetical by
             # display name (group key match is case-insensitive).
-            def _group_sort_key(b: str) -> tuple[int, str]:
-                # A named function, not a lambda: a lambda parameter is
-                # untyped, so the key came back as Any and the lookup
-                # lost its type (dv-hcg.28).
-                return (
+            ordered = sorted(
+                groups,
+                key=lambda b: (
                     0 if str(b or "").lower() == "citation" else 1,
                     group_labels.get(b, b).lower(),
-                )
-
-            ordered = sorted(groups, key=_group_sort_key)
+                ),
+            )
             for block in ordered:
                 label = group_labels.get(block, block)
-                rows = sorted(
-                    groups[block], key=lambda e: str(e.get("label") or e.get("field") or "")
+                rows = sorted(groups[block], key=lambda e: str(e.get("label") or e.get("field") or ""))
+                top = QTreeWidgetItem(
+                    [t("review.block_count", label=label, count=len(rows))]
                 )
-                top = QTreeWidgetItem([t("review.block_count", label=label, count=len(rows))])
                 try:
                     fnt = top.font(0)
                     fnt.setBold(True)
                     top.setFont(0, fnt)
                 except Exception:
                     pass
-                top.setData(0, Qt.ItemDataRole.UserRole, {"kind": "block", "block": block})
+                top.setData(0, Qt.UserRole, {"kind": "block", "block": block})
                 top.setToolTip(
                     0,
                     t(
@@ -736,7 +1051,7 @@ class ReviewConfigView(QWidget):
                         )
                         + (f"\n{e['req']}" if e["req"] else ""),
                     )
-                    child.setData(0, Qt.ItemDataRole.UserRole, {"kind": "field"})
+                    child.setData(0, Qt.UserRole, {"kind": "field"})
                     combo = make_combo(
                         [
                             (t("review.level_required"), "required"),
@@ -746,9 +1061,7 @@ class ReviewConfigView(QWidget):
                         height=32,
                         min_width=110,
                     )
-                    combo.setCurrentIndex(
-                        {"required": 0, "optional": 1, "unchecked": 2}.get(e["level"], 2)
-                    )
+                    combo.setCurrentIndex({"required": 0, "optional": 1, "unchecked": 2}.get(e["level"], 2))
                     combo.setProperty("kind", e["kind"])
                     combo.setProperty("block", block)
                     combo.setProperty("field", field)
@@ -777,7 +1090,7 @@ class ReviewConfigView(QWidget):
                         "",
                     ) or (prefix[:1].upper() + prefix[1:])
                     group = QTreeWidgetItem([parent_label])
-                    group.setData(0, Qt.ItemDataRole.UserRole, {"kind": "group"})
+                    group.setData(0, Qt.UserRole, {"kind": "group"})
                     try:
                         font = group.font(0)
                         font.setBold(True)
@@ -796,12 +1109,11 @@ class ReviewConfigView(QWidget):
                     for e in leaders:
                         _add_field_row(e, group)
                         n_fields += 1
-                    for e in sorted(
-                        children, key=lambda x: str(x.get("label") or x.get("field") or "")
-                    ):
+                    for e in sorted(children, key=lambda x: str(x.get("label") or x.get("field") or "")):
                         _add_field_row(e, group)
                         n_fields += 1
             tree.expandAll()
+            fit_tree_height(tree, row_height=40)
             self._update_blocks_btn()
         finally:
             try:
@@ -845,11 +1157,9 @@ class ReviewConfigView(QWidget):
             tree = self._field_tree
             for bi in range(tree.topLevelItemCount()):
                 top = tree.topLevelItem(bi)
-                if top is None:
-                    continue
                 for ci in range(top.childCount()):
                     child = top.child(ci)
-                    if child is not None and tree.itemWidget(child, 1) is combo:
+                    if tree.itemWidget(child, 1) is combo:
                         return child
         except Exception:
             pass
@@ -858,8 +1168,7 @@ class ReviewConfigView(QWidget):
     def _blocks_any_collapsed(self) -> bool:
         try:
             for bi in range(self._field_tree.topLevelItemCount()):
-                top = self._field_tree.topLevelItem(bi)
-                if top is not None and not top.isExpanded():
+                if not self._field_tree.topLevelItem(bi).isExpanded():
                     return True
             return False
         except Exception:
@@ -881,6 +1190,7 @@ class ReviewConfigView(QWidget):
                 self._field_tree.expandAll()
             else:
                 self._field_tree.collapseAll()
+            fit_tree_height(self._field_tree, row_height=40)
             self._update_blocks_btn()
         except Exception:
             pass
@@ -901,8 +1211,7 @@ class ReviewConfigView(QWidget):
                     (t("review.level_optional"), "optional"),
                     (t("review.level_unchecked"), "unchecked"),
                 ],
-                height=32,
-                min_width=110,
+                height=32, min_width=110,
             )
             _need = _probe.sizeHint().width() + 8
             if header.sectionSize(1) < _need:
@@ -932,7 +1241,7 @@ class ReviewConfigView(QWidget):
         try:
             self._content_list.blockSignals(True)
             self._content_list.clear()
-            for cr in self._current_ruleset().get("content_rules") or []:
+            for cr in (self._current_ruleset().get("content_rules") or []):
                 if not isinstance(cr, dict):
                     continue
                 scope = ", ".join(cr.get("scope") or [])
@@ -944,7 +1253,7 @@ class ReviewConfigView(QWidget):
                         scope=scope,
                     )
                 )
-                item.setData(Qt.ItemDataRole.UserRole, str(cr.get("id") or ""))
+                item.setData(Qt.UserRole, str(cr.get("id") or ""))
                 item.setToolTip(
                     t(
                         "review.content_item_tip",
@@ -973,20 +1282,18 @@ class ReviewConfigView(QWidget):
             pass
 
     def _find_field_rule(self, block: str, field: str, handler: str) -> dict[str, Any] | None:
-        for fr in self._current_ruleset().get("field_rules") or []:
+        for fr in (self._current_ruleset().get("field_rules") or []):
             if not isinstance(fr, dict):
                 continue
-            if (
-                str(fr.get("block") or "citation") == block
-                and str(fr.get("field") or "") == field
-                and str(fr.get("handler") or "nonempty") == handler
-            ):
+            if (str(fr.get("block") or "citation") == block
+                    and str(fr.get("field") or "") == field
+                    and str(fr.get("handler") or "nonempty") == handler):
                 return fr
         return None
 
     @staticmethod
     def _rule_sel_key(block: str, field: str, handler: str) -> str:
-        return f"{block}\x1ffield\x1f{handler}"
+        return f"{block}\x1f{field}\x1f{handler}"
 
     def _mark_dirty(self) -> None:
         """Surface that an edit landed in memory but not on disk."""
@@ -1009,8 +1316,7 @@ class ReviewConfigView(QWidget):
                 return
             self._sel_kind = "field"
             self._sel_key = self._rule_sel_key(
-                str(combo.property("block") or ""),
-                str(combo.property("field") or ""),
+                str(combo.property("block") or ""), str(combo.property("field") or ""),
                 str(combo.property("handler") or "nonempty"),
             )
             self._show_template_for_selection()
@@ -1036,33 +1342,23 @@ class ReviewConfigView(QWidget):
                     rules.remove(found)
             else:
                 if found is None:
-                    label = next(
-                        (
-                            f.get("label") or field
-                            for f in self._schema_fields()
-                            if f.get("block") == block and f.get("field") == field
-                        ),
-                        field,
-                    )
-                    found = {
-                        "block": block,
-                        "field": field,
-                        "label": label,
-                        "requirement": t(
-                            "review.rule_dialog.requirement",
-                            level=(
-                                t("review.rule_dialog.required")
-                                if level == "required"
-                                else t("review.rule_dialog.recommended")
-                            ),
-                            label=label,
-                        ),
-                        "handler": "nonempty",
-                        "response_template": t(
-                            "review.messages.missing_field_template",
-                            label=label,
-                        ),
-                    }
+                    label = next((f.get("label") or field for f in self._schema_fields()
+                                  if f.get("block") == block and f.get("field") == field), field)
+                    found = {"block": block, "field": field, "label": label,
+                             "requirement": t(
+                                 "review.rule_dialog.requirement",
+                                 level=(
+                                     t("review.rule_dialog.required")
+                                     if level == "required"
+                                     else t("review.rule_dialog.recommended")
+                                 ),
+                                 label=label,
+                             ),
+                             "handler": "nonempty",
+                             "response_template": t(
+                                 "review.messages.missing_field_template",
+                                 label=label,
+                             )}
                     rules.append(found)
                     handler = "nonempty"
                 found["level"] = level
@@ -1075,9 +1371,7 @@ class ReviewConfigView(QWidget):
             try:
                 child = self._find_combo_item(combo)
                 if child is not None:
-                    combo.setProperty(
-                        "kind", "rule" if found is not None and level != "unchecked" else "new"
-                    )
+                    combo.setProperty("kind", "rule" if found is not None and level != "unchecked" else "new")
                     if found is not None and level != "unchecked":
                         tip_req = str(found.get("requirement") or "")
                         child.setToolTip(
@@ -1099,8 +1393,8 @@ class ReviewConfigView(QWidget):
     def _selected_content_rule(self) -> dict[str, Any] | None:
         try:
             item = self._content_list.currentItem()
-            rid = item.data(Qt.ItemDataRole.UserRole) if item else ""
-            for cr in self._current_ruleset().get("content_rules") or []:
+            rid = item.data(Qt.UserRole) if item else ""
+            for cr in (self._current_ruleset().get("content_rules") or []):
                 if isinstance(cr, dict) and str(cr.get("id")) == str(rid):
                     return cr
         except Exception:
@@ -1117,14 +1411,9 @@ class ReviewConfigView(QWidget):
         self._template_edit.blockSignals(True)
         try:
             if self._sel_kind == "content":
-                cr = next(
-                    (
-                        c
-                        for c in (self._current_ruleset().get("content_rules") or [])
-                        if isinstance(c, dict) and str(c.get("id")) == self._sel_key
-                    ),
-                    None,
-                )
+                self._hide_field_extras()
+                cr = next((c for c in (self._current_ruleset().get("content_rules") or [])
+                           if isinstance(c, dict) and str(c.get("id")) == self._sel_key), None)
                 if cr is None:
                     return
                 self._sel_label.setText(
@@ -1136,9 +1425,7 @@ class ReviewConfigView(QWidget):
                 self._template_edit.setPlainText(str(cr.get("response_template") or ""))
             else:
                 parts = self._sel_key.split("\x1f")
-                fr = (
-                    self._find_field_rule(parts[0], parts[1], parts[2]) if len(parts) == 3 else None
-                )
+                fr = self._find_field_rule(parts[0], parts[1], parts[2]) if len(parts) == 3 else None
                 # Fall back to the tree's current row when nothing chosen yet.
                 if fr is None:
                     try:
@@ -1160,7 +1447,12 @@ class ReviewConfigView(QWidget):
                 if fr is None:
                     self._sel_label.setText(t("review.select_template"))
                     self._template_edit.setPlainText("")
+                    self._hide_field_extras()
                     return
+                handler = str(fr.get("handler") or "nonempty")
+                parts = str(self._sel_key or "").split("\x1f")
+                if len(parts) == 3:
+                    self._sync_field_extras(fr, parts[0], parts[1], handler)
                 self._sel_label.setText(
                     t(
                         "review.selection.field_rule",
@@ -1177,7 +1469,7 @@ class ReviewConfigView(QWidget):
         try:
             text = self._template_edit.toPlainText()
             if self._sel_kind == "content":
-                for cr in self._current_ruleset().get("content_rules") or []:
+                for cr in (self._current_ruleset().get("content_rules") or []):
                     if isinstance(cr, dict) and str(cr.get("id")) == self._sel_key:
                         cr["response_template"] = text
                         break
@@ -1212,7 +1504,7 @@ class ReviewConfigView(QWidget):
 
     def _on_content_add(self) -> None:
         dlg = ContentRuleDialog(self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if dlg.exec() != QDialog.Accepted:
             return
         rule = dlg.result_rule()
         if rule is None:
@@ -1222,11 +1514,7 @@ class ReviewConfigView(QWidget):
                 t("review.messages.label_pattern_required"),
             )
             return
-        existing = {
-            str(c.get("id"))
-            for c in (self._current_ruleset().get("content_rules") or [])
-            if isinstance(c, dict)
-        }
+        existing = {str(c.get("id")) for c in (self._current_ruleset().get("content_rules") or []) if isinstance(c, dict)}
         base, n = rule["id"], 2
         while rule["id"] in existing:
             rule["id"] = f"{base}-{n}"
@@ -1247,7 +1535,7 @@ class ReviewConfigView(QWidget):
             )
             return
         dlg = ContentRuleDialog(self, cr)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if dlg.exec() != QDialog.Accepted:
             return
         updated = dlg.result_rule(rule_id=str(cr.get("id") or ""))
         if updated is None:
@@ -1349,7 +1637,6 @@ class ReviewConfigView(QWidget):
             )
             return
         from ui.dialogs import confirm
-
         deleted = self._current
         n_rules = len(((self._rulesets.get(self._current) or {}).get("field_rules")) or [])
         if not confirm(
@@ -1361,11 +1648,7 @@ class ReviewConfigView(QWidget):
             return
         try:
             del self._rulesets[self._current]
-            self._current = (
-                "mcmaster-default"
-                if "mcmaster-default" in self._rulesets
-                else sorted(self._rulesets.keys())[0]
-            )
+            self._current = "mcmaster-default" if "mcmaster-default" in self._rulesets else sorted(self._rulesets.keys())[0]
             self._refresh_all()
             self._status.setText(t("review.messages.deleted", name=deleted))
             self._mark_dirty()
@@ -1378,7 +1661,6 @@ class ReviewConfigView(QWidget):
 
     def _on_revert(self) -> None:
         from ui.dialogs import confirm
-
         if not confirm(
             self,
             t("review.dialogs.revert_title"),
@@ -1406,7 +1688,7 @@ class ReviewConfigView(QWidget):
             )
             return
         try:
-            from curation import metadata_check as _mc
+            import metadata_check as _mc
 
             _mc.refresh_profiles_from_rulesets()
         except Exception:
@@ -1442,15 +1724,14 @@ class ReviewConfigView(QWidget):
             from ui.workers import MetadataBlocksWorker
 
             ws = getattr(getattr(self._config, "app", None), "workspace", Path.home())
-            worker = MetadataBlocksWorker(
+            self._worker = MetadataBlocksWorker(
                 self._config.dataverse.base_url, self._config.dataverse.api_token, Path(ws), self
             )
-            worker.finished.connect(self._on_fields_finished)
-            worker.error.connect(self._on_fields_error)
-            worker.finished.connect(worker.deleteLater)
-            worker.error.connect(worker.deleteLater)
-            self._worker = worker
-            worker.start()
+            self._worker.finished.connect(self._on_fields_finished)
+            self._worker.error.connect(self._on_fields_error)
+            self._worker.finished.connect(self._worker.deleteLater)
+            self._worker.error.connect(self._worker.deleteLater)
+            self._worker.start()
         except Exception as exc:
             self._fields_btn.setEnabled(True)
             show_critical(
@@ -1464,7 +1745,9 @@ class ReviewConfigView(QWidget):
         if isinstance(fields, list) and fields:
             self._schema = [dict(f) for f in fields if isinstance(f, dict) and f.get("field")]
             self._refresh_field_table()
-            self._status.setText(t("review.messages.loaded_fields", count=len(self._schema)))
+            self._status.setText(
+                t("review.messages.loaded_fields", count=len(self._schema))
+            )
         else:
             self._status.setText(t("review.messages.no_fields"))
 

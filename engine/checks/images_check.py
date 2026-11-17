@@ -4,8 +4,8 @@ Port of CUR_Res_CurationTools Scripts/Inspect_Images_Script.R: open/verify,
 dimensions, colour mode and format detection.
 
 Pillow is preferred (full verify + mode detection). When Pillow is absent
-(lite portable build without the sibling full folder, or offline dev venv)
-a pure-stdlib header parser covers JPG/PNG/GIF/BMP/WEBP dimensions so common
+(an offline dev venv, or a build with the optional lib stripped) a
+pure-stdlib header parser covers JPG/PNG/GIF/BMP/WEBP dimensions so common
 images still validate instead of reporting "Missing".
 """
 
@@ -300,7 +300,7 @@ class ImagesCheck(Check):
 
         name = path.name
         if not _have_pil:
-            # Offline / lite-build fallback: pure-stdlib header parse so
+            # Offline / missing-Pillow fallback: pure-stdlib header parse so
             # common JPG/PNG/GIF/BMP/WEBP still validate without Pillow.
             return _stdlib_image_result(path)
         # Decompression-bomb guard: refuse absurd pixel counts before decode.

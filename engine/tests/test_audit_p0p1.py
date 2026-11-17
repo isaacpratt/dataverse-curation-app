@@ -309,3 +309,7 @@ def test_pandas_not_in_requirements() -> None:
     pyproj = (root / "pyproject.toml").read_text(encoding="utf-8")
     assert '"pandas' not in pyproj
     assert '"pandas"' not in pyproj
+    # The lock is the real source of truth: a transitive bump can pull pandas
+    # back in without pyproject.toml changing at all.
+    lock = (root / "uv.lock").read_text(encoding="utf-8")
+    assert 'name = "pandas"' not in lock

@@ -147,16 +147,14 @@ def test_card_headings_are_not_clipped(small_window, detail, qapp):
 
 
 def test_sidebar_folds_away_on_a_narrow_window(small_window, detail, qapp):
-    """Below 1100px the sticky sidebar folds; its links move to the menu."""
+    """Below 1100px the sidebar folds; the rail stays and restores it."""
     small_window._stack.setCurrentWidget(detail)
     _pump(qapp)
     assert detail._side_scroll.isHidden(), "the sidebar must fold at 960px"
-    assert detail._sections_btn.isVisible(), "the Sections menu must appear"
-    detail._fill_sections_menu()
-    labels = [action.text() for action in detail._sections_menu.actions()]
-    assert t("detail.sections.file_manifest") in labels, (
-        "the folded sidebar's links must stay reachable"
-    )
+    # The rail is the one navigation model and never hides (dv-6wb).
+    assert not detail._rail.isHidden(), "the rail must stay visible (dv-6wb)"
+    # The single slim toggle restores the sidebar.
+    assert not detail._sidebar_toggle_btn.isHidden(), "the sidebar toggle must stay visible"
     # The dataset log does not disappear with the sidebar.
     assert _layout_holds(detail._main_wrap, detail._dataset_log_card), (
         "the dataset log must move to the main column when the sidebar folds"
@@ -164,14 +162,29 @@ def test_sidebar_folds_away_on_a_narrow_window(small_window, detail, qapp):
     assert not _layout_holds(detail._side_wrap, detail._dataset_log_card)
 
 
+def test_sidebar_toggle_restores_on_a_narrow_window(small_window, detail, qapp):
+    """The header toggle unfolds/folds the sidebar even at 960px."""
+    small_window._stack.setCurrentWidget(detail)
+    _pump(qapp)
+    assert detail._side_scroll.isHidden()
+    detail._sidebar_toggle_btn.click()
+    _pump(qapp)
+    assert not detail._side_scroll.isHidden(), "the toggle must unfold the sidebar"
+    assert not detail._rail.isHidden(), "the rail stays visible unfolded too"
+    detail._sidebar_toggle_btn.click()
+    _pump(qapp)
+    assert detail._side_scroll.isHidden(), "the toggle must fold the sidebar again"
+    assert not detail._rail.isHidden()
+
+
 def test_sidebar_comes_back_on_a_wide_window(small_window, detail, qapp):
-    """A wide window restores the sidebar."""
+    """A wide window restores the sidebar (when the user has not folded it)."""
+    detail._sidebar_user_collapsed = None  # width decides again
     small_window._stack.setCurrentWidget(detail)
     _pump(qapp)
     small_window.resize(1400, 860)
     _pump(qapp)
     assert not detail._side_scroll.isHidden(), "the sidebar must return when there is room"
-    assert detail._sections_btn.isHidden(), "the Sections menu folds away again"
     small_window.resize(*SMALL)
     _pump(qapp)
 
