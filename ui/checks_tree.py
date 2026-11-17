@@ -4,7 +4,7 @@ Carbon Tree View-inspired behavior (caret-left expanders, indented children,
 arrow-key navigation via QTreeView) implemented natively in PySide6 with the
 app's existing palette — Carbon web components are not available on desktop.
 
-Node kinds (Qt.UserRole dict on column-0 item):
+Node kinds (Qt.ItemDataRole.UserRole dict on column-0 item):
   folder: {"kind": "folder", "dir": str, "base": str}
   file:   {"kind": "file", "path": str, "base": str}
   check:  {"kind": "check", "path": str, "check_id": str}
@@ -39,7 +39,7 @@ COLUMNS = [
     t("checks.columns.scan"),
 ]
 
-_KIND_ROLE = Qt.UserRole + 1
+_KIND_ROLE = Qt.ItemDataRole.UserRole + 1
 
 # Legacy text glyphs (pre-Lucide). Kept so update_carets() can strip them
 # from any model built before the icon switch; nothing emits them anymore.
@@ -351,6 +351,10 @@ def node_kind(index) -> dict:
         if not isinstance(index, QModelIndex) or not index.isValid():
             return {}
         model = index.model()
+        if not isinstance(model, QStandardItemModel):
+            # itemFromIndex lives on QStandardItemModel, not the
+            # QAbstractItemModel base (dv-hcg.28).
+            return {}
         item = model.itemFromIndex(model.index(index.row(), 0, index.parent()))
         data = item.data(_KIND_ROLE) if item else None
         return data if isinstance(data, dict) else {}

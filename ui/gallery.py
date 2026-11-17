@@ -437,7 +437,7 @@ class GalleryWindow(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         content = QWidget()
         content.setObjectName("GalleryContent")
         content.setStyleSheet(page_background_qss("GalleryContent"))
@@ -461,7 +461,7 @@ class GalleryWindow(QWidget):
         footer = QLabel(t("gallery.footer"))
         footer.setObjectName("CaptionSM")
         footer.setWordWrap(True)
-        footer.setTextFormat(Qt.PlainText)
+        footer.setTextFormat(Qt.TextFormat.PlainText)
         outer.addWidget(footer)
         footer.setToolTip(t("gallery.footer_tip", colour=TEXT_MUTED))
 

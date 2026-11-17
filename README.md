@@ -35,7 +35,7 @@ The GUI defaults to the Borealis demo (demo.borealisdata.ca); pick or enter your
 
 ## Workflow
 
-Work is tracked in [beads](https://github.com/gastownhall/beads) (`bd ready` for next work, `bd list` for the queue). CI (windows-latest) runs on every push/PR to master: pre-commit, ruff, mypy (engine), pytest with coverage gates, headless smoke, UI probes, workflow lint, and an OSV vulnerability scan of the locked dependency set. Formatting is enforced by `ruff format`; dependency updates come through Dependabot.
+Work is tracked in [beads](https://github.com/gastownhall/beads) (`bd ready` for next work, `bd list` for the queue). CI (windows-latest) runs on every push/PR to master: pre-commit, ruff, mypy (engine + UI), pytest with coverage gates, headless smoke, UI probes, workflow lint, and an OSV vulnerability scan of the locked dependency set. Formatting is enforced by `ruff format`; dependency updates come through Dependabot.
 
 ## Roadmap
 

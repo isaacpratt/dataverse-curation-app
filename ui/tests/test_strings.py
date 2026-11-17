@@ -662,6 +662,7 @@ def test_cli_help_text_is_catalogue_backed():
         return
     tree = ast.parse(entry.read_text(encoding="utf-8"))
     hits = []
+    wanted: tuple[str, ...] = ()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue

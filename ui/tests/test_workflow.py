@@ -138,7 +138,9 @@ def test_step_order_and_accessible_names_are_stable():
     flow = derive_workflow(WorkflowInput(metadata_loaded=True))
     assert [s.key for s in flow.steps] == list(STEP_ORDER)
     assert flow.steps[0].accessible == "Metadata, done step"
-    assert flow.step_of("changes").accessible == "Changes, current step"
+    changes_step = flow.step_of("changes")
+    assert changes_step is not None
+    assert changes_step.accessible == "Changes, current step"
 
 
 # -- rail widget ----------------------------------------------------------

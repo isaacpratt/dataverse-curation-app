@@ -305,9 +305,9 @@ def _decided_ids(workspace: Path) -> set[str]:
 
 
 class _SortItem(QTableWidgetItem):
-    def __lt__(self, other):  # type: ignore[override]
-        a = self.data(Qt.UserRole)
-        b = other.data(Qt.UserRole) if isinstance(other, QTableWidgetItem) else None
+    def __lt__(self, other):
+        a = self.data(Qt.ItemDataRole.UserRole)
+        b = other.data(Qt.ItemDataRole.UserRole) if isinstance(other, QTableWidgetItem) else None
         # Numeric/date sort when both sides carry a float epoch or number
         if isinstance(a, float) and isinstance(b, float):
             return a < b
@@ -521,7 +521,7 @@ class DashboardView(QWidget):
         )
         # No horizontal scrollbar on the dashboard: the queue reads at
         # window width (the filler column absorbs any slack).
-        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # Flush under the banner header (last child: square top meets the
         # banner, 8px bottom meets the card border — see flush_table_style).
         self._table.setStyleSheet(flush_table_style())
@@ -538,7 +538,7 @@ class DashboardView(QWidget):
             pass
         # Native header: keyboard focus + sort on Space/Return
         native_hdr = self._table.horizontalHeader()
-        native_hdr.setFocusPolicy(Qt.StrongFocus)
+        native_hdr.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         native_hdr.setSectionsClickable(True)
         # Ensure the sort indicator is shown at startup
         native_hdr.setSortIndicatorShown(True)
@@ -583,11 +583,11 @@ class DashboardView(QWidget):
         self._status_lbl = _BarLabel("")
         self._status_lbl.setObjectName("CaptionSM")
         pill_lay.addWidget(self._status_lbl)
-        pill_lay.setAlignment(self._status_lbl, Qt.AlignVCenter)
+        pill_lay.setAlignment(self._status_lbl, Qt.AlignmentFlag.AlignVCenter)
         self._status_sep = make_caption_label("·")
         self._status_sep.hide()
         pill_lay.addWidget(self._status_sep)
-        pill_lay.setAlignment(self._status_sep, Qt.AlignVCenter)
+        pill_lay.setAlignment(self._status_sep, Qt.AlignmentFlag.AlignVCenter)
         self._progress = _ElidedBarLabel("")
         self._progress.setObjectName("CaptionSM")
         # Circular progress ring, alongside the status text (the text
@@ -595,9 +595,9 @@ class DashboardView(QWidget):
         self._ring = RingProgress(diameter=28)
         self._ring.hide()
         pill_lay.addWidget(self._ring)
-        pill_lay.setAlignment(self._ring, Qt.AlignVCenter)
+        pill_lay.setAlignment(self._ring, Qt.AlignmentFlag.AlignVCenter)
         pill_lay.addWidget(self._progress, 1)
-        pill_lay.setAlignment(self._progress, Qt.AlignVCenter)
+        pill_lay.setAlignment(self._progress, Qt.AlignmentFlag.AlignVCenter)
 
         def _sync_sep() -> None:
             # The dot joins scope and message only when both sides exist;
@@ -627,12 +627,12 @@ class DashboardView(QWidget):
             _pix = _QPixmap(mark_icon_path())
             if not _pix.isNull():
                 # Native 16x16 — never upscale the pixel mark.
-                mark.setPixmap(_pix.scaledToHeight(16, Qt.SmoothTransformation))
+                mark.setPixmap(_pix.scaledToHeight(16, Qt.TransformationMode.SmoothTransformation))
                 mark.setToolTip(t("app.name"))
         except Exception:
             pass
         mark.setStyleSheet(transparent_surface_qss("DocentMark"))
-        foot.addWidget(mark, 0, Qt.AlignVCenter)
+        foot.addWidget(mark, 0, Qt.AlignmentFlag.AlignVCenter)
 
         outer.addLayout(foot)
         _sync_sep()
@@ -767,7 +767,10 @@ class DashboardView(QWidget):
         try:
             from tools.startup_probe import mark
         except Exception:  # pragma: no cover - probe is optional
-            mark = lambda _label: None  # noqa: E731
+
+            def mark(label: str) -> None:
+                """No-op fallback when the startup probe is unavailable."""
+
         mark("dashboard: background load start")
         # Labels seed from disk before the cached rows (it imports the
         # Dataverse client, so it must not sit on the window-construction
@@ -990,7 +993,7 @@ class DashboardView(QWidget):
         from ui.icons import icon_label as _empty_icon
 
         wrap = QWidget()
-        wrap.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        wrap.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         lay = QVBoxLayout(wrap)
         lay.setContentsMargins(24, 32, 24, 32)
         lay.setSpacing(0)
@@ -1012,9 +1015,9 @@ class DashboardView(QWidget):
         icon = _empty_icon("database", size=28, color=ACCENT_PRIMARY)
         head_wrap = QHBoxLayout()
         head_wrap.setSpacing(10)
-        head_wrap.addWidget(icon, 0, Qt.AlignVCenter)
+        head_wrap.addWidget(icon, 0, Qt.AlignmentFlag.AlignVCenter)
         self._empty_head = make_card_title(t("dashboard.empty.none_loaded"))
-        head_wrap.addWidget(self._empty_head, 1, Qt.AlignVCenter)
+        head_wrap.addWidget(self._empty_head, 1, Qt.AlignmentFlag.AlignVCenter)
         inner.addLayout(head_wrap)
 
         self._empty_body = make_small_body_label(t("dashboard.empty.none_loaded_body"))
@@ -1065,7 +1068,7 @@ class DashboardView(QWidget):
         except Exception:
             pass
 
-    def _make_metric_card(self, accent: str, label: str, sub: str) -> QFrame:
+    def _make_metric_card(self, accent: str, label: str, sub: str) -> tuple[QFrame, QLabel]:
         """Slim single-line metric: icon + label on the left, value on the right."""
         card = QFrame()
         card.setObjectName("MetricCard")
@@ -1090,7 +1093,7 @@ class DashboardView(QWidget):
         icon = _metric_icon(icon_map.get(accent, "circle"), size=18, color=border_color)
         # The whole chip must be the click target: mouse-transparent
         # children let press/enter/leave reach the card's eventFilter.
-        icon.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         lay.addWidget(icon, 0)
         # The caption is the widest thing in the card ("PENDING · Datasets
         # waiting for a decision"), so it elides instead of pushing the
@@ -1100,18 +1103,18 @@ class DashboardView(QWidget):
             t("dashboard.metrics.card_label", label=label.upper(), sub=sub),
             object_name="LabelMD",
         )
-        lbl.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         lay.addWidget(lbl, 1)
         v = QLabel("0")
         v.setProperty("metricToken", _METRIC_VALUE_TOKEN)
         _apply_metric_token(v)
-        v.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        v.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        v.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        v.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         lay.addWidget(v, 0)
         # Tappable filter (dv-896): click or Enter/Space applies the card's
         # filter via eventFilter. Cursor + focus make it discoverable.
-        card.setCursor(Qt.PointingHandCursor)
-        card.setFocusPolicy(Qt.StrongFocus)
+        card.setCursor(Qt.CursorShape.PointingHandCursor)
+        card.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         card.installEventFilter(self)
         return card, v
 
@@ -1279,12 +1282,12 @@ class DashboardView(QWidget):
         table_hdr = self._table.horizontalHeader()
         if table_hdr.sortIndicatorSection() == logical and table_hdr.isSortIndicatorShown():
             order = (
-                Qt.DescendingOrder
-                if table_hdr.sortIndicatorOrder() == Qt.AscendingOrder
-                else Qt.AscendingOrder
+                Qt.SortOrder.DescendingOrder
+                if table_hdr.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder
+                else Qt.SortOrder.AscendingOrder
             )
         else:
-            order = Qt.AscendingOrder
+            order = Qt.SortOrder.AscendingOrder
         self._table.sortItems(logical, order)
         table_hdr.setSortIndicator(logical, order)
         table_hdr.setSortIndicatorShown(True)
@@ -1312,21 +1315,21 @@ class DashboardView(QWidget):
             self._columns_btn.mapToGlobal(self._columns_btn.rect().bottomLeft())
         )
 
-    def _show_columns_menu_at(self, pos) -> None:  # type: ignore[no-untyped-def]
+    def _show_columns_menu_at(self, pos) -> None:
         menu = QMenu(self)
         for idx, (_key, header, _v) in enumerate(COLUMNS):
             action = QAction(header, menu)
             action.setCheckable(True)
             action.setChecked(not self._table.isColumnHidden(idx))
-            action.toggled.connect(
-                lambda checked, i=idx: (
-                    self._set_column_visible(i, checked),
-                    # The user changed the column set: the fit starts over
-                    # from the widths as they are now.
-                    setattr(self, "_queue_unscaled", None),
-                    self._save_queue_layout(),
-                )
-            )
+
+            def _apply(checked: bool, i: int = idx) -> None:
+                self._set_column_visible(i, checked)
+                # The user changed the column set: the fit starts over
+                # from the widths as they are now.
+                self._queue_unscaled = None
+                self._save_queue_layout()
+
+            action.toggled.connect(_apply)
             menu.addAction(action)
         menu.addSeparator()
         try:
@@ -1853,7 +1856,7 @@ class DashboardView(QWidget):
                         elif ds.get("size_from_cache"):
                             item.setToolTip(t("dashboard.table.size_cached", value=text_val))
                     sort_key = self._cell_sort_key(ds, key)
-                    item.setData(Qt.UserRole, sort_key)
+                    item.setData(Qt.ItemDataRole.UserRole, sort_key)
                     if key in ("date_created", "date_published", "downloaded_at", "persistent_id"):
                         item.setFont(mono)
                     if key == "title":
@@ -1922,7 +1925,10 @@ class DashboardView(QWidget):
                 pass
         # Metric cards are tappable filters (dv-896).
         if isinstance(obj, QFrame) and obj.objectName() == "MetricCard":
-            if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.LeftButton:
+            if (
+                event.type() == QEvent.Type.MouseButtonPress
+                and event.button() == Qt.MouseButton.LeftButton
+            ):
                 self._on_metric_clicked(str(obj.property("accent") or ""))
                 return True
             if event.type() == QEvent.Type.KeyPress and event.key() in (

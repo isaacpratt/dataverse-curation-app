@@ -173,10 +173,10 @@ class SettingsPane(QWidget):
         form.setSpacing(12)
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(12)
-        form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
-        form.setRowWrapPolicy(QFormLayout.DontWrapRows)
-        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        form.setFormAlignment(Qt.AlignTop)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
 
         # Field labels wear the LabelStrongSM token: small and semibold on
         # the primary text colour, so each label scans before its field.
@@ -217,7 +217,8 @@ class SettingsPane(QWidget):
         self._conn_status = QLabel("")
         self._conn_status.setWordWrap(True)
         self._conn_status.setTextInteractionFlags(
-            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
         )
         # The verdict's colour changes at runtime, so the widget wears a
         # token (SuccessSM / DangerSM / HintSM) rather than a painted
@@ -286,7 +287,7 @@ class SettingsPane(QWidget):
             sortable=False,
         )
         # Used-for column absorbs leftover width.
-        self.ext_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.ext_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         # Qt derives CELL-WIDGET geometry from the item content box whenever
         # a stylesheet is active: the app's `QTableWidget::item` rule
         # (padding 10px 12px + 1px border-bottom) shrank every action cell to
@@ -372,7 +373,11 @@ class SettingsPane(QWidget):
         try:
             from PySide6.QtGui import QKeySequence, QShortcut
 
-            QShortcut(QKeySequence("Ctrl+S", QKeySequence.PortableText), self, self._on_save)  # type: ignore[arg-type]
+            QShortcut(
+                QKeySequence("Ctrl+S", QKeySequence.SequenceFormat.PortableText),
+                self,
+                self._on_save,
+            )
         except Exception:
             pass
 
@@ -395,7 +400,8 @@ class SettingsPane(QWidget):
 
     def _start_size_worker(self) -> None:
         """Compute package sizes off the GUI thread; patch rows when done."""
-        if getattr(self, "_size_worker", None) is not None and self._size_worker.isRunning():
+        size_worker = self._size_worker
+        if size_worker is not None and size_worker.isRunning():
             return
         rows = list(self.EXTENSIONS)
 
@@ -622,7 +628,9 @@ class SettingsPane(QWidget):
                 total = 0
                 for f in files:
                     try:
-                        loc = f.locate()
+                        # locate() returns a PathLike; Path() gives it the
+                        # is_file()/stat() surface the stub does not have.
+                        loc = Path(f.locate())
                     except Exception:
                         continue
                     try:
@@ -756,8 +764,8 @@ class SettingsPane(QWidget):
                 uninstall_btn.setToolTip(tip)
             # Buttons keep their sizeHint width: a layout-driven shrink
             # clips their labels symmetrically (see dv-dm3).
-            install_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-            uninstall_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            install_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            uninstall_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             cell_lay.addWidget(install_btn)
             cell_lay.addWidget(uninstall_btn)
             cell_lay.addStretch()
@@ -816,7 +824,7 @@ class SettingsPane(QWidget):
             )
             browse_btn.setToolTip(t("settings.extensions.locate_tip", label=label))
             browse_btn.clicked.connect(lambda _checked, k=key: self._browse_tool(k))
-            browse_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            browse_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             tool_lay.addWidget(browse_btn)
             tool_lay.addStretch()
             self.ext_table.setCellWidget(row, 4, tool_cell)
@@ -986,7 +994,10 @@ class SettingsPane(QWidget):
         """
         lbl = QLabel(t("settings.user.not_checked"))
         lbl.setWordWrap(True)
-        lbl.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        lbl.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
         lbl.setObjectName("BodySM")
         return lbl
 
@@ -1073,8 +1084,7 @@ class SettingsPane(QWidget):
         named, never a bare "—" (2026-10-02 P2).
         """
         try:
-            ok = isinstance(me, dict) and bool(me)
-            if not ok:
+            if not isinstance(me, dict) or not me:
                 empty = (
                     t("settings.user.no_user_returned")
                     if checked

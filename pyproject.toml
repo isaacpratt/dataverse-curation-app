@@ -273,28 +273,61 @@ python_version = "3.11"
 # Burn-down note (2026-11-16, dv-hcg.27): the last 44 errors under the
 # strict subset were fixed by annotating the engine, the client and the
 # core services - no per-module ignore list was needed and none is
-# configured here. The next step is the UI typing ramp (dv-hcg.28):
-# theme/kit -> main window -> views, then `ui/` joins `files`.
+# configured here. The UI typing ramp (dv-hcg.28) then joined `files`
+# under the documented relaxation below.
 strict = true
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
-# Gate the engine contract only: the engine plus the curation core it is
-# built on, and the engine test suite. The tests are Qt-free since
-# dv-hcg.26 (the dashboard cache helpers they borrow live in the
-# Qt-free curation.dashboard_cache module), so they join the strict gate
-# instead of needing an exclusion. The UI layer is typed separately
-# (dv-hcg.28: theme/kit -> main window -> views); the UI tests are
-# exercised by pytest, not by mypy.
+# Gate the engine contract, the curation core it is built on and the UI
+# layer: the engine plus the curation core (client, storage, downloads,
+# metadata rules, request log), the engine test suite, the UI package
+# (source and tests) and the entry point.
+#
+# The engine tests are Qt-free since dv-hcg.26 (the dashboard cache
+# helpers they borrow live in the Qt-free curation.dashboard_cache
+# module), so they join the strict gate instead of needing an exclusion.
+# The UI layer joined the gate in dv-hcg.28, under the documented
+# relaxation of --strict below; `main.py` is checked under the full
+# strict settings (it is the entry point, not a UI module).
 files = [
     "engine",
     "curation",
+    "ui",
+    "main.py",
 ]
 exclude = [
     "^\\.venv/",
     "^build/",
     "^dist/",
 ]
+
+# The UI layer is gated under a documented relaxation of --strict
+# (dv-hcg.28). Full strictness would demand an annotation on every one
+# of the ~4,000 lines of Qt glue; what the gate actually buys is the
+# *shape* checks - attr-defined, union-attr, assignment, arg-type,
+# operator, has-type, var-annotated, func-returns-value, no-redef -
+# and those are exactly the checks that found the real defects the
+# audit listed (the int(QSize) bug, the undeclared mixin attributes,
+# the twice-declared attribute, the functions used for their return
+# value). `check_untyped_defs` stays ON, so the bodies of unannotated
+# functions are still checked; only the "you must annotate this"
+# rules are relaxed.
+#
+# Justification for the relaxation: PySide6 ships no usable stubs for
+# the widget tree (the widgets are created in code, not declared), so
+# a strict UI would need thousands of `Any` annotations that add no
+# safety and would be erased by the first refactor. The enum sweep
+# (scoped PySide6 enum names) and the shape fixes are the parts that
+# pay for themselves.
+[[tool.mypy.overrides]]
+module = ["ui.*"]
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+disallow_incomplete_defs = false
+disallow_any_generics = false
+warn_return_any = false
+no_implicit_reexport = false
 
 # Machine-enforced dependency direction (import-linter).
 #

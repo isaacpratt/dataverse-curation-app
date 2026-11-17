@@ -143,7 +143,7 @@ class DownloadApprovalDialog(QDialog):
             self._add_question(form, question)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidget(host)
         scroll.setMinimumHeight(150)
         scroll.setMaximumHeight(340)
@@ -237,7 +237,7 @@ class DownloadApprovalDialog(QDialog):
             if not value:
                 continue
             try:
-                answers.append({"id": int(question.get("id")), "value": value})
+                answers.append({"id": int(question.get("id") or 0), "value": value})
             except (TypeError, ValueError):
                 continue
         if answers:

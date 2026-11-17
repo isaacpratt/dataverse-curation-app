@@ -94,7 +94,7 @@ def test_delegate_drops_the_dotted_focus_rect(qapp, monkeypatch):
 
     monkeypatch.setattr(QStyledItemDelegate, "paint", spy)
     option = QStyleOptionViewItem()
-    option.state = QStyle.State_Selected | QStyle.State_HasFocus
+    option.state = QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_HasFocus
     option.rect = table.rect()
     pixmap = QPixmap(table.size())
     painter = QPainter(pixmap)
@@ -103,8 +103,10 @@ def test_delegate_drops_the_dotted_focus_rect(qapp, monkeypatch):
     finally:
         painter.end()
     assert seen, "base paint ran"
-    assert not (seen[0].state & QStyle.State_HasFocus), "the dotted focus rect would still be drawn"
-    assert seen[0].state & QStyle.State_Selected, "the row stays selected"
+    assert not (seen[0].state & QStyle.StateFlag.State_HasFocus), (
+        "the dotted focus rect would still be drawn"
+    )
+    assert seen[0].state & QStyle.StateFlag.State_Selected, "the row stays selected"
 
 
 def test_active_versus_inactive_selection_keeps_the_tint():

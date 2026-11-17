@@ -105,7 +105,7 @@ Gate before handoff; run from the repository root when code (not docs-only) chan
 - **Module sizes**: view modules aim for ≤ ~1,000 lines and engine modules ≤ ~1,500; oversize view modules are missing a subcomponent. Exceptions carry a dated comment naming the reason. `poe check` (format + C90 budget) is the mechanical backstop, this line is the expectation for reviewers.
 
 - `uv run pytest -q` — must exit 0
-- `uv run poe typecheck` — must report `Success: no issues found`; the engine contract is checked under mypy `--strict` and the scope is `[tool.mypy] files`, so run bare `uv run mypy`
+- `uv run poe typecheck` — must report `Success: no issues found`; the scope is `[tool.mypy] files` (`engine/`, `curation/`, `ui/`, `main.py`), so run bare `uv run mypy`. The engine contract and `main.py` are checked under mypy `--strict`; the UI layer is checked under the documented relaxation in `[[tool.mypy.overrides]] module = ["ui.*"]` (the "annotate everything" rules off, `check_untyped_defs` and every shape check on — see ADR 0007)
 - `uv run poe contracts` — import-linter contracts must stay green: `engine/` and `curation/` may not import `ui/` or `PySide6`, and the operational helpers in `tools/` may not import `ui/` (the UI probes are the documented exception)
 - `python tools/probes/run_all.py` — must end with `all N probes passed`; mandatory for UI/theme changes, and cheap enough to always run
 - headless box? set `QT_QPA_PLATFORM=offscreen` first, or the probes fail for the wrong reason

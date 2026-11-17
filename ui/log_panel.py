@@ -115,6 +115,7 @@ class LogPage(QWidget):
         self._timer.timeout.connect(self._refresh)
         self._timer.start(800)
         self._last_len = 0
+        self._last_display: str | None = None
         # Debounce search: re-filter at most every 200 ms (matches dashboard).
         self._search_debounce = QTimer(self)
         self._search_debounce.setSingleShot(True)
@@ -233,7 +234,7 @@ class LogHighlighter(QSyntaxHighlighter):
             fmt = QTextCharFormat()
             fmt.setForeground(QColor(color))
             if bold:
-                fmt.setFontWeight(QFont.Bold)
+                fmt.setFontWeight(QFont.Weight.Bold)
             return fmt
 
         # Line severity: plain coloured text for the body, bold for the
@@ -283,7 +284,7 @@ class LogHighlighter(QSyntaxHighlighter):
         if length > 0:
             self.setFormat(match.start(), length, fmt)
 
-    def highlightBlock(self, text: str) -> None:  # type: ignore[override]  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    def highlightBlock(self, text: str) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         severity = self._severity(text)
         if severity == "error":
             self.setFormat(0, len(text), self.line_error_format)

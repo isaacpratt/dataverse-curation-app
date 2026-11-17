@@ -541,7 +541,8 @@ class DownloadWorker(QThread):
     def run(self) -> None:
         import traceback
 
-        from curation.download_manager import DownloadCancelled, DownloadManager
+        from curation.client import DownloadCancelled
+        from curation.download_manager import DownloadManager
 
         try:
             mgr = DownloadManager(self._client, self._workspace)

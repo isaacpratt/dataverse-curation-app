@@ -124,7 +124,7 @@ def _show(
         except Exception:
             pass
         header = QLabel(f"<b>{title}</b>")
-        header.setTextFormat(Qt.RichText)
+        header.setTextFormat(Qt.TextFormat.RichText)
         header_row.addWidget(header, 1)
         layout.addLayout(header_row)
 
@@ -132,7 +132,10 @@ def _show(
     if len(text) < 800 and "\n" not in text:
         label = QLabel(text)
         label.setWordWrap(True)
-        label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
         layout.addWidget(label)
     else:
         edit = make_multiline_input(read_only=True, fixed=False)
@@ -148,17 +151,17 @@ def _show(
         layout.addWidget(det, 1)
 
     state = {"retry": False}
-    buttons = QDialogButtonBox(QDialogButtonBox.Ok)
-    ok_btn = buttons.button(QDialogButtonBox.Ok)
+    buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+    ok_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
     if ok_btn is not None:
         ok_btn.setObjectName(_PRIMARY_BUTTON)
     if retry is not None:
-        retry_btn = buttons.addButton(QDialogButtonBox.Retry)
+        retry_btn = buttons.addButton(QDialogButtonBox.StandardButton.Retry)
         if retry_btn is not None:
             retry_btn.setObjectName(_SECONDARY_BUTTON)
     buttons.accepted.connect(dlg.accept)
     if retry is not None:
-        retry_btn = buttons.button(QDialogButtonBox.Retry)
+        retry_btn = buttons.button(QDialogButtonBox.StandardButton.Retry)
 
         def _on_click(btn, _rb=retry_btn) -> None:
             if btn is _rb:
@@ -204,17 +207,20 @@ def confirm(parent, title: str, text: str, *, confirm_label: str = "") -> bool:
         header_row.setSpacing(8)
         header_row.addWidget(_dlg_icon("triangle-alert", size=18, color=STATE_WARNING_GRAPHIC))
         header = QLabel(f"<b>{title}</b>")
-        header.setTextFormat(Qt.RichText)
+        header.setTextFormat(Qt.TextFormat.RichText)
         header_row.addWidget(header, 1)
         layout.addLayout(header_row)
     except Exception:
         pass
     label = QLabel(text)
     label.setWordWrap(True)
-    label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+    label.setTextInteractionFlags(
+        Qt.TextInteractionFlag.TextSelectableByMouse
+        | Qt.TextInteractionFlag.TextSelectableByKeyboard
+    )
     layout.addWidget(label)
     buttons = QDialogButtonBox()
-    no_btn = buttons.addButton(QDialogButtonBox.No)
+    no_btn = buttons.addButton(QDialogButtonBox.StandardButton.No)
     yes_btn = buttons.addButton(confirm_label, QDialogButtonBox.ButtonRole.AcceptRole)
     # The kit's roles: the affirmative action wears the brand fill, the
     # safe answer wears the neutral face.
@@ -248,14 +254,17 @@ def confirm_save_discard_cancel(parent, title: str, text: str) -> str:
         header_row.setSpacing(8)
         header_row.addWidget(_dlg_icon("triangle-alert", size=18, color=STATE_WARNING_GRAPHIC))
         header = QLabel(f"<b>{title}</b>")
-        header.setTextFormat(Qt.RichText)
+        header.setTextFormat(Qt.TextFormat.RichText)
         header_row.addWidget(header, 1)
         layout.addLayout(header_row)
     except Exception:
         pass
     label = QLabel(text)
     label.setWordWrap(True)
-    label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+    label.setTextInteractionFlags(
+        Qt.TextInteractionFlag.TextSelectableByMouse
+        | Qt.TextInteractionFlag.TextSelectableByKeyboard
+    )
     layout.addWidget(label)
 
     buttons = QDialogButtonBox()
@@ -264,7 +273,7 @@ def confirm_save_discard_cancel(parent, title: str, text: str) -> str:
     discard_btn = buttons.addButton(
         t("common.discard"), QDialogButtonBox.ButtonRole.DestructiveRole
     )
-    cancel_btn = buttons.addButton(t("common.cancel"), QDialogButtonBox.RejectRole)
+    cancel_btn = buttons.addButton(t("common.cancel"), QDialogButtonBox.ButtonRole.RejectRole)
     save_btn.setObjectName(_PRIMARY_BUTTON)
     discard_btn.setObjectName(_SECONDARY_BUTTON)
     cancel_btn.setObjectName(_SECONDARY_BUTTON)

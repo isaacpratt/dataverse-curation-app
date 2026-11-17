@@ -92,6 +92,8 @@ def test_dwm_failure_is_logged_with_full_hwnd(monkeypatch):
     monkeypatch.setattr("ctypes.windll", FakeWindll())
 
     class FakeSelf:
+        _hwnd = 0
+
         def winId(self):
             return 0x0000023A4F51C8D1
 
@@ -110,12 +112,22 @@ def test_apply_dwm_frame_never_raises_without_window():
     from ui.main_window import MainWindow
 
     class NoHandle:
+        _hwnd = 0
+
         def winId(self):
             return 0
 
+        def isMaximized(self):
+            return False
+
     class BadHandle:
+        _hwnd = 0
+
         def winId(self):
             raise RuntimeError("no native window")
+
+        def isMaximized(self):
+            return False
 
     MainWindow._apply_dwm_frame(NoHandle())
     MainWindow._apply_dwm_frame(BadHandle())
@@ -147,6 +159,9 @@ def test_cloak_window_sets_dwm_cloak_attribute(monkeypatch):
         def winId(self):
             return self._hwnd
 
+        def isMaximized(self):
+            return False
+
     assert MainWindow._cloak_window(FakeSelf(), True) is True
     assert seen == {
         "hwnd": 0x0000023A4F51C8D1,
@@ -169,9 +184,17 @@ def test_cloak_window_never_raises_without_window():
         def winId(self):
             return 0
 
+        def isMaximized(self):
+            return False
+
     class BadHandle:
+        _hwnd = 0
+
         def winId(self):
             raise RuntimeError("no native window")
+
+        def isMaximized(self):
+            return False
 
     assert MainWindow._cloak_window(NoHandle(), True) is False
     assert MainWindow._cloak_window(BadHandle(), True) is False

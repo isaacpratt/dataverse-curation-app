@@ -165,7 +165,7 @@ def test_the_tree_widget_reports_user_gestures(qapp):
     tree.header().resizeSection(1, 150)
     assert seen == [True], "dragging an interactive section is a user gesture"
 
-    tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+    tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
     seen.clear()
     tree.header().resizeSection(0, 300)
     assert seen == [], "a stretched section is not a user gesture"

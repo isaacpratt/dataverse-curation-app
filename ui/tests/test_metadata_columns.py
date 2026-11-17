@@ -23,7 +23,7 @@ def detail(win, qapp):
 def test_every_metadata_column_is_interactive(detail):
     hdr = detail._meta_check_tree.header()
     for col in range(5):
-        assert hdr.sectionResizeMode(col) == QHeaderView.Interactive, (
+        assert hdr.sectionResizeMode(col) == QHeaderView.ResizeMode.Interactive, (
             f"column {col} cannot be dragged (dv-dmv)"
         )
     assert not hdr.stretchLastSection()

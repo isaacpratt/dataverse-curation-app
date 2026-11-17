@@ -190,14 +190,14 @@ def test_queue_column_titles_elide_instead_of_clipping(small_window, qapp):
     small_window._show_dashboard()
     _pump(qapp)
     header = dash._table.horizontalHeader()
-    assert header.textElideMode() == Qt.ElideRight, (
+    assert header.textElideMode() == Qt.TextElideMode.ElideRight, (
         "a narrow column must elide its title, not clip it"
     )
     model = header.model()
     for index in range(header.count()):
         if header.isSectionHidden(index):
             continue
-        title = str(model.headerData(index, Qt.Horizontal, Qt.DisplayRole))
+        title = str(model.headerData(index, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole))
         assert title, "every column must keep its title"
         available = header.sectionSize(index) - 26  # the section's padding
         if available < 24:
@@ -212,7 +212,7 @@ def test_queue_column_titles_elide_instead_of_clipping(small_window, qapp):
         # is the honest result and there is nothing left to clip.
         if fm.horizontalAdvance(title[0] + "…") > available:
             continue
-        painted = fm.elidedText(title, Qt.ElideRight, available)
+        painted = fm.elidedText(title, Qt.TextElideMode.ElideRight, available)
         if painted == "…":
             # Qt chose ellipsis-only: nothing was clipped mid-word.
             continue

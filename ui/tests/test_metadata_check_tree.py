@@ -163,5 +163,5 @@ def test_complete_filter_rebuilds_the_tree(detail):
 
 def test_no_inner_scrollbars(detail):
     tree = detail._meta_check_tree
-    assert tree.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
-    assert tree.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
+    assert tree.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    assert tree.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff

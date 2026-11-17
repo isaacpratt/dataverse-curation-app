@@ -271,6 +271,9 @@ class DatasetDetailView(QWidget):
         self._report = None
         self._inventory: list[dict] = cached_inventory or []
         self._metadata: dict | None = cached_metadata
+        # One declaration for the file-row table (path, size, ext, path);
+        # it is filled by _populate_from_inventory and the staged scan.
+        self._all_file_rows: list[tuple[str, int, str, str]] = []
         self._guestbook: dict | None = None
         self._account: dict = {}
         self._curation: dict = {}
@@ -354,7 +357,7 @@ class DatasetDetailView(QWidget):
         # ---- Main column scroll ----
         main_scroll = QScrollArea()
         main_scroll.setWidgetResizable(True)
-        main_scroll.setFrameShape(QFrame.NoFrame)
+        main_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._scroll = main_scroll
         canvas = QWidget()
         canvas.setObjectName("Canvas")
@@ -370,8 +373,8 @@ class DatasetDetailView(QWidget):
         # ---- Sticky sidebar (own scroll so Sections never scrolls away) ----
         side_scroll = QScrollArea()
         side_scroll.setWidgetResizable(True)
-        side_scroll.setFrameShape(QFrame.NoFrame)
-        side_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        side_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        side_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         side_scroll.setMinimumWidth(280)
         side_scroll.setMaximumWidth(400)
         content_row.addWidget(side_scroll, 2)
@@ -421,13 +424,13 @@ class DatasetDetailView(QWidget):
         # Clickable Dataverse link sits next to the title
         self._header_link = QLabel()
         self._header_link.setObjectName("BodySM")
-        self._header_link.setTextFormat(Qt.RichText)
+        self._header_link.setTextFormat(Qt.TextFormat.RichText)
         self._header_link.setOpenExternalLinks(True)
         title_row = QHBoxLayout()
         title_row.setSpacing(12)
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.addWidget(self._title_lbl, 1)
-        title_row.addWidget(self._header_link, 0, Qt.AlignBottom)
+        title_row.addWidget(self._header_link, 0, Qt.AlignmentFlag.AlignBottom)
         header_left.addLayout(title_row)
 
         self._depositor_lbl = make_body_label(t("detail.header.loading_metadata"), wrap=False)
@@ -441,7 +444,7 @@ class DatasetDetailView(QWidget):
         # Actions: Download, Export, Load metadata (aligned row), then Run checks
         actions_col = QVBoxLayout()
         actions_col.setSpacing(8)
-        actions_col.setAlignment(Qt.AlignTop)
+        actions_col.setAlignment(Qt.AlignmentFlag.AlignTop)
         actions_row = QHBoxLayout()
         actions_row.setSpacing(8)
         self._dl_btn = make_action_button(
@@ -522,7 +525,7 @@ class DatasetDetailView(QWidget):
         self._ring = RingProgress(diameter=28)
         self._ring.hide()
         top_lay.addWidget(self._ring)
-        top_lay.setAlignment(self._ring, Qt.AlignVCenter)
+        top_lay.setAlignment(self._ring, Qt.AlignmentFlag.AlignVCenter)
 
         # Workflow step rail (replaces the old Review/Response tab row):
         # six steps, each navigates only — no step ever runs an action.
@@ -733,7 +736,7 @@ class DatasetDetailView(QWidget):
         # old in-body summary line was removed).
         self._meta_summary = QLabel(t("detail.metadata_check.not_loaded"))
         self._meta_summary.setObjectName("StateMD")
-        self._meta_summary.setTextFormat(Qt.RichText)
+        self._meta_summary.setTextFormat(Qt.TextFormat.RichText)
         self._meta_summary.setToolTip(t("detail.metadata_check.not_loaded_tip"))
         header_lay.insertWidget(2, self._meta_summary)
         # The two menus and the reset button live on their own row under
@@ -801,7 +804,7 @@ class DatasetDetailView(QWidget):
         # Stretch mode (a Stretch section cannot be resized by hand).
         _meta_hdr.setStretchLastSection(False)
         for col in range(5):
-            _meta_hdr.setSectionResizeMode(col, QHeaderView.Interactive)
+            _meta_hdr.setSectionResizeMode(col, QHeaderView.ResizeMode.Interactive)
         self._meta_check_tree.setColumnWidth(0, 170)
         self._meta_check_tree.setColumnWidth(1, 110)
         self._meta_check_tree.setColumnWidth(2, 120)
@@ -812,8 +815,8 @@ class DatasetDetailView(QWidget):
         self._track_table_widths("dataset_meta", _meta_hdr)
         # No internal scrollbars: the card always fits every row; the page
         # canvas scrolls instead. Height is fitted in _fit_meta_tree_height.
-        self._meta_check_tree.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._meta_check_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._meta_check_tree.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._meta_check_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._meta_check_tree.setFixedHeight(80)
         body.addWidget(self._meta_check_tree)
         return card
@@ -1277,7 +1280,7 @@ class DatasetDetailView(QWidget):
         outer_lay.setSpacing(0)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         outer_lay.addWidget(scroll)
         page = QWidget()
         page.setObjectName("DetailResponseInner")
@@ -1428,7 +1431,7 @@ class DatasetDetailView(QWidget):
         except Exception:
             pass
 
-    def _staged_dir_or_none(self):  # type: ignore[no-untyped-def]
+    def _staged_dir_or_none(self):
         try:
             staged = self._dl_mgr.files_dir(self._pid)
             return staged if staged.exists() else None
@@ -1459,7 +1462,7 @@ class DatasetDetailView(QWidget):
         except Exception:
             pass
 
-    def _response_draft_path(self):  # type: ignore[no-untyped-def]
+    def _response_draft_path(self):
         try:
             return self._dl_mgr.dataset_dir(self._pid) / "response_draft.md"
         except Exception:
@@ -1541,7 +1544,9 @@ class DatasetDetailView(QWidget):
                 for i in range(self._response_list.count()):
                     item = self._response_list.item(i)
                     if item is not None:
-                        prev[str(item.data(Qt.UserRole) or "")] = item.checkState() == Qt.Checked
+                        prev[str(item.data(Qt.ItemDataRole.UserRole) or "")] = (
+                            item.checkState() == Qt.CheckState.Checked
+                        )
             self._response_list.blockSignals(True)
             self._response_list.clear()
             for s in self._response_sections or []:
@@ -1571,15 +1576,15 @@ class DatasetDetailView(QWidget):
                     item.setForeground(QColor(TEXT_DANGER))
                 elif level == "warning":
                     item.setForeground(QColor(TEXT_AMBER))
-                item.setData(Qt.UserRole, str(s.get("id") or label))
+                item.setData(Qt.ItemDataRole.UserRole, str(s.get("id") or label))
                 item.setToolTip(str(s.get("message") or "")[:400])
-                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 if keep_checks:
                     checked = prev.get(str(s.get("id") or label), bool(s.get("included")))
                 else:
                     checked = bool(s.get("included"))
                 s["included"] = checked
-                item.setCheckState(Qt.Checked if checked else Qt.Unchecked)
+                item.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
                 self._response_list.addItem(item)
         except Exception:
             pass
@@ -1636,7 +1641,9 @@ class DatasetDetailView(QWidget):
             for i in range(self._response_list.count()):
                 item = self._response_list.item(i)
                 if item is not None:
-                    states[str(item.data(Qt.UserRole) or "")] = item.checkState() == Qt.Checked
+                    states[str(item.data(Qt.ItemDataRole.UserRole) or "")] = (
+                        item.checkState() == Qt.CheckState.Checked
+                    )
             for s in self._response_sections or []:
                 sid = str(s.get("id") or "")
                 if sid in states:
@@ -1743,7 +1750,7 @@ class DatasetDetailView(QWidget):
                 t("detail.response.export_title"),
                 start,
                 t("detail.response.markdown_filter"),
-                options=QFileDialog.DontUseNativeDialog,
+                options=QFileDialog.Option.DontUseNativeDialog,
             )
         except Exception as exc:
             show_critical(
@@ -1933,14 +1940,16 @@ class DatasetDetailView(QWidget):
         # free space (the card carries stretch 1 in the sidebar layout).
         self._dataset_log.setMinimumHeight(320)
         self._dataset_log.setMaximumHeight(650)
-        self._dataset_log.setSizeAdjustPolicy(QAbstractItemView.AdjustToContentsOnFirstShow)
-        self._dataset_log.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        self._dataset_log.setSizeAdjustPolicy(
+            QAbstractItemView.SizeAdjustPolicy.AdjustToContentsOnFirstShow
+        )
+        self._dataset_log.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self._dataset_log.setWordWrap(True)
         self._dataset_log.setToolTip(t("detail.dataset_log.tip"))
         body.addWidget(self._dataset_log)
         return card
 
-    def _state(self):  # type: ignore[no-untyped-def]
+    def _state(self):
         """Open the workspace state.db (best-effort; returns None on failure)."""
         try:
             from curation.storage import open_state
@@ -2578,8 +2587,8 @@ class DatasetDetailView(QWidget):
         self._file_tree.collapsed.connect(self._on_tree_expansion_changed)
         # No internal scrollbars: the manifest card grows to fit every
         # visible row and the page canvas scrolls instead.
-        self._file_tree.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._file_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._file_tree.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._file_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         lay.addWidget(self._file_tree, 1)
         # Compat alias: old code paths referenced _file_table; keep a None
         # placeholder so stray attribute access fails loudly, not silently.
@@ -2985,7 +2994,7 @@ class DatasetDetailView(QWidget):
             foreground=badge_fg,
             border=BORDER_SUBTLE,
         )
-        badge_lbl.setAlignment(Qt.AlignCenter)
+        badge_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         badge_lbl.setFixedHeight(20)
         badge_lbl.setMinimumWidth(56)
         lay.addWidget(badge_lbl)
@@ -3065,7 +3074,7 @@ class DatasetDetailView(QWidget):
             pass
 
     def _populate_from_inventory(self) -> None:
-        self._all_file_rows: list[tuple[str, int, str, str]] = []
+        self._all_file_rows = []
         total = 0
         for e in self._inventory if isinstance(self._inventory, list) else []:
             if not isinstance(e, dict):
@@ -3508,7 +3517,7 @@ class DatasetDetailView(QWidget):
         self._progress.setVisible(False)
         self._load_meta_btn.setEnabled(True)
         self._inventory = inventory if isinstance(inventory, list) else []
-        self._metadata = metadata
+        self._metadata = metadata if isinstance(metadata, dict) else None
         self._curation = curation if isinstance(curation, dict) else {}
         self._version_diff = version_diff if isinstance(version_diff, dict) else {}
         self._changes_loaded = True
@@ -3517,14 +3526,13 @@ class DatasetDetailView(QWidget):
         self._guestbook = guestbook if isinstance(guestbook, dict) else None
         account = extra.get("account")
         self._account = account if isinstance(account, dict) else {}
-        self._versions = extra.get("versions") if isinstance(extra.get("versions"), list) else []
-        self._timestamps = (
-            extra.get("timestamps") if isinstance(extra.get("timestamps"), dict) else {}
-        )
+        versions = extra.get("versions")
+        self._versions = versions if isinstance(versions, list) else []
+        timestamps = extra.get("timestamps")
+        self._timestamps = timestamps if isinstance(timestamps, dict) else {}
+        review_submissions = extra.get("review_submissions")
         self._review_submissions = (
-            extra.get("review_submissions")
-            if isinstance(extra.get("review_submissions"), list)
-            else []
+            review_submissions if isinstance(review_submissions, list) else []
         )
         self._in_review = bool(extra.get("in_review", False))
         self._update_header_link(metadata)
@@ -4018,7 +4026,7 @@ class DatasetDetailView(QWidget):
         if isinstance(guestbook, dict) and guestbook.get("enabled") is False:
             guestbook = None
         dlg = DownloadApprovalDialog(quote, self, guestbook=guestbook, account=self._account)
-        if dlg.exec() != QDialog.Accepted:
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         guestbook_response = dlg.guestbook_response() if guestbook else None
         self._dl_btn.setEnabled(False)
@@ -4368,7 +4376,7 @@ class DatasetDetailView(QWidget):
                 t("detail.export.reports_title"),
                 start_dir,
                 t("detail.export.markdown_filter"),
-                options=QFileDialog.DontUseNativeDialog,
+                options=QFileDialog.Option.DontUseNativeDialog,
             )
         except Exception as exc:
             show_critical(

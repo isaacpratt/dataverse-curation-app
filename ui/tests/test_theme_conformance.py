@@ -369,7 +369,9 @@ def test_the_style_checker_accepts_theme_and_kit_rules(expression):
     """A stylesheet built from the theme or the kit is fine."""
     tree = ast.parse(f"value = {expression}\n")
     bindings = _module_bindings(tree)
-    assert _is_style_expression(tree.body[0].value, bindings)
+    statement = tree.body[0]
+    assert isinstance(statement, ast.Assign)
+    assert _is_style_expression(statement.value, bindings)
 
 
 # ---------------------------------------------------------------------------

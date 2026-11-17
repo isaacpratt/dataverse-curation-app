@@ -19,7 +19,9 @@ What this file pins down:
 """
 
 import re
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtWidgets import QLabel
 
@@ -79,7 +81,7 @@ def test_every_label_token_is_defined():
 def test_the_kit_builders_use_the_tokens(qapp):
     from ui import widgets
 
-    builders = {
+    builders: dict[Callable[..., Any], tuple[str, ...]] = {
         widgets.make_page_heading: ("HeadlineLG",),
         widgets.make_section_heading: ("HeadlineMD",),
         widgets.make_card_title: ("CardTitle",),

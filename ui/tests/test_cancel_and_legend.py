@@ -6,6 +6,8 @@ and the log page's severity colours need a visible, non-hover legend
 whose chips use the highlighter's exact fills (WYSIWYG).
 """
 
+from typing import Any
+
 import pytest
 from PySide6.QtWidgets import QLabel
 
@@ -54,7 +56,7 @@ def test_cancel_click_signals_worker_and_disables(det):
 
 
 def test_cancelled_handler_resets_action_row(det, monkeypatch):
-    logged = {}
+    logged: dict[str, Any] = {}
 
     def _record(action, notes="", details=None):
         logged.update(action=action, notes=notes, details=details or {})

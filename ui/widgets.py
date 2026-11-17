@@ -16,6 +16,7 @@ Intentional one-offs (NOT kit violations):
 """
 
 import textwrap
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QIcon
@@ -44,6 +45,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+if TYPE_CHECKING:
+    from PySide6.QtCore import QAbstractItemModel, QModelIndex, QPersistentModelIndex
 
 from ui.i18n import t
 from ui.theme import (
@@ -178,7 +182,7 @@ class AppButton(QPushButton):
         self.setObjectName(_BUTTON_OBJECTS.get(kind, "SecondaryButton"))
         if size in BUTTON_HEIGHTS:
             self.setFixedHeight(BUTTON_HEIGHTS[size])
-        self.setCursor(Qt.PointingHandCursor)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         if tip:
             self.setToolTip(tip)
 
@@ -198,7 +202,7 @@ def _section_is_user_resizable(header, logical: int) -> bool:
     user drag and would be persisted as one.
     """
     try:
-        if header.sectionResizeMode(logical) != QHeaderView.Interactive:
+        if header.sectionResizeMode(logical) != QHeaderView.ResizeMode.Interactive:
             return False
     except Exception:
         return True
@@ -222,11 +226,13 @@ class _HeaderTooltipFilter(QObject):
     """
 
     def eventFilter(self, obj, event) -> bool:
-        if event.type() == QEvent.ToolTip:
+        if event.type() == QEvent.Type.ToolTip:
             header = obj
             try:
                 index = header.logicalIndexAt(event.pos())
-                label = header.model().headerData(index, Qt.Horizontal, Qt.DisplayRole)
+                label = header.model().headerData(
+                    index, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole
+                )
             except Exception:
                 return False
             if index >= 0 and label:
@@ -264,8 +270,8 @@ class SortArrowHeaderView(QHeaderView):
     def __init__(self, orientation: Qt.Orientation, parent: QWidget | None = None) -> None:
         super().__init__(orientation, parent)
         self._arrow = QLabel(self)
-        self._arrow.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self._arrow.setFocusPolicy(Qt.NoFocus)
+        self._arrow.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._arrow.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._arrow.setMouseTracking(False)
         self._arrow.setStyleSheet(transparent_qss("QLabel"))
         self._arrow.hide()
@@ -282,7 +288,7 @@ class SortArrowHeaderView(QHeaderView):
     def paintEvent(self, event) -> None:
         section = self.sortIndicatorSection()
         active = (
-            self.orientation() == Qt.Horizontal
+            self.orientation() == Qt.Orientation.Horizontal
             and self.isSortIndicatorShown()
             and 0 <= section < self.count()
             and not self.isSectionHidden(section)
@@ -310,7 +316,7 @@ class SortArrowHeaderView(QHeaderView):
     def _sync_arrow(self) -> None:
         section = self.sortIndicatorSection()
         if (
-            self.orientation() != Qt.Horizontal
+            self.orientation() != Qt.Orientation.Horizontal
             or not self.isSortIndicatorShown()
             or not (0 <= section < self.count())
             or self.isSectionHidden(section)
@@ -321,7 +327,9 @@ class SortArrowHeaderView(QHeaderView):
             from ui.icons import icon
 
             name = (
-                "chevron-down" if self.sortIndicatorOrder() == Qt.DescendingOrder else "chevron-up"
+                "chevron-down"
+                if self.sortIndicatorOrder() == Qt.SortOrder.DescendingOrder
+                else "chevron-up"
             )
             pixmap = icon(name, color=ON_SURFACE_VARIANT, size=self._ARROW_PX).pixmap(
                 QSize(self._ARROW_PX, self._ARROW_PX)
@@ -357,9 +365,9 @@ class SelectionDelegate(QStyledItemDelegate):
     """
 
     def paint(self, painter, option, index) -> None:
-        if option.state & QStyle.State_HasFocus:
+        if option.state & QStyle.StateFlag.State_HasFocus:
             option = QStyleOptionViewItem(option)
-            option.state &= ~QStyle.State_HasFocus
+            option.state &= ~QStyle.StateFlag.State_HasFocus
         super().paint(painter, option, index)
 
 
@@ -407,7 +415,7 @@ class AppTable(QTableWidget):
         # The kit header draws the sort arrow itself (see
         # SortArrowHeaderView): the style's native indicator floats in
         # the seam above the header on this Qt build.
-        self.setHorizontalHeader(SortArrowHeaderView(Qt.Horizontal, self))
+        self.setHorizontalHeader(SortArrowHeaderView(Qt.Orientation.Horizontal, self))
         self.setHorizontalHeaderLabels(list(headers))
         hdr = self.horizontalHeader()
         hdr.setStretchLastSection(stretch_last)
@@ -416,21 +424,21 @@ class AppTable(QTableWidget):
         # A narrow section elides its label instead of clipping it: a
         # centred label clipped on both sides loses its first letter
         # ("SUBMITTING AUTHOR" read as "UBMITTING AUTHOR").
-        hdr.setTextElideMode(Qt.ElideRight)
+        hdr.setTextElideMode(Qt.TextElideMode.ElideRight)
         # Hovering an elided column gives the full title back.
         self._header_tip = _HeaderTooltipFilter(hdr)
         hdr.installEventFilter(self._header_tip)
         for i in range(len(headers)):
             width = (widths or {}).get(i, 120)
             self.setColumnWidth(i, width)
-            hdr.setSectionResizeMode(i, QHeaderView.Interactive)
+            hdr.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
         self.setShowGrid(False)
         # NoFrame: the 1px StyledPanel frame would inset every flush table
         # 1px inside its card (770px table in a 772px card); the card border
         # already provides the outline.
-        self.setFrameStyle(QFrame.NoFrame)
-        self.setSelectionBehavior(QTableWidget.SelectRows)
-        self.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.setFrameStyle(QFrame.Shape.NoFrame)
+        self.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.setAlternatingRowColors(False)
         self.setWordWrap(False)
         self.verticalHeader().setVisible(False)
@@ -438,7 +446,7 @@ class AppTable(QTableWidget):
         # StrongFocus (not NoFocus): the copy KeyPress filter is installed
         # on the table itself, so it only sees events when the table has
         # focus. Visual outline stays off via the stylesheet.
-        self.setFocusPolicy(Qt.StrongFocus)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setSortingEnabled(sortable)
         # One selection face app-wide, and no dotted focus box (dv-coj).
         self.setItemDelegate(SelectionDelegate(self))
@@ -566,14 +574,17 @@ class AppTable(QTableWidget):
                 if hdr.isSectionHidden(i):
                     continue
                 mode = hdr.sectionResizeMode(i)
-                if mode == QHeaderView.Stretch:
+                if mode == QHeaderView.ResizeMode.Stretch:
                     stretch_reserve += max(min_width, min(max_width, int(hdr.sectionSize(i))))
                     continue
-                if mode != QHeaderView.Interactive:
+                if mode != QHeaderView.ResizeMode.Interactive:
                     continue
                 hint = 0
                 try:
-                    hint = int(hdr.sectionSizeFromContents(i))
+                    # sectionSizeFromContents returns a QSize; the column
+                    # width is its width(). int(QSize) raises, so the
+                    # content hint used to be silently dropped (dv-hcg.28).
+                    hint = int(hdr.sectionSizeFromContents(i).width())
                 except Exception:
                     hint = 0
                 try:
@@ -719,6 +730,22 @@ class _BranchPainting:
 
     _BRANCH_PX = 14
 
+    # The mixin borrows three tree methods from the widget it is mixed
+    # into (AppTree -> QTreeView, AppTreeWidget -> QTreeWidget). They
+    # are declared for the type checker only: at runtime the real tree
+    # methods must win, and a stub in this class body would shadow them
+    # in the MRO.
+    if TYPE_CHECKING:
+
+        def model(self, /) -> QAbstractItemModel:
+            """Return the tree's model (QTreeView.model / QTreeWidget.model)."""
+
+        def isExpanded(self, index: QModelIndex | QPersistentModelIndex, /) -> bool:
+            """Whether the row at *index* is expanded."""
+
+        def indentation(self, /) -> int:
+            """Return the tree's indentation width in pixels."""
+
     def drawBranches(self, painter, rect, index) -> None:
         """Replace the style's branch painting with one chevron."""
         self._paint_branch(painter, rect, index)
@@ -778,14 +805,14 @@ class AppTree(_BranchPainting, QTreeView):
         flush: bool = True,
     ) -> None:
         super().__init__(parent)
-        self.setHeader(SortArrowHeaderView(Qt.Horizontal, self))
+        self.setHeader(SortArrowHeaderView(Qt.Orientation.Horizontal, self))
         self.setHeaderHidden(False)
         self.setUniformRowHeights(False)
         self.setExpandsOnDoubleClick(True)
         self.setAnimated(True)
         self.setIndentation(18)
         self.setRootIsDecorated(True)
-        self.setFrameStyle(QFrame.NoFrame)
+        self.setFrameStyle(QFrame.Shape.NoFrame)
         self.setStyleSheet(tree_style(flush=flush, row_height=row_height))
         # One selection face app-wide, and no dotted focus box (dv-coj).
         self.setItemDelegate(SelectionDelegate(self))
@@ -794,7 +821,7 @@ class AppTree(_BranchPainting, QTreeView):
         hdr.setSectionsMovable(True)
         hdr.setSectionsClickable(True)
         # A narrow section elides its label instead of clipping it.
-        hdr.setTextElideMode(Qt.ElideRight)
+        hdr.setTextElideMode(Qt.TextElideMode.ElideRight)
         # Hovering an elided column gives the full title back.
         self._header_tip = _HeaderTooltipFilter(hdr)
         hdr.installEventFilter(self._header_tip)
@@ -872,13 +899,13 @@ class AppTreeWidget(_BranchPainting, QTreeWidget):
         flush: bool = False,
     ) -> None:
         super().__init__(parent)
-        self.setHeader(SortArrowHeaderView(Qt.Horizontal, self))
+        self.setHeader(SortArrowHeaderView(Qt.Orientation.Horizontal, self))
         self.setUniformRowHeights(False)
         self.setExpandsOnDoubleClick(True)
         self.setAnimated(True)
         self.setIndentation(18)
         self.setRootIsDecorated(True)
-        self.setFrameStyle(QFrame.NoFrame)
+        self.setFrameStyle(QFrame.Shape.NoFrame)
         self.setStyleSheet(tree_style(flush=flush, row_height=row_height))
         # One selection face app-wide, and no dotted focus box (dv-coj).
         self.setItemDelegate(SelectionDelegate(self))
@@ -887,7 +914,7 @@ class AppTreeWidget(_BranchPainting, QTreeWidget):
         hdr.setSectionsMovable(True)
         hdr.setSectionsClickable(True)
         # A narrow section elides its label instead of clipping it.
-        hdr.setTextElideMode(Qt.ElideRight)
+        hdr.setTextElideMode(Qt.TextElideMode.ElideRight)
         # Hovering an elided column gives the full title back.
         self._header_tip = _HeaderTooltipFilter(hdr)
         hdr.installEventFilter(self._header_tip)
@@ -1149,7 +1176,7 @@ class _ElidedChipButton(QPushButton):
 
     def _apply_elide(self) -> None:
         width = max(0, self.width() - self._TEXT_INSET)
-        shown = self.fontMetrics().elidedText(self._full_text, Qt.ElideRight, width)
+        shown = self.fontMetrics().elidedText(self._full_text, Qt.TextElideMode.ElideRight, width)
         if shown != self._shown_text:
             self._shown_text = shown
             self.setText(shown)
@@ -1179,9 +1206,9 @@ def make_split_chip(
     lay.setSpacing(0)
 
     open_btn = _ElidedChipButton(label)
-    open_btn.setCursor(Qt.PointingHandCursor)
+    open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
     open_btn.setToolTip(tip or label)
-    open_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+    open_btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
     open_btn.setFixedHeight(32)
     # No max width: the label asks for its full title (sizeHint) and only
     # elides when the chip row runs out of width (dv-dvu). The old 240px
@@ -1193,7 +1220,7 @@ def make_split_chip(
     lay.addWidget(open_btn)
 
     close_btn = QPushButton()
-    close_btn.setCursor(Qt.PointingHandCursor)
+    close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
     close_btn.setToolTip(close_tip or t("main.chip_close", label=label))
     close_btn.setAccessibleName(close_tip or t("main.chip_close", label=label))
     close_btn.setFixedSize(32, 32)
@@ -1367,7 +1394,7 @@ class ElidedLabel(QLabel):
         text: str = "",
         parent: QWidget | None = None,
         *,
-        mode: "Qt.ElideMode" = Qt.ElideRight,
+        mode: "Qt.TextElideMode" = Qt.TextElideMode.ElideRight,
         object_name: str = "",
     ) -> None:
         super().__init__(parent)
@@ -1376,7 +1403,7 @@ class ElidedLabel(QLabel):
         self._mode = mode
         # Ignored: the widget may be squeezed; the layout must not reserve
         # the width of the full string.
-        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.setMinimumWidth(0)
         if object_name:
             # Set before the first setText: the elide width is measured
@@ -1409,7 +1436,7 @@ class ElidedLabel(QLabel):
 def make_elided_label(
     text: str = "",
     *,
-    mode: "Qt.ElideMode" = Qt.ElideRight,
+    mode: "Qt.TextElideMode" = Qt.TextElideMode.ElideRight,
     object_name: str = "",
     parent: QWidget | None = None,
 ) -> ElidedLabel:
@@ -1522,7 +1549,7 @@ def add_info_tip(header_layout, *paragraphs: str, name: str = "") -> QToolButton
     # the app's own hit-target floor.
     btn.setFixedSize(32, 32)
     btn.setAutoRaise(True)
-    btn.setCursor(Qt.WhatsThisCursor)
+    btn.setCursor(Qt.CursorShape.WhatsThisCursor)
     btn.setToolTip(tip)
     btn.setAccessibleName(t("common.about_named", name=name) if name else t("common.section_help"))
     btn.setAccessibleDescription(tip)
@@ -1575,7 +1602,7 @@ def make_line_edit(
     field.setPlaceholderText(placeholder)
     field.setFixedHeight(height)
     if password:
-        field.setEchoMode(QLineEdit.Password)
+        field.setEchoMode(QLineEdit.EchoMode.Password)
     field.setStyleSheet(
         f"QLineEdit#SearchField {{ background: {SURFACE_CARD}; "
         f"border: 1px solid {BORDER_CONTROL}; border-radius: 8px; "
@@ -1600,21 +1627,21 @@ class _NoWheelCombo(QComboBox):
         super().__init__(parent)
         self._wheel_armed = False
 
-    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+    def mousePressEvent(self, event) -> None:
         self._wheel_armed = True
         try:
             super().mousePressEvent(event)
         except Exception:
             pass
 
-    def focusOutEvent(self, event) -> None:  # type: ignore[override]
+    def focusOutEvent(self, event) -> None:
         self._wheel_armed = False
         try:
             super().focusOutEvent(event)
         except Exception:
             pass
 
-    def wheelEvent(self, event) -> None:  # type: ignore[override]
+    def wheelEvent(self, event) -> None:
         try:
             if not self._wheel_armed:
                 event.ignore()
@@ -1643,7 +1670,7 @@ def make_combo(
     combo = _NoWheelCombo(parent)
     combo.setFixedHeight(height)
     combo.setMinimumWidth(min_width)
-    combo.setCursor(Qt.PointingHandCursor)
+    combo.setCursor(Qt.CursorShape.PointingHandCursor)
     if tip:
         combo.setToolTip(tip)
     for entry in items or []:
@@ -1690,7 +1717,10 @@ class PaneFooter(QFrame):
         layout.setSpacing(8)
         self.status = QLabel("")
         self.status.setWordWrap(True)
-        self.status.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.status.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
         self.status.setObjectName("CaptionSM")
         layout.addWidget(self.status, 1)
         self.dirty_chip = QLabel(t("common.dirty_chip"))
@@ -1742,7 +1772,7 @@ class WorkflowRail(QWidget):
             btn = QPushButton("")
             btn.setObjectName("WorkflowStep")
             btn.setFlat(True)
-            btn.setCursor(Qt.PointingHandCursor)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setMinimumWidth(0)
             btn.clicked.connect(lambda _c, k=key: self.stepClicked.emit(k))
             layout.addWidget(btn)
@@ -1756,7 +1786,7 @@ class WorkflowRail(QWidget):
         self.hint.setObjectName("WorkflowHint")
         self.hint.setWordWrap(False)
         self.hint.setMinimumWidth(0)
-        self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.hint.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.hint.setObjectName("CaptionSM")
         layout.addWidget(self.hint)
 

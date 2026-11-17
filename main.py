@@ -7,6 +7,7 @@ dataset directory and writes a JSON report (see docs/html/development.html).
 import argparse
 import sys
 from pathlib import Path
+from types import TracebackType
 
 from ui.i18n import t
 
@@ -246,7 +247,9 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
         return app.exec()
 
     # Global crash guard — show a copyable dialog instead of silently exiting
-    def _excepthook(exc_type, exc, tb):
+    def _excepthook(
+        exc_type: type[BaseException], exc: BaseException, tb: TracebackType | None
+    ) -> None:
         import traceback
 
         msg = "".join(traceback.format_exception(exc_type, exc, tb))

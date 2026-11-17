@@ -30,19 +30,19 @@ def test_tab_focus_paints_keyboard_only_focus(qapp, qtbot):
     for _ in range(5):
         qapp.processEvents()
 
-    qtbot.mouseClick(first, Qt.LeftButton)
+    qtbot.mouseClick(first, Qt.MouseButton.LeftButton)
     qtbot.wait(50)
     assert first.hasFocus(), "the click should focus the first button"
     assert first.property("focusVisible") in (None, "false"), (
         "a mouse click must never paint the keyboard focus tint"
     )
 
-    qtbot.keyClick(first, Qt.Key_Tab)
+    qtbot.keyClick(first, Qt.Key.Key_Tab)
     qtbot.wait(50)
     assert second.hasFocus(), "Tab should move focus to the next button"
     assert second.property("focusVisible") == "true", "keyboard arrival paints the focus tint"
 
-    qtbot.mouseClick(second, Qt.LeftButton)
+    qtbot.mouseClick(second, Qt.MouseButton.LeftButton)
     qtbot.wait(50)
     assert second.property("focusVisible") in (None, "false"), (
         "a mouse click must drop the keyboard focus tint"
@@ -59,10 +59,10 @@ def test_header_click_sorts_the_column(qapp, qtbot):
     for _ in range(5):
         qapp.processEvents()
     header = table.horizontalHeader()
-    qtbot.mouseClick(header.viewport(), Qt.LeftButton)
+    qtbot.mouseClick(header.viewport(), Qt.MouseButton.LeftButton)
     qtbot.wait(50)
     first = header.sortIndicatorSection()
-    qtbot.mouseClick(header.viewport(), Qt.LeftButton)
+    qtbot.mouseClick(header.viewport(), Qt.MouseButton.LeftButton)
     qtbot.wait(50)
     assert header.sortIndicatorSection() == first, "a header click must engage the sort indicator"
 
@@ -101,16 +101,21 @@ def test_header_label_and_tooltip_contract(qapp, qtbot):
         qapp.processEvents()
     model = table.horizontalHeader().model()
     labels = [
-        model.headerData(i, Qt.Horizontal, Qt.DisplayRole) for i in range(table.columnCount())
+        model.headerData(i, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole)
+        for i in range(table.columnCount())
     ]
     assert labels == ["Dataset Title", "Persistent ID"], (
         "the stored label must equal the painted (sentence-case) label"
     )
     header = table.horizontalHeader()
-    assert header.textElideMode() == Qt.ElideRight, (
+    assert header.textElideMode() == Qt.TextElideMode.ElideRight, (
         "a narrow section must elide, never clip mid-letter"
     )
     table.setColumnWidth(0, 48)
     qapp.processEvents()
-    shown = table.horizontalHeader().model().headerData(0, Qt.Horizontal, Qt.DisplayRole)
+    shown = (
+        table.horizontalHeader()
+        .model()
+        .headerData(0, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole)
+    )
     assert shown == "Dataset Title", "elision must not mutate stored data"

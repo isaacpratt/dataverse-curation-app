@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import copy
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -56,6 +56,9 @@ from ui.widgets import (
     transparent_surface_qss,
 )
 
+if TYPE_CHECKING:
+    from ui.workers import MetadataBlocksWorker
+
 _LEVELS = ["required", "optional", "unchecked"]
 
 
@@ -82,7 +85,8 @@ class ContentRuleDialog(QDialog):
         lvl = str(rule.get("level") or "required")
         self._level.setCurrentIndex(0 if lvl != "optional" else 1)
         form.addRow(t("review.rule_dialog.level"), self._level)
-        scope = rule.get("scope") if isinstance(rule.get("scope"), list) else ["filenames"]
+        raw_scope = rule.get("scope")
+        scope: list[Any] = raw_scope if isinstance(raw_scope, list) else ["filenames"]
         self._cb_files = make_checkbox(t("review.rule_dialog.scope_files"))
         self._cb_meta = make_checkbox(t("review.rule_dialog.scope_metadata"))
         self._cb_content = make_checkbox(t("review.rule_dialog.scope_content"))
@@ -121,7 +125,9 @@ class ContentRuleDialog(QDialog):
         self._template = make_multiline_input(fixed=False, min_height=120)
         self._template.setPlainText(str(rule.get("response_template") or ""))
         lay.addWidget(self._template, 1)
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
         lay.addWidget(btns)
@@ -173,7 +179,7 @@ class ReviewConfigView(QWidget):
     def __init__(self, config: Config, parent=None) -> None:
         super().__init__(parent)
         self._config = config
-        self._worker = None
+        self._worker: MetadataBlocksWorker | None = None
         try:
             from curation import review_rules as _rr
 
@@ -207,7 +213,7 @@ class ReviewConfigView(QWidget):
 
         outer.addWidget(self._build_topbar())
 
-        split = QSplitter(Qt.Horizontal)
+        split = QSplitter(Qt.Orientation.Horizontal)
         split.addWidget(self._build_rules_card())
         split.addWidget(self._build_templates_card())
         split.setStretchFactor(0, 3)
@@ -258,7 +264,7 @@ class ReviewConfigView(QWidget):
         except Exception:
             pass
         if getattr(self, "_current", "") in (self._rulesets or {}):
-            return self._current  # type: ignore[no-any-return]
+            return str(self._current)
         if "mcmaster-default" in (self._rulesets or {}):
             return "mcmaster-default"
         try:
@@ -403,8 +409,8 @@ class ReviewConfigView(QWidget):
         # sits edge-to-edge inside the card, header meeting the top bar).
         _fld_header = self._field_tree.header()
         _fld_header.setStretchLastSection(False)
-        _fld_header.setSectionResizeMode(0, QHeaderView.Stretch)
-        _fld_header.setSectionResizeMode(1, QHeaderView.Interactive)
+        _fld_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        _fld_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         self._field_tree.setColumnWidth(1, 150)
         # Remember the user's column widths/order across sessions. The
         # controller owns the persistence: it saves user gestures only.
@@ -502,12 +508,14 @@ class ReviewConfigView(QWidget):
                 from curation.review_rules import FIELD_CATALOG
             except Exception:
                 FIELD_CATALOG = []  # noqa: N806 - fallback for the upstream constant import above
-            seen = {(str(f.get("block") or "citation"), str(f.get("field") or "")) for f in live}
+            seen_live = {
+                (str(f.get("block") or "citation"), str(f.get("field") or "")) for f in live
+            }
             fallback = [dict(f) for f in FIELD_CATALOG if isinstance(f, dict) and f.get("field")]
             for f in fallback:
                 key = (str(f.get("block") or "citation"), str(f.get("field") or ""))
-                if key not in seen:
-                    seen.add(key)
+                if key not in seen_live:
+                    seen_live.add(key)
                     live.append(f)
             base = live
         else:
@@ -518,7 +526,11 @@ class ReviewConfigView(QWidget):
             except Exception:
                 base = []
         # Union with fields referenced by any ruleset so custom fields persist.
-        seen = {(f.get("block"), f.get("field")) for f in base}
+        # The key space is the normalized one the loop below builds, so a
+        # catalog entry and a rule that name the same field agree (dv-hcg.28).
+        seen: set[tuple[str, str]] = {
+            (str(f.get("block") or "citation"), str(f.get("field") or "")) for f in base
+        }
         for rs in (self._rulesets or {}).values():
             for fr in rs.get("field_rules") or []:
                 if not isinstance(fr, dict):
@@ -663,15 +675,19 @@ class ReviewConfigView(QWidget):
             tree.header().blockSignals(True)
             tree.clear()
             n_fields = 0
+
             # Citation block always first; the rest alphabetical by
             # display name (group key match is case-insensitive).
-            ordered = sorted(
-                groups,
-                key=lambda b: (
+            def _group_sort_key(b: str) -> tuple[int, str]:
+                # A named function, not a lambda: a lambda parameter is
+                # untyped, so the key came back as Any and the lookup
+                # lost its type (dv-hcg.28).
+                return (
                     0 if str(b or "").lower() == "citation" else 1,
                     group_labels.get(b, b).lower(),
-                ),
-            )
+                )
+
+            ordered = sorted(groups, key=_group_sort_key)
             for block in ordered:
                 label = group_labels.get(block, block)
                 rows = sorted(
@@ -684,7 +700,7 @@ class ReviewConfigView(QWidget):
                     top.setFont(0, fnt)
                 except Exception:
                     pass
-                top.setData(0, Qt.UserRole, {"kind": "block", "block": block})
+                top.setData(0, Qt.ItemDataRole.UserRole, {"kind": "block", "block": block})
                 top.setToolTip(
                     0,
                     t(
@@ -720,7 +736,7 @@ class ReviewConfigView(QWidget):
                         )
                         + (f"\n{e['req']}" if e["req"] else ""),
                     )
-                    child.setData(0, Qt.UserRole, {"kind": "field"})
+                    child.setData(0, Qt.ItemDataRole.UserRole, {"kind": "field"})
                     combo = make_combo(
                         [
                             (t("review.level_required"), "required"),
@@ -761,7 +777,7 @@ class ReviewConfigView(QWidget):
                         "",
                     ) or (prefix[:1].upper() + prefix[1:])
                     group = QTreeWidgetItem([parent_label])
-                    group.setData(0, Qt.UserRole, {"kind": "group"})
+                    group.setData(0, Qt.ItemDataRole.UserRole, {"kind": "group"})
                     try:
                         font = group.font(0)
                         font.setBold(True)
@@ -829,9 +845,11 @@ class ReviewConfigView(QWidget):
             tree = self._field_tree
             for bi in range(tree.topLevelItemCount()):
                 top = tree.topLevelItem(bi)
+                if top is None:
+                    continue
                 for ci in range(top.childCount()):
                     child = top.child(ci)
-                    if tree.itemWidget(child, 1) is combo:
+                    if child is not None and tree.itemWidget(child, 1) is combo:
                         return child
         except Exception:
             pass
@@ -840,7 +858,8 @@ class ReviewConfigView(QWidget):
     def _blocks_any_collapsed(self) -> bool:
         try:
             for bi in range(self._field_tree.topLevelItemCount()):
-                if not self._field_tree.topLevelItem(bi).isExpanded():
+                top = self._field_tree.topLevelItem(bi)
+                if top is not None and not top.isExpanded():
                     return True
             return False
         except Exception:
@@ -925,7 +944,7 @@ class ReviewConfigView(QWidget):
                         scope=scope,
                     )
                 )
-                item.setData(Qt.UserRole, str(cr.get("id") or ""))
+                item.setData(Qt.ItemDataRole.UserRole, str(cr.get("id") or ""))
                 item.setToolTip(
                     t(
                         "review.content_item_tip",
@@ -1080,7 +1099,7 @@ class ReviewConfigView(QWidget):
     def _selected_content_rule(self) -> dict[str, Any] | None:
         try:
             item = self._content_list.currentItem()
-            rid = item.data(Qt.UserRole) if item else ""
+            rid = item.data(Qt.ItemDataRole.UserRole) if item else ""
             for cr in self._current_ruleset().get("content_rules") or []:
                 if isinstance(cr, dict) and str(cr.get("id")) == str(rid):
                     return cr
@@ -1193,7 +1212,7 @@ class ReviewConfigView(QWidget):
 
     def _on_content_add(self) -> None:
         dlg = ContentRuleDialog(self)
-        if dlg.exec() != QDialog.Accepted:
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         rule = dlg.result_rule()
         if rule is None:
@@ -1228,7 +1247,7 @@ class ReviewConfigView(QWidget):
             )
             return
         dlg = ContentRuleDialog(self, cr)
-        if dlg.exec() != QDialog.Accepted:
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         updated = dlg.result_rule(rule_id=str(cr.get("id") or ""))
         if updated is None:
@@ -1423,14 +1442,15 @@ class ReviewConfigView(QWidget):
             from ui.workers import MetadataBlocksWorker
 
             ws = getattr(getattr(self._config, "app", None), "workspace", Path.home())
-            self._worker = MetadataBlocksWorker(
+            worker = MetadataBlocksWorker(
                 self._config.dataverse.base_url, self._config.dataverse.api_token, Path(ws), self
             )
-            self._worker.finished.connect(self._on_fields_finished)
-            self._worker.error.connect(self._on_fields_error)
-            self._worker.finished.connect(self._worker.deleteLater)
-            self._worker.error.connect(self._worker.deleteLater)
-            self._worker.start()
+            worker.finished.connect(self._on_fields_finished)
+            worker.error.connect(self._on_fields_error)
+            worker.finished.connect(worker.deleteLater)
+            worker.error.connect(worker.deleteLater)
+            self._worker = worker
+            worker.start()
         except Exception as exc:
             self._fields_btn.setEnabled(True)
             show_critical(

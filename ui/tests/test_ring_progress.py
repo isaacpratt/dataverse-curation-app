@@ -5,6 +5,7 @@ tests use the session's offscreen qapp fixture.
 """
 
 import os
+from typing import Any
 
 import pytest
 
@@ -51,7 +52,10 @@ def test_ease_step_clamps_inputs():
     assert ease_step(-5.0, 0.5) == pytest.approx(0.15)
     # A target above 1 clamps to 1.
     assert ease_step(0.5, 5.0) == pytest.approx(0.65)
-    assert ease_step("x", 1.0) == 0.0
+    # A non-numeric input is tolerated: ease_step returns 0.0 instead of
+    # raising (the defensive path the widget relies on).
+    not_a_number: Any = "x"
+    assert ease_step(not_a_number, 1.0) == 0.0
 
 
 def test_phase_fraction_spans():

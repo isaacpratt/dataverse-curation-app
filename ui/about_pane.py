@@ -166,7 +166,7 @@ class AboutPane(QWidget):
                 muted=TEXT_SUBTLE,
             )
         )
-        title.setTextFormat(Qt.RichText)
+        title.setTextFormat(Qt.TextFormat.RichText)
         # The product title wears the theme's HeadlineMD token (16px
         # semibold) - the app's card-title look, with no inline style.
         title.setObjectName("HeadlineMD")
@@ -183,12 +183,12 @@ class AboutPane(QWidget):
 
             pix = QPixmap(app_icon_path())
             if not pix.isNull():
-                mark.setPixmap(pix.scaledToHeight(64, Qt.SmoothTransformation))
+                mark.setPixmap(pix.scaledToHeight(64, Qt.TransformationMode.SmoothTransformation))
         except Exception:
             pass
         mark.setStyleSheet(transparent_surface_qss("DocentMark"))
         mark.setFixedWidth(64)
-        head_row.addWidget(mark, 0, Qt.AlignTop)
+        head_row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
         head_row.addWidget(title, 1)
         body.addLayout(head_row)
 
@@ -202,7 +202,7 @@ class AboutPane(QWidget):
         blurb = make_body_label(t("about.blurb"))
         left.addWidget(blurb)
         bullets = make_body_label(t("about.bullets"))
-        bullets.setTextFormat(Qt.RichText)
+        bullets.setTextFormat(Qt.TextFormat.RichText)
         left.addWidget(bullets)
         cols.addLayout(left, 3)
 
@@ -212,7 +212,7 @@ class AboutPane(QWidget):
         diag_head.setObjectName("LabelMD")
         right.addWidget(diag_head)
         diag = QLabel(_diag_text())
-        diag.setTextFormat(Qt.PlainText)
+        diag.setTextFormat(Qt.TextFormat.PlainText)
         diag.setWordWrap(True)
         diag.setObjectName("MonoSM")
         right.addWidget(diag)

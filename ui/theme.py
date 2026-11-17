@@ -1490,16 +1490,16 @@ def _install_interaction_tracking(app) -> None:  # noqa: C901 - grandfathered; c
 
         state = {"kbd": False}
         nav_keys = {
-            Qt.Key_Tab,
-            Qt.Key_Backtab,
-            Qt.Key_Left,
-            Qt.Key_Right,
-            Qt.Key_Up,
-            Qt.Key_Down,
-            Qt.Key_Home,
-            Qt.Key_End,
-            Qt.Key_PageUp,
-            Qt.Key_PageDown,
+            Qt.Key.Key_Tab,
+            Qt.Key.Key_Backtab,
+            Qt.Key.Key_Left,
+            Qt.Key.Key_Right,
+            Qt.Key.Key_Up,
+            Qt.Key.Key_Down,
+            Qt.Key.Key_Home,
+            Qt.Key.Key_End,
+            Qt.Key.Key_PageUp,
+            Qt.Key.Key_PageDown,
         }
 
         def _paint(w, on: bool) -> None:
@@ -1520,16 +1520,16 @@ def _install_interaction_tracking(app) -> None:  # noqa: C901 - grandfathered; c
             def eventFilter(self, obj, event):
                 try:
                     t = event.type()
-                    if t == QEvent.Enter:
+                    if t == QEvent.Type.Enter:
                         if isinstance(obj, QAbstractButton):
                             if obj.isEnabled():
-                                obj.setCursor(Qt.PointingHandCursor)
+                                obj.setCursor(Qt.CursorShape.PointingHandCursor)
                             else:
                                 obj.unsetCursor()
-                    elif t == QEvent.KeyPress:
+                    elif t == QEvent.Type.KeyPress:
                         if event.key() in nav_keys:
                             state["kbd"] = True
-                    elif t == QEvent.MouseButtonPress:
+                    elif t == QEvent.Type.MouseButtonPress:
                         state["kbd"] = False
                         _paint(app.focusWidget(), False)
                 except Exception:
@@ -1574,13 +1574,15 @@ def selectable_labels(root) -> None:
             try:
                 flags = lbl.textInteractionFlags()
                 lbl.setTextInteractionFlags(
-                    flags | Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+                    flags
+                    | Qt.TextInteractionFlag.TextSelectableByMouse
+                    | Qt.TextInteractionFlag.TextSelectableByKeyboard
                 )
                 pal = lbl.palette()
-                pal.setColor(QPalette.Base, Qt.transparent)
-                pal.setColor(QPalette.Window, Qt.transparent)
-                pal.setColor(QPalette.Highlight, QColor(PRIMARY_FIXED))
-                pal.setColor(QPalette.HighlightedText, QColor(ON_SURFACE))
+                pal.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.transparent)
+                pal.setColor(QPalette.ColorRole.Window, Qt.GlobalColor.transparent)
+                pal.setColor(QPalette.ColorRole.Highlight, QColor(PRIMARY_FIXED))
+                pal.setColor(QPalette.ColorRole.HighlightedText, QColor(ON_SURFACE))
                 lbl.setPalette(pal)
             except Exception:
                 continue
@@ -1594,15 +1596,15 @@ def enable_table_copy(table) -> None:
         from PySide6.QtCore import QEvent, QObject, Qt
         from PySide6.QtWidgets import QApplication, QTableWidget
 
-        table.setSelectionMode(QTableWidget.ExtendedSelection)
+        table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
 
         class _CopyFilter(QObject):
             def eventFilter(self, _obj, event):
                 try:
-                    if event.type() == QEvent.KeyPress and event.matches(Qt.Key_Copy):
+                    if event.type() == QEvent.Type.KeyPress and event.matches(Qt.Key.Key_Copy):
                         ranges = table.selectedRanges()
                         if ranges:
-                            rows = set()
+                            rows: set[int] = set()
                             for rng in ranges:
                                 rows.update(range(rng.topRow(), rng.bottomRow() + 1))
                             lines = []
@@ -1641,7 +1643,7 @@ def enable_list_copy(list_widget) -> None:
         class _ListCopyFilter(QObject):
             def eventFilter(self, _obj, event):
                 try:
-                    if event.type() == QEvent.KeyPress and event.matches(Qt.Key_Copy):
+                    if event.type() == QEvent.Type.KeyPress and event.matches(Qt.Key.Key_Copy):
                         items = list_widget.selectedItems()
                         if items:
                             QApplication.clipboard().setText("\n".join(i.text() for i in items))

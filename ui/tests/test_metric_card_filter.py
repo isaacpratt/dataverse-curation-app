@@ -16,7 +16,7 @@ def test_metric_card_children_are_mouse_transparent(win):
     dash = win._dashboard
     for card in dash._metric_cards:
         for child in card.findChildren(QLabel):
-            assert child.testAttribute(Qt.WA_TransparentForMouseEvents), (
+            assert child.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents), (
                 f"{child.text()!r} would swallow the click"
             )
 
@@ -33,9 +33,9 @@ def test_press_on_the_card_applies_its_filter(win, monkeypatch):
         QEvent.Type.MouseButtonPress,
         QPointF(5, 5),
         QPointF(5, 5),
-        Qt.LeftButton,
-        Qt.LeftButton,
-        Qt.NoModifier,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
     )
     handled = dash.eventFilter(card, press)
     assert handled is True

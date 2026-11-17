@@ -35,7 +35,10 @@ class _ObjectPayloadWorker(QThread):
 
 
 class _UnhashableReport:
-    __hash__ = None
+    # __hash__ = None makes instances unhashable: the registry must not
+    # depend on the payload being hashable. mypy needs the ignore because
+    # object.__hash__ is typed as Callable[[], int] (dv-hcg.28).
+    __hash__ = None  # type: ignore[assignment]
 
 
 def _run_and_flush(qapp, worker):

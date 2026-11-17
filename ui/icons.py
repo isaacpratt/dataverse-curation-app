@@ -70,7 +70,7 @@ def icon(name: str, color: str | None = None, size: int = 16) -> QIcon:
             tinted = text.replace("currentColor", color or INK)
             renderer = QSvgRenderer(bytearray(tinted.encode("utf-8")))
             pixmap = QPixmap(max(1, int(size)), max(1, int(size)))
-            pixmap.fill(Qt.transparent)
+            pixmap.fill(Qt.GlobalColor.transparent)
             painter = QPainter(pixmap)
             try:
                 renderer.render(painter)
@@ -95,7 +95,7 @@ def icon_label(name: str, size: int = 16, color: str | None = None) -> QLabel:
     try:
         lbl.setPixmap(icon(name, color=color, size=size).pixmap(QSize(int(size), int(size))))
         lbl.setFixedSize(int(size) + 4, int(size) + 4)
-        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setStyleSheet(transparent_qss("QLabel"))
     except Exception:
         pass
