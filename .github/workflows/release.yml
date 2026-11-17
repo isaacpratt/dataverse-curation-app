@@ -115,8 +115,10 @@ jobs:
           & $vpk download github -o dist/releases --repoUrl "https://github.com/${{ github.repository }}" --token "${{ secrets.GITHUB_TOKEN }}" --channel "$env:CHANNEL" @preArgs
           if ($LASTEXITCODE -ne 0) {
             Write-Output "::warning::no previous $env:CHANNEL release to use as a delta base (first release?) - packing full package only"
-          } else {
+          } elseif (Test-Path "dist/releases") {
             Get-ChildItem dist/releases -Filter "*.nupkg" | ForEach-Object { Write-Output "delta base: $($_.Name)" }
+          } else {
+            Write-Output "no previous release downloaded; packing full package only"
           }
 
       # Same entry point a developer uses, so CI packs exactly what you pack.
