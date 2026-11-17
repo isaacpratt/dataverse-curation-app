@@ -517,7 +517,7 @@ class DatasetDetailView(QWidget):
         # Sidebar show/hide toggle — the one layout control for the sidebar;
         # the rail is navigation, this is chrome (dv-6wb).
         self._sidebar_toggle_btn = make_action_button(
-            "", kind="ghost", size="sm"
+            "", kind="secondary", size="md"
         )
         try:
             from ui.icons import icon as _side_icon
@@ -2373,6 +2373,11 @@ class DatasetDetailView(QWidget):
                 return
             self._sidebar_collapsed = collapsed
             self._side_scroll.setVisible(not collapsed)
+            try:
+                from ui.icons import icon as _side_icon
+                self._sidebar_toggle_btn.setIcon(_side_icon("chevron-left" if collapsed else "chevron-right"))
+            except Exception:
+                pass
             self._sidebar_toggle_btn.setToolTip(
                 t("detail.sidebar.collapse_tip") if not collapsed
                 else t("detail.sidebar.show_action")
