@@ -124,16 +124,22 @@ jobs:
       # Same entry point a developer uses, so CI packs exactly what you pack.
       - name: Pack
         shell: pwsh
-        run: uv run python tools/pack_app.py --no-replace --version "$env:VERSION"
+        run: uv run python tools/pack_app.py --no-replace --version "$env:VERSION" --channel "$env:CHANNEL"
+
+      - name: Verify the pack
+        shell: pwsh
+        run: uv run python tools/check_pack.py --version "$env:VERSION" --channel "$env:CHANNEL"
 
       - name: SHA256SUMS
         shell: pwsh
         run: |
+          $setup = Get-ChildItem dist/releases -Filter "DataverseDocent-$env:CHANNEL-Setup.exe" | Select-Object -First 1
           $current = "-$env:VERSION-"
           Push-Location dist/releases
+          if ($setup) { "" } else { throw "no $env:CHANNEL Setup.exe in dist/releases" }
           Get-ChildItem -File | Where-Object {
-            $_.Name -eq 'DataverseDocent-win-Setup.exe' -or
-            $_.Name -eq 'DataverseDocent-win-Portable.zip' -or
+            $_.Name -eq $setup.Name -or
+            $_.Name -eq "DataverseDocent-$env:CHANNEL-Portable.zip" -or
             $_.Name.Contains($current)
           } | ForEach-Object {
             "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
@@ -151,7 +157,9 @@ jobs:
           $vpk = Join-Path $env:USERPROFILE ".dotnet\tools\vpk.exe"
           & $vpk upload github -o dist/releases --repoUrl "https://github.com/${{ github.repository }}" --token "${{ secrets.GITHUB_TOKEN }}" --publish --channel "$env:CHANNEL" --releaseName "Dataverse Docent $env:VERSION" --tag "$env:TAG" --targetCommitish "${{ github.sha }}" @preArgs
           if ($LASTEXITCODE -ne 0) { throw "vpk upload failed ($LASTEXITCODE)" }
-          gh release upload "$env:TAG" dist/releases/DataverseDocent-win-Portable.zip dist/releases/SHA256SUMS.txt --clobber
+          # vpk attaches Setup.exe, the portable zip and the nupkg from the pack's
+          # assets file; only SHA256SUMS is attached by hand.
+          gh release upload "$env:TAG" dist/releases/SHA256SUMS.txt --clobber
 
       - name: Job summary
         shell: pwsh

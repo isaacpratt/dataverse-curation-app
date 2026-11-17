@@ -43,6 +43,10 @@ MAIN_EXE = "DataverseDocent.exe"
 CHANNEL = "win"
 #: The build carries a CPython + compiled extensions for this arch only.
 RUNTIME = "win-x64"
+#: Channels a release may use: stable, and the prerelease feed. Whitelist,
+#: because vpk names every asset after the channel and a typo silently
+#: produces a release the updater can never see.
+CHANNELS = ("win", "win-beta")
 ICON = ROOT / "ui" / "assets" / "docent-mark.ico"
 BUILD_DIR = ROOT / "dist" / "DataverseDocent"
 RELEASES_DIR = ROOT / "dist" / "releases"
@@ -60,14 +64,31 @@ def portable_name(pack_id: str = PACK_ID, channel: str = CHANNEL) -> str:
     return f"{pack_id}-{channel}-Portable.zip"
 
 
-def nupkg_name(version: str, pack_id: str = PACK_ID) -> str:
-    """`DataverseDocent-0.1.0-full.nupkg` - the package the updater downloads."""
-    return f"{pack_id}-{version}-full.nupkg"
+def nupkg_name(version: str, pack_id: str = PACK_ID, channel: str = CHANNEL) -> str:
+    """`DataverseDocent-0.1.0-full.nupkg` on the default channel, otherwise suffixed.
+
+    vpk names the package `<id>-<version>-full.nupkg` only for the default
+    channel; every other channel inserts itself before `-full` (measured:
+    `DataverseDocent-0.2.0-rc.1-win-beta-full.nupkg`).
+    """
+    if channel == CHANNEL:
+        return f"{pack_id}-{version}-full.nupkg"
+    return f"{pack_id}-{version}-{channel}-full.nupkg"
 
 
 def feed_name(channel: str = CHANNEL) -> str:
     """`releases.win.json` - the feed `GithubSource` reads."""
     return f"releases.{channel}.json"
+
+
+def releases_index_name(channel: str = CHANNEL) -> str:
+    """`RELEASES` on the default channel, `RELEASES-<channel>` otherwise."""
+    return "RELEASES" if channel == CHANNEL else f"RELEASES-{channel}"
+
+
+def assets_name(channel: str = CHANNEL) -> str:
+    """`assets.win.json` - the upload manifest vpk publishes from."""
+    return f"assets.{channel}.json"
 
 
 def _nuspec(zf: zipfile.ZipFile) -> ET.Element | None:
@@ -116,7 +137,7 @@ def check_release(
     # The package the updater actually downloads: its metadata is what the
     # client compares against the installed version, so it is checked, not
     # just its existence.
-    expected_nupkg = nupkg_name(version, pack_id)
+    expected_nupkg = nupkg_name(version, pack_id, channel)
     nupkg = directory / expected_nupkg
     if not nupkg.is_file():
         found = sorted(p.name for p in directory.glob("*.nupkg"))
@@ -184,12 +205,13 @@ def check_release(
             elif not matching[0].get("SHA256"):
                 problems.append(f"{feed.name} entry for {version} has no SHA256")
 
-    # Legacy delta client (and some proxies) read RELEASES; vpk still writes it.
-    releases = directory / "RELEASES"
+    # Legacy delta client (and some proxies) read RELEASES[-channel]; vpk still writes it.
+    index_name = releases_index_name(channel)
+    releases = directory / index_name
     if not releases.is_file():
-        problems.append("missing RELEASES (legacy feed index)")
+        problems.append(f"missing {index_name} (legacy feed index)")
     elif expected_nupkg not in releases.read_text(encoding="utf-8", errors="replace"):
-        problems.append(f"RELEASES does not mention {expected_nupkg}")
+        problems.append(f"{index_name} does not mention {expected_nupkg}")
 
     return problems
 
@@ -208,6 +230,12 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="expected version (default: engine.__version__)",
     )
+    parser.add_argument(
+        "--channel",
+        default=CHANNEL,
+        choices=CHANNELS,
+        help="channel the release was packed for (default: win)",
+    )
     args = parser.parse_args(argv)
 
     if args.version is not None:
@@ -219,18 +247,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{directory} does not exist - run `uv run poe pack` first", file=sys.stderr)
         return 2
 
-    problems = check_release(directory, version=version)
+    problems = check_release(directory, version=version, channel=args.channel)
     if problems:
         print(f"{directory} is not a shippable release:", file=sys.stderr)
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return 1
 
-    setup = directory / setup_exe_name()
-    nupkg = directory / nupkg_name(version)
+    setup = directory / setup_exe_name(channel=args.channel)
+    nupkg = directory / nupkg_name(version, channel=args.channel)
     print(
         f"release ok: {setup.name} ({setup.stat().st_size / 1e6:.0f} MB), "
-        f"{nupkg.name}, {feed_name()} in {directory}"
+        f"{nupkg.name}, {feed_name(args.channel)} in {directory}"
     )
     return 0
 
