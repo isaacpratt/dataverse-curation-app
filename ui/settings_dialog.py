@@ -168,6 +168,10 @@ class SettingsPane(QWidget):
 
         # General tab
         general = QWidget()
+        # Pages must fill the tab widget, not shrink to their content
+        # (dv-ub0: the Extensions page was rendering 640x480 inside a
+        # 1016x693 stack, clipping the table's last row).
+        general.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         form = QFormLayout(general)
         form.setContentsMargins(16, 16, 16, 16)
         form.setSpacing(12)
@@ -274,9 +278,11 @@ class SettingsPane(QWidget):
         # Table is first (square top meets the tab bar) but not last
         # (square bottom meets the inset content below).
         ext_tab = QWidget()
+        ext_tab.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         ext_layout = QVBoxLayout(ext_tab)
         ext_layout.setContentsMargins(0, 0, 0, 0)
-        ext_layout.setSpacing(0)
+        # dv-ub0: keep some air between the flush table and the hint strip.
+        ext_layout.setSpacing(12)
         self.ext_table = AppTable(
             [
                 t("settings.extensions.columns.package"),
@@ -287,7 +293,7 @@ class SettingsPane(QWidget):
                 t("settings.extensions.columns.action"),
             ],
             widths={0: 110, 1: 80, 2: 90, 3: 90, 4: 200, 5: 300},
-            row_height=34,
+            row_height=44,
             stretch_last=False,
             # NOTE: sorting stays OFF here on purpose — per-row action
             # buttons are cell *widgets*, which Qt does not move when rows
@@ -338,7 +344,7 @@ class SettingsPane(QWidget):
         ext_hint.setWordWrap(True)
         bottom = QWidget()
         bottom_lay = QVBoxLayout(bottom)
-        bottom_lay.setContentsMargins(12, 8, 12, 8)
+        bottom_lay.setContentsMargins(12, 4, 12, 12)
         bottom_lay.addWidget(ext_hint)
         ext_btn_row = QHBoxLayout()
         self.ext_status = QLabel("")
@@ -769,7 +775,7 @@ class SettingsPane(QWidget):
             # clipping the buttons symmetrically (dv-dm3).
             cell.setMinimumWidth(168)
             cell_lay = QHBoxLayout(cell)
-            cell_lay.setContentsMargins(6, 3, 6, 3)
+            cell_lay.setContentsMargins(6, 6, 6, 6)
             cell_lay.setSpacing(6)
             install_label = (
                 t("settings.extensions.reinstall")
@@ -799,7 +805,7 @@ class SettingsPane(QWidget):
             cell_lay.addWidget(uninstall_btn)
             cell_lay.addStretch()
             self.ext_table.setCellWidget(row, 5, cell)
-            self.ext_table.setRowHeight(row, 34)
+            self.ext_table.setRowHeight(row, 44)
         # External binaries as table rows (same columns, Browse… action)
         base_row = len(self.EXTENSIONS)
         self.ext_table.setRowCount(base_row + len(self.TOOLS))
@@ -845,7 +851,7 @@ class SettingsPane(QWidget):
             tool_cell.setStyleSheet(transparent_surface_qss("ToolActionCell"))
             tool_cell.setMinimumWidth(168)
             tool_lay = QHBoxLayout(tool_cell)
-            tool_lay.setContentsMargins(6, 3, 6, 3)
+            tool_lay.setContentsMargins(6, 6, 6, 6)
             tool_lay.setSpacing(6)
             browse_btn = make_action_button(
                 t("settings.extensions.locate_button"), kind="cell", size="sm"
@@ -858,12 +864,19 @@ class SettingsPane(QWidget):
             tool_lay.addWidget(browse_btn)
             tool_lay.addStretch()
             self.ext_table.setCellWidget(row, 5, tool_cell)
-            self.ext_table.setRowHeight(row, 34)
+            self.ext_table.setRowHeight(row, 44)
         # Content-width columns (Used-for stays Stretch); no-op when a
         # saved view was restored or the user already resized. The action
         # column's cell forces a 168px preferred width via sizeHint, so
         # the fit never shrinks it below Reinstall+Uninstall.
         self.ext_table.fit_columns_to_content()
+        # dv-ub0: the table is at least as tall as its content, so no row
+        # is ever clipped inside it; the Settings pane scrolls instead.
+        try:
+            header_h = self.ext_table.horizontalHeader().height() or 30
+            self.ext_table.setMinimumHeight(header_h + self.ext_table.rowCount() * 44 + 2)
+        except Exception:
+            pass
 
     def _browse_tool(self, key: str) -> None:
         from PySide6.QtWidgets import QFileDialog as _QFileDialog
