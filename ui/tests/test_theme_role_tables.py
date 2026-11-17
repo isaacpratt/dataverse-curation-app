@@ -93,7 +93,7 @@ _BADGE_FAMILIES: tuple[str, ...] = (
 
 @pytest.fixture(autouse=True)
 def _restore_the_active_theme():
-    """A swapped theme must not leak into the next test."""
+    """Restore the active theme so a swap cannot leak into the next test."""
     yield
     theme.set_active_theme("light")
 
@@ -186,7 +186,7 @@ def test_switching_the_active_table_swaps_the_resolved_role():
     assert theme.ACTIVE_THEME == "dark"
     # The theme's own rules read the module's role values, so they
     # follow the swap.
-    assert theme.TEXT_PRIMARY == theme.DARK_ROLE_TABLE["TEXT_PRIMARY"]
+    assert theme.DARK_ROLE_TABLE["TEXT_PRIMARY"] == theme.TEXT_PRIMARY
 
 
 def test_an_unknown_theme_or_role_is_refused():
@@ -232,7 +232,9 @@ def test_the_active_role_table_is_logged(qapp):
     theme.apply_theme(qapp)
     logged = [line for line in lines() if "theme-role-table" in line]
     assert logged, "the active role table was not logged"
-    assert f"theme-role-table-{theme.ACTIVE_THEME}-roles-{len(theme.LIGHT_ROLE_TABLE)}" in logged[-1]
+    assert (
+        f"theme-role-table-{theme.ACTIVE_THEME}-roles-{len(theme.LIGHT_ROLE_TABLE)}" in logged[-1]
+    )
 
 
 def _luminance(value: str) -> float:

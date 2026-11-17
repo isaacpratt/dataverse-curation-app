@@ -29,7 +29,7 @@ from ui.widgets import AppTable, SortArrowHeaderView
 
 
 def _arrow_label(header: QHeaderView) -> QLabel | None:
-    """The arrow the kit paints over the sorted section (a child label)."""
+    """Find the arrow the kit paints over the sorted section (a child label)."""
     for label in header.findChildren(QLabel):
         if label.isVisible():
             return label
@@ -37,7 +37,7 @@ def _arrow_label(header: QHeaderView) -> QLabel | None:
 
 
 def _click(widget: QWidget, pos: QPoint) -> None:
-    """A press and a release at a point, sent the way the app receives them."""
+    """Send a press and a release at a point, the way the app receives them."""
     app = QApplication.instance()
     assert app is not None
     press = QMouseEvent(
@@ -62,12 +62,16 @@ def _click(widget: QWidget, pos: QPoint) -> None:
 
 
 def _titles(table: AppTable) -> list[str]:
-    return [table.item(row, 0).text() for row in range(table.rowCount())]
+    titles: list[str] = []
+    for row in range(table.rowCount()):
+        item = table.item(row, 0)
+        titles.append(item.text() if item is not None else "")
+    return titles
 
 
 @pytest.fixture
 def queue_table(qapp):
-    """A shown queue table with three rows and the first column sorted."""
+    """Build a shown queue table with three rows and the first column sorted."""
     host = QWidget()
     table = AppTable(["Alpha", "Beta"], parent=host)
     table.setRowCount(3)

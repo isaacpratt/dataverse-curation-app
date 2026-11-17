@@ -446,7 +446,7 @@ ACTIVE_THEME = "light"
 
 
 def role_table(theme: str | None = None) -> Mapping[str, str]:
-    """The role mapping for a theme (the active one by default)."""
+    """Return the role mapping for a theme (the active one by default)."""
     name = theme or ACTIVE_THEME
     table = ROLE_TABLES.get(name)
     if table is None:
@@ -460,9 +460,7 @@ def role(name: str, theme: str | None = None) -> str:
     try:
         return table[name]
     except KeyError:
-        raise KeyError(
-            f"unknown role {name!r} in theme {theme or ACTIVE_THEME!r}"
-        ) from None
+        raise KeyError(f"unknown role {name!r} in theme {theme or ACTIVE_THEME!r}") from None
 
 
 def set_active_theme(name: str) -> None:
