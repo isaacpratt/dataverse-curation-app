@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 
-import config as cfg_module
-from config import DEFAULT_CONFIG_PATH, Config
+from curation import config as cfg_module
+from curation.config import DEFAULT_CONFIG_PATH, Config
 
 
 class FakeKeyring:
@@ -343,7 +343,7 @@ def test_chmod_failure_logs_warning_without_token(
 ) -> None:
     import os
 
-    import applog
+    from curation import applog
 
     def _boom(_path: Path, _mode: str) -> None:
         raise OSError("read-only filesystem")
@@ -365,7 +365,7 @@ def test_icacls_failure_logs_warning_without_token(
 ) -> None:
     import subprocess
 
-    import applog
+    from curation import applog
 
     class _Out:
         returncode = 1

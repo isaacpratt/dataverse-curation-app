@@ -24,7 +24,7 @@ def boot():
     from PySide6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
-    from config import Config
+    from curation.config import Config
     from ui.theme import apply_theme
 
     apply_theme(app)

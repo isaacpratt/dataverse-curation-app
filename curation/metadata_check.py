@@ -72,7 +72,7 @@ _V2_PROFILE_KEYS: set[str] = set()
 # PROFILES entries so the dataset combo lists them.
 def _register_rulesets_in_profiles() -> None:
     try:
-        import review_rules as _rr
+        from curation import review_rules as _rr
 
         pool = _rr.load_rulesets()
         for _key, _rs in pool.items():
@@ -117,7 +117,7 @@ try:
             raise ValueError("profiles JSON must be an object")
 except Exception as exc:
     try:
-        from applog import get_app_log
+        from curation.applog import get_app_log
 
         get_app_log().error(f"requirements profiles unreadable ({exc}) — using built-ins")
     except Exception:
@@ -609,7 +609,7 @@ def check_metadata_completeness(
     the rule engine is unavailable.
     """
     try:
-        import review_rules as _rr
+        from curation import review_rules as _rr
 
         pool = _rr.load_rulesets()
         key = PROFILE_TO_RULESET.get(profile, profile)
@@ -629,7 +629,7 @@ def check_metadata_completeness(
                 for r in evaluated
             ]
     except Exception as exc:
-        from applog import get_app_log
+        from curation.applog import get_app_log
 
         get_app_log().error(
             f"ruleset engine failed for profile={profile!r} ({exc}); using legacy fallback"
@@ -649,7 +649,7 @@ def check_with_ruleset(
     rulesets: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Full rule evaluation (keeps rule_id/level/pending for the Response pane)."""
-    import review_rules as _rr
+    from curation import review_rules as _rr
 
     pool = rulesets if isinstance(rulesets, dict) else _rr.load_rulesets()
     # get_ruleset resolves legacy profile names ("McMaster"/"Minimal") and

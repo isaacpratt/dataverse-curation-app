@@ -24,14 +24,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config import Config
-from dashboard_cache import (
+from curation.config import Config
+from curation.dashboard_cache import (
     dashboard_cache_key,
     diff_dashboard_datasets,
     load_dashboard_cache,
     save_dashboard_cache,
 )
-from dashboard_cache import (
+from curation.dashboard_cache import (
     merge_enriched_rows as _merge_enriched_rows,
 )
 from ui.i18n import t
@@ -735,7 +735,7 @@ class DashboardView(QWidget):
         from another collection must not linger); the crawl refills them.
         """
         try:
-            from dataverse_client import read_allowed_labels_cache
+            from curation.client import read_allowed_labels_cache
 
             ws = Path(getattr(getattr(self._config, "app", None), "workspace", Path.home()))
             labels = read_allowed_labels_cache(
@@ -937,7 +937,7 @@ class DashboardView(QWidget):
         # slot holds pure probe results only (see _on_allowed_probed). The
         # union persists via the dashboard cache at crawl end.
         try:
-            from applog import get_app_log
+            from curation.applog import get_app_log
 
             get_app_log().info(
                 t(
@@ -967,7 +967,7 @@ class DashboardView(QWidget):
                 return
             labels = payload.get("labels") or []
             collection = payload.get("collection", self._current_collection())
-            from dataverse_client import write_allowed_labels_cache
+            from curation.client import write_allowed_labels_cache
 
             ws = Path(getattr(getattr(self._config, "app", None), "workspace", Path.home()))
             write_allowed_labels_cache(
@@ -1469,7 +1469,7 @@ class DashboardView(QWidget):
         on disk and shown here instead of "—".
         """
         try:
-            from storage import read_size_cache
+            from curation.storage import read_size_cache
 
             ws = getattr(getattr(self._config, "app", None), "workspace", Path.home())
             cache = read_size_cache(Path(ws))

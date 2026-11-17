@@ -13,8 +13,8 @@ from typing import Any, ClassVar, Literal
 
 import pytest
 
-from dataverse_client import DataverseClient, DownloadCancelled
-from download_manager import DownloadManager
+from curation.client import DataverseClient, DownloadCancelled
+from curation.download_manager import DownloadManager
 
 PID = "doi:10.5072/FK2/TESTCANCEL"
 

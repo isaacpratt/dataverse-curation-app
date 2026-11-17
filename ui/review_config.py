@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config import Config
+from curation.config import Config
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.i18n import t
 from ui.table_layout import TableLayout
@@ -175,7 +175,7 @@ class ReviewConfigView(QWidget):
         self._config = config
         self._worker = None
         try:
-            import review_rules as _rr
+            from curation import review_rules as _rr
 
             self._rr = _rr
             self._rulesets: dict[str, dict[str, Any]] = copy.deepcopy(_rr.load_rulesets())
@@ -268,7 +268,7 @@ class ReviewConfigView(QWidget):
 
     def _load_cached_schema(self) -> list[dict[str, str]] | None:
         try:
-            from dataverse_client import read_metadata_fields_cache
+            from curation.client import read_metadata_fields_cache
 
             ws = Path(getattr(getattr(self._config, "app", None), "workspace", Path.home()))
             hit = read_metadata_fields_cache(Path(ws), self._config.dataverse.base_url)
@@ -499,7 +499,7 @@ class ReviewConfigView(QWidget):
         if self._schema:
             live = [dict(f) for f in self._schema if isinstance(f, dict) and f.get("field")]
             try:
-                from review_rules import FIELD_CATALOG
+                from curation.review_rules import FIELD_CATALOG
             except Exception:
                 FIELD_CATALOG = []  # noqa: N806 - fallback for the upstream constant import above
             seen = {(str(f.get("block") or "citation"), str(f.get("field") or "")) for f in live}
@@ -512,7 +512,7 @@ class ReviewConfigView(QWidget):
             base = live
         else:
             try:
-                from review_rules import FIELD_CATALOG
+                from curation.review_rules import FIELD_CATALOG
 
                 base = [dict(f) for f in FIELD_CATALOG]
             except Exception:
@@ -1387,7 +1387,7 @@ class ReviewConfigView(QWidget):
             )
             return
         try:
-            import metadata_check as _mc
+            from curation import metadata_check as _mc
 
             _mc.refresh_profiles_from_rulesets()
         except Exception:

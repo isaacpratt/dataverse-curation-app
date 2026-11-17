@@ -140,7 +140,7 @@ def _file_name() -> str:
 def rulesets_path() -> Path:
     """Return the same location as the legacy profiles file (exe dir when frozen)."""
     try:
-        from metadata_check import profiles_path as _legacy
+        from curation.metadata_check import profiles_path as _legacy
 
         return _legacy()
     except Exception:
@@ -585,7 +585,7 @@ def rulesets_for_dataverse(
 
 
 def _mc() -> Any:
-    import metadata_check as _m
+    from curation import metadata_check as _m
 
     return _m
 

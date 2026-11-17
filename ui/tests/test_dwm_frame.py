@@ -73,7 +73,7 @@ def test_dwm_failure_is_logged_with_full_hwnd(monkeypatch):
     value (the original truncation bug) and that a failing HRESULT lands in
     the app log instead of vanishing.
     """
-    import applog
+    from curation import applog
     from ui.main_window import MainWindow
 
     seen = {}

@@ -6,7 +6,7 @@ from any context with just the payload in hand.
 
 from typing import Any
 
-from client.constants import STATE_IN_REVIEW
+from curation.client.constants import STATE_IN_REVIEW
 
 
 def _field_value(dataset_version: dict[str, Any], type_name: str) -> Any:

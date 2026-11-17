@@ -15,7 +15,7 @@ import json
 import pytest
 from PySide6.QtWidgets import QHeaderView
 
-from storage import (
+from curation.storage import (
     TABLE_LAYOUT_VERSION,
     clear_table_state,
     table_layout_entry_valid,

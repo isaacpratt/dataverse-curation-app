@@ -12,9 +12,9 @@ from typing import Any
 
 import pytest
 
-import applog
-import config as _config_module
-from config import AppConfig, Config, DataverseConfig
+from curation import applog
+from curation import config as _config_module
+from curation.config import AppConfig, Config, DataverseConfig
 
 
 class _DictKeyring:
@@ -142,7 +142,7 @@ def test_config_load_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_storage_table_state_roundtrip(tmp_path: Path) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-    from storage import clear_table_state, save_table_state
+    from curation.storage import clear_table_state, save_table_state
 
     class _Hdr:
         def __init__(self) -> None:
@@ -228,7 +228,7 @@ def test_storage_table_state_roundtrip(tmp_path: Path) -> None:  # noqa: C901 - 
 
 
 def test_storage_size_cache(tmp_path: Path) -> None:
-    from storage import read_size_cache, write_size_entry
+    from curation.storage import read_size_cache, write_size_entry
 
     write_size_entry(tmp_path, "doi:10.1/x", 12345, 3)
     cache = read_size_cache(tmp_path)

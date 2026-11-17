@@ -11,6 +11,7 @@ this?".
 | [0003](0003-ruff-format-phased-adoption.md) | Ruff format adopted in phases, gated on the whole tree | Accepted | 2026-11-13 |
 | [0004](0004-no-pypi-packaging-app-not-library.md) | The app is not a PyPI package (`package = false`) | Accepted | 2026-11-13 |
 | [0005](0005-api-token-os-credential-store.md) | The API token lives in the OS credential store | Accepted | 2026-11-13 |
+| [0006](0006-curation-core-package.md) | The application core lives in `curation/`; `main.py` stays the entry point | Accepted | 2026-11-16 |
 
 ## Format
 

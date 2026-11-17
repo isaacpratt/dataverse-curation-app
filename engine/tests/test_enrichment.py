@@ -12,13 +12,13 @@ from typing import Any
 import pytest
 import requests
 
-from dashboard_cache import (
+from curation.client import DataverseClient
+from curation.dashboard_cache import (
     diff_dashboard_datasets,
     load_dashboard_cache,
     merge_enriched_rows,
     save_dashboard_cache,
 )
-from dataverse_client import DataverseClient
 
 
 def _version_doc(files: list[Any], depositor: str = "", state: str = "DRAFT") -> dict[str, Any]:

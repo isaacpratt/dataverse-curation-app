@@ -2,10 +2,10 @@
 
 from typing import Any
 
-import review_rules as rr
+from curation import review_rules as rr
+from curation.response_draft import build_response, render_response
 from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
-from response_draft import build_response, render_response
 
 
 def _ruleset() -> dict[str, Any]:

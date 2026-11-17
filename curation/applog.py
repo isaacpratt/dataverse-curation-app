@@ -77,7 +77,7 @@ def get_app_log() -> type["AppLog"]:
 
 
 class AppLog:
-    """Namespace used by dataverse_client for structured logging."""
+    """Namespace used by the Dataverse client for structured logging."""
 
     @staticmethod
     def warn(message: str) -> None:

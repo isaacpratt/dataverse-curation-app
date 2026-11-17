@@ -6,10 +6,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed (layout)
+
+- **The application core moved to `curation/`** — the loose root modules (`applog`, `config`, `dashboard_cache`, `download_manager`, `metadata_check`, `response_draft`, `review_rules`, `storage`) and the `client/` package now live under `curation/`, which is the middle layer the dependency graph already had (ADR 0006). `main.py` stays the single entry point for both the GUI and `--headless`, and the PyInstaller builds are unchanged. The `dataverse_client.py` compatibility shim is gone — the app is not a library, so the old absolute paths were rewritten in place instead of being kept alive by a re-export. A new import-linter contract keeps `curation/` free of `ui/` and `PySide6`: the table-layout sort direction is persisted as a plain `int` in `curation.storage` and converted to `Qt.SortOrder` in `ui/table_layout.py`.
+
 ### Changed (tooling)
 
-- **mypy `--strict` on the engine contract** — the scope in `[tool.mypy] files` (`engine/`, `client/`, `download_manager.py`, `storage.py`, `metadata_check.py`, `review_rules.py`, `applog.py`, plus the engine test suite) is now checked under `--strict`, with no per-module ignore list. 44 strict-subset errors were fixed by annotating the engine, the client and the root services.
-- **Dependency direction is machine-enforced** — `poe contracts` (import-linter, also in `poe check` and CI) forbids `engine/` → `ui/`/`PySide6` and `tools/` → `ui/`. The engine contract has no exceptions: the dashboard cache helpers the engine tests used to borrow from `ui/dashboard.py` moved to the Qt-free root module `dashboard_cache.py`, so `engine/tests/` no longer imports the view layer and joined the strict mypy gate.
+- **mypy `--strict` on the engine contract** — the scope in `[tool.mypy] files` (`engine/`, `curation/`, plus the engine test suite) is now checked under `--strict`, with no per-module ignore list. 44 strict-subset errors were fixed by annotating the engine, the client and the core services.
+- **Dependency direction is machine-enforced** — `poe contracts` (import-linter, also in `poe check` and CI) forbids `engine/` → `ui/`/`PySide6`, `curation/` → `ui/`/`PySide6` and `tools/` → `ui/`. The engine contract has no exceptions: the dashboard cache helpers the engine tests used to borrow from `ui/dashboard.py` moved to the Qt-free `curation/dashboard_cache.py`, so `engine/tests/` no longer imports the view layer and joined the strict mypy gate.
 
 ## [0.2.0] - 2026-11-16
 

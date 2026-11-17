@@ -2,7 +2,7 @@
 
 from PySide6.QtWidgets import QComboBox, QDialog
 
-from download_manager import DownloadQuote
+from curation.download_manager import DownloadQuote
 from ui.download_dialog import DownloadApprovalDialog
 
 GUESTBOOK = {

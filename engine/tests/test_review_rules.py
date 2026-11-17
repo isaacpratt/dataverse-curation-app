@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-import metadata_check as mc
-import review_rules as rr
+from curation import metadata_check as mc
+from curation import review_rules as rr
 
 
 def _meta(fields: list[Any] | None = None, license_name: str = "CC0") -> dict[str, Any]:
@@ -400,7 +400,7 @@ def test_rulesets_for_dataverse_wildcard() -> None:
 
 
 def test_save_load_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import review_rules as _rr
+    from curation import review_rules as _rr
 
     target = tmp_path / "requirements_profiles.json"
     monkeypatch.setattr(_rr, "rulesets_path", lambda: target)
@@ -415,7 +415,7 @@ def test_save_load_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 def test_load_memoized_and_invalidated_on_save(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import review_rules as _rr
+    from curation import review_rules as _rr
 
     target = tmp_path / "requirements_profiles.json"
     monkeypatch.setattr(_rr, "rulesets_path", lambda: target)
@@ -429,12 +429,12 @@ def test_load_memoized_and_invalidated_on_save(
 
 
 def test_deleted_ruleset_leaves_profiles(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import review_rules as _rr
+    from curation import review_rules as _rr
 
     target = tmp_path / "requirements_profiles.json"
     monkeypatch.setattr(_rr, "rulesets_path", lambda: target)
     monkeypatch.setattr(_rr, "_RULESETS_MEMO", {})
-    import metadata_check as _mc
+    from curation import metadata_check as _mc
 
     pool = _rr.load_rulesets()
     pool["temp-custom"] = dict(pool["mcmaster-default"])

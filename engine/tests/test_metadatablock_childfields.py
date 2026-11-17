@@ -21,7 +21,7 @@ def _load() -> dict[str, Any]:
 
 
 def test_childfields_surface_as_dotted_rows() -> None:
-    from dataverse_client import parse_metadatablock_fields
+    from curation.client import parse_metadatablock_fields
 
     rows = parse_metadatablock_fields(_load())
     by = {r["field"]: r for r in rows}
@@ -47,7 +47,7 @@ def test_childfields_surface_as_dotted_rows() -> None:
 
 
 def test_childfields_order_is_borealis_display_order() -> None:
-    from dataverse_client import parse_metadatablock_fields
+    from curation.client import parse_metadatablock_fields
 
     rows = parse_metadatablock_fields(_load())
     author_children = [r for r in rows if r.get("parent") == "author"]
@@ -62,7 +62,7 @@ def test_childfields_order_is_borealis_display_order() -> None:
 
 def test_subfield_rows_survive_the_review_config_union(monkeypatch: pytest.MonkeyPatch) -> None:
     """Rule-config union must keep parent-linked rows after save/load."""
-    import review_rules as rr
+    from curation import review_rules as rr
 
     normalized = rr._normalize_ruleset(
         "x",

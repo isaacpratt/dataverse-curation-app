@@ -16,7 +16,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 def _cfg(tmp_path: Path):
-    from config import Config
+    from curation.config import Config
 
     cfg = Config()
     cfg.dataverse.base_url = "https://example.invalid"

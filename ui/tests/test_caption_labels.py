@@ -14,7 +14,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 @pytest.fixture(scope="module")
 def caption_buttons(qapp):
-    from config import Config
+    from curation.config import Config
     from ui.main_window import MainWindow, _CaptionButton
 
     window = MainWindow(Config.load(None))

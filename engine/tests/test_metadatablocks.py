@@ -1,11 +1,11 @@
-"""Tests for metadatablocks parsing + field-catalog cache (dataverse_client)."""
+"""Tests for metadatablocks parsing + field-catalog cache (curation.client)."""
 
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from dataverse_client import (
+from curation.client import (
     get_cached_metadata_fields,
     parse_metadatablock_display_names,
     parse_metadatablock_fields,
@@ -123,7 +123,7 @@ def test_parse_block_display_names() -> None:
 
 def test_fetch_skips_empty_memory_cache(monkeypatch: pytest.MonkeyPatch) -> None:
     """[] in memory means 'fetch failed' — refetch, don't serve it."""
-    import dataverse_client as _dc
+    from curation import client as _dc
 
     monkeypatch.setattr(_dc, "_METADATABLOCKS_MEMO", {})
     set_cached_metadata_fields("https://empty.invalid", [])
@@ -150,7 +150,7 @@ def test_fetch_skips_empty_memory_cache(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_fetch_attaches_block_labels(monkeypatch: pytest.MonkeyPatch) -> None:
-    import dataverse_client as _dc
+    from curation import client as _dc
 
     monkeypatch.setattr(_dc, "_METADATABLOCKS_MEMO", {})
 

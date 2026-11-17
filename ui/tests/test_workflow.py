@@ -146,7 +146,7 @@ def test_step_order_and_accessible_names_are_stable():
 
 @pytest.fixture
 def detail(qapp, tmp_path):
-    from config import Config
+    from curation.config import Config
     from ui.dataset_detail import DatasetDetailView
 
     cfg = Config()

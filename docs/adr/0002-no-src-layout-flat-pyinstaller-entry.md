@@ -7,7 +7,7 @@
 
 The application is packaged with PyInstaller and run as a desktop program, not
 imported as a library. Its modules (`config.py`, `applog.py`, `storage.py`,
-`download_manager.py`, `metadata_check.py`, `review_rules.py`) are imported by
+`download_manager.py`, `metadata_check.py`, `review_rules.py`) were imported by
 absolute top-level name from the views, the workers and the tests
 (`from config import Config`, `import applog`). A `src/` layout would require
 either an installed package (the app is not one) or `sys.path` surgery in
@@ -37,16 +37,35 @@ parsing, caching and download logic in one module.
 - Module-size guideline (reviewers' expectation, not a hard gate): views
   ≤ ~1,000 lines, engine modules ≤ ~1,500; exceptions carry a dated comment.
 
+## Amendment — 2026-11-16 (ADR 0006)
+
+The `curation/` consolidation (dv-hcg.24) landed and resolved the open
+question above:
+
+- The loose root modules and the `client/` package now live under
+  **`curation/`** — the middle layer the dependency graph already had.
+- The `dataverse_client.py` compatibility shim is **deleted**. The app is
+  not a library and is never installed (ADR 0004), so the old absolute
+  paths were rewritten in place rather than kept alive by a re-export.
+- "Flat root" above is now read as "**no `src/` layout, no installable
+  package**", not as "every module is a loose file at the top level".
+  The root holds `engine/`, `curation/`, `ui/`, `tools/`, `main.py` and
+  `config.example.json` — and `main.py` is still the single entry point.
+
+The `client/` package row in the decision list above is historical: it
+became `curation/client/`.
+
 ## Consequences
 
 - Running from a clone is `uv run python main.py` — no install step, no
   `PYTHONPATH` juggling, and the frozen build has the same entry point.
-- Imports in the app are absolute and stable (`from config import Config`),
-  which is why moving a module is a breaking change; the `dataverse_client`
-  shim is the pattern for deprecating a path.
-- The root will keep accumulating small modules until the `curation/`
-  consolidation bead (`dv-hcg.24`) lands; the guideline above is what keeps
-  that from becoming a pile.
+- Imports in the app are absolute and stable (`from curation.config import
+  Config`), which is why moving a module is a breaking change; since the
+  app is not a library, the fix is to rewrite the import sites rather
+  than to keep a shim (ADR 0006).
+- The root no longer accumulates small modules: they belong to
+  `curation/` (the core), `engine/` (the checks) or `ui/` (the views),
+  and the import-linter contracts keep those layers apart.
 
 ## Links
 
@@ -55,3 +74,4 @@ parsing, caching and download logic in one module.
   `dv-hcg.34` (module-size guideline).
 - `AGENTS.md` — repository layout map.
 - `docs/html/architecture.html` — component map.
+- ADR 0006 — the curation core package.

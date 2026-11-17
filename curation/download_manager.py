@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dataverse_client import DownloadCancelled
+from curation.client import DownloadCancelled
 
 _STREAM_CHUNK = 1 << 20
 
@@ -213,7 +213,7 @@ class DownloadManager:
             inv = inventory if inventory is not None else self.inventory(persistent_id)
             return bool(inv) and not self.missing_files(persistent_id, inv)
         except Exception as exc:
-            from applog import get_app_log
+            from curation.applog import get_app_log
 
             get_app_log().error(f"is_fully_staged({persistent_id}): {exc}")
             return False
@@ -250,7 +250,7 @@ class DownloadManager:
             _atomic_write(self.metadata_path(persistent_id), metadata or {})
             _atomic_write(self.manifest_path(persistent_id), inventory or [])
         except Exception as exc:
-            from applog import get_app_log
+            from curation.applog import get_app_log
 
             get_app_log().error(f"save_metadata({persistent_id}): {exc}")
 
@@ -327,7 +327,7 @@ class DownloadManager:
             except DownloadCancelled:
                 raise
             except Exception as exc:
-                from applog import get_app_log
+                from curation.applog import get_app_log
 
                 get_app_log().error(f"download_originals after bundle ({persistent_id}): {exc}")
             return self.files_dir(persistent_id)

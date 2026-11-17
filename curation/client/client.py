@@ -13,19 +13,19 @@ from typing import Any
 
 import requests
 
-import client.caches as _caches
-from applog import get_app_log
-from client.caches import (
+from curation.applog import get_app_log
+from curation.client import caches as _caches
+from curation.client.caches import (
     _me_cache_key,
     get_cached_allowed_labels,
     get_cached_metadata_fields,
     set_cached_allowed_labels,
     set_cached_metadata_fields,
 )
-from client.constants import _RETRYABLE_NETWORK
-from client.downloads import _DownloadsMixin
-from client.http import _throttle_delay
-from client.parsers import (
+from curation.client.constants import _RETRYABLE_NETWORK
+from curation.client.downloads import _DownloadsMixin
+from curation.client.http import _throttle_delay
+from curation.client.parsers import (
     _version_files_data,
     locks_indicate_review,
     normalize_files,
@@ -84,7 +84,7 @@ class DataverseClient(_DownloadsMixin):
         return f"{self._base_url}{path}"
 
     def _get_json(self, path: str, params: dict[str, str] | None = None) -> dict[str, Any]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-        from applog import log_response
+        from curation.applog import log_response
 
         last_exc: Exception | None = None
         for attempt in range(3):
@@ -164,7 +164,7 @@ class DataverseClient(_DownloadsMixin):
         for application/json. HTTP errors propagate so callers can
         distinguish 403 (no permission) from other failures.
         """
-        from applog import log_response
+        from curation.applog import log_response
 
         headers = {"Accept": "text/csv, */*"}
         if self._api_token:
@@ -1071,7 +1071,7 @@ class DataverseClient(_DownloadsMixin):
 
     def set_curation_label(self, identifier: str, label: str) -> bool:
         """Assign a curation label to a draft dataset. Returns True on success."""
-        from applog import log_response
+        from curation.applog import log_response
 
         path, base_params = self._curation_paths(identifier, "curationStatus")
         params = dict(base_params or {})
@@ -1098,7 +1098,7 @@ class DataverseClient(_DownloadsMixin):
 
     def delete_curation_label(self, identifier: str) -> bool:
         """Remove the curation label from a draft dataset. Returns True on success."""
-        from applog import log_response
+        from curation.applog import log_response
 
         path, params = self._curation_paths(identifier, "curationStatus")
         try:

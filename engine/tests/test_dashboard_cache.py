@@ -8,7 +8,7 @@ per-instance cache-key separation.
 from pathlib import Path
 from typing import Any
 
-from dashboard_cache import (
+from curation.dashboard_cache import (
     dashboard_cache_key,
     dataset_fingerprint,
     diff_dashboard_datasets,

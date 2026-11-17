@@ -56,6 +56,6 @@ no server, so there is no need for an application-level secrets service.
   (config schema), `dv-hcg.11` (env overrides), `dv-hcg.17` (log redaction),
   `dv-hcg.18` (ACL failure reporting), `dv-hcg.19` (SECURITY.md).
 - `SECURITY.md` — token handling, reporting channel, threat model.
-- `config.py` — `KEYRING_SERVICE`, load precedence, save fallback.
-- `applog.py` — redaction patterns.
+- `curation/config.py` — `KEYRING_SERVICE`, load precedence, save fallback.
+- `curation/applog.py` — redaction patterns.
 - `engine/tests/test_config.py` — keyring contract tests.

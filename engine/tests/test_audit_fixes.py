@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from download_manager import DownloadManager
+from curation.download_manager import DownloadManager
 from engine.checks._util import detect_encoding, missing_library
 from engine.checks.code_check import CodeCheck
 from engine.checks.containers_check import ContainersCheck

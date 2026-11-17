@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from dataverse_client import (
+from curation.client import (
     DataverseClient,
     extract_file_restrictions,
     get_cached_allowed_labels,
@@ -31,7 +31,7 @@ from dataverse_client import (
     top_level_collection,
     write_allowed_labels_cache,
 )
-from download_manager import DownloadManager
+from curation.download_manager import DownloadManager
 
 
 def _file_entry(path: str, size: int, sha1: str) -> dict[str, Any]:
@@ -375,7 +375,7 @@ class FakeClient:
 
 
 def test_size_cache_roundtrip(tmp_path: Path) -> None:
-    from storage import read_size_cache, write_size_entry
+    from curation.storage import read_size_cache, write_size_entry
 
     assert read_size_cache(tmp_path) == {}
     write_size_entry(tmp_path, "doi:10.5072/FK2/A", 12345, 3)
@@ -600,7 +600,7 @@ def test_download_originals_skips_staged_and_nontabular(tmp_path: Path) -> None:
 
 
 def test_quote_prefers_original_size_for_tabular() -> None:
-    from download_manager import DownloadManager
+    from curation.download_manager import DownloadManager
 
     inv = [
         {
@@ -669,7 +669,7 @@ def test_top_level_collection() -> None:
 
 
 def test_allowed_labels_shared_cache_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
-    import client.caches as _dc
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
     set_cached_allowed_labels("https://demo.test", "mcmaster", ["A", "B"])
@@ -691,7 +691,7 @@ def test_allowed_labels_shared_cache_isolation(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_fetch_allowed_labels_shared_single_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    import client.caches as _dc
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
     calls: list[str] = []
@@ -711,7 +711,7 @@ def test_fetch_allowed_labels_shared_single_call(monkeypatch: pytest.MonkeyPatch
 
 
 def test_fetch_allowed_labels_shared_bounds_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
-    import client.caches as _dc
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
     calls: list[str] = []
@@ -734,7 +734,7 @@ def test_fetch_allowed_labels_shared_bounds_attempts(monkeypatch: pytest.MonkeyP
 
 
 def test_allowed_labels_disk_cache_roundtrip(tmp_path: Path) -> None:
-    import client.caches as _dc
+    from curation.client import caches as _dc
 
     _dc._ALLOWED_LABELS_CACHE.pop(("https://demo.test", "mcmaster"), None)
     write_allowed_labels_cache(tmp_path, "https://demo.test", "mcmaster", ["A", "B"])
@@ -785,7 +785,7 @@ def test_allowed_labels_disk_cache_roundtrip(tmp_path: Path) -> None:
 
 def test_allowed_probe_answered_tracks_server_answers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Only HTTP-200 rounds count as answered (stamp-worthy)."""
-    import client.caches as _dc
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
 
@@ -824,7 +824,7 @@ def test_allowed_probe_answered_tracks_server_answers(monkeypatch: pytest.Monkey
 
 
 def test_parse_allowed_labels_shapes() -> None:
-    from dataverse_client import parse_allowed_labels
+    from curation.client import parse_allowed_labels
 
     assert parse_allowed_labels("A, B,A,, ") == ["A", "B"]
     assert parse_allowed_labels(["A", "B", "A"]) == ["A", "B"]
@@ -840,7 +840,7 @@ def test_snapshot_apply_clear_table_view(tmp_path: Path) -> None:  # noqa: C901 
     """Reset reproduces construction state; clear drops the persisted entry."""
     import json as _json
 
-    from storage import (
+    from curation.storage import (
         apply_table_view,
         clear_table_state,
         snapshot_table_view,
@@ -911,7 +911,7 @@ def test_snapshot_apply_clear_table_view(tmp_path: Path) -> None:  # noqa: C901 
     header.setSortIndicatorShown(True)
     assert header.sectionSize(0) == 55
 
-    from storage import save_table_state
+    from curation.storage import save_table_state
 
     save_table_state(tmp_path, "reset_me", header)
     raw = _json.loads((tmp_path / "table_layout.json").read_text(encoding="utf-8"))
@@ -931,7 +931,7 @@ def test_snapshot_apply_clear_table_view(tmp_path: Path) -> None:  # noqa: C901 
 
 
 def test_is_draft_dataset() -> None:
-    from dataverse_client import is_draft_dataset
+    from curation.client import is_draft_dataset
 
     assert is_draft_dataset({"state": "DRAFT"}) is True
     assert is_draft_dataset({"state": "draft"}) is True
@@ -945,7 +945,7 @@ def test_is_draft_dataset() -> None:
 
 
 def test_get_me_returns_profile_and_caches(monkeypatch: pytest.MonkeyPatch) -> None:
-    import client.caches as _dc
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
     calls: list[str] = []
@@ -975,7 +975,7 @@ def test_get_me_returns_profile_and_caches(monkeypatch: pytest.MonkeyPatch) -> N
 def test_get_me_denied_is_none_without_caching(monkeypatch: pytest.MonkeyPatch) -> None:
     import requests
 
-    import client.caches as _dc
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
 
@@ -992,7 +992,7 @@ def test_get_me_denied_is_none_without_caching(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_get_collection_roles_matches_me_identifier(monkeypatch: pytest.MonkeyPatch) -> None:
-    import client.caches as _dc
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
     monkeypatch.setattr(_dc, "_ROLE_CACHE", {})
@@ -1026,7 +1026,7 @@ def test_get_collection_roles_matches_me_identifier(monkeypatch: pytest.MonkeyPa
 def test_get_collection_roles_denied_or_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     import requests
 
-    import client.caches as _dc
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
     monkeypatch.setattr(_dc, "_ROLE_CACHE", {})
@@ -1059,7 +1059,7 @@ def test_get_collection_roles_denied_or_empty(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_table_layout_roundtrip(tmp_path: Path) -> None:
-    from storage import restore_table_state, save_table_state
+    from curation.storage import restore_table_state, save_table_state
 
     class FakeHeader:
         def __init__(self, widths: list[int]) -> None:
@@ -1093,7 +1093,7 @@ def test_table_layout_roundtrip(tmp_path: Path) -> None:
 
 def test_table_view_state_roundtrip(tmp_path: Path) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Widths + sort + hidden columns + visual order all persist."""
-    from storage import restore_table_state, save_table_state
+    from curation.storage import restore_table_state, save_table_state
 
     class FakeViewHeader:
         def __init__(self, widths: list[int]) -> None:

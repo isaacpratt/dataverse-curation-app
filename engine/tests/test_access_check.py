@@ -2,7 +2,7 @@
 
 from typing import Any
 
-import review_rules as rr
+from curation import review_rules as rr
 from engine.checks.access_check import AccessCheck
 from engine.runner import run_report
 
@@ -94,8 +94,8 @@ def test_ruleset_access_rule_presents_embargo_and_terms() -> None:
 
 
 def test_response_draft_uses_access_templates() -> None:
+    from curation.response_draft import build_response
     from engine.report import DatasetReport
-    from response_draft import build_response
 
     results = AccessCheck().run_dataset([], {"inventory": _inventory(), "metadata": _metadata()})
     report = DatasetReport(

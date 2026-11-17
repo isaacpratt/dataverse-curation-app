@@ -14,7 +14,7 @@ The contract
 
 * **Restores are validated.** A layout saved for a different column count
   (an older table shape) is ignored instead of squeezing the columns
-  (see ``storage.table_layout_entry_valid``).
+  (see ``curation.storage.table_layout_entry_valid``).
 
 Usage::
 
@@ -34,7 +34,9 @@ from __future__ import annotations
 from contextlib import contextmanager
 from pathlib import Path
 
-from storage import (
+from PySide6.QtCore import Qt
+
+from curation.storage import (
     apply_table_view,
     clear_table_state,
     restore_table_state,
@@ -43,6 +45,18 @@ from storage import (
 )
 
 __all__ = ["TableLayout"]
+
+
+def _qt_sort_order(raw: int) -> Qt.SortOrder:
+    """Convert the persisted sort direction (an int) to the enum Qt wants.
+
+    The curation core stores plain ints and knows nothing about Qt; the
+    view layer owns this conversion (dv-hcg.24).
+    """
+    try:
+        return Qt.SortOrder(int(raw))
+    except Exception:
+        return Qt.SortOrder.AscendingOrder
 
 
 class TableLayout:
@@ -137,7 +151,9 @@ class TableLayout:
         """
         with self.suppressed():
             try:
-                return bool(restore_table_state(self.workspace, self.key, self.header))
+                return bool(
+                    restore_table_state(self.workspace, self.key, self.header, _qt_sort_order)
+                )
             except Exception:
                 return False
 
@@ -157,7 +173,7 @@ class TableLayout:
             if not isinstance(snap, dict):
                 return False
             try:
-                apply_table_view(self.header, snap)
+                apply_table_view(self.header, snap, _qt_sort_order)
             except Exception:
                 return False
         return True

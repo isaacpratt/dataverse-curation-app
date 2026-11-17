@@ -40,8 +40,8 @@ Issues = "https://github.com/isaacpratt/dataverse-curation-app/issues"
 Documentation = "https://github.com/isaacpratt/dataverse-curation-app/tree/master/docs/html"
 
 # Application, not library: never build/install it as a package. The wheel
-# produced by the deleted setuptools config excluded the ten root modules,
-# so `pip install .` yielded a broken app. uv/PyInstaller consume the tree
+# produced by the deleted setuptools config excluded the root modules, so
+# `pip install .` yielded a broken app. uv/PyInstaller consume the tree
 # in place; package = false stops uv building it on every sync.
 [tool.uv]
 package = false
@@ -80,7 +80,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["engine", "ui", "storage", "config", "applog", "download_manager", "dataverse_client", "metadata_check", "review_rules"]
+source = ["engine", "ui", "curation"]
 branch = true
 
 [tool.coverage.report]
@@ -159,11 +159,11 @@ type = "simple"
   cmd = "python tools/complexity_report.py"
 
   [tool.poe.tasks.contracts]
-  help = "Import-linter contracts: the engine must not import ui/Qt; the tools must not import ui"
+  help = "Import-linter contracts: the engine and the curation core must not import ui/Qt; the tools must not import ui"
   cmd = "lint-imports"
 
   [tool.poe.tasks.typecheck]
-  help = "Type-check the engine (mypy; scope from [tool.mypy] files/exclude)"
+  help = "Type-check the engine contract and the curation core (mypy; scope from [tool.mypy] files/exclude)"
   cmd = "mypy"
 
   [tool.poe.tasks.gallery]
@@ -267,33 +267,28 @@ max-complexity = 12
 [tool.mypy]
 python_version = "3.11"
 # The engine contract is checked under mypy --strict. The scope is the
-# `files` list below: the engine plus the root services it is built on
+# `files` list below: the engine plus the curation core it is built on
 # (client, storage, downloads, metadata rules, request log).
 #
 # Burn-down note (2026-11-16, dv-hcg.27): the last 44 errors under the
 # strict subset were fixed by annotating the engine, the client and the
-# root services - no per-module ignore list was needed and none is
+# core services - no per-module ignore list was needed and none is
 # configured here. The next step is the UI typing ramp (dv-hcg.28):
 # theme/kit -> main window -> views, then `ui/` joins `files`.
 strict = true
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
-# Gate the engine contract only: the engine plus the root services it is
+# Gate the engine contract only: the engine plus the curation core it is
 # built on, and the engine test suite. The tests are Qt-free since
-# dv-hcg.26 (the dashboard cache helpers they borrow live in the root
-# module dashboard_cache.py), so they join the strict gate instead of
-# needing an exclusion. The UI layer is typed separately (dv-hcg.28:
-# theme/kit -> main window -> views); the UI tests are exercised by
-# pytest, not by mypy.
+# dv-hcg.26 (the dashboard cache helpers they borrow live in the
+# Qt-free curation.dashboard_cache module), so they join the strict gate
+# instead of needing an exclusion. The UI layer is typed separately
+# (dv-hcg.28: theme/kit -> main window -> views); the UI tests are
+# exercised by pytest, not by mypy.
 files = [
     "engine",
-    "applog.py",
-    "metadata_check.py",
-    "review_rules.py",
-    "client",
-    "download_manager.py",
-    "storage.py",
+    "curation",
 ]
 exclude = [
     "^\\.venv/",
@@ -303,17 +298,19 @@ exclude = [
 
 # Machine-enforced dependency direction (import-linter).
 #
-#   engine  <-  root services (config/storage/client/...)  <-  ui
+#   engine  <-  curation (config/storage/client/...)  <-  ui
 #
 # The engine is the part that must stay usable headless and testable
 # without Qt: if engine/ ever imports ui/ or PySide6, the engine gate and
-# the headless build break. The tools/ scripts are operational helpers that
-# run outside the app, so they may not drag the UI layer in either.
+# the headless build break. The curation core is the app's middle layer -
+# it may not reach back into the views either. The tools/ scripts are
+# operational helpers that run outside the app, so they may not drag the
+# UI layer in either.
 [tool.importlinter]
 # The repo has no importable top-level package (the app is flat and
 # `package = false`), so the contracts are expressed against the project
 # directories that are packages in their own right.
-root_packages = ["engine", "ui", "client", "tools"]
+root_packages = ["engine", "ui", "curation", "tools"]
 # PySide6 must be in the graph: the Qt half of the engine contract is only
 # visible when external packages are included.
 include_external_packages = true
@@ -325,8 +322,20 @@ source_modules = ["engine"]
 forbidden_modules = ["ui", "PySide6"]
 # No exceptions: the engine tests are Qt-free since dv-hcg.26. The dashboard
 # cache helpers they used to borrow from ui/dashboard.py now live in the
-# root module dashboard_cache.py, and the size-formatter test moved to
-# ui/tests/ (it asserts something about the views).
+# Qt-free curation.dashboard_cache module, and the size-formatter test
+# moved to ui/tests/ (it asserts something about the views).
+
+[[tool.importlinter.contracts]]
+name = "Curation core must not import the UI layer or Qt"
+type = "forbidden"
+source_modules = ["curation"]
+forbidden_modules = ["ui", "PySide6"]
+# The curation core (config, storage, client, metadata rules, response
+# drafting) knows nothing about the views: ui/ imports it, never the other
+# way round. The contract landed with the curation/ consolidation
+# (dv-hcg.24) - the layering existed, the filesystem did not say so.
+# Qt moved out with it: the table-layout sort direction is persisted as a
+# plain int and the view layer converts it to Qt.SortOrder.
 
 [[tool.importlinter.contracts]]
 name = "Tools must not import the UI layer"

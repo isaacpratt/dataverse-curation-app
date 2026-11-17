@@ -34,8 +34,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config import PRESETS, Config
-from dataverse_client import DataverseClient
+from curation.client import DataverseClient
+from curation.config import PRESETS, Config
 from ui.dialogs import (
     confirm,
     confirm_save_discard_cancel,
@@ -459,13 +459,14 @@ class SettingsPane(QWidget):
     def _on_reset_ext_view(self) -> None:
         """Reset the extensions table to its construction view."""
         try:
-            from storage import apply_table_view, clear_table_state
+            from curation.storage import apply_table_view, clear_table_state
+            from ui.table_layout import _qt_sort_order
 
             snap = getattr(self, "_ext_snap", None)
             clear_table_state(self._config.app.workspace, "extensions")
             self.ext_table.enable_auto_fit()
             if isinstance(snap, dict):
-                apply_table_view(self.ext_table.horizontalHeader(), snap)
+                apply_table_view(self.ext_table.horizontalHeader(), snap, _qt_sort_order)
             self._refresh_extensions()
         except Exception:
             pass

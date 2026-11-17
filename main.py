@@ -85,14 +85,16 @@ if _TYPE_CHECKING:  # pragma: no cover
     import PySide6.QtGui
     import PySide6.QtWidgets  # noqa: F401
 
-    import response_draft  # noqa: F401
-    import review_rules  # noqa: F401
     import ui.dashboard
     import ui.dataset_detail
     import ui.main_window
     import ui.review_config
     import ui.settings_dialog
     import ui.workers  # noqa: F401
+    from curation import (
+        response_draft,  # noqa: F401
+        review_rules,  # noqa: F401
+    )
 
 
 def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
@@ -194,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
 
     from PySide6.QtWidgets import QApplication
 
-    from config import Config
+    from curation.config import Config
     from ui.main_window import MainWindow
 
     mark("PySide6 + ui.main_window imported")
@@ -205,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
         # Corrupt config: fall back to defaults but tell the user loudly
         # instead of silently discarding their workspace/token.
         print(t("app.cli.config_warning", exc=exc), file=sys.stderr)
-        from config import Config as _Config
+        from curation.config import Config as _Config
 
         cfg = _Config()
     if args.dataverse:

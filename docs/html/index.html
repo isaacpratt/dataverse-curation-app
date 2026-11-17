@@ -137,14 +137,16 @@ uv run python main.py --headless &lt;staged_dir&gt; --out report.json --format j
 │   ├── runner.py         # run_report / run_report_to_file / list_planned_checks
 │   └── tests/            # pytest suite (212 tests)
 ├── ui/                   # PySide6 views (21 modules, 242 tests)
-├── client/                # client package: constants, errors, http, parsers, caches, downloads, DataverseClient
-├── dataverse_client.py  # thin shim re-exporting client/ (existing imports keep working)
-├── download_manager.py   # approval-gated downloads + verify
-├── metadata_check.py     # citation-block completeness (McMaster / Minimal)
-├── review_rules.py       # versioned review rulesets (v2)
-├── response_draft.py     # depositor-response draft builder
-├── applog.py             # in-memory request log
-├── storage.py            # SQLite local state + JSON caches
+├── curation/             # the app core — no Qt, no view imports (import-linter enforces both)
+│   ├── client/           # client package: constants, errors, http, parsers, caches, downloads, DataverseClient
+│   ├── download_manager.py # approval-gated downloads + verify
+│   ├── metadata_check.py # citation-block completeness (McMaster / Minimal)
+│   ├── review_rules.py   # versioned review rulesets (v2)
+│   ├── response_draft.py # depositor-response draft builder
+│   ├── dashboard_cache.py # Qt-free dashboard cache helpers
+│   ├── applog.py         # in-memory request log
+│   ├── config.py         # configuration load/save, presets, env overrides
+│   └── storage.py        # SQLite local state + JSON caches
 ├── main.py               # entry point (GUI + --headless)
 └── config.example.json   # configuration template</code></pre>
 

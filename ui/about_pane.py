@@ -114,7 +114,7 @@ def _diag_text() -> str:
     lines.append(t("about.diag.commit", value=sha))
     lines.append(t("about.diag.lock_hash", value=lock_hash))
     try:
-        from config import Config
+        from curation.config import Config
 
         cfg = Config.load(None)
         lines.append(t("about.diag.workspace", value=cfg.app.workspace))

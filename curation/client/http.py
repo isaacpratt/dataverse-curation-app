@@ -4,7 +4,7 @@ from typing import Any
 
 import requests
 
-from client.constants import _RETRYABLE_STATUS
+from curation.client.constants import _RETRYABLE_STATUS
 
 
 def _error_message(response: Any) -> str:

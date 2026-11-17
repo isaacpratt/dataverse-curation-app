@@ -30,7 +30,7 @@ def qapp():
 
 @pytest.fixture(scope="session")
 def win(qapp):
-    from config import Config
+    from curation.config import Config
     from ui.main_window import MainWindow
 
     try:

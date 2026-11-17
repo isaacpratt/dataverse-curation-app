@@ -12,7 +12,7 @@ from typing import Any, ClassVar, Literal
 
 import requests
 
-from dataverse_client import DataverseClient
+from curation.client import DataverseClient
 
 PID = "doi:10.80240/FK2/RZXIKC"
 

@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from download_manager import DownloadQuote
+from curation.download_manager import DownloadQuote
 from ui.i18n import t
 from ui.theme import TEXT_WARNING
 from ui.widgets import (

@@ -76,7 +76,7 @@ jobs:
       - name: Tests
         run: uv run --group dev python -m pytest -q -n auto --cov=engine --cov-report=term-missing --cov-fail-under=75
       - name: Compile check
-        run: uv run --group dev python -m compileall -q engine dataverse_client.py download_manager.py storage.py config.py main.py
+        run: uv run --group dev python -m compileall -q engine curation ui main.py
       - name: Headless smoke
         run: uv run --group dev python main.py --headless --help
 

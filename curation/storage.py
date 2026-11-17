@@ -18,6 +18,7 @@ Stored under <workspace>/state.db. The API token never touches the database.
 
 import json
 import sqlite3
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -267,9 +268,9 @@ def _table_layout_path(workspace: Path) -> Path:
 
 
 def _enum_int(value: Any) -> int:
-    """Best-effort int from a PySide6 enum member OR a plain int.
+    """Best-effort int from an enum member OR a plain int.
 
-    This PySide6 build raises TypeError on int(enum), so .value is the
+    Some Qt builds raise TypeError on int(enum), so .value is the
     fallback; duck-typed headers (tests) may return plain ints.
     """
     try:
@@ -282,14 +283,13 @@ def _enum_int(value: Any) -> int:
     return 0
 
 
-def _sort_order_value(raw: int) -> Any:
-    """Enum for real Qt headers when possible, plain int otherwise."""
-    try:
-        from PySide6.QtCore import Qt
+SortOrder = Callable[[int], Any]
+"""How a persisted sort order (an int) becomes the header's own type.
 
-        return Qt.SortOrder(int(raw))
-    except Exception:
-        return int(raw)
+A real Qt header wants ``Qt.SortOrder``; a duck-typed header (the tests)
+takes the plain int. The core stays Qt-free and the view layer supplies
+the converter - see ``ui/table_layout.py``.
+"""
 
 
 TABLE_LAYOUT_VERSION = 1
@@ -408,8 +408,15 @@ def snapshot_table_view(header: Any) -> dict[str, Any]:
     return snap
 
 
-def apply_table_view(header: Any, snap: Any) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-    """Re-apply a view-state dict (snapshot or persisted entry). Never raises."""
+def apply_table_view(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    header: Any, snap: Any, sort_order: SortOrder | None = None
+) -> None:
+    """Re-apply a view-state dict (snapshot or persisted entry). Never raises.
+
+    ``sort_order`` converts the persisted sort direction (an int) into
+    the type the header expects; the default passes the int straight
+    through, which is what duck-typed headers take.
+    """
     try:
         if not isinstance(snap, dict):
             return
@@ -471,7 +478,8 @@ def apply_table_view(header: Any, snap: Any) -> None:  # noqa: C901 - grandfathe
                     # Real Qt headers want the enum; duck-typed headers
                     # accept the plain int (first call falls back).
                     try:
-                        header.setSortIndicator(column, _sort_order_value(sort[1]))
+                        order_value = sort_order(int(sort[1])) if sort_order else int(sort[1])
+                        header.setSortIndicator(column, order_value)
                     except Exception:
                         header.setSortIndicator(column, int(sort[1]))
                     if snap.get("sort_shown"):
@@ -511,7 +519,9 @@ def clear_table_state(workspace: Path, name: str) -> None:
         pass
 
 
-def restore_table_state(workspace: Path, name: str, header: Any) -> bool:
+def restore_table_state(
+    workspace: Path, name: str, header: Any, sort_order: SortOrder | None = None
+) -> bool:
     """Re-apply a persisted view state (best-effort, never raises).
 
     Widths always come back; sort indicator, hidden columns, and visual
@@ -520,6 +530,9 @@ def restore_table_state(workspace: Path, name: str, header: Any) -> bool:
     ignored: it would squeeze the wrong columns.
     Returns True when a saved entry was applied (caller should skip
     content auto-fit so the user's layout wins).
+
+    ``sort_order`` is the header's sort-direction converter - the view
+    layer owns it so this module stays Qt-free.
     """
     try:
         path = _table_layout_path(workspace)
@@ -531,7 +544,7 @@ def restore_table_state(workspace: Path, name: str, header: Any) -> bool:
         entry = raw.get(name)
         if not table_layout_entry_valid(entry, header.count()):
             return False
-        apply_table_view(header, entry)
+        apply_table_view(header, entry, sort_order)
         return True
     except Exception:
         return False

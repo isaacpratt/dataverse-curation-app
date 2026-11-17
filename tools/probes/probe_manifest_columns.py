@@ -20,7 +20,7 @@ from _common import Report, boot
 
 def main() -> int:
     app, cfg = boot()
-    from storage import _table_layout_path
+    from curation.storage import _table_layout_path
     from ui import dataset_detail as dd
 
     # The view fetches the dataset's metadata on a timer; the probe only

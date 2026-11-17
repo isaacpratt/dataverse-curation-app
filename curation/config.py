@@ -42,7 +42,7 @@ PRESETS: dict[str, str] = {
 def _warn_acl_failure(reason: str) -> None:
     """Config was written without owner-only protection; say so (no secrets)."""
     try:
-        from applog import get_app_log
+        from curation.applog import get_app_log
 
         get_app_log().warn(
             f"config.json could not be locked down ({reason}); the file is stored with "
@@ -283,7 +283,7 @@ class Config:
             except Exception:
                 kr = None
                 try:
-                    from applog import get_app_log
+                    from curation.applog import get_app_log
 
                     get_app_log().warn("keyring read failed; falling back to token in config.json")
                 except Exception:
@@ -320,7 +320,7 @@ class Config:
                 return "", "keyring"
             except Exception:
                 try:
-                    from applog import get_app_log
+                    from curation.applog import get_app_log
 
                     get_app_log().warn(
                         "keyring unavailable; API token remains in config.json (owner-only ACL)"

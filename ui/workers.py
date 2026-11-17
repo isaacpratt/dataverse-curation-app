@@ -149,8 +149,8 @@ class CrawlWorker(QThread):
         import traceback
 
         try:
-            from applog import get_app_log
-            from dataverse_client import STATE_IN_REVIEW, DataverseClient
+            from curation.applog import get_app_log
+            from curation.client import STATE_IN_REVIEW, DataverseClient
 
             self.progress.emit(t("workers.connecting", base_url=self._base_url))
             client = DataverseClient(self._base_url, self._api_token)
@@ -304,7 +304,7 @@ class CrawlWorker(QThread):
             # doomed report call and read per-draft curationStatus only —
             # labels/status exist solely for datasets under curation, so
             # published/deaccessioned rows are never attempted.
-            from dataverse_client import is_draft_dataset
+            from curation.client import is_draft_dataset
 
             labels: list = []
             report = None
@@ -436,7 +436,7 @@ class CrawlWorker(QThread):
                     for d in datasets
                     if d.get("persistent_id") and d.get("persistent_id") not in ordered
                 ]
-                from dataverse_client import get_cached_allowed_labels
+                from curation.client import get_cached_allowed_labels
 
                 was_cached = get_cached_allowed_labels(self._base_url, self._subtree) is not None
                 if was_cached:
@@ -541,7 +541,7 @@ class DownloadWorker(QThread):
     def run(self) -> None:
         import traceback
 
-        from download_manager import DownloadCancelled, DownloadManager
+        from curation.download_manager import DownloadCancelled, DownloadManager
 
         try:
             mgr = DownloadManager(self._client, self._workspace)
@@ -691,7 +691,7 @@ class MetadataBlocksWorker(QThread):
         import traceback
 
         try:
-            from dataverse_client import (
+            from curation.client import (
                 DataverseClient,
                 read_metadata_fields_cache,
                 write_metadata_fields_cache,
@@ -739,7 +739,7 @@ class MetadataWorker(QThread):
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         try:
-            from dataverse_client import DataverseClient
+            from curation.client import DataverseClient
 
             client = DataverseClient(self._base_url, self._api_token)
 

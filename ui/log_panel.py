@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-import applog
+from curation import applog
 from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,

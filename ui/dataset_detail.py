@@ -26,10 +26,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config import Config
-from dataverse_client import DataverseClient
-from download_manager import DownloadManager
-from metadata_check import DEFAULT_PROFILE, PROFILES
+from curation.client import DataverseClient
+from curation.config import Config
+from curation.download_manager import DownloadManager
+from curation.metadata_check import DEFAULT_PROFILE, PROFILES
 from ui.dialogs import confirm, describe_error, show_critical, show_info, show_warning
 from ui.download_dialog import DownloadApprovalDialog
 from ui.i18n import t
@@ -875,7 +875,7 @@ class DatasetDetailView(QWidget):
     def _meta_display(value) -> str:
         """Compact display text for any metadata value (never raises)."""
         try:
-            from metadata_check import _display_value as _dv
+            from curation.metadata_check import _display_value as _dv
 
             return _dv(value, max_len=1000)
         except Exception:
@@ -929,7 +929,7 @@ class DatasetDetailView(QWidget):
         if rule_id.endswith("orcid"):
             return []
         try:
-            from metadata_check import _field
+            from curation.metadata_check import _field
 
             meta = self._metadata or {}
             latest = meta.get("latestVersion") or {}
@@ -1438,7 +1438,7 @@ class DatasetDetailView(QWidget):
     def refresh_rules(self) -> None:
         """Reload rule profiles (after Review-config save) and re-evaluate."""
         try:
-            import metadata_check as _mc
+            from curation import metadata_check as _mc
 
             _mc.refresh_profiles_from_rulesets()
             combo = getattr(self, "_profile_combo", None)
@@ -1470,7 +1470,7 @@ class DatasetDetailView(QWidget):
         if getattr(self, "_response_loading", False):
             return
         try:
-            from response_draft import build_response
+            from curation.response_draft import build_response
         except Exception:
             return
         if self._metadata is None:
@@ -1491,7 +1491,7 @@ class DatasetDetailView(QWidget):
         try:
             ruleset = self._ruleset if isinstance(self._ruleset, dict) and self._ruleset else None
             if ruleset is None:
-                import review_rules as _rr
+                from curation import review_rules as _rr
 
                 try:
                     pool = _rr.load_rulesets()
@@ -1499,7 +1499,7 @@ class DatasetDetailView(QWidget):
                     pool = {}
                 key = "mcmaster-default"
                 try:
-                    import metadata_check as _mc
+                    from curation import metadata_check as _mc
 
                     key = _mc.PROFILE_TO_RULESET.get(self._profile, self._profile)
                     if key not in pool:
@@ -1641,7 +1641,7 @@ class DatasetDetailView(QWidget):
                 sid = str(s.get("id") or "")
                 if sid in states:
                     s["included"] = states[sid]
-            from response_draft import render_response
+            from curation.response_draft import render_response
 
             md = render_response(
                 self._ruleset or {}, self._response_sections or [], self._title, self._pid
@@ -1943,7 +1943,7 @@ class DatasetDetailView(QWidget):
     def _state(self):  # type: ignore[no-untyped-def]
         """Open the workspace state.db (best-effort; returns None on failure)."""
         try:
-            from storage import open_state
+            from curation.storage import open_state
 
             return open_state(self._config.app.workspace)
         except Exception:
@@ -2657,7 +2657,7 @@ class DatasetDetailView(QWidget):
                     break
             # Prefer the real Dataverse title when metadata arrives (TopNav chips use it)
             try:
-                from dataverse_client import extract_title
+                from curation.client import extract_title
 
                 real_title = extract_title(latest) if isinstance(latest, dict) else ""
                 if real_title and real_title != self._title:
@@ -3540,7 +3540,7 @@ class DatasetDetailView(QWidget):
         self._inventory_ok = not inv_failed
         if not inv_failed:
             try:
-                from storage import write_size_entry
+                from curation.storage import write_size_entry
 
                 write_size_entry(
                     self._config.app.workspace,
@@ -3651,7 +3651,7 @@ class DatasetDetailView(QWidget):
             if cache is None:
                 cache = {}
                 try:
-                    from dataverse_client import read_metadata_fields_cache
+                    from curation.client import read_metadata_fields_cache
 
                     for f in (
                         read_metadata_fields_cache(
@@ -3673,7 +3673,7 @@ class DatasetDetailView(QWidget):
     def _populate_completeness(self, metadata: dict) -> None:
         # Rule-driven evaluation (keeps rule_id/level/pending for Response).
         try:
-            from metadata_check import check_with_ruleset
+            from curation.metadata_check import check_with_ruleset
 
             full, ruleset = check_with_ruleset(
                 metadata, self._profile, self._inventory, self._staged_dir_or_none()
@@ -3682,7 +3682,7 @@ class DatasetDetailView(QWidget):
             self._ruleset = ruleset
             results = [dict(r) for r in full]
         except Exception:
-            from metadata_check import check_metadata_completeness
+            from curation.metadata_check import check_metadata_completeness
 
             results = check_metadata_completeness(
                 metadata, profile=self._profile, inventory=self._inventory

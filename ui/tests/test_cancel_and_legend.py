@@ -9,7 +9,7 @@ whose chips use the highlighter's exact fills (WYSIWYG).
 import pytest
 from PySide6.QtWidgets import QLabel
 
-from dataverse_client import DownloadCancelled
+from curation.client import DownloadCancelled
 from ui.workers import DownloadWorker
 
 

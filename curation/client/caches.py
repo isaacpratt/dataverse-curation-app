@@ -10,7 +10,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from client.parsers import top_level_collection
+from curation.client.parsers import top_level_collection
 
 # Authenticated-identity cache: (base_url, token fingerprint) -> /api/users/:me data.
 # Keyed by a SHA-256 fingerprint, never the token itself. Successes only —

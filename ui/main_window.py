@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config import Config
+from curation.config import Config
 from ui.dashboard import DashboardView
 from ui.dialogs import show_warning
 from ui.i18n import t
@@ -864,7 +864,7 @@ class MainWindow(QMainWindow):
             self._refresh_nav_state()
             return
         # Imported here, not at module level: the detail view drags in the
-        # whole network stack (requests, dataverse_client, download manager,
+        # whole network stack (requests, the Dataverse client, download manager,
         # metadata rules). None of it is needed to show the dashboard.
         from ui.dataset_detail import DatasetDetailView
 
@@ -1265,7 +1265,7 @@ class MainWindow(QMainWindow):
             _declare_dwm_signatures(dwmapi, _MARGINS)
 
             try:
-                from applog import get_app_log as _get_log
+                from curation.applog import get_app_log as _get_log
             except Exception:
                 _get_log = None  # type: ignore[assignment]
 

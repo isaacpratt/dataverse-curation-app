@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 import requests
 
-from dataverse_client import DataverseClient, GuestbookRequired
+from curation.client import DataverseClient, GuestbookRequired
 
 
 class _ErrorResponse:

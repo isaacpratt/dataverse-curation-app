@@ -1,18 +1,18 @@
-"""Dataverse client package - implementation split out of dataverse_client.py.
+"""Dataverse client package - the Native/Search API client.
 
-Public surface is intentionally identical to the original module, and
-``dataverse_client`` re-exports all of it; existing imports keep working.
+Public surface: ``curation.client`` re-exports everything the app and the
+tests import; the implementation is split across focused modules.
 Layout:
 
-- ``client.constants`` - retry/backoff pools, stream chunk, state tokens
-- ``client.errors``    - _RetryOriginal, DownloadCancelled, GuestbookRequired
-- ``client.http``      - small HTTP helpers (_error_message, _throttle_delay)
-- ``client.parsers``   - pure payload parsers/normalizers (no network)
-- ``client.caches``    - identity/labels/metadatablock caches (memory + disk)
-- ``client.client``    - DataverseClient: session, retries, downloads, guestbook
+- ``curation.client.constants`` - retry/backoff pools, stream chunk, state tokens
+- ``curation.client.errors``    - _RetryOriginal, DownloadCancelled, GuestbookRequired
+- ``curation.client.http``      - small HTTP helpers (_error_message, _throttle_delay)
+- ``curation.client.parsers``   - pure payload parsers/normalizers (no network)
+- ``curation.client.caches``    - identity/labels/metadatablock caches (memory + disk)
+- ``curation.client.client``    - DataverseClient: session, retries, downloads, guestbook
 """
 
-from client.caches import (
+from curation.client.caches import (
     _ALLOWED_LABELS_CACHE,
     _ALLOWED_LABELS_FILE,
     _ALLOWED_LABELS_LOCK,
@@ -35,23 +35,23 @@ from client.caches import (
     write_allowed_labels_cache,
     write_metadata_fields_cache,
 )
-from client.client import DataverseClient
-from client.constants import (
+from curation.client.client import DataverseClient
+from curation.client.constants import (
     _RETRYABLE_NETWORK,
     _RETRYABLE_STATUS,
     _STREAM_CHUNK,
     STATE_IN_REVIEW,
 )
-from client.errors import (
+from curation.client.errors import (
     DownloadCancelled,
     GuestbookRequired,
     _RetryOriginal,
 )
-from client.http import (
+from curation.client.http import (
     _error_message,
     _throttle_delay,
 )
-from client.parsers import (
+from curation.client.parsers import (
     _CURATION_NONE_VALUES,
     _DATE_RE,
     REVIEW_SUBMIT_TYPES,

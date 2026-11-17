@@ -53,7 +53,7 @@ def test_orcid_rule_targets_the_identifier_subfield(win):
 
 
 def test_parse_metadatablock_fields_fixture_roundtrip():
-    from dataverse_client import parse_metadatablock_fields
+    from curation.client import parse_metadatablock_fields
 
     repo = Path(__file__).resolve().parents[2]
     payload = json.loads(

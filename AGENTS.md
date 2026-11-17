@@ -21,13 +21,15 @@ dataverse-curation-app/
 ├── tools/                  # operational helpers (audit/SBOM/licenses, smoke, startup probe) + probes/
 │   ├── probes/             # offscreen UI probes (queue columns, manifest columns, page headings, card corner, buttons, gallery)
 │   └── startup_probe.py    # opt-in startup phase timings (DOCENT_STARTUP_LOG)
-├── client/               # Native/Search API client (constants/errors/http/parsers/caches/downloads/DataverseClient; total-driven paginated search + pooled inventory enrichment, versions/compare/timestamps/notifications/curation labels)
-├── dataverse_client.py   # compatibility shim re-exporting client/ (existing imports keep working)
-├── download_manager.py   # approval-gated downloads, originals, skip-if-staged, verify (ok/problems/warnings)
-├── dashboard_cache.py    # Qt-free dashboard cache helpers (slot keys, fingerprints, diffing, load/save)
-├── metadata_check.py     # citation-block completeness (McMaster / Minimal profiles)
-├── applog.py             # in-memory request log (Log page)
-├── storage.py            # SQLite local state + JSON caches (sizes, labels, table layout)
+├── curation/               # the app core: no Qt, no view imports (import-linter enforces both)
+│   ├── client/             # Native/Search API client (constants/errors/http/parsers/caches/downloads/DataverseClient; total-driven paginated search + pooled inventory enrichment, versions/compare/timestamps/notifications/curation labels)
+│   ├── download_manager.py # approval-gated downloads, originals, skip-if-staged, verify (ok/problems/warnings)
+│   ├── dashboard_cache.py  # Qt-free dashboard cache helpers (slot keys, fingerprints, diffing, load/save)
+│   ├── metadata_check.py   # citation-block completeness (McMaster / Minimal profiles)
+│   ├── response_draft.py   # depositor response assembler
+│   ├── review_rules.py     # rule-driven completeness evaluation
+│   ├── applog.py           # in-memory request log (Log page)
+│   └── storage.py          # SQLite local state + JSON caches (sizes, labels, table layout)
 ├── main.py               # entry point (GUI + --headless)
 └── config.example.json   # configuration template (copy to config.json)
 ```
@@ -104,7 +106,7 @@ Gate before handoff; run from the repository root when code (not docs-only) chan
 
 - `uv run pytest -q` — must exit 0
 - `uv run poe typecheck` — must report `Success: no issues found`; the engine contract is checked under mypy `--strict` and the scope is `[tool.mypy] files`, so run bare `uv run mypy`
-- `uv run poe contracts` — import-linter contracts must stay green: `engine/` may not import `ui/` or `PySide6`, and the operational helpers in `tools/` may not import `ui/` (the UI probes are the documented exception; the engine contract has none since dv-hcg.26)
+- `uv run poe contracts` — import-linter contracts must stay green: `engine/` and `curation/` may not import `ui/` or `PySide6`, and the operational helpers in `tools/` may not import `ui/` (the UI probes are the documented exception)
 - `python tools/probes/run_all.py` — must end with `all N probes passed`; mandatory for UI/theme changes, and cheap enough to always run
 - headless box? set `QT_QPA_PLATFORM=offscreen` first, or the probes fail for the wrong reason
 - probes run against a throwaway temp workspace (see `tools/probes/README.md`) — never against the configured instance or the real `workspace/table_layout.json`

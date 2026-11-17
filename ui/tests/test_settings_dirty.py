@@ -14,7 +14,7 @@ CUSTOM = "Custom\u2026"
 
 @pytest.fixture
 def pane(qapp, tmp_path, monkeypatch):
-    from config import Config
+    from curation.config import Config
     from ui.settings_dialog import SettingsPane
 
     monkeypatch.setattr(SettingsPane, "_start_size_worker", lambda self: None)
@@ -90,7 +90,7 @@ def test_tool_path_change_marks_dirty(pane):
 
 
 def test_preset_change_that_rewrites_the_url_marks_dirty(qapp, tmp_path, monkeypatch):
-    from config import Config
+    from curation.config import Config
     from ui.settings_dialog import SettingsPane
 
     monkeypatch.setattr(SettingsPane, "_start_size_worker", lambda self: None)

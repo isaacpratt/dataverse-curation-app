@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-import config as config_mod
-import metadata_check
+from curation import config as config_mod
+from curation import metadata_check
 
 
 def _freeze(monkeypatch: pytest.MonkeyPatch, exe: Path) -> None:

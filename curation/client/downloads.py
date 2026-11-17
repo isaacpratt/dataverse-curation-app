@@ -13,11 +13,11 @@ from typing import Any
 
 import requests
 
-from applog import get_app_log
-from client.constants import _RETRYABLE_NETWORK, _STREAM_CHUNK
-from client.errors import DownloadCancelled, GuestbookRequired, _RetryOriginal
-from client.http import _error_message, _throttle_delay
-from client.parsers import _summarize_version_data, is_draft_dataset
+from curation.applog import get_app_log
+from curation.client.constants import _RETRYABLE_NETWORK, _STREAM_CHUNK
+from curation.client.errors import DownloadCancelled, GuestbookRequired, _RetryOriginal
+from curation.client.http import _error_message, _throttle_delay
+from curation.client.parsers import _summarize_version_data, is_draft_dataset
 
 
 class _DownloadsMixin:
@@ -257,7 +257,7 @@ class _DownloadsMixin:
         .part path. `is_cancelled` is polled per chunk; a True answer
         raises DownloadCancelled, which is never retried.
         """
-        from applog import log_response
+        from curation.applog import log_response
 
         if is_cancelled and is_cancelled():
             raise DownloadCancelled(label)
@@ -524,7 +524,7 @@ class _DownloadsMixin:
         `is_cancelled` is polled before each attempt and per chunk; a True
         answer raises DownloadCancelled, which is never retried.
         """
-        from applog import log_response
+        from curation.applog import log_response
 
         dest = Path(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
