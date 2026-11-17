@@ -114,6 +114,29 @@ def test_current_folder_alone_marks_an_install(
     assert config_mod.resolve_config_path(None) == appdata / "config.json"
 
 
+def test_the_portable_zip_is_not_an_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The portable package has exactly the `<root>/current/` + Update.exe shape
+    # of an install; it marks its root `.portable` instead of registering an
+    # uninstall entry, and that marker is the only thing telling them apart.
+    root = tmp_path / "DataverseDocent-win-Portable"
+    exe_dir = root / "current"
+    exe_dir.mkdir(parents=True)
+    (root / "Update.exe").write_bytes(b"")
+    (root / ".portable").write_bytes(b"")
+    exe = exe_dir / "curation-app-full.exe"
+    exe.write_bytes(b"")
+    _freeze(monkeypatch, exe)
+    _no_velopack(monkeypatch)
+    monkeypatch.chdir(exe_dir)
+
+    assert config_mod.is_installed_build() is False
+    # Beside the exe, then one level up ("above the folder the installer
+    # replaces"), never per-user app data.
+    assert config_mod.resolve_config_path(None) == root / "config.json"
+
+
 def test_velopack_portable_answer_wins_over_the_layout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, appdata: Path
 ) -> None:
