@@ -86,6 +86,7 @@ from ui.widgets import (
     WorkflowRail,
     add_info_tip,
     disposition_label,
+    fit_tree_height,
     flush_list_style,
     flush_table_style,
     make_action_button,
@@ -4313,28 +4314,10 @@ class DatasetDetailView(QWidget):
         """Grow the manifest tree to its visible rows (no inner scroll).
 
         The tree lives on the page's scroll canvas, so an inner scrollbar
-        only traps the wheel. Every expanded row contributes its 30px
-        row height plus the header band.
+        only traps the wheel. Delegates to the kit's content-fit helper
+        (the same one the review-config checks tree uses).
         """
-        try:
-            tree = self._file_tree
-            model = tree.model()
-            visible_rows = 0
-            if model is not None:
-                stack = [tree.rootIndex()]
-                while stack:
-                    parent = stack.pop()
-                    count = model.rowCount(parent)
-                    visible_rows += count
-                    for r in range(count):
-                        idx = model.index(r, 0, parent)
-                        if model.hasChildren(idx) and tree.isExpanded(idx):
-                            stack.append(idx)
-            row_h = 30
-            header_h = tree.header().height() or 30
-            tree.setFixedHeight(max(80, header_h + visible_rows * row_h + 2))
-        except Exception:
-            pass
+        fit_tree_height(self._file_tree, row_height=30, floor=80)
 
     def _sync_tree_carets(self) -> None:
         """Re-sync folder icons with the manifest tree's expanded state."""
