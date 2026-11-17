@@ -143,11 +143,18 @@ def test_velopack_portable_answer_wins_over_the_layout(
     exe = _installed(monkeypatch, tmp_path)
     module = types.ModuleType("velopack")
 
+    class _Source:
+        def __init__(self, *args, **kwargs):
+            pass
+
     class _Manager:
-        @staticmethod
-        def get_is_portable() -> bool:
+        def __init__(self, source=None):
+            self._source = source
+
+        def get_is_portable(self) -> bool:
             return True
 
+    module.GithubSource = _Source  # type: ignore[attr-defined]
     module.UpdateManager = _Manager  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "velopack", module)
 

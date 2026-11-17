@@ -37,6 +37,31 @@ if _TYPE_CHECKING:  # pragma: no cover  # noqa: E402
     import ui.workers  # noqa: F401
 
 
+def _kick_update_check() -> None:
+    """Start the once-a-day feed check, silently and off the GUI thread.
+
+    Runs only after the window has been revealed (same rule as the
+    dashboard's background load) and only in the GUI, never headless or
+    in the gallery. Every failure is a silent no-op (the Log carries one
+    line when the check fails); an update is surfaced in the About pane,
+    never a modal.
+    """
+    import os
+
+    if os.environ.get("DOCENT_NO_UPDATE_CHECK"):
+        return
+    try:
+        from ui import updater
+
+        if not updater.is_check_due():
+            return
+        worker = updater.UpdateCheckWorker(force=False)
+        worker.finished.connect(lambda _outcome: updater.notify_state_changed())
+        worker.start()
+    except Exception:
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=t("app.cli.description"))
     parser.add_argument(
@@ -241,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
     window.reveal()
     mark("first paint")
     window.start_background_load()
+    _kick_update_check()
     return app.exec()
 
 
