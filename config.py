@@ -2,15 +2,18 @@
 
 The curator chooses which Dataverse to work against in Settings (or via
 CLI flags in headless mode). The selected base URL, API token and
-collection alias are persisted to config.json — resolved for frozen
-builds by `resolve_config_path` (CWD, next to the exe, then the folder
-holding the build), for dev runs in the working directory.
+collection alias are persisted to config.json. Installed builds keep it
+(and the requirement profiles) under the per-user app data folder, where
+an update or reinstall cannot reach it; portable builds keep it beside
+the exe; dev runs use the working directory. `resolve_user_file` is the
+one policy every user-editable file follows.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,29 +23,128 @@ PRESETS: dict[str, str] = {
     "Custom…": "",
 }
 
-DEFAULT_CONFIG_PATH = Path("config.json")
+#: Folder under %APPDATA% / Application Support / XDG config for data that
+#: has to outlive an update and a reinstall (the API token, curated rules).
+APP_DIR_NAME = "Dataverse Docent"
+
+CONFIG_FILE_NAME = "config.json"
+
+DEFAULT_CONFIG_PATH = Path(CONFIG_FILE_NAME)
+
+
+def user_data_dir() -> Path:
+    """Per-user folder for files that must survive an update or reinstall.
+
+    Windows uses %APPDATA% (roaming, so a token follows the user to another
+    machine in the same domain); macOS and Linux follow their own convention
+    so a dev run and the tests behave the same way everywhere. Velopack
+    replaces the whole install folder on every update, so nothing a curator
+    typed may live there.
+    """
+    if os.name == "nt":
+        base = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
+        return Path(base) / APP_DIR_NAME
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / APP_DIR_NAME
+    return Path(os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")) / APP_DIR_NAME
+
+
+def _frozen_exe_dir() -> Path | None:
+    """Folder holding the running exe, or None for a source run."""
+    if not getattr(sys, "frozen", False):
+        return None
+    return Path(sys.executable).parent
+
+
+def is_installed_build() -> bool:
+    """Decide whether this frozen run lives inside an installed (Velopack) app.
+
+    Velopack unpacks each version into `<root>/current/` next to its own
+    `Update.exe` and swaps that folder on every update. Its runtime answers
+    authoritatively when it is importable; the folder shape answers when it
+    is not, because a plain PyInstaller onedir or an unzipped portable build
+    has neither marker and must keep the beside-the-exe behaviour.
+    """
+    exe_dir = _frozen_exe_dir()
+    if exe_dir is None:
+        return False
+    try:
+        from velopack import UpdateManager  # type: ignore[import-not-found]
+
+        portable = UpdateManager.get_is_portable()
+        if isinstance(portable, bool):
+            return not portable
+    except Exception:
+        pass
+    return exe_dir.name == "current" or (exe_dir.parent / "Update.exe").exists()
+
+
+def _legacy_candidates(name: str, exe_dir: Path) -> list[Path]:
+    """Where a user-editable file used to live, nearest first.
+
+    CWD first (terminal launches have always resolved there), then beside
+    the exe, then one and two levels above it — the folder holding the
+    build, where onefile-era launches and portable zips kept the file.
+    """
+    return [
+        Path(name),
+        exe_dir / name,
+        exe_dir.parent / name,
+        exe_dir.parent.parent / name,
+    ]
+
+
+def _migrate(target: Path, candidates: list[Path]) -> bool:
+    """Copy the first existing legacy file to `target`; never delete it."""
+    for candidate in candidates:
+        try:
+            if not candidate.is_file():
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(candidate, target)
+            return True
+        except OSError:
+            continue
+    return False
+
+
+def resolve_user_file(name: str) -> Path:
+    """Resolve a user-editable data file by policy, not by accident.
+
+    Source runs keep CWD semantics (the repo root is the sandbox). Installed
+    builds read and write under `user_data_dir()`, migrating an existing
+    file from the old beside-the-exe locations on first run so an upgrade
+    does not silently drop a token or a hand-built ruleset. Portable builds
+    keep the old search untouched.
+    """
+    exe_dir = _frozen_exe_dir()
+    if exe_dir is None:
+        return Path(name)
+    candidates = _legacy_candidates(name, exe_dir)
+    if is_installed_build():
+        target = user_data_dir() / name
+        if not target.exists():
+            _migrate(target, candidates)
+        return target
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return exe_dir.parent / name
 
 
 def resolve_config_path(path: Path | None = None) -> Path:
     """Choose which config.json this run reads and writes.
 
-    Source runs are unchanged (CWD semantics) and explicit paths are
-    honoured as-is. For the default path inside a frozen exe: CWD first
-    (terminal launches have always resolved there), then beside the exe,
-    then one level above the exe — the folder holding the build, where
-    onefile-era launches kept the file — so the lite exe moving into its
-    own onedir subfolder still finds an existing config. With no config
-    anywhere, frozen runs default above the build folder so a fresh save
-    survives rebuilds (PyInstaller wipes its output folder on rebuild).
+    An explicit path is honoured as-is (the `--config` flag, tests). The
+    bare default - `None`, or the literal `config.json` that argparse
+    supplies - is a request for the policy, not a location:
+    `resolve_user_file` answers with per-user app data for an installed
+    build, beside the exe for a portable one, the working directory for a
+    source run.
     """
-    primary = Path(path) if path else DEFAULT_CONFIG_PATH
-    if primary != DEFAULT_CONFIG_PATH or not getattr(sys, "frozen", False):
-        return primary
-    exe_dir = Path(sys.executable).parent
-    for candidate in (primary, exe_dir / primary.name, exe_dir.parent / primary.name):
-        if candidate.exists():
-            return candidate
-    return exe_dir.parent / primary.name
+    if path is not None and Path(path) != DEFAULT_CONFIG_PATH:
+        return Path(path)
+    return resolve_user_file(CONFIG_FILE_NAME)
 
 
 def default_workspace() -> Path:

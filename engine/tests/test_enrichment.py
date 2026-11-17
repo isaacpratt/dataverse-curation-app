@@ -66,7 +66,8 @@ class _StubClient(DataverseClient):
         super().__init__("https://example.invalid", "token")
         self._docs = docs
 
-    def _fetch_version_data(self, identifier, version="draft", fall_back_on_auth=False):
+    def _fetch_version_data(self, identifier, version="draft", fall_back_on_auth=False,
+                            order=None):
         doc = self._docs.get(identifier)
         if isinstance(doc, BaseException):
             raise doc
@@ -91,7 +92,10 @@ def test_enrich_sums_and_patches():
     client = _StubClient(docs)
     rows = [_thin(pid)]
     stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
-    assert stats == {"attempted": 1, "enriched": 1, "pending": 0, "auth_failed": 0}
+    assert stats == {
+        "attempted": 1, "enriched": 1, "pending": 0,
+        "auth_failed": 0, "restricted": 0,
+    }
     row = rows[0]
     assert row["total_size_bytes"] == 150
     assert row["size_enriched"] is True
@@ -100,6 +104,8 @@ def test_enrich_sums_and_patches():
     assert row["has_draft"] is True
     assert row["file_count"] == 2  # falsy search count filled from inventory
     assert "files" not in row  # sums-only: no file arrays embedded
+    assert row["access"]["state"] == "readable"
+    assert row["access"]["version"] == ":draft"
 
 
 def test_drafts_first_with_cap():
@@ -136,15 +142,27 @@ def test_error_isolation():
     assert rows[2]["total_size_bytes"] == 7
 
 
-def test_auth_abort():
-    pid = "doi:10.5072/FK2/A"
-    client = _StubClient({pid: _http_error(401)})
-    rows = [_thin(pid)]
+def test_restricted_row_is_marked_and_the_batch_continues():
+    """A dataset this account may not read is marked, not dropped.
+
+    A 401 on one dataset is the server's answer for that dataset (its
+    curation scope), not a broken token: the row records the refusal and
+    the other rows are still enriched.
+    """
+    denied, ok = "doi:10.5072/FK2/DENIED", "doi:10.5072/FK2/OK"
+    client = _StubClient(
+        {denied: _http_error(401), ok: _version_doc([_entry("a.csv", 5)])}
+    )
+    rows = [_thin(denied), _thin(ok)]
     stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
-    assert stats["auth_failed"] == 1
-    assert stats["enriched"] == 0
-    assert rows[0].get("total_size_bytes") is None
-    assert "size_enriched" not in rows[0]
+    assert stats["restricted"] == 1
+    assert stats["enriched"] == 1
+    assert stats["auth_failed"] == 0
+    denied_row = rows[0]
+    assert denied_row["access"]["state"] == "restricted"
+    assert denied_row["access"]["reason"]
+    assert denied_row.get("total_size_bytes") is None
+    assert rows[1]["total_size_bytes"] == 5
 
 
 def test_cancellation():
@@ -276,27 +294,26 @@ def test_discovery_progress_reports_page_counts(monkeypatch):
     assert seen == [(1, 2, 1000), (2, 2, 2000)]
 
 
-def test_enrichment_falls_back_to_published_when_draft_denied():
-    """A published dataset with no readable draft still enriches.
+def test_published_row_is_read_once_without_a_version_probe():
+    """A published row needs one dataset read — no doomed :draft probe.
 
-    `:draft` is refused (401) but `:latest` answers — the row must be
-    enriched from the published version, not dropped. Stubs the HTTP
-    layer so the real version-fallback logic runs.
+    The search payload already says the dataset is published with no
+    draft, and a :draft probe there is answered "not permitted" every
+    time. The unversioned dataset read answers with the published
+    version.
     """
     pid = "doi:10.5072/FK2/PUB"
-    # A plain client (no _fetch_version_data override) so the real
-    # version-fallback logic runs against a patched HTTP layer.
     client = DataverseClient("https://example.invalid", "token")
     seen = []
 
     def _get_json(path, params=None, **kwargs):
         seen.append(path)
-        if path.endswith("/versions/:draft"):
-            raise _http_error(401)
         return {
             "data": {
-                "files": [_entry("p.csv", 42)],
-                "versionState": "RELEASED",
+                "latestVersion": {
+                    "files": [_entry("p.csv", 42)],
+                    "versionState": "RELEASED",
+                }
             }
         }
 
@@ -304,10 +321,94 @@ def test_enrichment_falls_back_to_published_when_draft_denied():
     rows = [_thin(pid, draft=False)]
     stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
     assert stats["enriched"] == 1
-    assert stats["auth_failed"] == 0
     assert rows[0]["total_size_bytes"] == 42
-    assert any(p.endswith("/versions/:draft") for p in seen)
-    assert any(p.endswith("/versions/:latest") for p in seen)
+    assert rows[0]["access"]["state"] == "readable"
+    assert rows[0]["access"]["version"] == ":latest-published"
+    # One call, and it is not a version probe.
+    assert len(seen) == 1
+    assert "/versions/" not in seen[0]
+
+
+def test_deaccessioned_row_never_asks_for_a_published_version():
+    """A deaccessioned row has no published version — do not ask for one."""
+    pid = "doi:10.5072/FK2/DEACC"
+    client = DataverseClient("https://example.invalid", "token")
+    seen = []
+
+    def _get_json(path, params=None, **kwargs):
+        seen.append(path)
+        if "/versions/" in path:
+            raise _http_error(404)
+        # The dataset itself answers (a deaccessioned dataset still has a
+        # record) — only its versions are gone.
+        return {"data": {"versionState": "DEACCESSIONED"}}
+
+    client._get_json = _get_json
+    rows = [_thin(pid, draft=False)]
+    rows[0]["state"] = "DEACCESSIONED"
+    client.enrich_datasets_with_inventory(rows, max_workers=1)
+    assert not any("/versions/" in p for p in seen)
+    assert rows[0]["access"]["state"] == "metadata_only"
+    assert rows[0]["access"]["reason"] == "no_published_version"
+    assert rows[0].get("size_enriched") is None
+
+
+def test_draft_row_probes_draft_first_and_falls_back():
+    """A row under curation is read at :draft first, the dataset read second."""
+    pid = "doi:10.5072/FK2/DRF"
+    client = DataverseClient("https://example.invalid", "token")
+    seen = []
+
+    def _get_json(path, params=None, **kwargs):
+        seen.append(path)
+        if path.endswith("/versions/:draft"):
+            raise _http_error(401)
+        # The dataset read answers with the published version.
+        return {
+            "data": {
+                "latestVersion": {
+                    "files": [_entry("d.csv", 7)],
+                    "versionState": "RELEASED",
+                }
+            }
+        }
+
+    client._get_json = _get_json
+    rows = [_thin(pid, draft=True)]
+    stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
+    assert stats["enriched"] == 1
+    assert rows[0]["total_size_bytes"] == 7
+    assert seen[0].endswith("/versions/:draft")
+    assert "/versions/" not in seen[1]
+    # The draft was refused for this account, so the row says so.
+    assert rows[0]["access"]["state"] == "readable"
+    assert rows[0]["access"]["version"] == ":latest-published"
+
+
+def test_draft_row_readable_at_draft_is_marked_as_a_draft():
+    """A draft the account may read is recorded as a draft."""
+    pid = "doi:10.5072/FK2/DRF2"
+    client = DataverseClient("https://example.invalid", "token")
+    seen = []
+
+    def _get_json(path, params=None, **kwargs):
+        seen.append(path)
+        return {
+            "data": {
+                "files": [_entry("d.csv", 7)],
+                "versionState": "DRAFT",
+            }
+        }
+
+    client._get_json = _get_json
+    rows = [_thin(pid, draft=True)]
+    stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
+    assert stats["enriched"] == 1
+    assert seen[0].endswith("/versions/:draft")
+    assert len(seen) == 1
+    assert rows[0]["has_draft"] is True
+    assert rows[0]["access"]["state"] == "readable"
+    assert rows[0]["access"]["version"] == ":draft"
 
 
 def test_enrichment_leaves_size_unknown_when_files_absent():

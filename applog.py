@@ -80,8 +80,30 @@ class AppLog:
         except Exception:
             pass
 
+    @staticmethod
+    def expected(message: str) -> None:
+        """Log a server answer that is the documented answer, not a bug.
 
-def log_response(method: str, url: str, status: int, elapsed_ms: int, summary: str = "") -> None:
+        The message still carries the true call and response; the EXPECTED
+        word only says the refusal is expected for that endpoint (for
+        example a draft this account may not read). The Log page paints
+        these in the muted tone instead of the error red.
+        """
+        log(f"EXPECTED: {message}")
+        try:
+            _logger.info(_redact(message))
+        except Exception:
+            pass
+
+
+def log_response(
+    method: str,
+    url: str,
+    status: int,
+    elapsed_ms: int,
+    summary: str = "",
+    context: str = "",
+) -> None:
     # Strip query-string secrets from URLs before storing.
     try:
         import re
@@ -92,4 +114,9 @@ def log_response(method: str, url: str, status: int, elapsed_ms: int, summary: s
     msg = f"{method} {safe_url} → {status} ({elapsed_ms} ms)"
     if summary:
         msg += f" — {summary}"
+    if context:
+        # Context is appended, never substituted: the call, the status and
+        # the timing stay exactly as the server answered them. The marker
+        # is the same word the Log page paints in the muted tone.
+        msg += f" — EXPECTED: {context}"
     log(msg)

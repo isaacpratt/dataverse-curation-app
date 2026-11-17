@@ -95,8 +95,21 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td>Discovery cap</td><td>None in practice: paging is driven by the server's <code>total_count</code>, and a short/empty page ends the crawl. <code>max_pages=100</code> is a runaway guard only (100 × 1000 = 100k); a genuine mismatch between collected and total is logged loudly</td></tr>
 <tr><td>Guestbook required (400)</td><td>The approval window renders the dataset's guestbook (from <code>GET /api/guestbooks/{id}</code>, account details prefilled) and POSTs the answers; Dataverse returns <code>data.signedUrl</code>, which streams the ZIP. A missing required field is caught before sending; a server rejection shows its reason. No version retries, no misleading “Base URL” hint</td></tr>
 <tr><td>Large download</td><td>Quote warning ~5 GB in the approval dialog; <code>Accept: */*</code> avoids 406</td></tr>
-<tr><td>Logging</td><td>Every call via <code>applog.log_response</code> (method, URL, status, ms, summary)</td></tr>
+<tr><td>Logging</td><td>Every call via <code>applog.log_response</code> (method, URL, status, ms, summary); an expected refusal adds its reason after the raw line</td></tr>
 </table>
+
+<h2>Expected refusals (not bugs)</h2>
+<p>Dataverse answers some requests with a 4xx <i>by design</i>. The app classifies every refusal by (path, status, body) in <code>dataverse_client._refusal()</code>; a classified refusal is logged as <code>EXPECTED</code> — the raw call and the raw response are kept verbatim, only the tone changes (muted, not red) — while anything unclassified (500, a bad request, a wrong path) stays an <code>ERROR</code>. The curator sees the same facts either way, and the Log no longer reports the server's documented answers as application failures.</p>
+<table>
+<tr><th>Refusal</th><th>Endpoint</th><th>Why it is the expected answer</th><th>Code</th></tr>
+<tr><td>401 / 403</td><td><code>…/versions/:draft</code></td><td>Dataverse grants draft access only inside a dataset's curation scope — an account outside it (even a collection admin) gets “not permitted”, not an empty draft</td><td><code>draft_not_readable</code></td></tr>
+<tr><td>404</td><td><code>…/versions/:draft</code></td><td>The dataset has no draft version — the author is not working on an update</td><td><code>no_draft_version</code></td></tr>
+<tr><td>404</td><td><code>…/versions/:latest</code>, <code>:latest-published</code></td><td>The dataset has no published version — deaccessioned versions are excluded from the version endpoints unless <code>includeDeaccessioned=true</code> is asked for</td><td><code>no_published_version</code></td></tr>
+<tr><td>403</td><td><code>…/curationStatus</code></td><td>Curation state exists only for datasets under curation, and only for accounts in their curation scope</td><td><code>not_under_curation</code></td></tr>
+<tr><td>404</td><td><code>…/versions/:latest-published/compare/:draft</code></td><td>There is no published/draft pair to compare</td><td><code>no_versions_to_compare</code></td></tr>
+</table>
+<div class="callout"><b>Reads that cannot exist are not sent.</b> The Native API's dataset read answers with the version the account may see: the draft for a dataset under curation, the published version for a published one, and no version at all for a deaccessioned one. The dashboard therefore reads each dataset <i>once</i>, with no version probe — and only a row the Search payload marks as under curation is additionally probed at <code>:draft</code>, because that is the only version a curator cares about. A <code>:draft</code> probe on a published dataset is answered “not permitted” every time, and <code>:latest</code> / <code>:latest-published</code> are 404 for a deaccessioned dataset; neither is ever sent. The queue row travels with the open request, so the detail view skips the curation status, the label history and the version comparison for a dataset with no draft. A refusal on one dataset marks that row (<code>access</code>: state, reason code, the server's message) and the batch continues — the search call already proved the token works.</div>
+<div class="callout ok">The search reconciliation reads the gap correctly too: the index counts <i>documents</i>, not datasets, so a dataset listed twice (its published doc and its draft doc) is merged. “Search collected 26 of 29 dataset(s) — 3 duplicate document(s) … were merged; nothing is missing” is information, not an error.</div>
 
 <h2>Version comparison</h2>
 <p><code>MetadataWorker</code> calls <code>compare_versions(pid)</code> alongside the metadata fetch; <code>parse_version_compare</code> normalizes the <code>DatasetVersionDifference</code> shape. The “Changes since publication” card renders a Field | Previous (vX) | New (Draft) table plus a color-coded file list (added green, removed red, replaced amber, metadata blue) with a <code>vX → Draft · N change(s)</code> summary. First versions show “no published version to compare against”; identical drafts show “no changes”.</p>
@@ -107,6 +120,6 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <div class="callout ok"><b>Live-verified</b> against <code>https://demo.borealisdata.ca</code>: version → Borealis; search <code>subtree=mcmaster</code> → 14 datasets in one page (<code>total_count=14</code>); the whole repository → 2,097 datasets over 3 pages at <code>per_page=1000</code>; dataset lookup → citation title OK; versions → 23 files; bundle → 358 477 bytes streamed and unzipped. Empty alias and <code>:root</code> return the whole repo; root alias is <code>dv</code>. The demo is a <b>real Borealis Dataverse deployment</b> (v6.8.4-SP), not a production instance; a token-backed authenticated pass is deferred until later.</div>
 
 </div></main>
-<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-11-03, verified against code.</div></footer>
+<footer><div class="wrap"><a href="index.html">← Overview</a> · Updated 2026-11-13, verified against code.</div></footer>
 </body>
 </html>
