@@ -45,7 +45,6 @@ from ui.check_titles import check_summary, check_title
 from ui.dialogs import confirm, describe_error, show_critical, show_info, show_warning
 from ui.download_dialog import DownloadApprovalDialog
 from ui.i18n import t
-from ui.ring import RingProgress
 from ui.status_text import status_text
 from ui.table_layout import TableLayout
 from ui.theme import (
@@ -84,6 +83,7 @@ from ui.widgets import (
     AppTable,
     AppTree,
     WorkflowRail,
+    RingProgress,
     add_info_tip,
     disposition_label,
     fit_tree_height,

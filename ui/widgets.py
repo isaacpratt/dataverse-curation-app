@@ -85,6 +85,7 @@ from ui.theme import (
     transparent_surface_qss,
     workflow_step_qss,
 )
+from ui.ring import RingProgress
 from ui.workflow import STEP_ORDER, Workflow
 
 __all__ = [
@@ -95,6 +96,7 @@ __all__ = [
     "SortArrowHeaderView",
     "PaneFooter",
     "WorkflowRail",
+    "RingProgress",
     "flush_table_style",
     "flush_list_style",
     "tree_style",

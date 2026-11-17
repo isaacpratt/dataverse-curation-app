@@ -1262,7 +1262,8 @@
       "check_box_label": "Check box",
       "check_box_checked": "Include the guestbook response",
       "check_box_disabled": "A disabled option",
-      "progress_label": "Progress"
+      "progress_label": "Progress",
+      "progress_ring_label": "Progress ring"
     },
     "containers": {
       "title": "Containers",

@@ -342,6 +342,7 @@ class SettingsPane(QWidget):
         bottom_lay.addWidget(ext_hint)
         ext_btn_row = QHBoxLayout()
         self.ext_status = QLabel("")
+        self.ext_status.setObjectName("CaptionSM")
         ext_btn_row.addWidget(self.ext_status, 1)
         refresh_ext_btn = make_action_button(t("common.refresh"), kind="secondary")
         refresh_ext_btn.setToolTip(t("settings.extensions.refresh_tip"))

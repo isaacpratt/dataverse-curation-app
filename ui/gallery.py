@@ -331,6 +331,12 @@ def _input_section() -> QWidget:
     bar.setRange(0, 100)
     bar.setValue(60)
     lay.addWidget(bar)
+    lay.addWidget(make_field_label(t("gallery.inputs.progress_ring_label")))
+    from ui.widgets import RingProgress
+
+    ring = RingProgress(diameter=28)
+    ring.setFraction(0.6)
+    lay.addWidget(ring)
     return host
 
 

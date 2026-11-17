@@ -1317,7 +1317,6 @@ QProgressBar {{
     border: 1px solid {OUTLINE_VARIANT};
     border-radius: {RADIUS_LG};
     background: {SURFACE_CONTAINER_LOW};
-    text-visible: false;
     height: 6px;
 }}
 QProgressBar::chunk {{

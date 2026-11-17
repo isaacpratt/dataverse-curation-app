@@ -25,7 +25,6 @@ from PySide6.QtWidgets import (
 
 from config import Config
 from ui.i18n import t
-from ui.ring import RingProgress
 from ui.table_layout import TableLayout
 from ui.theme import (
     ACCENT_PRIMARY,
@@ -43,6 +42,7 @@ from ui.theme import (
 from ui.widgets import (
     AppTable,
     ElidedLabel,
+    RingProgress,
     flush_table_style,
     make_action_button,
     make_caption_label,
