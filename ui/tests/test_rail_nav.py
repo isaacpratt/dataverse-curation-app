@@ -54,7 +54,7 @@ def view(qapp, tmp_path):
     v._goto_section = lambda attr: v._jumps.append(attr)  # type: ignore[method-assign]
     v._show_review_page = lambda: None  # type: ignore[method-assign]
     v._show_response_page = lambda: v._responses.append(1)  # type: ignore[method-assign]
-    v._set_status = lambda msg: v._statuses.append(msg)  # type: ignore[method-assign]
+    v._set_status = lambda msg, **_kw: v._statuses.append(msg)  # type: ignore[method-assign]
     v._log_action = lambda a, n="", d=None: v._logged.append((a, n, d))
     return v
 

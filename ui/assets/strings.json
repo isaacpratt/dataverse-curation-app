@@ -132,6 +132,20 @@
       "ssl": "The secure connection to the Dataverse failed (certificate/SSL error). Check the Base URL, or ask IT about the server certificate."
     }
   },
+  "help": {
+    "heading": "Help",
+    "sub": "Every explained control in one searchable list. The same text hangs off that card's (i) button.",
+    "search_placeholder": "Search help…",
+    "groups": {
+      "queue": "Queue",
+      "download": "Download",
+      "checks": "Checks",
+      "respond": "Respond",
+      "general": "General"
+    },
+    "empty": "Nothing matches that.",
+    "built_log": "Help index built: {count} entries"
+  },
   "log": {
     "title": "Dataverse Communication Log",
     "err_tip": "ERROR lines and failing responses (4xx/5xx) render in red text",
@@ -275,8 +289,8 @@
         "sub": "locked for review"
       },
       "action": {
-        "label": "Needs Action",
-        "sub": "awaiting decision"
+        "label": "In Progress",
+        "sub": "curation label applied"
       },
       "checking": "Checking…",
       "not_fetched": "Not fetched",
@@ -383,6 +397,7 @@
       "settings": "Settings",
       "rules": "Configure Rules",
       "log": "Log",
+      "help": "Help",
       "about": "About"
     },
     "caption": {
@@ -470,6 +485,7 @@
       "columns": {
         "package": "Package",
         "installed": "Installed",
+        "version": "Version",
         "size": "Size",
         "used_for": "Used for",
         "action": "Action"
@@ -1267,7 +1283,8 @@
       "check_box_label": "Check box",
       "check_box_checked": "Include the guestbook response",
       "check_box_disabled": "A disabled option",
-      "progress_label": "Progress"
+      "progress_label": "Progress",
+      "progress_ring_label": "Progress ring"
     },
     "containers": {
       "title": "Containers",

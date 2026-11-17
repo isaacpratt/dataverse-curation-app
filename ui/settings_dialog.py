@@ -218,6 +218,10 @@ class SettingsPane(QWidget):
         conn_row.setContentsMargins(0, 0, 0, 0)
         conn_row.setSpacing(8)
         conn_row.addWidget(test_btn, 0)
+        # Icon + verdict: a success reads as unmissable at a glance (dv-3wc).
+        self._conn_icon = QLabel()
+        self._conn_icon.hide()
+        conn_row.addWidget(self._conn_icon, 0)
         self._conn_status = QLabel("")
         self._conn_status.setWordWrap(True)
         self._conn_status.setTextInteractionFlags(
@@ -231,6 +235,7 @@ class SettingsPane(QWidget):
         form.addRow("", conn_row)
         # A stale verdict must not survive a URL edit.
         self.url_edit.textChanged.connect(lambda _t: self._conn_status.setText(""))
+        self.url_edit.textChanged.connect(lambda _t: self._conn_icon.hide())
         self.url_edit.textChanged.connect(lambda _t: self._clear_user_info())
         self.token_edit.textChanged.connect(lambda _t: self._clear_user_info())
         self.subtree_edit.textChanged.connect(lambda _t: self._clear_collection_role())
@@ -276,11 +281,12 @@ class SettingsPane(QWidget):
             [
                 t("settings.extensions.columns.package"),
                 t("settings.extensions.columns.installed"),
+                t("settings.extensions.columns.version"),
                 t("settings.extensions.columns.size"),
                 t("settings.extensions.columns.used_for"),
                 t("settings.extensions.columns.action"),
             ],
-            widths={0: 110, 1: 130, 2: 90, 3: 200, 4: 300},
+            widths={0: 110, 1: 80, 2: 90, 3: 90, 4: 200, 5: 300},
             row_height=34,
             stretch_last=False,
             # NOTE: sorting stays OFF here on purpose — per-row action
@@ -290,7 +296,7 @@ class SettingsPane(QWidget):
             sortable=False,
         )
         # Used-for column absorbs leftover width.
-        self.ext_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.ext_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
         # Qt derives CELL-WIDGET geometry from the item content box whenever
         # a stylesheet is active: the app's `QTableWidget::item` rule
         # (padding 10px 12px + 1px border-bottom) shrank every action cell to
@@ -311,6 +317,18 @@ class SettingsPane(QWidget):
                 self.ext_table.horizontalHeader(),
                 view=self.ext_table,
             )
+            # The Extensions table gained a Version column at index 2
+            # (dv-bld): re-key a layout saved before that onto the new
+            # shape so it still applies; entries already in the new shape
+            # are left alone.
+            from storage import remap_table_layout_entry
+
+            remap_table_layout_entry(
+                self._config.app.workspace,
+                "extensions",
+                [0, 1, None, 2, 3, 4],
+                default_width=90,
+            )
             if self._ext_layout.restore():
                 self.ext_table.disable_auto_fit()
         except Exception:
@@ -324,6 +342,7 @@ class SettingsPane(QWidget):
         bottom_lay.addWidget(ext_hint)
         ext_btn_row = QHBoxLayout()
         self.ext_status = QLabel("")
+        self.ext_status.setObjectName("CaptionSM")
         ext_btn_row.addWidget(self.ext_status, 1)
         refresh_ext_btn = make_action_button(t("common.refresh"), kind="secondary")
         refresh_ext_btn.setToolTip(t("settings.extensions.refresh_tip"))
@@ -441,15 +460,15 @@ class SettingsPane(QWidget):
         self._size_worker = None
 
     def _apply_size_cache(self) -> None:
-        """Write cached sizes into the extensions table Size column (index 2)."""
+        """Write cached sizes into the extensions table Size column (index 3)."""
         for row, (pip_name, import_name, _desc) in enumerate(self.EXTENSIONS):
             key = import_name or pip_name
             size = self._size_cache.get(key)
             if size:
-                item = self.ext_table.item(row, 2)
+                item = self.ext_table.item(row, 3)
                 if item is None:
                     item = QTableWidgetItem(size)
-                    self.ext_table.setItem(row, 2, item)
+                    self.ext_table.setItem(row, 3, item)
                 else:
                     item.setText(size)
 
@@ -688,7 +707,7 @@ class SettingsPane(QWidget):
         # ghost button copies over the Used-for column in any capture (or
         # one-frame flash) taken between the replacement and that turn.
         for _r in range(self.ext_table.rowCount()):
-            _old = self.ext_table.cellWidget(_r, 4)
+            _old = self.ext_table.cellWidget(_r, 5)
             if _old is not None:
                 _old.hide()
         self.ext_table.setRowCount(len(self.EXTENSIONS))
@@ -697,28 +716,32 @@ class SettingsPane(QWidget):
 
             try:
                 ver = importlib.metadata.version(pip_name if pip_name != "Pillow" else "Pillow")
-                installed, is_installed = ver, True
+                is_installed = True
+                version_text = str(ver)
+                state_tip = t("settings.extensions.installed_lower")
             except importlib.metadata.PackageNotFoundError:
                 try:
                     __import__(import_name)
-                    installed, is_installed = (
-                        t("settings.extensions.installed_lower"),
-                        True,
-                    )
+                    is_installed = True
+                    version_text = "—"
+                    state_tip = t("settings.extensions.installed_lower")
                 except ImportError:
-                    installed, is_installed = (
-                        t("settings.extensions.not_installed"),
-                        False,
-                    )
+                    is_installed = False
+                    version_text = "—"
+                    state_tip = t("settings.extensions.not_installed")
             except Exception:
-                installed, is_installed = "?", False
-            inst_item = QTableWidgetItem(installed)
-            if not is_installed and installed != "?":
+                is_installed = None  # unknown — minus glyph
+                version_text = "?"
+                state_tip = "?"
+            # Installed column: icon only (check / X / minus); words live in
+            # the tooltip/accessible text so the state isn't colour-only.
+            inst_item = QTableWidgetItem("")
+            if is_installed is False:
                 inst_item.setForeground(QColor(TEXT_DANGER))
             elif is_installed:
                 inst_item.setForeground(QColor(ACCENT_PRIMARY))
             try:
-                if not is_installed and installed != "?":
+                if is_installed is False:
                     inst_item.setIcon(_ext_icon("x", color=STATE_ERROR_GRAPHIC))
                 elif is_installed:
                     inst_item.setIcon(_ext_icon("check", color=ACCENT_PRIMARY))
@@ -726,15 +749,17 @@ class SettingsPane(QWidget):
                     inst_item.setIcon(_ext_icon("minus", color=TEXT_ON_TINT))
             except Exception:
                 pass
+            inst_item.setToolTip(state_tip)
             self.ext_table.setItem(row, 1, inst_item)
+            self.ext_table.setItem(row, 2, QTableWidgetItem(version_text))
             # Sizes come from the background _SizeWorker — never walk here
             # (importlib.metadata + os.walk on the GUI thread froze Settings).
             size_key = import_name or pip_name
             cached = self._size_cache.get(size_key, "…")
             self.ext_table.setItem(
-                row, 2, QTableWidgetItem(cached if is_installed else "—")
+                row, 3, QTableWidgetItem(cached if is_installed else "—")
             )
-            self.ext_table.setItem(row, 3, QTableWidgetItem(desc))
+            self.ext_table.setItem(row, 4, QTableWidgetItem(desc))
             # Action cell: padded container so buttons never clip ("mangled" text fix)
             cell = QWidget()
             cell.setObjectName("ExtActionCell")
@@ -773,7 +798,7 @@ class SettingsPane(QWidget):
             cell_lay.addWidget(install_btn)
             cell_lay.addWidget(uninstall_btn)
             cell_lay.addStretch()
-            self.ext_table.setCellWidget(row, 4, cell)
+            self.ext_table.setCellWidget(row, 5, cell)
             self.ext_table.setRowHeight(row, 34)
         # External binaries as table rows (same columns, Browse… action)
         base_row = len(self.EXTENSIONS)
@@ -783,11 +808,7 @@ class SettingsPane(QWidget):
             configured = (self._tool_paths or {}).get(key, "")
             resolved = self._detect_tool(key, configured)
             self.ext_table.setItem(row, 0, QTableWidgetItem(label))
-            status_item = QTableWidgetItem(
-                t("settings.extensions.installed_lower")
-                if resolved
-                else t("settings.extensions.not_installed")
-            )
+            status_item = QTableWidgetItem("")
             status_item.setForeground(QColor(ACCENT_PRIMARY if resolved else TEXT_DANGER))
             try:
                 status_item.setIcon(
@@ -797,14 +818,18 @@ class SettingsPane(QWidget):
             except Exception:
                 pass
             status_item.setToolTip(
-                resolved
-                or (
+                f"{t('settings.extensions.installed_lower')}: {resolved}"
+                if resolved
+                else f"{t('settings.extensions.not_installed')}\n"
+                + (
                     t("settings.extensions.configured", configured=configured)
                     if configured
                     else t("settings.extensions.add_path_tip")
                 )
             )
             self.ext_table.setItem(row, 1, status_item)
+            # Version: external binaries have no package version.
+            self.ext_table.setItem(row, 2, QTableWidgetItem("—"))
             if resolved:
                 try:
                     _size = Path(resolved).stat().st_size
@@ -813,8 +838,8 @@ class SettingsPane(QWidget):
                     tool_size = "—"
             else:
                 tool_size = "—"
-            self.ext_table.setItem(row, 2, QTableWidgetItem(tool_size))
-            self.ext_table.setItem(row, 3, QTableWidgetItem(desc))
+            self.ext_table.setItem(row, 3, QTableWidgetItem(tool_size))
+            self.ext_table.setItem(row, 4, QTableWidgetItem(desc))
             tool_cell = QWidget()
             tool_cell.setObjectName("ToolActionCell")
             tool_cell.setStyleSheet(transparent_surface_qss("ToolActionCell"))
@@ -832,7 +857,7 @@ class SettingsPane(QWidget):
             browse_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             tool_lay.addWidget(browse_btn)
             tool_lay.addStretch()
-            self.ext_table.setCellWidget(row, 4, tool_cell)
+            self.ext_table.setCellWidget(row, 5, tool_cell)
             self.ext_table.setRowHeight(row, 34)
         # Content-width columns (Used-for stays Stretch); no-op when a
         # saved view was restored or the user already resized. The action
@@ -1216,7 +1241,22 @@ class SettingsPane(QWidget):
         in-progress tone. No dialog — the result lives where the test ran.
         """
         try:
-            token = "SuccessSM" if ok is True else ("DangerSM" if ok is False else "HintSM")
+            token = "SuccessMD" if ok is True else ("DangerMD" if ok is False else "HintSM")
+            from ui.icons import icon as _icon
+            from ui.theme import TEXT_DANGER, TEXT_SUCCESS
+
+            if ok is True:
+                self._conn_icon.setPixmap(
+                    _icon("check", color=TEXT_SUCCESS, size=16).pixmap(16, 16)
+                )
+                self._conn_icon.show()
+            elif ok is False:
+                self._conn_icon.setPixmap(
+                    _icon("x", color=TEXT_DANGER, size=16).pixmap(16, 16)
+                )
+                self._conn_icon.show()
+            else:
+                self._conn_icon.hide()
             self._conn_status.setObjectName(token)
             self._conn_status.setText(text)
             self._conn_status.setToolTip(tip or text)

@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QListWidgetItem,
+    QScrollArea,
     QSpinBox,
     QSplitter,
     QTreeWidgetItem,
@@ -44,6 +45,7 @@ from ui.widgets import (
     AppTreeWidget,
     PaneFooter,
     add_info_tip,
+    fit_tree_height,
     make_action_button,
     make_card,
     make_checkbox,
@@ -229,8 +231,19 @@ class ReviewConfigView(QWidget):
         outer.addWidget(self._build_topbar())
 
         split = QSplitter(Qt.Horizontal)
-        split.addWidget(self._build_rules_card())
-        split.addWidget(self._build_templates_card())
+        # Two scroll areas: Checks (stretch 3) and Response (stretch 2).
+        # Each holds a card that grows to its content, moving the scrollbar
+        # to the pane's own right edge — the dataset page's two-column idiom.
+        def make_pane(card_builder):
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            card = card_builder()
+            scroll.setWidget(card)
+            return scroll
+
+        split.addWidget(make_pane(self._build_rules_card))
+        split.addWidget(make_pane(self._build_templates_card))
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 2)
         # A 16px gap between the Checks card and the Response text card,
@@ -348,7 +361,7 @@ class ReviewConfigView(QWidget):
         # pattern the dataset page uses — not a permanent paragraph that
         # pushed the tree down.
         add_info_tip(
-            header_lay, t("review.checks_hint"), name=t("review.card_checks")
+            header_lay, t("review.checks_hint"), name=t("review.card_checks"), group="Checks"
         )
         # The title bar keeps title + (i) only; the filters and actions are
         # tools, so they sit on their own row under it (file-manifest pattern).
@@ -419,7 +432,8 @@ class ReviewConfigView(QWidget):
         self._field_tree.setExpandsOnDoubleClick(True)
         self._field_tree.setAnimated(True)
         self._field_tree.setIndentation(18)
-        self._field_tree.setMinimumHeight(160)
+        # No fixed floor; height is fit to content to move scroll to the pane.
+        self._field_tree.setMinimumHeight(0)
         # The standard tree chrome comes with the widget (flush: the tree
         # sits edge-to-edge inside the card, header meeting the top bar).
         _fld_header = self._field_tree.header()
@@ -443,19 +457,29 @@ class ReviewConfigView(QWidget):
         self._field_tree.itemSelectionChanged.connect(self._on_field_selected)
         # The Collapse/Expand button follows manual expand/collapse too:
         # without these, collapsing one block left the button reading
-        # "Collapse all" and clicking it expanded everything.
-        self._field_tree.itemExpanded.connect(lambda _i: self._update_blocks_btn())
-        self._field_tree.itemCollapsed.connect(lambda _i: self._update_blocks_btn())
-        body.addWidget(self._field_tree, 1)
+        # "Collapse all" and clicking it expanded everything. The tree is
+        # content-fitted, so a manual toggle must refit too.
+        self._field_tree.itemExpanded.connect(
+            lambda _i: (self._update_blocks_btn(), fit_tree_height(self._field_tree, row_height=40))
+        )
+        self._field_tree.itemCollapsed.connect(
+            lambda _i: (self._update_blocks_btn(), fit_tree_height(self._field_tree, row_height=40))
+        )
+        # The tree and text rules are now stacked in a single vertical flow
+        # inside the scroll pane, so the tree doesn't compete for height.
+        scroll_content = QWidget()
+        content_lay = QVBoxLayout(scroll_content)
+        content_lay.setContentsMargins(0, 0, 0, 0)
+        content_lay.setSpacing(0)
 
-        # Text rules: their own section under a divider, inset like a card
-        # body, so an expanded metadata block can never run behind them.
+        content_lay.addWidget(self._field_tree)
+
         divider = QFrame()
         divider.setObjectName("ReviewSectionDivider")
         divider.setFixedHeight(1)
         # theme-allow: simple divider colour is a one-off
         divider.setStyleSheet(f"background: {BORDER_SUBTLE};")
-        body.addWidget(divider)
+        content_lay.addWidget(divider)
 
         rules_section = QWidget()
         rules_lay = QVBoxLayout(rules_section)
@@ -479,7 +503,9 @@ class ReviewConfigView(QWidget):
             row.addWidget(b)
         row.addStretch(1)
         rules_lay.addLayout(row)
-        body.addWidget(rules_section, 1)
+
+        content_lay.addWidget(rules_section)
+        body.addWidget(scroll_content)
         return card
 
     def _build_templates_card(self) -> QWidget:
@@ -1087,6 +1113,7 @@ class ReviewConfigView(QWidget):
                         _add_field_row(e, group)
                         n_fields += 1
             tree.expandAll()
+            fit_tree_height(tree, row_height=40)
             self._update_blocks_btn()
         finally:
             try:
@@ -1163,6 +1190,7 @@ class ReviewConfigView(QWidget):
                 self._field_tree.expandAll()
             else:
                 self._field_tree.collapseAll()
+            fit_tree_height(self._field_tree, row_height=40)
             self._update_blocks_btn()
         except Exception:
             pass

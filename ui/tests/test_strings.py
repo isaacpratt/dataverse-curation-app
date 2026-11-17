@@ -283,6 +283,10 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         "; text-decoration:none;'>": "rich-text link markup",
         "not executed": "needle matched against an engine check description",
     },
+    "ui/help_index.py": {
+        "metadata check": "keyword match for grouping tips under the Checks task",
+        "auto-check": "keyword match for grouping tips under the Checks task",
+    },
     "ui/log_panel.py": {
         "(?:→|->|=>)\\s*(\\d{3})\\b": "regex for HTTP status codes after arrows",
     },

@@ -110,10 +110,16 @@ def main() -> int:
     report.check(title_row is not None, "the Title row exists")
     bars = title_row.findChildren(QFrame, "MetaRequiredBar") if title_row is not None else []
     report.check(
-        len(bars) >= 1,
-        "a required rule carries the required bar",
+        len(bars) == 0,
+        "no required bar is painted (dv-onk)",
         f"bars={len(bars)}",
     )
+    if title_row is not None:
+        report.check(
+            "Required" in (title_row.toolTip() or ""),
+            "the level wording rides the row tooltip (dv-onk)",
+            f"tip={title_row.toolTip()!r}",
+        )
 
     # Compound field: the author drawer expands and collapses.
     author_row = _row(view, "Author Name & Affiliation")

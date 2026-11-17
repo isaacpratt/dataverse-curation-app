@@ -49,7 +49,7 @@ def view(qapp, tmp_path):
 
     v._log_action = _log
     v._status_msgs = []
-    v._set_status = lambda msg: v._status_msgs.append(msg)
+    v._set_status = lambda msg, **_kw: v._status_msgs.append(msg)
     return v
 
 

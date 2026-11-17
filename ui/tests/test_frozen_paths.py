@@ -72,6 +72,9 @@ def test_installed_build_migrates_a_beside_the_exe_config(
 ) -> None:
     exe = _installed(monkeypatch, tmp_path)
     _no_velopack(monkeypatch)
+    # _legacy_candidates lists the cwd first; isolate from a dev checkout
+    # that keeps a real config.json at the repo root.
+    monkeypatch.chdir(tmp_path)
     legacy = exe.parent / "config.json"
     legacy.write_text('{"dataverse": {"api_token": "tok-123"}}', encoding="utf-8")
 
@@ -160,6 +163,9 @@ def test_velopack_portable_answer_wins_over_the_layout(
 
     assert config_mod.is_installed_build() is False
     # Portable semantics: the file beside the exe wins.
+    # _legacy_candidates lists the cwd first; isolate from a dev checkout
+    # that keeps a real config.json at the repo root.
+    monkeypatch.chdir(tmp_path)
     beside = exe.parent / "config.json"
     beside.write_text("{}", encoding="utf-8")
     assert config_mod.resolve_config_path(None) == beside

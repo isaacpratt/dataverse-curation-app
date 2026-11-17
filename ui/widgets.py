@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui.i18n import t
+from ui.ring import RingProgress
 from ui.theme import (
     ACCENT_FOCUS_RING,
     ACCENT_PRIMARY,
@@ -95,6 +96,7 @@ __all__ = [
     "SortArrowHeaderView",
     "PaneFooter",
     "WorkflowRail",
+    "RingProgress",
     "flush_table_style",
     "flush_list_style",
     "tree_style",
@@ -109,6 +111,7 @@ __all__ = [
     "make_split_chip",
     "make_plain_text_view",
     "make_progress_bar",
+    "fit_tree_height",
     "make_section_heading",
     "make_body_label",
     "make_caption_label",
@@ -1318,6 +1321,7 @@ def make_text_label(
     object_name: str = "BodySM",
     tip: str = "",
     wrap: bool = False,
+    selectable: bool = False,
 ) -> QLabel:
     """Plain text label wearing a body token, optionally recoloured.
 
@@ -1327,6 +1331,8 @@ def make_text_label(
     lbl = QLabel(text)
     lbl.setObjectName(object_name)
     lbl.setWordWrap(wrap)
+    if selectable:
+        lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
     if color:
         lbl.setStyleSheet(f"QLabel#{object_name} {{ color: {color}; }}")
     if tip:
@@ -1524,16 +1530,23 @@ def _wrap_tip(*paragraphs: str, width: int = 76) -> str:
     return "\n\n".join(chunks)
 
 
-def add_info_tip(header_layout, *paragraphs: str, name: str = "") -> QToolButton:
+def add_info_tip(header_layout, *paragraphs: str, name: str = "", group: str = "") -> QToolButton:
     """Add a small Lucide (i) button right after a card title.
 
     The explanation lives in the tooltip, so section headers read as
     "Auto-Checks (i)" instead of carrying a permanent help paragraph.
-    Clicking shows the same text, for touch and pen input.
+    Clicking shows the same text, for touch and pen input. The tip is
+    also registered into ui.help_index for the searchable Help page
+    (dv-o8k); ``group=`` places it under a curator task.
     """
+    from ui.help_index import register_help
     from ui.icons import icon as _icon
 
     tip = _wrap_tip(*paragraphs)
+    try:
+        register_help(group, name, tip)
+    except Exception:
+        pass
     btn = QToolButton()
     btn.setObjectName("InfoTip")
     try:
@@ -1606,6 +1619,27 @@ def make_line_edit(placeholder: str = "", parent: QWidget | None = None, *,
     return field
 
 
+class _ComboPopupRowDelegate(QStyledItemDelegate):
+    """Paint combo-box popup rows at the app's menu row metrics (dv-tkz).
+
+    The app sheet declares ``QAbstractItemView::item`` with min-height
+    22px and 6px vertical padding (~34px rows), but the popup measures
+    items through the delegate, not the stylesheet — rows painted at
+    ~20px and clipped descenders. Sizing from the font keeps the row at
+    the declared contract at any display scaling.
+    """
+
+    _ROW_HEIGHT = 34  # 22px min-height + 2 x 6px padding
+
+    def sizeHint(self, option, index):  # noqa: N802 (Qt naming)
+        hint = super().sizeHint(option, index)
+        try:
+            font_h = option.fontMetrics.height()
+        except Exception:
+            font_h = 12
+        return QSize(hint.width(), max(self._ROW_HEIGHT, font_h + 12))
+
+
 class _NoWheelCombo(QComboBox):
     """QComboBox that ignores the mouse-wheel until it has been clicked.
 
@@ -1657,6 +1691,8 @@ def make_combo(items=None, parent: QWidget | None = None, *, height: int = 36,
     combo.setFixedHeight(height)
     combo.setMinimumWidth(min_width)
     combo.setCursor(Qt.PointingHandCursor)
+    # Popup rows honor the app's menu row metrics (dv-tkz).
+    combo.view().setItemDelegate(_ComboPopupRowDelegate(combo))
     if tip:
         combo.setToolTip(tip)
     for entry in items or []:
@@ -1801,8 +1837,11 @@ class WorkflowRail(QWidget):
         self.hint = QLabel("")
         self.hint.setObjectName("CaptionSM")
         self.hint.setWordWrap(False)
-        self.hint.setMinimumWidth(0)
+        # Ignored horizontally but with a floor: the layout may squeeze the
+        # hint at narrow widths (never to zero) without the rail's
+        # minimumSizeHint blowing past the app's 960px floor.
         self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.hint.setMinimumWidth(80)
         self._toggle = QPushButton("")
         self._toggle.setObjectName("WorkflowStep")
         self._toggle.setFlat(True)
@@ -1815,6 +1854,19 @@ class WorkflowRail(QWidget):
         self._rebuild_steps(list(STEP_ORDER))
         layout.addWidget(self.hint)
         layout.addWidget(self._toggle)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 (Qt naming)
+        """Keep the window free to stay at the 960px floor.
+
+        Qt's default minimum-size algorithm sums the buttons' size hints
+        (the seven CURATE(D) steps overflow 960px), so it would drag the
+        whole window wider on narrow screens. The rail has no intrinsic
+        width floor of its own: steps compress without a lower bound, and
+        the hint/toggle squeeze towards their own floors. Only the height
+        floor matters.
+        """
+        hint = super().minimumSizeHint()
+        return QSize(1, hint.height())
 
     def _rebuild_steps(self, keys: list[str]) -> None:
         """Rebuild the step buttons for a step set (mechanical or CURATE(D))."""
@@ -1838,9 +1890,9 @@ class WorkflowRail(QWidget):
             btn.setFlat(True)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setMinimumWidth(0)
-            # Ignored horizontally: seven CURATE(D) steps must compress
-            # inside the app's 960px floor instead of forcing the window.
-            btn.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+            # MinimumExpanding ensures buttons take available space but don't
+            # force the window wider than 960px.
+            btn.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
             btn.clicked.connect(lambda _c, k=key: self.stepClicked.emit(k))
             lay.addWidget(btn)
             self.buttons[key] = btn
@@ -1848,7 +1900,8 @@ class WorkflowRail(QWidget):
                 connector = QLabel("\u203a")
                 connector.setObjectName("WorkflowSeparator")
                 lay.addWidget(connector)
-        lay.addStretch(1)
+        # The buttons and hint should share space; we remove the hard stretch
+        # to allow the MinimumExpanding buttons to actually expand.
         lay.addWidget(self.hint)
         lay.addWidget(self._toggle)
 
@@ -1894,3 +1947,31 @@ class WorkflowRail(QWidget):
             btn.setAccessibleDescription(step.hint)
         self.hint.setText(workflow.hint)
         self.hint.setToolTip(workflow.hint)
+
+
+def fit_tree_height(tree, row_height: int = 40, floor: int = 80) -> None:
+    """Grow a tree to its visible rows so the page scrolls, not the tree.
+
+    Content fit for flush trees on a scrolling canvas (file manifest,
+    review-config checks tree): tallies the visible rows, expanded
+    children included, and pins the tree to that height so it never
+    needs its own scrollbar. A quiet no-op on any failure.
+    """
+    try:
+        model = tree.model()
+        if model is None:
+            return
+        visible_rows = 0
+        stack = [tree.rootIndex()]
+        while stack:
+            parent = stack.pop()
+            count = model.rowCount(parent)
+            visible_rows += count
+            for r in range(count):
+                idx = model.index(r, 0, parent)
+                if model.hasChildren(idx) and tree.isExpanded(idx):
+                    stack.append(idx)
+        header_h = tree.header().height() if tree.header() else 30
+        tree.setFixedHeight(max(floor, header_h + visible_rows * row_height + 2))
+    except Exception:
+        pass

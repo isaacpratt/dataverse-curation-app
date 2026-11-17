@@ -792,6 +792,64 @@ def clear_table_state(workspace: Path, name: str) -> None:
         pass
 
 
+def remap_table_layout_entry(
+    workspace: Path,
+    name: str,
+    new_to_old: list[int | None],
+    default_width: int = 120,
+) -> bool:
+    """Re-shape a persisted table layout onto a new column layout.
+
+    ``new_to_old[new_index]`` is the index that column had in the entry
+    saved by an older build (``None`` for a brand-new column, which gets
+    ``default_width``). Widths and hidden flags are re-mapped; order and
+    the sort indicator are dropped (they are column-index specific and a
+    renumbered column could inherit the wrong meaning). The rewritten
+    entry keeps the current schema version. Returns True when an entry
+    was rewritten; False when nothing matched (no file, wrong shape
+    already, or an unreadable entry) — in which case the normal
+    column-count validation in ``restore_table_state`` still protects
+    the table.
+    """
+    try:
+        path = _table_layout_path(workspace)
+        if not path.exists():
+            return False
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return False
+        entry = raw.get(name)
+        if not isinstance(entry, dict):
+            return False
+        widths = entry.get("widths")
+        if not isinstance(widths, list) or not widths:
+            return False
+        if len(widths) == len(new_to_old):
+            return False  # already the new shape
+        mapping = [idx for idx in new_to_old if idx is not None]
+        if not mapping or max(mapping) >= len(widths):
+            return False
+        new_widths = [
+            int(widths[old]) if old is not None else int(default_width)
+            for old in new_to_old
+        ]
+        new_entry: dict[str, Any] = {
+            "v": TABLE_LAYOUT_VERSION,
+            "widths": new_widths,
+        }
+        hidden = entry.get("hidden")
+        if isinstance(hidden, list) and len(hidden) == len(widths):
+            new_entry["hidden"] = [
+                bool(hidden[old]) if old is not None else False
+                for old in new_to_old
+            ]
+        raw[name] = new_entry
+        _atomic_write_json(path, raw)
+        return True
+    except Exception:
+        return False
+
+
 def restore_table_state(workspace: Path, name: str, header) -> bool:
     """Re-apply a persisted view state (best-effort, never raises).
 

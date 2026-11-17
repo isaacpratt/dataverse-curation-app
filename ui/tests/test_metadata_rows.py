@@ -134,9 +134,13 @@ def _qframe_by_name(row, name):
     return [w for w in row.findChildren(QFrame) if w.objectName() == name]
 
 
-def test_required_rows_carry_the_left_bar_optional_ones_do_not(detail):
-    assert _qframe_by_name(_row(detail, "Title"), "MetaRequiredBar")
-    assert not _qframe_by_name(_row(detail, "ORCiD for authors"), "MetaRequiredBar")
+def test_no_rows_paint_a_required_bar(detail):
+    """dv-onk: no metadata-check row paints a coloured bar; level stays on the tooltip."""
+    assert _qframe_by_name(_row(detail, "Title"), "MetaRequiredBar") == []
+    assert _qframe_by_name(_row(detail, "ORCiD for authors"), "MetaRequiredBar") == []
+    # The required/optional distinction survives as text on the row.
+    tip = _row(detail, "Title").toolTip()
+    assert "Required" in tip
 
 
 def test_author_entries_expand_in_the_drawer(detail):

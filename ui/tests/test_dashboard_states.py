@@ -103,6 +103,8 @@ def seeded_dash(win, monkeypatch):
         ],
     )
     dash._filter_edit.setText("")
+    dash._state_filter.setCurrentIndex(0)
+    dash._labelled_only = False
     dash._apply_filter()
     return dash
 
