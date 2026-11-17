@@ -29,7 +29,7 @@ def _installed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     exe_dir = root / "current"
     exe_dir.mkdir(parents=True)
     (root / "Update.exe").write_bytes(b"")
-    exe = exe_dir / "curation-app-full.exe"
+    exe = exe_dir / "DataverseDocent.exe"
     exe.write_bytes(b"")
     _freeze(monkeypatch, exe)
     return exe
@@ -105,7 +105,7 @@ def test_current_folder_alone_marks_an_install(
     # still says the folder gets replaced on update.
     exe_dir = tmp_path / "current"
     exe_dir.mkdir(parents=True)
-    exe = exe_dir / "curation-app-full.exe"
+    exe = exe_dir / "DataverseDocent.exe"
     exe.write_bytes(b"")
     _freeze(monkeypatch, exe)
     _no_velopack(monkeypatch)
@@ -125,7 +125,7 @@ def test_the_portable_zip_is_not_an_install(
     exe_dir.mkdir(parents=True)
     (root / "Update.exe").write_bytes(b"")
     (root / ".portable").write_bytes(b"")
-    exe = exe_dir / "curation-app-full.exe"
+    exe = exe_dir / "DataverseDocent.exe"
     exe.write_bytes(b"")
     _freeze(monkeypatch, exe)
     _no_velopack(monkeypatch)
@@ -162,7 +162,7 @@ def test_portable_build_keeps_the_beside_the_exe_search(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     dist = tmp_path / "dist"
-    exe = dist / "curation-app-lite" / "curation-app-lite.exe"
+    exe = dist / "DataverseDocent" / "DataverseDocent.exe"
     exe.parent.mkdir(parents=True)
     (dist / "config.json").write_text(
         '{"dataverse": {"api_token": "tok-123"}}', encoding="utf-8"
@@ -180,7 +180,7 @@ def test_portable_fresh_save_lands_above_build_folder(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     dist = tmp_path / "dist"
-    exe = dist / "curation-app-lite" / "curation-app-lite.exe"
+    exe = dist / "DataverseDocent" / "DataverseDocent.exe"
     exe.parent.mkdir(parents=True)
     monkeypatch.chdir(exe.parent)
     _freeze(monkeypatch, exe)
@@ -196,7 +196,7 @@ def test_portable_config_prefers_cwd_when_present(
     cwd = tmp_path / "elsewhere"
     cwd.mkdir()
     (cwd / "config.json").write_text("{}", encoding="utf-8")
-    exe = tmp_path / "dist" / "curation-app-lite" / "curation-app-lite.exe"
+    exe = tmp_path / "dist" / "DataverseDocent" / "DataverseDocent.exe"
     exe.parent.mkdir(parents=True)
     monkeypatch.chdir(cwd)
     _freeze(monkeypatch, exe)
@@ -210,10 +210,10 @@ def test_portable_config_prefers_cwd_when_present(
 def test_portable_profiles_prefer_file_beside_exe(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    exe_dir = tmp_path / "dist" / "curation-app-full"
+    exe_dir = tmp_path / "dist" / "DataverseDocent"
     exe_dir.mkdir(parents=True)
     (exe_dir / "requirements_profiles.json").write_text("{}", encoding="utf-8")
-    _freeze(monkeypatch, exe_dir / "curation-app-full.exe")
+    _freeze(monkeypatch, exe_dir / "DataverseDocent.exe")
     _no_velopack(monkeypatch)
 
     assert metadata_check.profiles_path() == exe_dir / "requirements_profiles.json"

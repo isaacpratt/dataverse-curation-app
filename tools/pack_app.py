@@ -1,4 +1,4 @@
-"""Pack dist/curation-app-full into a Velopack release with vpk, then verify it.
+"""Pack dist/DataverseDocent into a Velopack release with vpk, then verify it.
 
     uv run poe pack                    # build already done: dist/releases/<version>
     uv run python tools/pack_app.py --out dist/releases
@@ -114,12 +114,12 @@ def clear_version(out_dir: Path, version: str) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Pack the full onedir build into a Velopack release."
+        description="Pack the PyInstaller app folder into a Velopack release."
     )
     parser.add_argument(
         "--build-dir",
         default=str(check_pack.BUILD_DIR),
-        help="PyInstaller folder to pack (default: dist/curation-app-full)",
+        help="PyInstaller folder to pack (default: dist/DataverseDocent)",
     )
     parser.add_argument(
         "--out",

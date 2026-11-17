@@ -39,12 +39,12 @@ PACK_TITLE = "Dataverse Docent"
 #: which users read as a typo ("DataverseDocent").
 PACK_AUTHORS = "Dataverse Docent"
 #: The PyInstaller onedir executable - the file the shortcut launches.
-MAIN_EXE = "curation-app-full.exe"
+MAIN_EXE = "DataverseDocent.exe"
 CHANNEL = "win"
 #: The build carries a CPython + compiled extensions for this arch only.
 RUNTIME = "win-x64"
 ICON = ROOT / "ui" / "assets" / "docent-mark.ico"
-BUILD_DIR = ROOT / "dist" / "curation-app-full"
+BUILD_DIR = ROOT / "dist" / "DataverseDocent"
 RELEASES_DIR = ROOT / "dist" / "releases"
 
 _MIN_PLAUSIBLE_BYTES = 1_000_000  # a Setup.exe under 1 MB is a stub, not an app

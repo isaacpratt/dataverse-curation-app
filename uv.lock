@@ -684,7 +684,7 @@ wheels = [
 ]
 
 [[package]]
-name = "dataverse-curation-app"
+name = "dataverse-docent"
 source = { editable = "." }
 dependencies = [
     { name = "chardet" },
