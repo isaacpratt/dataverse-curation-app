@@ -1,11 +1,13 @@
 """Always-emit contract: a module run yields one result per owned check_id."""
 
+from pathlib import Path
+
 import pytest
 
 from engine.checks import registry
 
 
-def _expected_ids():
+def _expected_ids() -> dict[str, set[str]]:
     return {
         "inventory.extensions": {
             "inventory.extensions",
@@ -83,9 +85,9 @@ def _expected_ids():
     }
 
 
-def test_clean_files_emit_full_id_sets(tmp_path):
+def test_clean_files_emit_full_id_sets(tmp_path: Path) -> None:
     expected = _expected_ids()
-    samples = {
+    samples: dict[str, tuple[str, ...] | None] = {
         "inventory.extensions": None,  # dataset-level, handled below
         "format.containers": ("a.zip",),
         "format.csv": ("a,b\n1,2\n",),
@@ -121,7 +123,9 @@ def test_clean_files_emit_full_id_sets(tmp_path):
             results = cls().run([p])
         elif parent == "format.ipynb":
             p = tmp_path / "n.ipynb"
-            p.write_text(samples[parent][0])
+            content = samples[parent]
+            assert content is not None
+            p.write_text(content[0])
             results = cls().run([p])
         elif parent == "format.xlsx":
             openpyxl = pytest.importorskip("openpyxl")
@@ -134,6 +138,8 @@ def test_clean_files_emit_full_id_sets(tmp_path):
         else:
             ext = next(iter(cls.extensions))
             p = tmp_path / f"s{ext}"
-            p.write_text(samples[parent][0])
+            content = samples[parent]
+            assert content is not None
+            p.write_text(content[0])
             results = cls().run([p])
         assert {r.check_id for r in results} == expected[parent], parent

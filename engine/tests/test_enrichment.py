@@ -6,18 +6,22 @@ W-03 (progressive merge helper) and W-04 (cache round-trip preserves
 enriched fields; size-only changes stay out of the diff fingerprint).
 """
 
+from pathlib import Path
+from typing import Any
+
+import pytest
 import requests
 
-from dataverse_client import DataverseClient
-from ui.dashboard import (
-    _merge_enriched_rows,
+from dashboard_cache import (
     diff_dashboard_datasets,
     load_dashboard_cache,
+    merge_enriched_rows,
     save_dashboard_cache,
 )
+from dataverse_client import DataverseClient
 
 
-def _version_doc(files, depositor="", state="DRAFT"):
+def _version_doc(files: list[Any], depositor: str = "", state: str = "DRAFT") -> dict[str, Any]:
     return {
         "datasetVersion": {
             "versionState": state,
@@ -34,7 +38,7 @@ def _version_doc(files, depositor="", state="DRAFT"):
     }
 
 
-def _entry(name, size):
+def _entry(name: str, size: int) -> dict[str, Any]:
     return {
         "filename": name,
         "dataFile": {
@@ -46,7 +50,7 @@ def _entry(name, size):
     }
 
 
-def _thin(pid, draft=True):
+def _thin(pid: str, draft: bool = True) -> dict[str, Any]:
     return {
         "persistent_id": pid,
         "title": f"Title {pid}",
@@ -62,18 +66,20 @@ def _thin(pid, draft=True):
 class _StubClient(DataverseClient):
     """DataverseClient with canned version docs (no network)."""
 
-    def __init__(self, docs):
+    def __init__(self, docs: Any) -> None:
         super().__init__("https://example.invalid", "token")
         self._docs = docs
 
-    def _fetch_version_data(self, identifier, version="draft", fall_back_on_auth=False):
+    def _fetch_version_data(
+        self, identifier: str, version: Any = "draft", fall_back_on_auth: bool = False
+    ) -> tuple[Any, str, list[Any]]:
         doc = self._docs.get(identifier)
         if isinstance(doc, BaseException):
             raise doc
         return doc, ":draft", []
 
 
-def _http_error(status):
+def _http_error(status: int) -> requests.HTTPError:
     resp = requests.Response()
     resp.status_code = status
     exc = requests.HTTPError(f"HTTP {status}")
@@ -81,7 +87,7 @@ def _http_error(status):
     return exc
 
 
-def test_enrich_sums_and_patches():
+def test_enrich_sums_and_patches() -> None:
     pid = "doi:10.5072/FK2/A"
     docs = {pid: _version_doc([_entry("a.csv", 100), _entry("b.csv", 50)], depositor="Carol C.")}
     client = _StubClient(docs)
@@ -98,7 +104,7 @@ def test_enrich_sums_and_patches():
     assert "files" not in row  # sums-only: no file arrays embedded
 
 
-def test_drafts_first_with_cap():
+def test_drafts_first_with_cap() -> None:
     pub, draft = "doi:10.5072/FK2/PUB", "doi:10.5072/FK2/DRF"
     docs = {
         pub: _version_doc([_entry("p.csv", 10)], state="RELEASED"),
@@ -115,7 +121,7 @@ def test_drafts_first_with_cap():
     assert by_pid[pub].get("size_pending") is True
 
 
-def test_error_isolation():
+def test_error_isolation() -> None:
     pids = [f"doi:10.5072/FK2/{c}" for c in "ABC"]
     docs = {
         pids[0]: _version_doc([_entry("a.csv", 5)]),
@@ -132,7 +138,7 @@ def test_error_isolation():
     assert rows[2]["total_size_bytes"] == 7
 
 
-def test_auth_abort():
+def test_auth_abort() -> None:
     pid = "doi:10.5072/FK2/A"
     client = _StubClient({pid: _http_error(401)})
     rows = [_thin(pid)]
@@ -143,13 +149,13 @@ def test_auth_abort():
     assert "size_enriched" not in rows[0]
 
 
-def test_cancellation():
+def test_cancellation() -> None:
     pids = [f"doi:10.5072/FK2/{c}" for c in "ABC"]
     docs = {p: _version_doc([_entry("f.csv", 1)]) for p in pids}
     client = _StubClient(docs)
-    calls = {"n": 0}
+    calls: dict[str, int] = {"n": 0}
 
-    def _cancel_after_first():
+    def _cancel_after_first() -> bool:
         calls["n"] += 1
         return calls["n"] > 1
 
@@ -163,7 +169,7 @@ def test_cancellation():
     assert rows[1].get("total_size_bytes") is None
 
 
-def test_enrichment_never_clobbers_in_review():
+def test_enrichment_never_clobbers_in_review() -> None:
     pid = "doi:10.5072/FK2/A"
     docs = {pid: _version_doc([_entry("a.csv", 9)], state="RELEASED")}
     client = _StubClient(docs)
@@ -174,11 +180,13 @@ def test_enrichment_never_clobbers_in_review():
     assert rows[0]["total_size_bytes"] == 9
 
 
-def test_discovery_pages_until_total(monkeypatch):
+def test_discovery_pages_until_total(monkeypatch: pytest.MonkeyPatch) -> None:
     """Discovery is total-driven: 2500 datasets at per_page=1000 → 3 calls."""
-    calls = {"n": 0}
+    calls: dict[str, int] = {"n": 0}
 
-    def _page(self, subtree="", per_page=1000, start=0):
+    def _page(
+        self: Any, subtree: Any = "", per_page: int = 1000, start: int = 0
+    ) -> tuple[list[dict[str, Any]], int | None]:
         calls["n"] += 1
         remaining = 2500 - start
         n = max(0, min(per_page, remaining))
@@ -200,11 +208,13 @@ def test_discovery_pages_until_total(monkeypatch):
     assert len(rows) == 2500
 
 
-def test_discovery_stops_on_short_page_when_total_missing(monkeypatch):
+def test_discovery_stops_on_short_page_when_total_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     """No total_count from the server → the short page ends the crawl."""
-    calls = {"n": 0}
+    calls: dict[str, int] = {"n": 0}
 
-    def _page(self, subtree="", per_page=1000, start=0):
+    def _page(
+        self: Any, subtree: Any = "", per_page: int = 1000, start: int = 0
+    ) -> tuple[list[dict[str, Any]], int | None]:
         calls["n"] += 1
         n = 1000 if start == 0 else 12
         return (
@@ -225,11 +235,13 @@ def test_discovery_stops_on_short_page_when_total_missing(monkeypatch):
     assert len(rows) == 1012
 
 
-def test_discovery_runaway_guard(monkeypatch):
+def test_discovery_runaway_guard(monkeypatch: pytest.MonkeyPatch) -> None:
     """A server that always returns a full page stops at the guard."""
-    calls = {"n": 0}
+    calls: dict[str, int] = {"n": 0}
 
-    def _page(self, subtree="", per_page=1000, start=0):
+    def _page(
+        self: Any, subtree: Any = "", per_page: int = 1000, start: int = 0
+    ) -> tuple[list[dict[str, Any]], int | None]:
         calls["n"] += 1
         return (
             [
@@ -249,10 +261,12 @@ def test_discovery_runaway_guard(monkeypatch):
     assert len(rows) == 3000
 
 
-def test_discovery_progress_reports_page_counts(monkeypatch):
-    seen = []
+def test_discovery_progress_reports_page_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[Any] = []
 
-    def _page(self, subtree="", per_page=1000, start=0):
+    def _page(
+        self: Any, subtree: Any = "", per_page: int = 1000, start: int = 0
+    ) -> tuple[list[dict[str, Any]], int | None]:
         remaining = 2000 - start
         n = max(0, min(per_page, remaining))
         return (
@@ -272,7 +286,7 @@ def test_discovery_progress_reports_page_counts(monkeypatch):
     assert seen == [(1, 2, 1000), (2, 2, 2000)]
 
 
-def test_enrichment_falls_back_to_published_when_draft_denied():
+def test_enrichment_falls_back_to_published_when_draft_denied() -> None:
     """A published dataset with no readable draft still enriches.
 
     `:draft` is refused (401) but `:latest` answers — the row must be
@@ -283,9 +297,9 @@ def test_enrichment_falls_back_to_published_when_draft_denied():
     # A plain client (no _fetch_version_data override) so the real
     # version-fallback logic runs against a patched HTTP layer.
     client = DataverseClient("https://example.invalid", "token")
-    seen = []
+    seen: list[str] = []
 
-    def _get_json(path, params=None, **kwargs):
+    def _get_json(path: str, params: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         seen.append(path)
         if path.endswith("/versions/:draft"):
             raise _http_error(401)
@@ -296,7 +310,7 @@ def test_enrichment_falls_back_to_published_when_draft_denied():
             }
         }
 
-    client._get_json = _get_json
+    client._get_json = _get_json  # type: ignore[method-assign]
     rows = [_thin(pid, draft=False)]
     stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
     assert stats["enriched"] == 1
@@ -306,7 +320,7 @@ def test_enrichment_falls_back_to_published_when_draft_denied():
     assert any(p.endswith("/versions/:latest") for p in seen)
 
 
-def test_enrichment_leaves_size_unknown_when_files_absent():
+def test_enrichment_leaves_size_unknown_when_files_absent() -> None:
     """A payload with no `files` key means 'unknown', not 'zero bytes'."""
     pid = "doi:10.5072/FK2/NOFILES"
     client = _StubClient({pid: {"versionState": "RELEASED", "metadataBlocks": {}}})
@@ -317,7 +331,7 @@ def test_enrichment_leaves_size_unknown_when_files_absent():
     assert "size_enriched" not in rows[0]
 
 
-def test_merge_helper_copies_and_preserves_review():
+def test_merge_helper_copies_and_preserves_review() -> None:
     existing = [_thin("doi:10.5072/FK2/A")]
     existing[0]["state"] = "In Review"
     existing[0]["total_size_bytes"] = 111
@@ -334,17 +348,17 @@ def test_merge_helper_copies_and_preserves_review():
         },
         {"persistent_id": "doi:10.5072/FK2/GHOST", "total_size_bytes": 1},
     ]
-    assert _merge_enriched_rows(existing, batch) == 1
+    assert merge_enriched_rows(existing, batch) == 1
     row = existing[0]
     assert row["total_size_bytes"] == 150  # live value wins
     assert row.get("size_from_cache") is None  # stale disk fill cleared
     assert row["depositor"] == "Carol C."
     assert row["state"] == "In Review"  # lock confirmation preserved
-    assert _merge_enriched_rows(existing, []) == 0
-    assert _merge_enriched_rows(existing, [{"no_pid": 1}]) == 0
+    assert merge_enriched_rows(existing, []) == 0
+    assert merge_enriched_rows(existing, [{"no_pid": 1}]) == 0
 
 
-def test_cache_roundtrip_and_diff_semantics(tmp_path):
+def test_cache_roundtrip_and_diff_semantics(tmp_path: Path) -> None:
     old = [_thin("doi:10.5072/FK2/A")]
     new = [_thin("doi:10.5072/FK2/A")]
     new[0].update(

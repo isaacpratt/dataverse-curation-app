@@ -9,6 +9,7 @@ import sys
 import tarfile
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -45,11 +46,11 @@ from engine.runner import collect_files, list_planned_checks, run_report
         ("x.mat", set()),
     ],
 )
-def test_compound_extension_dispatch(name, expected):
+def test_compound_extension_dispatch(name: str, expected: Any) -> None:
     assert {c.check_id for c in checks_for_file(Path(name))} == expected
 
 
-def test_planned_matches_dispatch(tmp_path):
+def test_planned_matches_dispatch(tmp_path: Path) -> None:
     files = []
     for name in ("a.fq.gz", "b.csv", "c.mat"):
         p = tmp_path / name
@@ -63,7 +64,7 @@ def test_planned_matches_dispatch(tmp_path):
 # -- missing-library contract ----------------------------------------------
 
 
-def test_missing_library_contract():
+def test_missing_library_contract() -> None:
     result = missing_library("format.xlsx.openable", "openpyxl")
     assert result.level == "warning"
     assert result.passed is True
@@ -84,7 +85,14 @@ def test_missing_library_contract():
         # "Missing" warning (see test_images_stdlib_fallback_* below).
     ],
 )
-def test_optional_import_guard(tmp_path, monkeypatch, module, cls, file_suffix, result_id):
+def test_optional_import_guard(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    module: Any,
+    cls: Any,
+    file_suffix: str,
+    result_id: str,
+) -> None:
     monkeypatch.setitem(sys.modules, module, None)
     target = tmp_path / f"sample{file_suffix}"
     target.write_bytes(b"\x00\x01\x02")
@@ -101,7 +109,9 @@ def test_optional_import_guard(tmp_path, monkeypatch, module, cls, file_suffix, 
             assert r.passed is True
 
 
-def test_images_stdlib_fallback_without_pillow(tmp_path, monkeypatch):
+def test_images_stdlib_fallback_without_pillow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """JPG/PNG still validate via stdlib headers when Pillow is absent."""
     import struct
 
@@ -122,7 +132,7 @@ def test_images_stdlib_fallback_without_pillow(tmp_path, monkeypatch):
     assert results[0].details.get("width") == 1
 
 
-def test_corrupt_png_reports_error_not_crash(tmp_path):
+def test_corrupt_png_reports_error_not_crash(tmp_path: Path) -> None:
     """Mypy dv-q9m catch: Pillow 12 removed ImageFile.TruncatedFileError.
 
     Evaluating a stale `except ImageFile.TruncatedFileError` clause raises
@@ -150,7 +160,9 @@ def test_corrupt_png_reports_error_not_crash(tmp_path):
     assert "truncated" in results[0].message or "unreadable" in results[0].message
 
 
-def test_images_stdlib_fallback_rejects_garbage(tmp_path, monkeypatch):
+def test_images_stdlib_fallback_rejects_garbage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setitem(sys.modules, "PIL", None)
     monkeypatch.setitem(sys.modules, "PIL.Image", None)
     monkeypatch.setitem(sys.modules, "PIL.ImageFile", None)
@@ -162,7 +174,7 @@ def test_images_stdlib_fallback_rejects_garbage(tmp_path, monkeypatch):
     assert results[0].level == "error"
 
 
-def test_chardet_fallback(tmp_path, monkeypatch):
+def test_chardet_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "chardet", None)
     target = tmp_path / "a.txt"
     target.write_bytes(b"plain ascii")
@@ -172,7 +184,7 @@ def test_chardet_fallback(tmp_path, monkeypatch):
 # -- containers guards ------------------------------------------------------
 
 
-def test_zip_unsafe_entry_flagged(tmp_path):
+def test_zip_unsafe_entry_flagged(tmp_path: Path) -> None:
     bundle = tmp_path / "evil.zip"
     with zipfile.ZipFile(bundle, "w") as archive:
         archive.writestr("ok.txt", "fine")
@@ -185,7 +197,7 @@ def test_zip_unsafe_entry_flagged(tmp_path):
     assert unsafe.level == "warning"
 
 
-def test_tar_nested_macosx_and_unsafe(tmp_path):
+def test_tar_nested_macosx_and_unsafe(tmp_path: Path) -> None:
     bundle = tmp_path / "evil.tar"
     inner = tmp_path / "inner.txt"
     inner.write_text("d")
@@ -199,7 +211,7 @@ def test_tar_nested_macosx_and_unsafe(tmp_path):
     assert by_id["format.containers.unsafe_entry"].passed is False
 
 
-def test_zip_member_cap(tmp_path, monkeypatch):
+def test_zip_member_cap(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import engine.checks.containers_check as cc
 
     monkeypatch.setattr(cc, "_MAX_MEMBERS", 2)
@@ -215,7 +227,7 @@ def test_zip_member_cap(tmp_path, monkeypatch):
 # -- download hardening ------------------------------------------------------
 
 
-def test_contained_blocks_traversal(tmp_path):
+def test_contained_blocks_traversal(tmp_path: Path) -> None:
     root = tmp_path / "files"
     root.mkdir()
     assert DownloadManager._contained(root, "a/b.csv") is not None
@@ -224,7 +236,7 @@ def test_contained_blocks_traversal(tmp_path):
     assert DownloadManager._contained(root, "sub/../../evil") is None
 
 
-def test_extract_atomic_preserves_stage(tmp_path):
+def test_extract_atomic_preserves_stage(tmp_path: Path) -> None:
     manager = DownloadManager(object(), tmp_path)
     dest = tmp_path / "stage"
     (dest / "old").mkdir(parents=True)
@@ -237,9 +249,9 @@ def test_extract_atomic_preserves_stage(tmp_path):
     assert not (tmp_path / "stage.new").exists()
 
 
-def test_verify_rejects_unsafe_and_malformed(tmp_path):
+def test_verify_rejects_unsafe_and_malformed(tmp_path: Path) -> None:
     class FakeClient:
-        def get_file_inventory(self, pid):
+        def get_file_inventory(self, pid: str) -> list[dict[str, Any]]:
             return [
                 {
                     "path": "../escape.csv",
@@ -257,7 +269,7 @@ def test_verify_rejects_unsafe_and_malformed(tmp_path):
     assert any("malformed" in p for p in problems)
 
 
-def test_collect_files_skips_symlinks(tmp_path):
+def test_collect_files_skips_symlinks(tmp_path: Path) -> None:
     real = tmp_path / "real.csv"
     real.write_text("a")
     link = tmp_path / "link.csv"
@@ -271,7 +283,7 @@ def test_collect_files_skips_symlinks(tmp_path):
 # -- caps, taxonomy, inventory -----------------------------------------------
 
 
-def test_csv_scan_cap(tmp_path, monkeypatch):
+def test_csv_scan_cap(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import engine.checks.csv_check as csv_mod
 
     monkeypatch.setattr(csv_mod, "_MAX_ROWS_SCANNED", 10)
@@ -283,7 +295,7 @@ def test_csv_scan_cap(tmp_path, monkeypatch):
     assert "sampled" in content.message
 
 
-def test_empty_files_are_errors(tmp_path):
+def test_empty_files_are_errors(tmp_path: Path) -> None:
     csv_empty = tmp_path / "e.csv"
     csv_empty.write_bytes(b"")
     (tmp_path / "t.txt").write_bytes(b"")
@@ -293,7 +305,7 @@ def test_empty_files_are_errors(tmp_path):
     assert (txt_res.level, txt_res.passed) == ("error", False)
 
 
-def test_todo_markers_are_warnings(tmp_path):
+def test_todo_markers_are_warnings(tmp_path: Path) -> None:
     target = tmp_path / "s.py"
     target.write_text("# TODO: fix me\nx = 1\n")
     results = CodeCheck().run([target])
@@ -301,7 +313,7 @@ def test_todo_markers_are_warnings(tmp_path):
     assert (todo.level, todo.passed) == ("warning", False)
 
 
-def test_fastq_qual_mismatch_flagged(tmp_path):
+def test_fastq_qual_mismatch_flagged(tmp_path: Path) -> None:
     target = tmp_path / "bad.fastq"
     target.write_text("@r1\nACGT\n+\nIII\n")  # qual shorter than seq
     results = FastqCheck().run([target])
@@ -309,7 +321,7 @@ def test_fastq_qual_mismatch_flagged(tmp_path):
     assert valid.passed is False
 
 
-def test_netcdf_name_patterns():
+def test_netcdf_name_patterns() -> None:
     from engine.checks.nc_check import _LAT, _LON
 
     for good in ("lat", "latitude", "grid_lat", "XLAT", "lon", "longitude", "xlong"):
@@ -319,7 +331,7 @@ def test_netcdf_name_patterns():
         assert not _LON.search(bad), bad
 
 
-def test_extensions_nested_junk_and_single_component(tmp_path):
+def test_extensions_nested_junk_and_single_component(tmp_path: Path) -> None:
 
     nested = tmp_path / "a" / "__MACOSX" / "sub"
     nested.mkdir(parents=True)
@@ -331,7 +343,7 @@ def test_extensions_nested_junk_and_single_component(tmp_path):
     assert junk.passed is False
 
 
-def test_runner_unchecked_types_hint(tmp_path):
+def test_runner_unchecked_types_hint(tmp_path: Path) -> None:
     staged = tmp_path / "ds"
     staged.mkdir()
     (staged / "model.mat").write_bytes(b"\x00" * 16)

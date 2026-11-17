@@ -1,5 +1,10 @@
 """Tests for metadatablocks parsing + field-catalog cache (dataverse_client)."""
 
+from pathlib import Path
+from typing import Any
+
+import pytest
+
 from dataverse_client import (
     get_cached_metadata_fields,
     parse_metadatablock_display_names,
@@ -11,7 +16,7 @@ from dataverse_client import (
 )
 
 
-def test_parse_block_names():
+def test_parse_block_names() -> None:
     assert parse_metadatablock_names({"data": [{"name": "citation"}, {"name": "geospatial"}]}) == [
         "citation",
         "geospatial",
@@ -20,7 +25,7 @@ def test_parse_block_names():
     assert parse_metadatablock_names({"data": "nope"}) == []
 
 
-def test_parse_block_fields_dict_shape():
+def test_parse_block_fields_dict_shape() -> None:
     out = parse_metadatablock_fields(
         {
             "data": {
@@ -36,7 +41,7 @@ def test_parse_block_fields_dict_shape():
     assert len(out) == 2
 
 
-def test_parse_block_fields_list_shape():
+def test_parse_block_fields_list_shape() -> None:
     out = parse_metadatablock_fields(
         {
             "data": {
@@ -50,7 +55,7 @@ def test_parse_block_fields_list_shape():
     assert out == [{"block": "citation", "field": "title", "label": "Title"}]
 
 
-def test_parse_block_fields_newer_fields_shape():
+def test_parse_block_fields_newer_fields_shape() -> None:
     """Dataverse 6.8 answers data.fields (dict keyed by field name)."""
     out = parse_metadatablock_fields(
         {
@@ -86,7 +91,7 @@ def test_parse_block_fields_newer_fields_shape():
     assert out2 == [{"block": "citation", "field": "title", "label": "Title"}]
 
 
-def test_fields_cache_roundtrip(tmp_path):
+def test_fields_cache_roundtrip(tmp_path: Path) -> None:
     base = "https://example.invalid"
     fields = [{"block": "citation", "field": "title", "label": "Title"}]
     write_metadata_fields_cache(tmp_path, base, fields)
@@ -94,14 +99,14 @@ def test_fields_cache_roundtrip(tmp_path):
     assert read_metadata_fields_cache(tmp_path, "https://other.invalid") is None
 
 
-def test_memory_cache_roundtrip():
+def test_memory_cache_roundtrip() -> None:
     set_cached_metadata_fields("https://mem.invalid", [{"block": "b", "field": "f", "label": "L"}])
     assert get_cached_metadata_fields("https://mem.invalid") == [
         {"block": "b", "field": "f", "label": "L"}
     ]
 
 
-def test_parse_block_display_names():
+def test_parse_block_display_names() -> None:
     out = parse_metadatablock_display_names(
         {
             "data": [
@@ -116,7 +121,7 @@ def test_parse_block_display_names():
     assert parse_metadatablock_display_names({}) == {}
 
 
-def test_fetch_skips_empty_memory_cache(monkeypatch):
+def test_fetch_skips_empty_memory_cache(monkeypatch: pytest.MonkeyPatch) -> None:
     """[] in memory means 'fetch failed' — refetch, don't serve it."""
     import dataverse_client as _dc
 
@@ -124,7 +129,7 @@ def test_fetch_skips_empty_memory_cache(monkeypatch):
     set_cached_metadata_fields("https://empty.invalid", [])
     calls: list[str] = []
 
-    def fake_json(self, path, params=None):
+    def fake_json(self: Any, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         calls.append(path)
         if path == "/api/metadatablocks":
             return {"data": [{"name": "citation", "displayName": "Citation Metadata"}]}
@@ -144,12 +149,12 @@ def test_fetch_skips_empty_memory_cache(monkeypatch):
     ]
 
 
-def test_fetch_attaches_block_labels(monkeypatch):
+def test_fetch_attaches_block_labels(monkeypatch: pytest.MonkeyPatch) -> None:
     import dataverse_client as _dc
 
     monkeypatch.setattr(_dc, "_METADATABLOCKS_MEMO", {})
 
-    def fake_json(self, path, params=None):
+    def fake_json(self: Any, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         if path == "/api/metadatablocks":
             return {"data": [{"name": "citation", "displayName": "Citation Metadata"}]}
         return {"data": {"name": "citation", "metadataFields": {"title": {"displayName": "Title"}}}}

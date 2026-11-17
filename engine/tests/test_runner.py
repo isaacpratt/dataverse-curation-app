@@ -19,7 +19,7 @@ def _make_staged(tmp_path: Path) -> Path:
     return staged
 
 
-def test_run_report_on_synthetic(tmp_path):
+def test_run_report_on_synthetic(tmp_path: Path) -> None:
     staged = _make_staged(tmp_path)
 
     report = run_report(staged, persistent_id="doi:10.5072/FK2/TEST")
@@ -47,7 +47,7 @@ def test_run_report_on_synthetic(tmp_path):
     assert inventory.passed
 
 
-def test_report_roundtrip_via_file(tmp_path):
+def test_report_roundtrip_via_file(tmp_path: Path) -> None:
     staged = _make_staged(tmp_path)
     out = tmp_path / "report.json"
 
@@ -57,7 +57,7 @@ def test_report_roundtrip_via_file(tmp_path):
 
 
 @pytest.mark.skipif(not CUR_DATA.exists(), reason="sample data not found")
-def test_run_report_on_cur_gpkg_samples():
+def test_run_report_on_cur_gpkg_samples() -> None:
     report = run_report(CUR_DATA / "Inspect_gpkg")
 
     gpkg_entries = [f for f in report.files if f.path.endswith(".gpkg")]

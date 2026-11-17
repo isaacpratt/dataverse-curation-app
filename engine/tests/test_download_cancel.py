@@ -7,8 +7,9 @@ truncated `_bundle.zip.part` behind — all offline, against fake clients.
 
 import io
 import zipfile
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar, Literal
 
 import pytest
 
@@ -23,56 +24,56 @@ class _ChunkedResponse:
 
     status_code = 200
     url = "http://example.test/stream"
-    headers: ClassVar[dict] = {}
+    headers: ClassVar[dict[str, str]] = {}
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.chunks_yielded = 0
 
-    def __enter__(self):
+    def __enter__(self) -> "_ChunkedResponse":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> Literal[False]:
         return False
 
-    def raise_for_status(self):
+    def raise_for_status(self) -> None:
         return None
 
-    def iter_content(self, chunk_size):
+    def iter_content(self, chunk_size: int) -> Iterator[bytes]:
         for _ in range(5):
             self.chunks_yielded += 1
             yield b"x" * 64
 
 
 class _FakeSession:
-    def __init__(self, response):
+    def __init__(self, response: Any) -> None:
         self.calls = 0
         self._response = response
 
-    def get(self, url, **kwargs):
+    def get(self, url: str, **kwargs: Any) -> Any:
         self.calls += 1
         return self._response
 
 
-def _client_with_session(session):
+def _client_with_session(session: Any) -> DataverseClient:
     client = DataverseClient.__new__(DataverseClient)
     client._session = session
-    client._api_token = None
+    client._api_token = ""
     client._timeout = 5
 
-    def _api(path):
+    def _api(path: str) -> str:
         return "http://example.test" + path
 
-    client._api = _api
+    client._api = _api  # type: ignore[method-assign]
     return client
 
 
-def test_stream_cancel_mid_chunk_writes_one_chunk_and_never_retries(tmp_path):
+def test_stream_cancel_mid_chunk_writes_one_chunk_and_never_retries(tmp_path: Path) -> None:
     resp = _ChunkedResponse()
     session = _FakeSession(resp)
     client = _client_with_session(session)
     dest = tmp_path / "_bundle.zip.part"
 
-    def is_cancelled():
+    def is_cancelled() -> bool:
         return resp.chunks_yielded >= 2
 
     with pytest.raises(DownloadCancelled):
@@ -82,13 +83,13 @@ def test_stream_cancel_mid_chunk_writes_one_chunk_and_never_retries(tmp_path):
     assert dest.read_bytes() == b"x" * 64, "exactly one chunk before stop"
 
 
-def test_datafile_original_cancel_mid_chunk_never_retries(tmp_path):
+def test_datafile_original_cancel_mid_chunk_never_retries(tmp_path: Path) -> None:
     resp = _ChunkedResponse()
     session = _FakeSession(resp)
     client = _client_with_session(session)
     dest = tmp_path / "a.sav"
 
-    def is_cancelled():
+    def is_cancelled() -> bool:
         return resp.chunks_yielded >= 2
 
     with pytest.raises(DownloadCancelled):
@@ -97,17 +98,17 @@ def test_datafile_original_cancel_mid_chunk_never_retries(tmp_path):
     assert session.calls == 1, "cancel must not trigger the retry loop"
 
 
-def test_bundle_cancel_unlinks_partial_part(tmp_path):
+def test_bundle_cancel_unlinks_partial_part(tmp_path: Path) -> None:
     class _CancelBundle:
         def download_dataset_zip(
             self,
-            identifier,
-            dest,
-            version="draft",
-            progress=None,
-            is_cancelled=None,
-            guestbook_response=None,
-        ):
+            identifier: str,
+            dest: Path,
+            version: Any = "draft",
+            progress: Callable[[int], None] | None = None,
+            is_cancelled: Callable[[], bool] | None = None,
+            guestbook_response: dict[str, Any] | None = None,
+        ) -> None:
             dest = Path(dest)
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(b"partial-zip")
@@ -122,9 +123,15 @@ def test_bundle_cancel_unlinks_partial_part(tmp_path):
     assert not (staging / "_bundle.zip").exists(), "partial bundle must not publish"
 
 
-def test_originals_cancel_propagates_and_removes_partial(tmp_path):
+def test_originals_cancel_propagates_and_removes_partial(tmp_path: Path) -> None:
     class _CancelOriginals:
-        def download_datafile_original(self, file_id, dest, progress=None, is_cancelled=None):
+        def download_datafile_original(
+            self,
+            file_id: str,
+            dest: Path,
+            progress: Callable[[int], None] | None = None,
+            is_cancelled: Callable[[], bool] | None = None,
+        ) -> None:
             Path(dest).write_bytes(b"partial-bytes")
             raise DownloadCancelled(f"datafile {file_id}")
 
@@ -144,9 +151,15 @@ def test_originals_cancel_propagates_and_removes_partial(tmp_path):
     assert not (mgr.files_dir(PID) / "a.sav").exists(), "in-flight partial removed"
 
 
-def test_originals_real_failure_still_swallowed(tmp_path):
+def test_originals_real_failure_still_swallowed(tmp_path: Path) -> None:
     class _Boom:
-        def download_datafile_original(self, file_id, dest, progress=None, is_cancelled=None):
+        def download_datafile_original(
+            self,
+            file_id: str,
+            dest: Path,
+            progress: Callable[[int], None] | None = None,
+            is_cancelled: Callable[[], bool] | None = None,
+        ) -> None:
             raise RuntimeError("server exploded")
 
     inv = [
@@ -163,17 +176,17 @@ def test_originals_real_failure_still_swallowed(tmp_path):
     assert staged == [], "ordinary per-file failures stay non-fatal"
 
 
-def test_happy_path_unaffected_by_live_stop_flag(tmp_path):
+def test_happy_path_unaffected_by_live_stop_flag(tmp_path: Path) -> None:
     class _OkClient:
         def download_dataset_zip(
             self,
-            identifier,
-            dest,
-            version="draft",
-            progress=None,
-            is_cancelled=None,
-            guestbook_response=None,
-        ):
+            identifier: str,
+            dest: Path,
+            version: Any = "draft",
+            progress: Callable[[int], None] | None = None,
+            is_cancelled: Callable[[], bool] | None = None,
+            guestbook_response: dict[str, Any] | None = None,
+        ) -> Path:
             buf = io.BytesIO()
             with zipfile.ZipFile(buf, "w") as zf:
                 zf.writestr("data.txt", "hello")
@@ -182,7 +195,7 @@ def test_happy_path_unaffected_by_live_stop_flag(tmp_path):
             dest.write_bytes(buf.getvalue())
             return dest
 
-        def inventory(self, persistent_id):
+        def inventory(self, persistent_id: str) -> list[Any]:
             return []
 
     mgr = DownloadManager(_OkClient(), tmp_path)

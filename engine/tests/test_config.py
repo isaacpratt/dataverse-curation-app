@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -17,49 +19,51 @@ from config import DEFAULT_CONFIG_PATH, Config
 
 
 class FakeKeyring:
-    def __init__(self, broken: bool = False):
+    def __init__(self, broken: bool = False) -> None:
         self.store: dict[tuple[str, str], str] = {}
         self.broken = broken
 
-    def get_password(self, service, username):
+    def get_password(self, service: str, username: str) -> str | None:
         if self.broken:
             raise RuntimeError("store is unavailable")
         return self.store.get((service, username))
 
-    def set_password(self, service, username, password):
+    def set_password(self, service: str, username: str, password: str) -> None:
         if self.broken:
             raise RuntimeError("store is unavailable")
         self.store[(service, username)] = password
 
-    def delete_password(self, service, username):
+    def delete_password(self, service: str, username: str) -> None:
         if self.broken:
             raise RuntimeError("store is unavailable")
         self.store.pop((service, username), None)
 
 
 @pytest.fixture
-def store(monkeypatch):
+def store(monkeypatch: pytest.MonkeyPatch) -> FakeKeyring:
     fake = FakeKeyring()
     monkeypatch.setattr(cfg_module, "_keyring", fake)
     return fake
 
 
 @pytest.fixture
-def broken(monkeypatch):
+def broken(monkeypatch: pytest.MonkeyPatch) -> FakeKeyring:
     fake = FakeKeyring(broken=True)
     monkeypatch.setattr(cfg_module, "_keyring", fake)
     return fake
 
 
-def _write(tmp_path, payload: dict) -> None:
+def _write(tmp_path: Path, payload: dict[str, Any]) -> None:
     (tmp_path / "config.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def _read(tmp_path) -> dict:
-    return json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
+def _read(tmp_path: Path) -> dict[str, Any]:
+    raw = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
+    assert isinstance(raw, dict)
+    return raw
 
 
-def test_save_writes_keyring_and_blanks_plaintext(store, tmp_path):
+def test_save_writes_keyring_and_blanks_plaintext(store: FakeKeyring, tmp_path: Path) -> None:
     cfg = Config()
     cfg.dataverse.base_url = "https://example.test"
     cfg.dataverse.api_token = "supersecret"
@@ -70,7 +74,7 @@ def test_save_writes_keyring_and_blanks_plaintext(store, tmp_path):
     assert store.store[(cfg_module.KEYRING_SERVICE, "https://example.test")] == "supersecret"
 
 
-def test_reload_reads_token_from_keyring(store, tmp_path):
+def test_reload_reads_token_from_keyring(store: FakeKeyring, tmp_path: Path) -> None:
     _write(
         tmp_path,
         {
@@ -89,7 +93,9 @@ def test_reload_reads_token_from_keyring(store, tmp_path):
     assert cfg.dataverse.api_token_source == "keyring"
 
 
-def test_env_overrides_keyring(store, tmp_path, monkeypatch):
+def test_env_overrides_keyring(
+    store: FakeKeyring, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _write(
         tmp_path,
         {
@@ -109,7 +115,7 @@ def test_env_overrides_keyring(store, tmp_path, monkeypatch):
     assert cfg.dataverse.api_token_source == "env"
 
 
-def test_fallback_to_plaintext_when_store_broken(broken, tmp_path):
+def test_fallback_to_plaintext_when_store_broken(broken: FakeKeyring, tmp_path: Path) -> None:
     cfg = Config()
     cfg.dataverse.base_url = "https://example.test"
     cfg.dataverse.api_token = "supersecret"
@@ -119,7 +125,9 @@ def test_fallback_to_plaintext_when_store_broken(broken, tmp_path):
     assert raw["dataverse"]["api_token_source"] == "config"
 
 
-def test_load_falls_back_to_plaintext_when_store_broken(broken, tmp_path):
+def test_load_falls_back_to_plaintext_when_store_broken(
+    broken: FakeKeyring, tmp_path: Path
+) -> None:
     _write(
         tmp_path,
         {
@@ -136,7 +144,7 @@ def test_load_falls_back_to_plaintext_when_store_broken(broken, tmp_path):
     assert cfg.dataverse.api_token == "legacy-token"
 
 
-def test_plaintext_migrates_to_keyring_on_save(store, tmp_path):
+def test_plaintext_migrates_to_keyring_on_save(store: FakeKeyring, tmp_path: Path) -> None:
     _write(
         tmp_path,
         {
@@ -158,7 +166,7 @@ def test_plaintext_migrates_to_keyring_on_save(store, tmp_path):
     assert store.store[(cfg_module.KEYRING_SERVICE, "https://example.test")] == "legacy-token"
 
 
-def test_legacy_config_without_source_marker(store, tmp_path):
+def test_legacy_config_without_source_marker(store: FakeKeyring, tmp_path: Path) -> None:
     _write(
         tmp_path,
         {
@@ -175,7 +183,7 @@ def test_legacy_config_without_source_marker(store, tmp_path):
     assert cfg.dataverse.api_token_source == "config"
 
 
-def test_clearing_token_deletes_stale_credential(store, tmp_path):
+def test_clearing_token_deletes_stale_credential(store: FakeKeyring, tmp_path: Path) -> None:
     _write(
         tmp_path,
         {
@@ -195,7 +203,7 @@ def test_clearing_token_deletes_stale_credential(store, tmp_path):
     assert (cfg_module.KEYRING_SERVICE, "https://example.test") not in store.store
 
 
-def test_keyring_keyed_by_base_url(store, tmp_path):
+def test_keyring_keyed_by_base_url(store: FakeKeyring, tmp_path: Path) -> None:
     cfg = Config()
     cfg.dataverse.base_url = "https://other.test/"
     cfg.dataverse.api_token = "abc"
@@ -203,11 +211,11 @@ def test_keyring_keyed_by_base_url(store, tmp_path):
     assert (cfg_module.KEYRING_SERVICE, "https://other.test") in store.store
 
 
-def test_default_path_untouched():
-    assert cfg_module.Path("config.json") == DEFAULT_CONFIG_PATH
+def test_default_path_untouched() -> None:
+    assert Path("config.json") == DEFAULT_CONFIG_PATH
 
 
-def _cfg_env(monkeypatch, **vars):
+def _cfg_env(monkeypatch: pytest.MonkeyPatch, **vars: str) -> None:
     # scrub every relevant var, then set what the test wants
     for name in (
         "DATAVERSE_BASE_URL",
@@ -220,25 +228,33 @@ def _cfg_env(monkeypatch, **vars):
         monkeypatch.setenv(name, value)
 
 
-def test_env_http_url_rejected(store, tmp_path, monkeypatch):
+def test_env_http_url_rejected(
+    store: FakeKeyring, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _cfg_env(monkeypatch, DATAVERSE_BASE_URL="http://borealis.example")
     with pytest.raises(ValueError, match="plain HTTP"):
         Config.load(tmp_path / "config.json")
 
 
-def test_env_non_https_scheme_rejected(store, tmp_path, monkeypatch):
+def test_env_non_https_scheme_rejected(
+    store: FakeKeyring, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _cfg_env(monkeypatch, DATAVERSE_BASE_URL="ftp://borealis.example")
     with pytest.raises(ValueError, match="https://"):
         Config.load(tmp_path / "config.json")
 
 
-def test_env_url_without_host_rejected(store, tmp_path, monkeypatch):
+def test_env_url_without_host_rejected(
+    store: FakeKeyring, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _cfg_env(monkeypatch, DATAVERSE_BASE_URL="https://")
     with pytest.raises(ValueError, match="no host"):
         Config.load(tmp_path / "config.json")
 
 
-def test_env_url_normalised_and_ws_honoured(tmp_path, monkeypatch):
+def test_env_url_normalised_and_ws_honoured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     store_dir = tmp_path / "ws-from-env"
     _cfg_env(
         monkeypatch,
@@ -250,7 +266,9 @@ def test_env_url_normalised_and_ws_honoured(tmp_path, monkeypatch):
     assert cfg.app.workspace == store_dir
 
 
-def test_env_http_url_rejected_with_file(store, tmp_path, monkeypatch):
+def test_env_http_url_rejected_with_file(
+    store: FakeKeyring, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _write(
         tmp_path,
         {
@@ -263,14 +281,14 @@ def test_env_http_url_rejected_with_file(store, tmp_path, monkeypatch):
         Config.load(tmp_path / "config.json")
 
 
-def test_config_write_includes_schema_version(store, tmp_path):
+def test_config_write_includes_schema_version(store: FakeKeyring, tmp_path: Path) -> None:
     cfg = Config()
     cfg.save(tmp_path / "config.json")
     raw = _read(tmp_path)
     assert raw["version"] == 1
 
 
-def test_config_drops_compat_aliases(store, tmp_path):
+def test_config_drops_compat_aliases(store: FakeKeyring, tmp_path: Path) -> None:
     cfg = Config()
     cfg.dataverse.collection = "mcmaster"
     cfg.save(tmp_path / "config.json")
@@ -281,7 +299,7 @@ def test_config_drops_compat_aliases(store, tmp_path):
     assert dv["collection"] == "mcmaster"
 
 
-def test_config_version_missing_is_tolerated(tmp_path):
+def test_config_version_missing_is_tolerated(tmp_path: Path) -> None:
     _write(
         tmp_path,
         {
@@ -293,7 +311,7 @@ def test_config_version_missing_is_tolerated(tmp_path):
     assert cfg.dataverse.base_url == "https://ok.test"
 
 
-def test_config_wrong_shaped_section_fails_loudly(tmp_path):
+def test_config_wrong_shaped_section_fails_loudly(tmp_path: Path) -> None:
     _write(
         tmp_path,
         {"dataverse": "not-an-object", "app": {}},
@@ -302,7 +320,7 @@ def test_config_wrong_shaped_section_fails_loudly(tmp_path):
         Config.load(tmp_path / "config.json")
 
 
-def test_config_wrong_shaped_engine_tools_fails_loudly(tmp_path):
+def test_config_wrong_shaped_engine_tools_fails_loudly(tmp_path: Path) -> None:
     _write(
         tmp_path,
         {"dataverse": {}, "engine": {"optional_tools": {"tesseract": 123}}},
@@ -311,7 +329,7 @@ def test_config_wrong_shaped_engine_tools_fails_loudly(tmp_path):
         Config.load(tmp_path / "config.json")
 
 
-def test_config_wrong_base_url_type_fails_loudly(tmp_path):
+def test_config_wrong_base_url_type_fails_loudly(tmp_path: Path) -> None:
     _write(
         tmp_path,
         {"dataverse": {"base_url": 42}, "app": {}},
@@ -320,12 +338,14 @@ def test_config_wrong_base_url_type_fails_loudly(tmp_path):
         Config.load(tmp_path / "config.json")
 
 
-def test_chmod_failure_logs_warning_without_token(store, tmp_path, monkeypatch):
+def test_chmod_failure_logs_warning_without_token(
+    store: FakeKeyring, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import os
 
     import applog
 
-    def _boom(_path, _mode):
+    def _boom(_path: Path, _mode: str) -> None:
         raise OSError("read-only filesystem")
 
     monkeypatch.setattr(os, "chmod", _boom)
@@ -340,7 +360,9 @@ def test_chmod_failure_logs_warning_without_token(store, tmp_path, monkeypatch):
 
 
 @pytest.mark.skipif(os.name != "nt", reason="icacls is Windows-only")
-def test_icacls_failure_logs_warning_without_token(store, tmp_path, monkeypatch):
+def test_icacls_failure_logs_warning_without_token(
+    store: FakeKeyring, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import subprocess
 
     import applog

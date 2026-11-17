@@ -6,6 +6,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed (tooling)
+
+- **mypy `--strict` on the engine contract** — the scope in `[tool.mypy] files` (`engine/`, `client/`, `download_manager.py`, `storage.py`, `metadata_check.py`, `review_rules.py`, `applog.py`, plus the engine test suite) is now checked under `--strict`, with no per-module ignore list. 44 strict-subset errors were fixed by annotating the engine, the client and the root services.
+- **Dependency direction is machine-enforced** — `poe contracts` (import-linter, also in `poe check` and CI) forbids `engine/` → `ui/`/`PySide6` and `tools/` → `ui/`. The engine contract has no exceptions: the dashboard cache helpers the engine tests used to borrow from `ui/dashboard.py` moved to the Qt-free root module `dashboard_cache.py`, so `engine/tests/` no longer imports the view layer and joined the strict mypy gate.
+
 ## [0.2.0] - 2026-11-16
 
 ### Changed (tooling)

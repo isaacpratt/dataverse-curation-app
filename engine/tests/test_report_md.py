@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from engine.report import DatasetReport
 from engine.runner import run_report
 
@@ -14,7 +16,7 @@ def _make_staged(tmp_path: Path) -> Path:
     return staged
 
 
-def test_markdown_shows_passes_and_inventory(tmp_path):
+def test_markdown_shows_passes_and_inventory(tmp_path: Path) -> None:
     report = run_report(_make_staged(tmp_path), persistent_id="doi:10/x")
     md = report.to_markdown()
     assert "# Curation report" in md
@@ -25,7 +27,7 @@ def test_markdown_shows_passes_and_inventory(tmp_path):
     assert "JSON is canonical" in md
 
 
-def test_markdown_roundtrip_via_files(tmp_path):
+def test_markdown_roundtrip_via_files(tmp_path: Path) -> None:
     report = run_report(_make_staged(tmp_path), persistent_id="doi:10/x")
     out_json = tmp_path / "r.json"
     out_md = tmp_path / "r.md"
@@ -38,7 +40,7 @@ def test_markdown_roundtrip_via_files(tmp_path):
     assert "data/table.csv" in text
 
 
-def test_markdown_skipped_renders_skipped(tmp_path, monkeypatch):
+def test_markdown_skipped_renders_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import sys
 
     monkeypatch.setitem(sys.modules, "pypdf", None)

@@ -29,6 +29,11 @@ parsing, caching and download logic in one module.
   compatibility shim so every existing import still resolves.
 - **Root modules stay flat until they grow:** `engine/`, `ui/`, `client/` and
   `tools/` are packages; the remaining root modules are single-purpose.
+  `dashboard_cache.py` (the Qt-free dashboard cache helpers) is one of them:
+  it is pure data handling that the engine tests need without the view
+  layer, so it sits at the root beside `storage.py` and `applog.py`
+  (dv-hcg.26). The `curation/` consolidation bead (dv-hcg.24) will decide
+  where it lands.
 - Module-size guideline (reviewers' expectation, not a hard gate): views
   ≤ ~1,000 lines, engine modules ≤ ~1,500; exceptions carry a dated comment.
 
@@ -46,6 +51,7 @@ parsing, caching and download logic in one module.
 ## Links
 
 - Beads: `dv-hcg` (audit), `dv-hcg.21` (client split), `dv-hcg.24`
-  (root-module consolidation), `dv-hcg.34` (module-size guideline).
+  (root-module consolidation), `dv-hcg.26` (Qt-free dashboard cache),
+  `dv-hcg.34` (module-size guideline).
 - `AGENTS.md` — repository layout map.
 - `docs/html/architecture.html` — component map.

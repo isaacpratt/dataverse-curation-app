@@ -7,15 +7,20 @@ fetched 2026-11-12, trimmed to the citation author + dsDescription blocks.
 
 import json
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "metadatablocks_citation.json"
 
 
-def _load() -> dict:
-    return json.loads(_FIXTURE.read_text(encoding="utf-8"))
+def _load() -> dict[str, Any]:
+    raw = json.loads(_FIXTURE.read_text(encoding="utf-8"))
+    assert isinstance(raw, dict)
+    return raw
 
 
-def test_childfields_surface_as_dotted_rows():
+def test_childfields_surface_as_dotted_rows() -> None:
     from dataverse_client import parse_metadatablock_fields
 
     rows = parse_metadatablock_fields(_load())
@@ -41,7 +46,7 @@ def test_childfields_surface_as_dotted_rows():
     assert "dsDescription.dsDescriptionDate" in by
 
 
-def test_childfields_order_is_borealis_display_order():
+def test_childfields_order_is_borealis_display_order() -> None:
     from dataverse_client import parse_metadatablock_fields
 
     rows = parse_metadatablock_fields(_load())
@@ -55,7 +60,7 @@ def test_childfields_order_is_borealis_display_order():
     ]
 
 
-def test_subfield_rows_survive_the_review_config_union(monkeypatch):
+def test_subfield_rows_survive_the_review_config_union(monkeypatch: pytest.MonkeyPatch) -> None:
     """Rule-config union must keep parent-linked rows after save/load."""
     import review_rules as rr
 
@@ -75,4 +80,5 @@ def test_subfield_rows_survive_the_review_config_union(monkeypatch):
             ]
         },
     )
+    assert normalized is not None
     assert normalized["field_rules"][0]["field"] == "author.authorIdentifier"

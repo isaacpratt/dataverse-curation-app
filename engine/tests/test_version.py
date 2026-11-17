@@ -16,19 +16,19 @@ import engine
 _PYPROJECT = Path(__file__).resolve().parent.parent.parent / "pyproject.toml"
 
 
-def test_version_is_semver_ish():
+def test_version_is_semver_ish() -> None:
     parts = engine.__version__.split(".")
     assert len(parts) == 3
     assert all(part.isdigit() for part in parts)
 
 
-def test_pyproject_and_engine_agree():
+def test_pyproject_and_engine_agree() -> None:
     with _PYPROJECT.open("rb") as fh:
         meta = tomllib.load(fh)
     assert meta["project"]["version"] == engine.__version__
 
 
-def test_report_version_matches(tmp_path):
+def test_report_version_matches(tmp_path: Path) -> None:
     from engine.report import DatasetReport
 
     report = DatasetReport(persistent_id="doi:x", label="t", engine_version=engine.__version__)

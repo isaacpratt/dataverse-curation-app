@@ -20,7 +20,7 @@ def _fmt(template: str, ctx: dict[str, Any]) -> str:
         return str(template or "")
 
 
-class _SafeDict(dict):
+class _SafeDict(dict[str, Any]):
     def __missing__(self, key: str) -> str:
         return "{" + key + "}"
 

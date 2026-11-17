@@ -33,7 +33,7 @@ PACKAGES = [
 ]
 
 
-def test_normalize_license_maps_common_spellings():
+def test_normalize_license_maps_common_spellings() -> None:
     assert normalize_license("MIT") == "MIT"
     assert normalize_license("MIT License") == "MIT"
     assert normalize_license("Mozilla Public License 2.0 (MPL 2.0)") == "MPL-2.0"
@@ -41,12 +41,12 @@ def test_normalize_license_maps_common_spellings():
     assert normalize_license("Some Proprietary Terms") == "NOASSERTION"
 
 
-def test_normalize_license_does_not_guess_the_bsd_clause_count():
+def test_normalize_license_does_not_guess_the_bsd_clause_count() -> None:
     # "BSD License" does not say which clause count, so it stays unasserted.
     assert normalize_license("BSD License") == "NOASSERTION"
 
 
-def test_spdx_document_shape():
+def test_spdx_document_shape() -> None:
     doc = spdx_document(PACKAGES, "0.2.0")
     assert doc["spdxVersion"] == "SPDX-2.3"
     assert doc["dataLicense"] == "CC0-1.0"
@@ -65,14 +65,14 @@ def test_spdx_document_shape():
     assert all(r["relationshipType"] == "DESCRIBES" for r in doc["relationships"])
 
 
-def test_spdx_document_keeps_unknown_license_as_comment():
+def test_spdx_document_keeps_unknown_license_as_comment() -> None:
     doc = spdx_document(PACKAGES, "0.2.0")
     legacy = next(p for p in doc["packages"] if p["name"] == "legacy-thing")
     assert legacy["licenseDeclared"] == "NOASSERTION"
     assert "BSD License" in legacy["licenseComments"]
 
 
-def test_spdx_document_skips_incomplete_packages():
+def test_spdx_document_skips_incomplete_packages() -> None:
     doc = spdx_document(
         [*PACKAGES, {"Name": "", "Version": "1.0"}, {"Name": "no-version", "Version": ""}],
         "0.2.0",
@@ -80,12 +80,12 @@ def test_spdx_document_skips_incomplete_packages():
     assert len(doc["packages"]) == 3
 
 
-def test_spdx_document_is_json_serialisable():
+def test_spdx_document_is_json_serialisable() -> None:
     doc = spdx_document(PACKAGES, "0.2.0")
     assert json.loads(json.dumps(doc))["spdxVersion"] == "SPDX-2.3"
 
 
-def test_notice_lists_attributions_and_dependencies():
+def test_notice_lists_attributions_and_dependencies() -> None:
     text = render_notice(PACKAGES, "0.2.0")
     assert "Dataverse Docent - NOTICE" in text
     assert "CUR_Res_CurationTools" in text
@@ -98,6 +98,6 @@ def test_notice_lists_attributions_and_dependencies():
         assert terms in text
 
 
-def test_notice_reports_the_package_count():
+def test_notice_reports_the_package_count() -> None:
     text = render_notice(PACKAGES, "0.2.0")
     assert "3 Python packages are redistributed" in text

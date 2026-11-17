@@ -1,11 +1,13 @@
 """Dataset-level access check: restricted/embargoed files + terms of access."""
 
+from typing import Any
+
 import review_rules as rr
 from engine.checks.access_check import AccessCheck
 from engine.runner import run_report
 
 
-def _inventory():
+def _inventory() -> list[dict[str, Any]]:
     return [
         {"path": "data/open.csv"},
         {
@@ -17,11 +19,11 @@ def _inventory():
     ]
 
 
-def _metadata(terms="Contact the curator for access"):
+def _metadata(terms: str = "Contact the curator for access") -> dict[str, Any]:
     return {"latestVersion": {"termsOfAccess": {"value": terms}}}
 
 
-def test_access_check_names_restricted_and_embargoed_files():
+def test_access_check_names_restricted_and_embargoed_files() -> None:
     results = AccessCheck().run_dataset([], {"inventory": _inventory(), "metadata": _metadata()})
     by_id = {r.check_id: r for r in results}
 
@@ -39,7 +41,7 @@ def test_access_check_names_restricted_and_embargoed_files():
     assert embargoed.details["dates"] == ["2027-06-01", "2028-01-15"]
 
 
-def test_access_check_without_inventory_is_skipped_not_passed():
+def test_access_check_without_inventory_is_skipped_not_passed() -> None:
     results = AccessCheck().run_dataset([], None)
     by_id = {r.check_id: r for r in results}
     assert set(by_id) == {"inventory.restricted_files", "inventory.embargoed_files"}
@@ -47,13 +49,13 @@ def test_access_check_without_inventory_is_skipped_not_passed():
     assert all(r.details.get("skipped") for r in results)
 
 
-def test_access_check_clean_inventory_passes():
+def test_access_check_clean_inventory_passes() -> None:
     results = AccessCheck().run_dataset([], {"inventory": [{"path": "data/open.csv"}]})
     assert all(r.passed for r in results)
     assert all("No restricted" in r.message or "No embargoed" in r.message for r in results)
 
 
-def test_run_report_wires_access_context():
+def test_run_report_wires_access_context() -> None:
     import tempfile
     from pathlib import Path
 
@@ -71,7 +73,7 @@ def test_run_report_wires_access_context():
     assert "Terms of access" in by_id["inventory.embargoed_files"].message
 
 
-def test_ruleset_access_rule_presents_embargo_and_terms():
+def test_ruleset_access_rule_presents_embargo_and_terms() -> None:
     rs = rr.get_ruleset("mcmaster-default")
     rule = next(fr for fr in rs["field_rules"] if fr.get("handler") == "access_conditions")
     assert rule["field"] == "termsOfAccess"
@@ -91,7 +93,7 @@ def test_ruleset_access_rule_presents_embargo_and_terms():
     assert "Contact the curator" in found["value"]
 
 
-def test_response_draft_uses_access_templates():
+def test_response_draft_uses_access_templates() -> None:
     from engine.report import DatasetReport
     from response_draft import build_response
 
@@ -107,9 +109,9 @@ def test_response_draft_uses_access_templates():
     assert "Contact the curator for access" in md
 
 
-def test_ruleset_access_rule_flags_missing_terms():
+def test_ruleset_access_rule_flags_missing_terms() -> None:
     rs = rr.get_ruleset("mcmaster-default")
-    meta = {"latestVersion": {"metadataBlocks": {"citation": {"fields": []}}}}
+    meta: dict[str, Any] = {"latestVersion": {"metadataBlocks": {"citation": {"fields": []}}}}
     evaluated = rr.evaluate_ruleset(meta, rs, _inventory())
     found = next(r for r in evaluated if r["rule_id"].endswith(":access_conditions"))
     assert found["status"] == "incomplete"

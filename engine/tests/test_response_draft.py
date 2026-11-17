@@ -1,22 +1,24 @@
 """Tests for the depositor response assembler (response_draft)."""
 
+from typing import Any
+
 import review_rules as rr
 from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
 from response_draft import build_response, render_response
 
 
-def _ruleset():
+def _ruleset() -> dict[str, Any]:
     return rr.get_ruleset("mcmaster-default")
 
 
-def test_empty_findings_gives_ready_note():
+def test_empty_findings_gives_ready_note() -> None:
     md, sections = build_response(_ruleset(), [], None, "T", "doi:x")
     assert sections == []
     assert "ready" in md.lower()
 
 
-def test_incomplete_metadata_uses_templates_and_placeholders():
+def test_incomplete_metadata_uses_templates_and_placeholders() -> None:
     completeness = [
         {
             "rule_id": "field:citation.title",
@@ -57,7 +59,7 @@ def test_incomplete_metadata_uses_templates_and_placeholders():
     assert "Missing Title in My DS (doi:1)." in md
 
 
-def test_filecheck_failures_included_passes_and_skips_excluded():
+def test_filecheck_failures_included_passes_and_skips_excluded() -> None:
     report = DatasetReport(
         persistent_id="doi:1",
         label="x",
@@ -125,7 +127,7 @@ def test_filecheck_failures_included_passes_and_skips_excluded():
     assert "empty.csv" in md or "zero-byte" in md or "empty" in md
 
 
-def test_render_respects_inclusion_flags():
+def test_render_respects_inclusion_flags() -> None:
     rs = _ruleset()
     sections = [
         {
@@ -154,7 +156,7 @@ def test_render_respects_inclusion_flags():
     assert "Second item" not in md
 
 
-def test_items_raise_severity_tags():
+def test_items_raise_severity_tags() -> None:
     """Warnings/errors/required items are tagged up front in the draft."""
     md, _sections = build_response(_ruleset(), [], None, "T", "doi:1")
     report = DatasetReport(
@@ -222,7 +224,7 @@ def test_items_raise_severity_tags():
     assert "empty" in err_line  # ruleset's zero_byte template ("The file '{path}' is empty…")
 
 
-def test_filecheck_level_flows_to_section():
+def test_filecheck_level_flows_to_section() -> None:
     """Each file-check finding carries warning/error severity for the UI."""
     report = DatasetReport(
         persistent_id="doi:1",

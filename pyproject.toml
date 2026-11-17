@@ -279,11 +279,13 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
-# Gate the engine contract only. engine/tests import the PySide6 view layer
-# (ui.dashboard, ui.checks_tree, ...), which would drag ~170 Qt-stub-only
-# attr-defined errors into the gate (PySide6 exposes enums only under their
-# scoped names, e.g. Qt.CursorShape.PointingHandCursor). UI typing is tracked
-# separately; tests are exercised by pytest, not by mypy.
+# Gate the engine contract only: the engine plus the root services it is
+# built on, and the engine test suite. The tests are Qt-free since
+# dv-hcg.26 (the dashboard cache helpers they borrow live in the root
+# module dashboard_cache.py), so they join the strict gate instead of
+# needing an exclusion. The UI layer is typed separately (dv-hcg.28:
+# theme/kit -> main window -> views); the UI tests are exercised by
+# pytest, not by mypy.
 files = [
     "engine",
     "applog.py",
@@ -297,7 +299,6 @@ exclude = [
     "^\\.venv/",
     "^build/",
     "^dist/",
-    "^engine/tests/",
 ]
 
 # Machine-enforced dependency direction (import-linter).
@@ -322,16 +323,10 @@ name = "Engine must not import the UI layer or Qt"
 type = "forbidden"
 source_modules = ["engine"]
 forbidden_modules = ["ui", "PySide6"]
-# engine/tests import the view layer for fixtures; that trade-off is
-# documented in [tool.mypy] and tracked by the Qt-free-seam bead.
-ignore_imports = [
-    "engine.tests.test_audit_p0p1 -> ui.checks_tree",
-    "engine.tests.test_audit_p0p1 -> ui.dashboard",
-    "engine.tests.test_audit_p0p1 -> ui.dataset_detail",
-    "engine.tests.test_audit_p0p1 -> ui.download_dialog",
-    "engine.tests.test_dashboard_cache -> ui.dashboard",
-    "engine.tests.test_enrichment -> ui.dashboard",
-]
+# No exceptions: the engine tests are Qt-free since dv-hcg.26. The dashboard
+# cache helpers they used to borrow from ui/dashboard.py now live in the
+# root module dashboard_cache.py, and the size-formatter test moved to
+# ui/tests/ (it asserts something about the views).
 
 [[tool.importlinter.contracts]]
 name = "Tools must not import the UI layer"

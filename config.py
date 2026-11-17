@@ -22,12 +22,13 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 try:  # optional, hard-imported but never fatal to the app at runtime
     import keyring as _keyring
 except Exception:  # pragma: no cover - keyring absent entirely
-    _keyring = None
+    _keyring = None  # type: ignore[assignment]
 
 KEYRING_SERVICE = "Dataverse Docent"
 CONFIG_SCHEMA_VERSION = 1
@@ -54,7 +55,7 @@ def _warn_acl_failure(reason: str) -> None:
 DEFAULT_CONFIG_PATH = Path("config.json")
 
 
-def validate_raw(raw: object) -> dict:
+def validate_raw(raw: object) -> dict[str, Any]:
     """Validate the decoded config.json payload shape.
 
     Tolerant of unknown keys; strict about the ones we know. Raises
@@ -80,7 +81,7 @@ def validate_raw(raw: object) -> dict:
     return raw
 
 
-def _section(raw: dict, name: str) -> dict:
+def _section(raw: dict[str, Any], name: str) -> dict[str, Any]:
     value = raw.get(name, {})
     if value is None:
         return {}
@@ -89,7 +90,7 @@ def _section(raw: dict, name: str) -> dict:
     return value
 
 
-def _check_str(section: dict, key: str, where: str) -> None:
+def _check_str(section: dict[str, Any], key: str, where: str) -> None:
     value = section.get(key)
     if value is not None and not isinstance(value, str):
         raise ValueError(f"'{where}.{key}' must be a string")

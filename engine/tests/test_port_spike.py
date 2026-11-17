@@ -5,6 +5,7 @@ automatically when the sibling repo or its samples are absent.
 """
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -19,18 +20,18 @@ requires_samples = pytest.mark.skipif(
 )
 
 
-def _files(subdirectory: str, suffix: str):
+def _files(subdirectory: str, suffix: str) -> list[Path]:
     directory = CUR_DATA / subdirectory
     return sorted(directory.rglob(f"*{suffix}"))
 
 
 @requires_samples
-def test_sas_dictionary_extracted():
+def test_sas_dictionary_extracted() -> None:
     files = _files("Inspect_sas7bdat", ".sas7bdat")
     assert files, "expected .sas7bdat samples"
 
     results = Sas7bdatCheck().run(files)
-    by_id = {}
+    by_id: dict[str, list[Any]] = {}
     for result in results:
         by_id.setdefault(result.check_id, []).append(result)
 
@@ -48,7 +49,7 @@ def test_sas_dictionary_extracted():
 
 
 @requires_samples
-def test_gpkg_layers_and_crs():
+def test_gpkg_layers_and_crs() -> None:
     files = _files("Inspect_gpkg", ".gpkg")
     assert files, "expected .gpkg samples"
 
@@ -64,7 +65,7 @@ def test_gpkg_layers_and_crs():
 
 
 @requires_samples
-def test_netcdf_georeferenced():
+def test_netcdf_georeferenced() -> None:
     files = _files("Inspect_Images", ".nc") or _files("Inspect_xml", ".nc")
     assert files, "expected .nc samples"
 

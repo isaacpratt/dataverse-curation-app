@@ -1,25 +1,29 @@
 """Tests for rule-driven completeness (review_rules) + legacy parity."""
 
 import copy
+from pathlib import Path
+from typing import Any
+
+import pytest
 
 import metadata_check as mc
 import review_rules as rr
 
 
-def _meta(fields=(), license_name="CC0"):
+def _meta(fields: list[Any] | None = None, license_name: str = "CC0") -> dict[str, Any]:
     return {
         "latestVersion": {
             "license": {"name": license_name} if license_name else {},
-            "metadataBlocks": {"citation": {"fields": list(fields)}},
+            "metadataBlocks": {"citation": {"fields": list(fields or [])}},
         }
     }
 
 
-def _f(name, value):
+def _f(name: str, value: Any) -> dict[str, Any]:
     return {"typeName": name, "value": value}
 
 
-def test_mcmaster_set_parity_with_legacy():
+def test_mcmaster_set_parity_with_legacy() -> None:
     meta = _meta(
         [
             _f("title", "T"),
@@ -39,14 +43,14 @@ def test_mcmaster_set_parity_with_legacy():
     )
 
 
-def test_minimal_exact_parity_with_legacy():
+def test_minimal_exact_parity_with_legacy() -> None:
     meta = _meta([_f("title", "T")])
     assert mc.check_metadata_completeness(meta, "Minimal", []) == mc._check_minimal(
         meta, meta["latestVersion"]["metadataBlocks"], []
     )
 
 
-def test_unchecked_field_is_skipped():
+def test_unchecked_field_is_skipped() -> None:
     rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
     for fr in rs["field_rules"]:
         if fr["field"] == "subject":
@@ -55,7 +59,7 @@ def test_unchecked_field_is_skipped():
     assert not any(r["field"] == "Subject" for r in res)
 
 
-def test_optional_missing_stays_incomplete_with_level():
+def test_optional_missing_stays_incomplete_with_level() -> None:
     rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
     res = rr.evaluate_ruleset(_meta([]), rs, [])
     orcid = next(r for r in res if r["rule_id"] == "field:citation.author.authorIdentifier:orcid")
@@ -63,7 +67,7 @@ def test_optional_missing_stays_incomplete_with_level():
     assert orcid["level"] == "optional"
 
 
-def test_content_rule_filename_glob():
+def test_content_rule_filename_glob() -> None:
     rule = {
         "id": "readme-present",
         "label": "README file",
@@ -86,7 +90,7 @@ def test_content_rule_filename_glob():
     )
 
 
-def test_filename_glob_case_sensitive_skips_legacy_fallback():
+def test_filename_glob_case_sensitive_skips_legacy_fallback() -> None:
     rule = {
         "id": "r",
         "label": "R",
@@ -104,7 +108,7 @@ def test_filename_glob_case_sensitive_skips_legacy_fallback():
     assert rr.evaluate_content_rule(rule, {}, [{"path": "readme.txt"}])["status"] == "complete"
 
 
-def test_filename_glob_with_slash_matches_full_path():
+def test_filename_glob_with_slash_matches_full_path() -> None:
     rule = {
         "id": "r",
         "label": "R",
@@ -122,7 +126,7 @@ def test_filename_glob_with_slash_matches_full_path():
     )
 
 
-def test_content_rule_metadata_scope():
+def test_content_rule_metadata_scope() -> None:
     rule = {
         "id": "x",
         "label": "X",
@@ -139,7 +143,7 @@ def test_content_rule_metadata_scope():
     assert rr.evaluate_content_rule(rule, _meta([]), [])["status"] == "incomplete"
 
 
-def test_content_rule_file_content_pending_without_staged(tmp_path):
+def test_content_rule_file_content_pending_without_staged(tmp_path: Path) -> None:
     rule = {
         "id": "x",
         "label": "X",
@@ -156,7 +160,7 @@ def test_content_rule_file_content_pending_without_staged(tmp_path):
     )
 
 
-def test_content_rule_file_content_match(tmp_path):
+def test_content_rule_file_content_match(tmp_path: Path) -> None:
     (tmp_path / "notes.txt").write_text("hello world", encoding="utf-8")
     rule = {
         "id": "x",
@@ -172,14 +176,14 @@ def test_content_rule_file_content_match(tmp_path):
     assert rr.evaluate_content_rule(rule, {}, [], staged_dir=tmp_path)["status"] == "complete"
 
 
-def test_field_rule_ids_unique_per_handler():
+def test_field_rule_ids_unique_per_handler() -> None:
     rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
     res = rr.evaluate_ruleset(_meta([]), rs, [])
     ids = [r["rule_id"] for r in res]
     assert len(ids) == len(set(ids)), ids
 
 
-def test_author_count_handler_bounds_and_display():
+def test_author_count_handler_bounds_and_display() -> None:
     rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
     # Configure min/max on the Author count rule.
     for fr in rs["field_rules"]:
@@ -209,7 +213,7 @@ def test_author_count_handler_bounds_and_display():
     assert ac1["level"] == "optional"
 
 
-def test_license_terms_handler_reads_version_surface():
+def test_license_terms_handler_reads_version_surface() -> None:
     rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
     meta = _meta([])
     meta["latestVersion"]["termsOfUse"] = {"value": "CC BY 4.0 attribution"}
@@ -222,7 +226,7 @@ def test_license_terms_handler_reads_version_surface():
     assert "contact curator" in lt["value"]
 
 
-def test_orcid_handler_requires_every_author():
+def test_orcid_handler_requires_every_author() -> None:
     rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
     meta = _meta(
         [
@@ -268,7 +272,7 @@ def test_orcid_handler_requires_every_author():
     assert orc2["status"] == "complete"
 
 
-def test_orcid_dotted_identifier_rule_complete_and_incomplete():
+def test_orcid_dotted_identifier_rule_complete_and_incomplete() -> None:
     """Builtin mcmaster ORCID rule now targets author.authorIdentifier."""
     rs = copy.deepcopy(rr.get_ruleset("mcmaster-default"))
     orc_rules = [r for r in rs["field_rules"] if r.get("handler") == "orcid"]
@@ -313,7 +317,7 @@ def test_orcid_dotted_identifier_rule_complete_and_incomplete():
     assert orc2["status"] == "complete"
 
 
-def test_dotted_nonempty_rule_requires_every_identifier():
+def test_dotted_nonempty_rule_requires_every_identifier() -> None:
     ruleset = {
         "label": "t",
         "description": "",
@@ -366,7 +370,7 @@ def test_dotted_nonempty_rule_requires_every_identifier():
     assert "Y" in r2["value"]
 
 
-def test_legacy_orcid_field_author_migrates_on_load():
+def test_legacy_orcid_field_author_migrates_on_load() -> None:
     merged = rr._normalize_ruleset(
         "legacy",
         {
@@ -383,10 +387,11 @@ def test_legacy_orcid_field_author_migrates_on_load():
             ]
         },
     )
+    assert merged is not None
     assert merged["field_rules"][0]["field"] == "author.authorIdentifier"
 
 
-def test_rulesets_for_dataverse_wildcard():
+def test_rulesets_for_dataverse_wildcard() -> None:
     pool = rr.load_rulesets()
     assert any(
         k == "mcmaster-default"
@@ -394,7 +399,7 @@ def test_rulesets_for_dataverse_wildcard():
     )
 
 
-def test_save_load_roundtrip(tmp_path, monkeypatch):
+def test_save_load_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import review_rules as _rr
 
     target = tmp_path / "requirements_profiles.json"
@@ -407,7 +412,9 @@ def test_save_load_roundtrip(tmp_path, monkeypatch):
     assert _rr.load_rulesets()["lab"]["dataverses"] == ["https://example.invalid"]
 
 
-def test_load_memoized_and_invalidated_on_save(tmp_path, monkeypatch):
+def test_load_memoized_and_invalidated_on_save(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import review_rules as _rr
 
     target = tmp_path / "requirements_profiles.json"
@@ -421,7 +428,7 @@ def test_load_memoized_and_invalidated_on_save(tmp_path, monkeypatch):
     assert "lab2" in _rr.load_rulesets()
 
 
-def test_deleted_ruleset_leaves_profiles(tmp_path, monkeypatch):
+def test_deleted_ruleset_leaves_profiles(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import review_rules as _rr
 
     target = tmp_path / "requirements_profiles.json"

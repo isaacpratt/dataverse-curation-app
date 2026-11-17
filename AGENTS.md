@@ -24,6 +24,7 @@ dataverse-curation-app/
 ├── client/               # Native/Search API client (constants/errors/http/parsers/caches/downloads/DataverseClient; total-driven paginated search + pooled inventory enrichment, versions/compare/timestamps/notifications/curation labels)
 ├── dataverse_client.py   # compatibility shim re-exporting client/ (existing imports keep working)
 ├── download_manager.py   # approval-gated downloads, originals, skip-if-staged, verify (ok/problems/warnings)
+├── dashboard_cache.py    # Qt-free dashboard cache helpers (slot keys, fingerprints, diffing, load/save)
 ├── metadata_check.py     # citation-block completeness (McMaster / Minimal profiles)
 ├── applog.py             # in-memory request log (Log page)
 ├── storage.py            # SQLite local state + JSON caches (sizes, labels, table layout)
@@ -36,7 +37,7 @@ dataverse-curation-app/
 ```bash
 uv sync                   # create .venv and install everything incl. dev group (from uv.lock; no pip needed)
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
-uv run pytest             # 513 tests (218 engine + 295 UI; run uv run pytest --collect-only -q for current count)
+uv run pytest             # 567 tests (run uv run pytest --collect-only -q for current count)
 pre-commit run --all-files # optional local gate (CI runs it too); needs uv on PATH. core.hooksPath is beads-managed, so hooks are not auto-installed — run it manually or rely on CI (uv run poe hooks wraps the same thing)
 uv run poe audit        # OSV vulnerability scan of the locked dependency set (fails on any advisory)
 uv run poe hooks        # pre-commit run --all-files (wrapped for uv users)
@@ -103,7 +104,7 @@ Gate before handoff; run from the repository root when code (not docs-only) chan
 
 - `uv run pytest -q` — must exit 0
 - `uv run poe typecheck` — must report `Success: no issues found`; the engine contract is checked under mypy `--strict` and the scope is `[tool.mypy] files`, so run bare `uv run mypy`
-- `uv run poe contracts` — import-linter contracts must stay green: `engine/` may not import `ui/` or `PySide6`, and the operational helpers in `tools/` may not import `ui/` (the UI probes and the two engine-test fixtures are the documented exceptions)
+- `uv run poe contracts` — import-linter contracts must stay green: `engine/` may not import `ui/` or `PySide6`, and the operational helpers in `tools/` may not import `ui/` (the UI probes are the documented exception; the engine contract has none since dv-hcg.26)
 - `python tools/probes/run_all.py` — must end with `all N probes passed`; mandatory for UI/theme changes, and cheap enough to always run
 - headless box? set `QT_QPA_PLATFORM=offscreen` first, or the probes fail for the wrong reason
 - probes run against a throwaway temp workspace (see `tools/probes/README.md`) — never against the configured instance or the real `workspace/table_layout.json`

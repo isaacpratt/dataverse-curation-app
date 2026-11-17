@@ -5,16 +5,19 @@ local enrichment, cache save/load round-trip, corrupt-cache tolerance and
 per-instance cache-key separation.
 """
 
-from ui.dashboard import (
-    _dataset_fingerprint,
+from pathlib import Path
+from typing import Any
+
+from dashboard_cache import (
     dashboard_cache_key,
+    dataset_fingerprint,
     diff_dashboard_datasets,
     load_dashboard_cache,
     save_dashboard_cache,
 )
 
 
-def _row(pid, **over):
+def _row(pid: str, **over: Any) -> dict[str, Any]:
     base = {
         "persistent_id": pid,
         "title": f"Title {pid}",
@@ -37,7 +40,7 @@ def _row(pid, **over):
     return base
 
 
-def test_diff_detects_added_removed_changed():
+def test_diff_detects_added_removed_changed() -> None:
     old = [_row("doi:1"), _row("doi:2"), _row("doi:3")]
     new = [
         _row("doi:1"),
@@ -50,7 +53,7 @@ def test_diff_detects_added_removed_changed():
     assert diff["changed"] == ["doi:2"]
 
 
-def test_diff_ignores_local_enrichment():
+def test_diff_ignores_local_enrichment() -> None:
     old = [_row("doi:1")]
     new = [
         _row(
@@ -63,7 +66,7 @@ def test_diff_ignores_local_enrichment():
     assert diff_dashboard_datasets(old, new) == {"added": [], "removed": [], "changed": []}
 
 
-def test_diff_flags_state_label_and_file_changes():
+def test_diff_flags_state_label_and_file_changes() -> None:
     old = [_row("doi:1")]
     assert diff_dashboard_datasets(old, [_row("doi:1", state="In Review")])["changed"] == ["doi:1"]
     assert diff_dashboard_datasets(old, [_row("doi:1", curation_label="Approve")])["changed"] == [
@@ -73,11 +76,11 @@ def test_diff_flags_state_label_and_file_changes():
     assert diff_dashboard_datasets([], []) == {"added": [], "removed": [], "changed": []}
 
 
-def test_fingerprint_stable_for_identical_rows():
-    assert _dataset_fingerprint(_row("doi:1")) == _dataset_fingerprint(_row("doi:1"))
+def test_fingerprint_stable_for_identical_rows() -> None:
+    assert dataset_fingerprint(_row("doi:1")) == dataset_fingerprint(_row("doi:1"))
 
 
-def test_cache_round_trip(tmp_path):
+def test_cache_round_trip(tmp_path: Path) -> None:
     key = dashboard_cache_key("https://demo.example.ca/", "dv")
     rows = [_row("doi:1"), _row("doi:2")]
     save_dashboard_cache(tmp_path, key, rows, ["Approve", "Reject"])
@@ -88,13 +91,13 @@ def test_cache_round_trip(tmp_path):
     assert entry["saved_at"]
 
 
-def test_cache_missing_and_corrupt(tmp_path):
+def test_cache_missing_and_corrupt(tmp_path: Path) -> None:
     assert load_dashboard_cache(tmp_path, "nope|x") is None
     (tmp_path / "dashboard_cache.json").write_text("{not json", encoding="utf-8")
     assert load_dashboard_cache(tmp_path, "nope|x") is None
 
 
-def test_cache_key_separates_instances_and_collections():
+def test_cache_key_separates_instances_and_collections() -> None:
     a = dashboard_cache_key("https://demo.example.ca", "dv")
     assert dashboard_cache_key("https://demo.example.ca/", "dv") == a
     assert dashboard_cache_key("https://demo.example.ca", "DV") == a
@@ -102,10 +105,14 @@ def test_cache_key_separates_instances_and_collections():
     assert dashboard_cache_key("https://other.example.ca", "dv") != a
 
 
-def test_cache_slots_do_not_clobber(tmp_path):
+def test_cache_slots_do_not_clobber(tmp_path: Path) -> None:
     k1 = dashboard_cache_key("https://a.example.ca", "dv")
     k2 = dashboard_cache_key("https://a.example.ca", "other")
     save_dashboard_cache(tmp_path, k1, [_row("doi:1")], [])
     save_dashboard_cache(tmp_path, k2, [_row("doi:9")], [])
-    assert [d["persistent_id"] for d in load_dashboard_cache(tmp_path, k1)["datasets"]] == ["doi:1"]
-    assert [d["persistent_id"] for d in load_dashboard_cache(tmp_path, k2)["datasets"]] == ["doi:9"]
+    slot1 = load_dashboard_cache(tmp_path, k1)
+    slot2 = load_dashboard_cache(tmp_path, k2)
+    assert slot1 is not None
+    assert slot2 is not None
+    assert [d["persistent_id"] for d in slot1["datasets"]] == ["doi:1"]
+    assert [d["persistent_id"] for d in slot2["datasets"]] == ["doi:9"]

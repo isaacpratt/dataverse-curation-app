@@ -308,7 +308,7 @@ def parse_allowed_labels(data: Any) -> list[str]:
     return seen
 
 
-def top_level_collection(collection: str) -> str:
+def top_level_collection(collection: str | None) -> str:
     """First path segment of a collection alias.
 
     Allowed curation labels are shared across a first-level collection and
