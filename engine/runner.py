@@ -5,10 +5,12 @@ Dispatches checks and aggregates findings into a DatasetReport
 """
 
 import mimetypes
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from engine import __version__
-from engine.checks.base import CheckResult
+from engine.checks.base import Check, CheckResult
 from engine.dispatcher import checks_for_file, dataset_level_checks
 from engine.report import DatasetReport, FileEntry
 
@@ -36,7 +38,7 @@ def guess_mime(path: Path) -> str:
     return mime or "application/octet-stream"
 
 
-def _safe_run(check_cls, files: list[Path]) -> list[CheckResult]:
+def _safe_run(check_cls: type[Check], files: list[Path]) -> list[CheckResult]:
     try:
         result: list[CheckResult] = check_cls().run(files)
         return result
@@ -51,7 +53,9 @@ def _safe_run(check_cls, files: list[Path]) -> list[CheckResult]:
         ]
 
 
-def _safe_run_dataset(check_cls, files: list[Path], context: dict) -> list[CheckResult]:
+def _safe_run_dataset(
+    check_cls: type[Check], files: list[Path], context: dict[str, Any]
+) -> list[CheckResult]:
     """Run a dataset-level check, passing the inventory/metadata context."""
     try:
         result: list[CheckResult] = check_cls().run_dataset(files, context)
@@ -67,12 +71,12 @@ def _safe_run_dataset(check_cls, files: list[Path], context: dict) -> list[Check
         ]
 
 
-def _check_description(check_cls) -> str:
+def _check_description(check_cls: type[Check]) -> str:
     doc = (check_cls.__doc__ or "").strip().split("\n")[0]
     return doc[:80] if doc else check_cls.check_id
 
 
-def list_planned_checks(files: list[Path]) -> list[dict]:
+def list_planned_checks(files: list[Path]) -> list[dict[str, Any]]:
     """Return list of checks that will be run for the given file list, with status."""
     from collections import Counter
 
@@ -90,7 +94,7 @@ def list_planned_checks(files: list[Path]) -> list[dict]:
             }
         )
     # per-file: single pass over files (O(F) dispatcher calls, not O(C*F)).
-    counts: Counter = Counter()
+    counts: Counter[str] = Counter()
     for path in files:
         try:
             for check_cls in checks_for_file(path):
@@ -117,12 +121,12 @@ def run_report(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg d
     dataset_dir: Path,
     persistent_id: str = "",
     label: str = "",
-    progress_callback=None,
-    progress_fraction=None,
+    progress_callback: Callable[[str], None] | None = None,
+    progress_fraction: Callable[[int, int], None] | None = None,
     max_workers: int = 1,
-    is_cancelled=None,
-    inventory: list[dict] | None = None,
-    metadata: dict | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
+    inventory: list[dict[str, Any]] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> DatasetReport:
     """Run all applicable checks on a staged dataset directory.
 
@@ -174,7 +178,7 @@ def run_report(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg d
 
     _report_progress(f"Running per-file checks on {len(files)} file(s)…")
 
-    def _run_one_file(args) -> FileEntry | Path | None:
+    def _run_one_file(args: tuple[int, Path]) -> FileEntry | Path | None:
         idx, path = args
         try:
             checks = checks_for_file(path)
@@ -286,8 +290,8 @@ def run_report_to_file(
     label: str = "",
     max_workers: int = 1,
     fmt: str = "json",
-    inventory: list[dict] | None = None,
-    metadata: dict | None = None,
+    inventory: list[dict[str, Any]] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> DatasetReport:
     """Write the report in json, md, or both (sibling extension swap).
 

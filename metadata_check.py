@@ -63,7 +63,7 @@ def profiles_path() -> Path:
 
 # Keys PROFILES gained from v2 rulesets (tracked so deleted rulesets can be
 # removed again on refresh, not just added).
-_V2_PROFILE_KEYS: set = set()
+_V2_PROFILE_KEYS: set[str] = set()
 
 
 # Load custom profiles from file if present (written by Requirements dialog)
@@ -250,7 +250,7 @@ def _extract_orcid_value(metadata_blocks: dict[str, Any]) -> str:
 
 
 def _check_mcmaster(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-    metadata: dict, blocks: dict[str, Any], inventory: list[dict[str, Any]] | None
+    metadata: dict[str, Any], blocks: dict[str, Any], inventory: list[Any] | None
 ) -> list[dict[str, Any]]:
     def has(block: str, name: str) -> bool:
         return _nonempty(_field(blocks, block, name))
@@ -568,7 +568,7 @@ def _check_mcmaster(  # noqa: C901 - grandfathered; complexity burns down as dv-
 
 
 def _check_minimal(
-    metadata: dict, blocks: dict[str, Any], inventory: list[dict[str, Any]] | None
+    metadata: dict[str, Any], blocks: dict[str, Any], inventory: list[Any] | None
 ) -> list[dict[str, Any]]:
     def has(block: str, name: str) -> bool:
         return _nonempty(_field(blocks, block, name))
@@ -596,11 +596,11 @@ def _check_minimal(
 
 
 def check_metadata_completeness(
-    metadata: dict,
+    metadata: dict[str, Any],
     profile: str = DEFAULT_PROFILE,
     inventory: list[dict[str, Any]] | None = None,
     staged_dir: Any = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Deterministic completeness check for the chosen profile/ruleset.
 
     Profiles `McMaster`/`Minimal` and any custom v2 ruleset key all evaluate
@@ -642,12 +642,12 @@ def check_metadata_completeness(
 
 
 def check_with_ruleset(
-    metadata: dict,
+    metadata: dict[str, Any],
     ruleset_key: str = "mcmaster-default",
     inventory: list[dict[str, Any]] | None = None,
     staged_dir: Any = None,
     rulesets: dict[str, Any] | None = None,
-) -> tuple[list[dict], dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Full rule evaluation (keeps rule_id/level/pending for the Response pane)."""
     import review_rules as _rr
 
@@ -668,9 +668,9 @@ def refresh_profiles_from_rulesets() -> None:
 
 # Back-compat alias used by older code
 def check_completeness(
-    metadata: dict,
+    metadata: dict[str, Any],
     profile: str = DEFAULT_PROFILE,
     inventory: list[dict[str, Any]] | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Citation-block completeness against a McMaster/Minimal profile."""
     return check_metadata_completeness(metadata, profile, inventory)

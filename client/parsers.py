@@ -241,7 +241,7 @@ def note_review_submission(pid: str, note: Any) -> dict[str, str] | None:
     }
 
 
-def locks_indicate_review(locks: list[dict[str, Any]]) -> bool:
+def locks_indicate_review(locks: list[Any]) -> bool:
     """Return True when any lock's type/reason indicates an in-review lock."""
     import re as _re
 
@@ -258,7 +258,7 @@ def locks_indicate_review(locks: list[dict[str, Any]]) -> bool:
     return False
 
 
-def search_item_state(item: dict[str, Any]) -> tuple:
+def search_item_state(item: dict[str, Any]) -> tuple[str, bool]:
     """Derive (state, has_draft) from a Search API dataset doc.
 
     A dataset with a published version plus a new draft version can surface
@@ -622,7 +622,7 @@ def parse_curation_states_csv(text: str) -> list[dict[str, Any]]:
             # title candidate only if it cannot be the localized header.
             title = first
 
-        def _cell(i: int, _cells=cells) -> str:
+        def _cell(i: int, _cells: list[str] = cells) -> str:
             return _cells[i].strip() if len(_cells) > i else ""
 
         label = _clean_curation_value(_cell(3))

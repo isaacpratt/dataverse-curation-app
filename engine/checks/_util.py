@@ -1,6 +1,7 @@
 """Shared helpers for format checks."""
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -97,7 +98,7 @@ def detect_encoding(path: Path, sample_bytes: int = 65536) -> str:
     except OSError:
         return "utf-8"
     try:
-        guess = chardet.detect(sample)
+        guess: Any = chardet.detect(sample)
     except Exception:
         return "utf-8"
     if not isinstance(guess, dict):
@@ -142,7 +143,7 @@ def _ca_sin_luhn_ok(value: str) -> bool:
     return checksum % 10 == 0
 
 
-def _get_pii_scrubber():
+def _get_pii_scrubber() -> Any:
     """Return the cached piigex Scrubber (intl detectors only)."""
     global _PII_SCRUBBER
     if _PII_SCRUBBER is None:
@@ -262,7 +263,9 @@ def quoted_ident(name: str) -> str:
     return '"' + str(name).replace('"', '""') + '"'
 
 
-def run_per_file(check: Check, files: list[Path], handler) -> list[CheckResult]:
+def run_per_file(
+    check: Check, files: list[Path], handler: Callable[[Path], list[CheckResult]]
+) -> list[CheckResult]:
     """Apply `handler(path) -> List[CheckResult]` to each file.
 
     Unexpected exceptions become an error-level result instead of failing

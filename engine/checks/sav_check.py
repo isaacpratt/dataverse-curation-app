@@ -6,7 +6,7 @@ a non-ASCII encoding scan.
 """
 
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -15,7 +15,7 @@ _MAX_UNLABELED_LISTED = 20
 _MAX_VARIABLES_LISTED = 200
 
 
-def _has_non_ascii(frame) -> bool:
+def _has_non_ascii(frame: Any) -> bool:
     for column in frame.columns:
         for value in frame[column].dropna().head(_ROW_LIMIT):
             if isinstance(value, str) and any(ord(ch) > 127 for ch in value):

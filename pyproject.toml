@@ -266,6 +266,16 @@ max-complexity = 12
 
 [tool.mypy]
 python_version = "3.11"
+# The engine contract is checked under mypy --strict. The scope is the
+# `files` list below: the engine plus the root services it is built on
+# (client, storage, downloads, metadata rules, request log).
+#
+# Burn-down note (2026-11-16, dv-hcg.27): the last 44 errors under the
+# strict subset were fixed by annotating the engine, the client and the
+# root services - no per-module ignore list was needed and none is
+# configured here. The next step is the UI typing ramp (dv-hcg.28):
+# theme/kit -> main window -> views, then `ui/` joins `files`.
+strict = true
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true

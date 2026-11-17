@@ -1,11 +1,13 @@
 """HTTP helpers for the Dataverse client stack."""
 
+from typing import Any
+
 import requests
 
 from client.constants import _RETRYABLE_STATUS
 
 
-def _error_message(response) -> str:
+def _error_message(response: Any) -> str:
     """Best-effort Dataverse error message from a JSON error response."""
     try:
         payload = response.json()

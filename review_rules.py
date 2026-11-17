@@ -658,7 +658,7 @@ def _walk_path(node: Any, parts: list[str]) -> Any:
     return None
 
 
-def _field_path(blocks: dict[str, Any], block: str, field: str):
+def _field_path(blocks: dict[str, Any], block: str, field: str) -> list[Any] | None:
     r"""Resolve a dotted field path ("author.authorIdentifier") to its leaves.
 
     The first segment is the actual metadatablock field; the rest walk down
@@ -691,7 +691,7 @@ def _leaves_value(leaves: list[Any], max_len: int = 200) -> str:
     return s[:max_len] or "—"
 
 
-def _orcid_dotted(m, blocks: dict[str, Any], block: str, field: str) -> tuple[bool, str]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+def _orcid_dotted(m: Any, blocks: dict[str, Any], block: str, field: str) -> tuple[bool, str]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """ORCID rule on a dotted identifier path ("author.authorIdentifier").
 
     Mirrors the composite ``orcid`` handler: every author needs a scheme of
@@ -985,7 +985,7 @@ def _iter_metadata_strings(metadata: dict[str, Any]) -> list[str]:
 
 
 def _match_filenames(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-    rule: dict[str, Any], inventory: list[dict[str, Any]] | None
+    rule: dict[str, Any], inventory: list[Any] | None
 ) -> tuple[bool | None, str]:
     """(found | None=pending, evidence). None when the file list is not loaded."""
     if inventory is None:

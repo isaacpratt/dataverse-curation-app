@@ -160,7 +160,7 @@ class _DownloadsMixin:
         if not todo:
             return result
 
-        def _fetch_one(ds: dict) -> tuple[dict, tuple]:
+        def _fetch_one(ds: dict[str, Any]) -> tuple[dict[str, Any], tuple[Any, ...]]:
             pid = str(ds.get("persistent_id") or "")
             # fall_back_on_auth: a published dataset has no readable draft
             # and a guest token cannot see drafts at all — fall through to

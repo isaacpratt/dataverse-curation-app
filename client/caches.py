@@ -16,12 +16,12 @@ from client.parsers import top_level_collection
 # Keyed by a SHA-256 fingerprint, never the token itself. Successes only —
 # a failure (bad token, network) returns None and retries next time.
 # Collection roles share the lock with a (base_url, fingerprint, alias) key.
-_ME_CACHE: dict[tuple, dict[str, Any]] = {}
-_ROLE_CACHE: dict[tuple, list[str]] = {}
+_ME_CACHE: dict[tuple[str, str], dict[str, Any]] = {}
+_ROLE_CACHE: dict[tuple[str, str, str], list[str]] = {}
 _ME_LOCK = threading.Lock()
 
 
-def _me_cache_key(base_url: str, api_token: str) -> tuple:
+def _me_cache_key(base_url: str, api_token: str) -> tuple[str, str]:
     try:
         base = (base_url or "").rstrip("/").lower()
     except Exception:
@@ -38,13 +38,13 @@ def _me_cache_key(base_url: str, api_token: str) -> tuple:
 # for every dataset under a first-level collection, so one network call
 # per top-level collection per process is enough; [] is a valid negative
 # entry (none configured) — None means "unknown, may fetch".
-_ALLOWED_LABELS_CACHE: dict[tuple, list[str]] = {}
+_ALLOWED_LABELS_CACHE: dict[tuple[str, str], list[str]] = {}
 _ALLOWED_LABELS_LOCK = threading.Lock()
 
 _ALLOWED_LABELS_FILE = "curation_labels.json"
 
 
-def allowed_labels_cache_key(base_url: str, collection: str) -> tuple:
+def allowed_labels_cache_key(base_url: str, collection: str) -> tuple[str, str]:
     """Memory-cache key: normalized (instance, first-level collection)."""
     try:
         base = (base_url or "").rstrip("/").lower()
@@ -82,7 +82,7 @@ def _allowed_labels_disk_key(base_url: str, collection: str) -> str:
     return f"{base}|{top}"
 
 
-def read_allowed_labels_cache(workspace, base_url: str, collection: str) -> list[str] | None:
+def read_allowed_labels_cache(workspace: Path, base_url: str, collection: str) -> list[str] | None:
     """Read allowed labels from disk for a top-level collection (None = unknown).
 
     Only slots stamped "probed" at format v2 by a real discovery round
@@ -129,7 +129,7 @@ def read_allowed_labels_cache(workspace, base_url: str, collection: str) -> list
 
 
 def write_allowed_labels_cache(
-    workspace, base_url: str, collection: str, labels: list[str]
+    workspace: Path, base_url: str, collection: str, labels: list[str]
 ) -> None:
     """Persist allowed labels for a top-level collection (best-effort).
 
@@ -175,7 +175,7 @@ def write_allowed_labels_cache(
 
 _METADATABLOCKS_FILE = "metadatablocks_cache.json"
 
-_METADATABLOCKS_MEMO: dict[tuple, list[dict[str, Any]]] = {}
+_METADATABLOCKS_MEMO: dict[tuple[str], list[dict[str, Any]]] = {}
 _METADATABLOCKS_LOCK = threading.Lock()
 
 
@@ -206,7 +206,7 @@ def set_cached_metadata_fields(base_url: str, fields: list[dict[str, Any]]) -> N
         pass
 
 
-def read_metadata_fields_cache(workspace, base_url: str) -> list[dict[str, Any]] | None:
+def read_metadata_fields_cache(workspace: Path, base_url: str) -> list[dict[str, Any]] | None:
     """Field catalog from disk for an instance (None = unknown). Never raises."""
     try:
         path = Path(workspace) / _METADATABLOCKS_FILE
@@ -230,7 +230,9 @@ def read_metadata_fields_cache(workspace, base_url: str) -> list[dict[str, Any]]
         return None
 
 
-def write_metadata_fields_cache(workspace, base_url: str, fields: list[dict[str, str]]) -> None:
+def write_metadata_fields_cache(
+    workspace: Path, base_url: str, fields: list[dict[str, str]]
+) -> None:
     """Persist an instance's field catalog (best-effort)."""
     try:
         import json as _json

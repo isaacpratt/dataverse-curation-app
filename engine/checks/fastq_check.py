@@ -7,7 +7,7 @@ content on a sample. Transparently handles gzip-compressed files.
 
 import gzip
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, TextIO
 
 from engine.checks.base import Check, CheckResult
 
@@ -21,7 +21,7 @@ except Exception:  # pragma: no cover
     _MAX_LINE_CHARS = 1_000_000
 
 
-def _open_text(path: Path):
+def _open_text(path: Path) -> TextIO:
     with open(path, "rb") as probe:
         magic = probe.read(2)
     if magic == b"\x1f\x8b":

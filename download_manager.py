@@ -44,7 +44,7 @@ class DownloadQuote:
 
 
 class DownloadManager:
-    def __init__(self, client, workspace: Path) -> None:
+    def __init__(self, client: Any, workspace: Path) -> None:
         self._client = client
         self._workspace = Path(workspace)
 
@@ -87,7 +87,7 @@ class DownloadManager:
         return self.quote_from(self.inventory(persistent_id), persistent_id)
 
     @staticmethod
-    def quote_from(inventory: list, persistent_id: str) -> DownloadQuote:
+    def quote_from(inventory: list[Any], persistent_id: str) -> DownloadQuote:
         total = 0
         count = 0
         for f in inventory:
@@ -110,7 +110,7 @@ class DownloadManager:
             total_size_bytes=total,
         )
 
-    def missing_files(self, persistent_id: str, inventory: list | None = None) -> list:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    def missing_files(self, persistent_id: str, inventory: list[Any] | None = None) -> list[Any]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Inventory paths not yet staged (missing or size-changed).
 
         Exact directoryLabel paths win; a basename fallback covers bundles
@@ -119,7 +119,7 @@ class DownloadManager:
         """
         from pathlib import Path as _Path
 
-        inv = inventory if inventory is not None else self.inventory(persistent_id)
+        inv: Any = inventory if inventory is not None else self.inventory(persistent_id)
         staged_root = self.files_dir(persistent_id)
         # One directory walk for all basename fallbacks: map basename ->
         # list of staged sizes so the fallback can still enforce size match.
@@ -140,7 +140,7 @@ class DownloadManager:
                         continue
         except Exception:
             pass
-        missing: list = []
+        missing: list[Any] = []
         if not isinstance(inv, list):
             return []
         for item in inv:
@@ -207,7 +207,7 @@ class DownloadManager:
             missing.append(path)
         return missing
 
-    def is_fully_staged(self, persistent_id: str, inventory: list | None = None) -> bool:
+    def is_fully_staged(self, persistent_id: str, inventory: list[Any] | None = None) -> bool:
         """Check whether every inventory file is already staged with matching size."""
         try:
             inv = inventory if inventory is not None else self.inventory(persistent_id)
@@ -220,14 +220,16 @@ class DownloadManager:
 
     # -- on-disk metadata / manifest / reports --------------------------------
 
-    def save_metadata(self, persistent_id: str, metadata: dict, inventory: list) -> None:
+    def save_metadata(
+        self, persistent_id: str, metadata: dict[str, Any], inventory: list[Any]
+    ) -> None:
         """Cache dataset metadata + file manifest beside the downloads."""
         try:
             import json as _json
             import os
             import tempfile
 
-            def _atomic_write(path, payload) -> None:
+            def _atomic_write(path: Path, payload: Any) -> None:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 fd, tmp_name = tempfile.mkstemp(
                     dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
@@ -252,7 +254,7 @@ class DownloadManager:
 
             get_app_log().error(f"save_metadata({persistent_id}): {exc}")
 
-    def load_metadata(self, persistent_id: str) -> tuple:
+    def load_metadata(self, persistent_id: str) -> tuple[dict[str, Any] | None, list[Any] | None]:
         """Load cached (metadata, inventory) or (None, None) — never raises."""
         try:
             import json as _json
@@ -274,7 +276,7 @@ class DownloadManager:
         persistent_id: str,
         progress: Callable[[int], None] | None = None,
         is_cancelled: Callable[[], bool] | None = None,
-        guestbook_response: dict | None = None,
+        guestbook_response: dict[str, Any] | None = None,
     ) -> Path:
         """Download the bundle and stage its contents for the check engine.
 
@@ -333,7 +335,7 @@ class DownloadManager:
     def download_originals(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         self,
         persistent_id: str,
-        inventory: list | None = None,
+        inventory: list[Any] | None = None,
         progress: Callable[[int], None] | None = None,
         max_workers: int = 1,
         is_cancelled: Callable[[], bool] | None = None,
@@ -349,14 +351,14 @@ class DownloadManager:
         in parallel (I/O-bound).
         """
         try:
-            inv = inventory if inventory is not None else self.inventory(persistent_id)
+            inv: Any = inventory if inventory is not None else self.inventory(persistent_id)
         except Exception:
             return []
         root = self.files_dir(persistent_id)
         if not isinstance(inv, list):
             return []
 
-        def _fetch_one(item) -> str | None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+        def _fetch_one(item: Any) -> str | None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
             dest: Path | None = None
             try:
                 if is_cancelled and is_cancelled():
@@ -415,7 +417,7 @@ class DownloadManager:
                 return None
 
         staged: list[str] = []
-        tabular_items = [it for it in inv if isinstance(it, dict) and it.get("tabular")]
+        tabular_items: list[Any] = [it for it in inv if isinstance(it, dict) and it.get("tabular")]
         if max_workers and max_workers > 1 and len(tabular_items) > 1:
             from concurrent.futures import ThreadPoolExecutor
 
@@ -458,7 +460,7 @@ class DownloadManager:
         return staged
 
     @staticmethod
-    def _is_tabular(item: dict) -> bool:
+    def _is_tabular(item: dict[str, Any]) -> bool:
         return bool(item.get("tabular")) or str(item.get("path", "")).lower().endswith(".tab")
 
     def verify(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
@@ -466,7 +468,7 @@ class DownloadManager:
         persistent_id: str,
         progress: Callable[[int, int], None] | None = None,
         max_workers: int = 1,
-        inventory: list | None = None,
+        inventory: list[Any] | None = None,
     ) -> tuple[bool, list[str], list[str]]:
         """Rehash staged files against the Dataverse inventory checksums.
 
@@ -482,7 +484,8 @@ class DownloadManager:
         staged_root = self.files_dir(persistent_id)
         problems: list[str] = []
         warnings: list[str] = []
-        total = len(inventory) if isinstance(inventory, list) else 0
+        items: list[Any] = inventory if isinstance(inventory, list) else []
+        total = len(items)
         done = 0
         done_lock = threading.Lock()
 
@@ -497,7 +500,7 @@ class DownloadManager:
                 except Exception:
                     pass
 
-        def _verify_one(item) -> tuple[str | None, str | None]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+        def _verify_one(item: Any) -> tuple[str | None, str | None]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
             if not isinstance(item, dict):
                 return ("malformed inventory entry (missing path)", None)
             rel = str(item.get("path", "") or "")

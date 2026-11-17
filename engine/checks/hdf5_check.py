@@ -5,7 +5,7 @@ dataset shapes/dtypes/compression and external-link risk detection.
 """
 
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -43,12 +43,12 @@ class Hdf5Check(Check):
 
         name = path.name
         items: list[str] = []
-        datasets: list[dict] = []
+        datasets: list[dict[str, Any]] = []
         external_links: list[str] = []
         truncated = False
         with h5py.File(str(path), "r", locking=False) as handle:
 
-            def _visit(obj_path, obj):
+            def _visit(obj_path: str, obj: Any) -> None:
                 nonlocal truncated
                 if truncated:
                     return

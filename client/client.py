@@ -576,7 +576,7 @@ class DataverseClient(_DownloadsMixin):
     # None/[] when labels are not configured or the caller lacks permission
     # (403/404), never raising for those cases.
 
-    def _curation_paths(self, identifier: str, endpoint: str) -> tuple:
+    def _curation_paths(self, identifier: str, endpoint: str) -> tuple[str, dict[str, str] | None]:
         if ":" in identifier:
             return (
                 f"/api/datasets/:persistentId/{endpoint}",
@@ -983,7 +983,7 @@ class DataverseClient(_DownloadsMixin):
         route one form). Returns {} when unavailable (4xx) or on network
         failure — callers treat this as best-effort timeline data.
         """
-        candidates: list[tuple] = []
+        candidates: list[tuple[str, dict[str, str] | None]] = []
         if ":" in identifier:
             candidates.append(
                 ("/api/datasets/:persistentId/timestamps", {"persistentId": identifier})
@@ -991,7 +991,7 @@ class DataverseClient(_DownloadsMixin):
         else:
             candidates.append((f"/api/datasets/{identifier}/timestamps", None))
         try:
-            numeric = int(numeric_id)  # type: ignore[arg-type]
+            numeric = int(numeric_id)
             candidates.append((f"/api/datasets/{numeric}/timestamps", None))
         except Exception:
             pass

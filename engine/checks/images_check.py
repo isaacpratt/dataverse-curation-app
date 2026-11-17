@@ -291,7 +291,7 @@ class ImagesCheck(Check):
 
     def _run_one(self, path: Path) -> list[CheckResult]:
         try:
-            from PIL import Image  # type: ignore
+            from PIL import Image
 
             _have_pil = True
         except ImportError:

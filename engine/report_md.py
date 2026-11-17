@@ -5,13 +5,18 @@ Lists in details are capped at 10 items with "+n more", matching the engine
 messages. Skipped results (details.skipped) render as Skipped, never Pass.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
+from engine.checks.base import CheckResult
 from engine.report import DatasetReport
 from engine.status import classify, summarize
 
 _MAX_LISTED = 10
 
 
-def _badge(result) -> str:
+def _badge(result: CheckResult) -> str:
     kind = classify(result)
     if kind == "passed":
         return "PASS"
@@ -22,7 +27,7 @@ def _badge(result) -> str:
     return "SKIPPED"
 
 
-def _fmt_value(value, depth: int = 0):
+def _fmt_value(value: Any, depth: int = 0) -> str:
     if isinstance(value, dict):
         if not value:
             return "{}"
@@ -44,8 +49,8 @@ def _fmt_value(value, depth: int = 0):
     return repr(value) if not isinstance(value, str) else value
 
 
-def _details_lines(details: dict) -> list[str]:
-    lines = []
+def _details_lines(details: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
     for key in sorted(details):
         if key in ("skipped",):
             continue
@@ -101,7 +106,7 @@ def render_markdown(report: DatasetReport) -> str:  # noqa: C901 - grandfathered
     if not report.files:
         lines.append("No files staged.")
         lines.append("")
-    by_dir: dict[str, list] = {}
+    by_dir: dict[str, list[Any]] = {}
     for entry in report.files:
         parent = entry.path.rpartition("/")[0] if "/" in entry.path else "."
         by_dir.setdefault(parent, []).append(entry)

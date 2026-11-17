@@ -6,13 +6,13 @@ header preview and a 'likely non-tabular' heuristic.
 """
 
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from engine.checks._util import pii_result
 from engine.checks.base import Check, CheckResult
 
 
-def _sheet_headers(workbook, sheet_name: str, max_cols: int = 5) -> tuple[list[str], bool]:
+def _sheet_headers(workbook: Any, sheet_name: str, max_cols: int = 5) -> tuple[list[str], bool]:
     worksheet = workbook[sheet_name]
     headers: list[str] = []
     for row in worksheet.iter_rows(min_row=1, max_row=1, max_col=max_cols, values_only=True):

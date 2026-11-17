@@ -266,7 +266,7 @@ def _table_layout_path(workspace: Path) -> Path:
     return Path(workspace) / _TABLE_LAYOUT_NAME
 
 
-def _enum_int(value) -> int:
+def _enum_int(value: Any) -> int:
     """Best-effort int from a PySide6 enum member OR a plain int.
 
     This PySide6 build raises TypeError on int(enum), so .value is the
@@ -282,7 +282,7 @@ def _enum_int(value) -> int:
     return 0
 
 
-def _sort_order_value(raw: int):
+def _sort_order_value(raw: int) -> Any:
     """Enum for real Qt headers when possible, plain int otherwise."""
     try:
         from PySide6.QtCore import Qt
@@ -324,7 +324,7 @@ def table_layout_entry_valid(entry: Any, column_count: int) -> bool:
     return len(widths) == int(column_count)
 
 
-def save_table_state(workspace: Path, name: str, header) -> None:
+def save_table_state(workspace: Path, name: str, header: Any) -> None:
     """Persist a table's full view state (best-effort, never raises).
 
     Records column widths, the user's sort indicator, hidden columns, and
@@ -342,7 +342,7 @@ def save_table_state(workspace: Path, name: str, header) -> None:
         if not isinstance(raw, dict):
             raw = {}
         count = header.count()
-        entry: dict = {
+        entry: dict[str, Any] = {
             "v": TABLE_LAYOUT_VERSION,
             "widths": [header.sectionSize(i) for i in range(count)],
         }
@@ -369,14 +369,20 @@ def save_table_state(workspace: Path, name: str, header) -> None:
         pass
 
 
-def snapshot_table_view(header) -> dict:
+def snapshot_table_view(header: Any) -> dict[str, Any]:
     """Capture a header's current view state for later reset (never raises).
 
     Records widths, hidden columns, visual order, and the sort indicator —
     call right after construction (before restore) so reset reproduces the
     fresh-start view exactly.
     """
-    snap: dict = {"widths": [], "hidden": [], "order": [], "sort": None, "sort_shown": False}
+    snap: dict[str, Any] = {
+        "widths": [],
+        "hidden": [],
+        "order": [],
+        "sort": None,
+        "sort_shown": False,
+    }
     try:
         count = header.count()
         snap["widths"] = [header.sectionSize(i) for i in range(count)]
@@ -402,7 +408,7 @@ def snapshot_table_view(header) -> dict:
     return snap
 
 
-def apply_table_view(header, snap) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+def apply_table_view(header: Any, snap: Any) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Re-apply a view-state dict (snapshot or persisted entry). Never raises."""
     try:
         if not isinstance(snap, dict):
@@ -505,7 +511,7 @@ def clear_table_state(workspace: Path, name: str) -> None:
         pass
 
 
-def restore_table_state(workspace: Path, name: str, header) -> bool:
+def restore_table_state(workspace: Path, name: str, header: Any) -> bool:
     """Re-apply a persisted view state (best-effort, never raises).
 
     Widths always come back; sort indicator, hidden columns, and visual

@@ -6,7 +6,7 @@ value labels) and a non-ASCII encoding scan over character columns.
 """
 
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -27,7 +27,7 @@ def _detect_format(path: Path) -> str:
     return "unknown"
 
 
-def _read(path: Path, fmt: str):
+def _read(path: Path, fmt: str) -> tuple[dict[str, Any], Any]:
     import pyreadstat
 
     # output_format="dict" keeps the check free of a pandas/polars runtime
@@ -37,7 +37,7 @@ def _read(path: Path, fmt: str):
     return pyreadstat.read_sas7bdat(str(path), row_limit=_ROW_LIMIT, output_format="dict")
 
 
-def _has_non_ascii(frame) -> bool:
+def _has_non_ascii(frame: Any) -> bool:
     for _column, values in frame.items():
         for value in values[:_ROW_LIMIT]:
             if isinstance(value, str):

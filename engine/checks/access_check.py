@@ -45,7 +45,7 @@ def terms_of_access(metadata: dict[str, Any] | None) -> str:
 
 
 def collect_restrictions(
-    inventory: list[dict[str, Any]] | None,
+    inventory: list[Any] | None,
 ) -> tuple[list[str], list[dict[str, str]]]:
     """Return (restricted paths, [{path, date}] for embargoed files)."""
     restricted: list[str] = []
