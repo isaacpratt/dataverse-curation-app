@@ -67,12 +67,42 @@ reissue, and update the app via Settings.
 
 ## Signing
 
-The Windows builds are currently **unsigned**. Windows SmartScreen and
-institutional AV tools may flag them as unknown publishers. Verify the
-SHA-256 checksum published alongside each release (release notes list it).
-A signing decision (Authenticode certificate, or a documented unsigned
-policy with mandatory checksum verification) is pending and will be
-recorded here and in the release notes when made.
+**Decision (2026-11-17): distributed Windows builds are signed through a
+managed signing service — SignPath Foundation.** SignPath Foundation
+signs open-source Windows software for free; the publisher name Windows
+shows is *SignPath Foundation*, not an individual maintainer. The
+signing step is implemented and wired in `dv-4t6.6`, and it is gated on
+the `SIGNPATH_*` repository secrets: when they are absent the release
+workflow logs "signing skipped" and publishes unsigned artefacts, so
+forks and local builds are unaffected.
+
+- **Cert source:** SignPath Foundation (managed). There is no
+  institutional certificate to buy or hold, and no key material in this
+  repository — the service holds the signing key and signs on request.
+- **Renewal:** nothing to renew. SignPath's published signing policy
+  governs what may be signed; each release is approved manually in the
+  SignPath dashboard before it is signed, so a release cannot be signed
+  without a deliberate human action.
+- **Scope:** the built `curation-app-full` executable and the packed
+  installer are signed. The update package is not (the feed hashes the
+  package, not the installer).
+
+**Until the first signed release, the builds are unsigned.** Every
+release publishes a `SHA256SUMS.txt` next to its artefacts, and Windows
+SmartScreen or institutional AV tools may flag an unsigned build as an
+unknown publisher. That is expected for the first release; the
+click-through and the checksum check are documented in the
+[user guide](docs/html/user-guide.html) (First run). Verify an
+artefact before running it:
+
+```powershell
+Get-FileHash -Algorithm SHA256 .\curation-app-lite.zip
+```
+
+and compare the digest with the matching line in `SHA256SUMS.txt`.
+
+The release workflow (`.github/workflows/release.yml`) links this
+decision and publishes the checksums.
 
 ## Threat model
 
@@ -83,7 +113,7 @@ In scope:
 - Token theft via malicious dependencies is covered by the pinned lock,
   CI OSV audit and Dependabot.
 - Tampering with the installed exes is mitigated by checksum comparison
-  (for now; signing pending).
+  (and by the Authenticode signature once signing goes live).
 
 Out of scope / accepted risks:
 

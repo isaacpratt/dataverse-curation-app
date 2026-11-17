@@ -31,7 +31,7 @@ The GUI defaults to the Borealis demo (demo.borealisdata.ca); pick or enter your
 - `docs/html/index.html` — documentation index (source of truth): architecture, user guide, checks reference, dataverse integration, report contract, development setup
 - `AGENTS.md` — agent-facing working agreement: repo layout, quality gates, beads workflow
 - `DESIGN.md` — design system (tokens, components, motion)
-- `SECURITY.md` — token handling, reporting a vulnerability, dependency/CVE policy
+- `SECURITY.md` — token handling, reporting a vulnerability, dependency/CVE policy, the Windows signing policy (SignPath Foundation)
 
 ## Workflow
 

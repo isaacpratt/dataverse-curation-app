@@ -46,9 +46,10 @@ no server, so there is no need for an application-level secrets service.
 - Headless/CI runs use `DATAVERSE_API_TOKEN`; a machine with no credential
   store (some Linux CI images, minimal containers) falls back to the
   environment or to the plaintext file, and the fallback is loud.
-- The Windows exes are still unsigned (see `SECURITY.md`); credential storage
-  does not change that, and the signing decision is tracked separately in
-  `dv-hcg.39`.
+- The Windows exes are unsigned in the first releases (see `SECURITY.md`);
+  credential storage does not change that. The signing policy was decided
+  on 2026-11-17 (SignPath Foundation, wired in `dv-4t6.6`), and the
+  decision bead was `dv-hcg.39`.
 
 ## Links
 

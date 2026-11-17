@@ -6,6 +6,14 @@ on:
 
 # Tag-only workflow. It builds both artefacts, smokes them, and attaches
 # the windows build to a GitHub Release. ci.yml is untouched (read-only).
+#
+# Signing policy (decision 2026-11-17, bead dv-hcg.39): distributed builds
+# are signed through SignPath Foundation; the signing step lands with
+# dv-4t6.6 and skips cleanly when the SIGNPATH_* secrets are absent, so
+# this workflow publishes unsigned artefacts until then. The policy and
+# the interim checksum-verification guidance live in SECURITY.md; every
+# release publishes SHA256SUMS.txt so an unsigned artefact can still be
+# verified.
 permissions:
   contents: read
 
@@ -53,6 +61,8 @@ jobs:
         run: uv run --group dev poe release-artefacts
 
       - name: Zip release artefacts
+        # The checksums are the interim integrity guarantee for unsigned
+        # builds (SECURITY.md, signing policy 2026-11-17).
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist_release | Out-Null
