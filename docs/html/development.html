@@ -253,7 +253,7 @@ python -m ruff check ui/           # lint</code></pre>
 <li>Type scale: no raw <code>font-size: Npx</code> outside <code>theme.py</code> (enforced by <code>ui/tests/test_type_scale.py</code>); a label wears a token.</li>
 <li>Tables: one controller per header (<code>ui/table_layout.py</code>); only user gestures are persisted; a programmatic fit runs inside <code>layout.suppressed()</code>.</li>
 <li>Interface text: no hardcoded copy outside <code>ui/assets/strings.json</code> (enforced by <code>ui/tests/test_strings.py</code>). Add a catalogue key first, then reference it with <code>t()</code>.</li>
-<li>Performance constants are measured, not guessed: the queue's painting window is benchmarked by <code>tools/bench_paint_window.py</code> (25k synthetic rows; <code>--markdown</code> prints the table). Re-run it before changing a cap, and record the numbers in the constant's comment and the decision log.</li>
+<li>Performance constants are measured, not guessed: the queue's painting window is benchmarked by <code>tools/bench_paint_window.py</code> (25k synthetic rows) and the enrichment cap by <code>tools/bench_enrichment_cap.py</code> (5k synthetic collection, simulated GET latency, exact fetch count). Both print <code>--markdown</code> tables. Re-run them before changing a cap, and record the numbers in the constant's comment and the decision log.</li>
 </ul>
 
 </div></main>

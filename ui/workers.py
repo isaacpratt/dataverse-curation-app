@@ -111,9 +111,35 @@ class CrawlWorker(QThread):
 
     # Dashboard enrichment bounds (approved scope): drafts first, capped,
     # sums-only, flushed to the table in batches.
+    #
+    # The cap is measured, not guessed (dv-gj9; tools/bench_enrichment_cap.py,
+    # 5,000-row synthetic collection, simulated 100 ms GET latency, 5
+    # workers, exact fetch count): 200 rows costs ~4 s of background
+    # enrichment (50 rows ~1 s, 400 ~8 s, 1,000 ~20 s, 5,000 ~100 s).
+    # Drafts go first, so a capped run spends its whole call budget on
+    # the rows most likely to need action; the cap does not gate when the
+    # first enriched rows reach the table (progressive paints flush
+    # every 25 completions), so halving it buys nothing the user sees.
+    # 200 stays; the Log records the value and the fetch count of every
+    # refresh.
     _ENRICH_MAX_ROWS = 200
     _ENRICH_WORKERS = 5
     _ENRICH_FLUSH_EVERY = 25
+
+    @classmethod
+    def _enrichment_log_line(cls, attempted: int) -> str:
+        """Build the one Log line a refresh writes about enrichment (dv-gj9).
+
+        The cap and the fetch count together explain a refresh's cost, so
+        a slow crawl can be attributed to the enrichment fan-out instead
+        of guessed at.
+        """
+        return t(
+            "workers.enrichment_log",
+            cap=cls._ENRICH_MAX_ROWS,
+            workers=cls._ENRICH_WORKERS,
+            attempted=attempted,
+        )
 
     def __init__(self, base_url: str, api_token: str, subtree: str, parent=None):
         super().__init__(parent)
@@ -232,6 +258,15 @@ class CrawlWorker(QThread):
                 )
                 if self.isInterruptionRequested():
                     return
+                try:
+                    n_attempted = int((enrich_stats or {}).get("attempted", 0))
+                    # The cap is a measured value (dv-gj9; see
+                    # tools/bench_enrichment_cap.py): log it and the fetch
+                    # count every refresh so a slow refresh can be
+                    # attributed to the enrichment fan-out.
+                    get_app_log().info(CrawlWorker._enrichment_log_line(n_attempted))
+                except Exception:
+                    pass
                 try:
                     rest = [
                         dict(d)
