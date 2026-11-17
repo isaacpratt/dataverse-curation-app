@@ -130,7 +130,25 @@ uv run poe smoke         # size report + headless --help check (DOCENT_SMOKE_EXE
 <li>One version, one literal: <code>engine/__init__.py:__version__</code> is read by the wheel metadata (<code>[tool.setuptools.dynamic]</code>), the About pane and the updater, and <code>uv run python tools/check_version.py --tag v0.2.0</code> fails when a release tag disagrees with it (the workflow runs it before anything is built).</li>
 </ul>
 
+<h2>Releasing</h2>
+<p>A release is a tag push or a workflow dispatch, never a local upload. <code>.github/workflows/release.yml</code> runs the full CI gate first, refuses a tag that disagrees with <code>engine.__version__</code> (<code>tools/check_version.py</code>), builds, packs (<code>pack_app.py</code>, the same entry point you run locally) and publishes with <code>vpk upload github --publish</code>; the delta is computed from the previous release, downloaded in the same job. Pushing the same tag twice is not possible, and re-running a failed job re-uses the same inputs.</p>
+<ol>
+<li>Make sure CI is green on master.</li>
+<li>Set the version in <code>engine/__init__.py</code> (<code>__version__ = "0.2.0"</code>); commit it. The About pane and the wheel metadata read it from there.</li>
+<li>Tag with the matching number: <code>git tag v0.2.0</code>; <code>git show v0.2.0</code> should carry the release notes summary.</li>
+<li><code>git push origin v0.2.0</code>. The workflow runs the gate, builds, packs, publishes a <b>win</b> release and attaches the portable zip and <code>SHA256SUMS.txt</code>. For a prerelease, use <code>v0.2.0-rc.1</code> &mdash; it builds for the <code>win-beta</code> channel and publishes as a pre-release, so prerelease feeds never leak into the stable updater.</li>
+</ol>
+<ul>
+<li><b>prerelease = win-beta job</b>: <code>-rc</code>/<code>-beta</code> tags pack with <code>--channel win-beta</code>, producing <code>assets.win-beta.json</code> and a <code>win-beta</code> release marked pre-release. Everything names the channel (<code>DataverseDocent-win-beta-Setup.exe</code>, <code>DataverseDocent-0.2.0-rc.1-win-beta-full.nupkg</code>, <code>RELEASES-win-beta</code>), because vpk derives every file name from <code>--channel</code> - pack and upload with mismatched channels is the one misconfiguration that produces a release nobody can see. Upload goes from <code>assets.win-beta.json</code>: Setup.exe, portable zip and the nupkg, so <code>poe check-pack --channel win-beta</code> knows exactly what to verify. Stable tags pack <code>win</code> as before.</li>
+<li><b>Dispatch instead of tagging</b>: <b>Actions &rarr; Release &rarr; Run workflow</b> with <code>version: 0.2.0</code> (it creates the tag from the dispatched commit, or reuses the existing one). This re-runs a failed release without a second tag.</li>
+<li><b>Delta base</b>: the job downloads the latest release of the same channel first, so releasing on schedule gives delta updates of a few MB. The summary step prints the delta size against the full package.</li>
+<li><b>Yanking a bad release</b>: delete the GitHub release (Assets disappear; the tag may stay or go). Installed copies stop seeing it as an update once the feed regenerates; users can reinstall the previous version manually by downloading its <code>Setup.exe</code>. If the bad version applies a broken update in-app, the recovery is the previous full package, which is still on the release page.</li>
+<li><b>The release is a draft under the hood</b>: <code>vpk upload github</code> publishes only with <code>--publish</code>; the flag is in the workflow, so an aborted job leaves a draft release you can complete or delete, never a half-published one visible to the updater.</li>
+<li><b>Permissions</b>: the job requests <code>contents: write</code> and nothing else; <code>github.token</code> authors the release (no PAT, nothing to rotate). The feed flips from 404 to visible as soon as the repo is public (see bead <code>dv-hcg.39</code>).</li>
+</ul>
+
 <h2>UI conventions</h2>
+
 <p>The shared kit in <code>ui/widgets.py</code> and the theme in <code>ui/theme.py</code> are the only sources of the app's look. A new view builds its controls through the kit; it does not invent its own stylesheet.</p>
 <table>
 <tr><th>Rule</th><th>How</th></tr>
