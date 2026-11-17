@@ -3,7 +3,13 @@
 Palette is Material 3-like: primary #004ccd, tertiary #4142cf, error #ba1a1a,
 surface #faf8ff, backgrounds #f2f3ff/#eaedff, outline-variant #c3c6d8.
 Typography is Inter (body) + JetBrains Mono (monospace).
+
+The colour layer is split in two: the palette says what a colour IS,
+the role layer says what it is FOR, and the role layer is a table per
+theme - so switching theme is a table swap, not a re-skin.
 """
+
+from collections.abc import Mapping
 
 # --- Colors ---
 PRIMARY = "#004ccd"
@@ -208,6 +214,275 @@ BADGE_SKY_BORDER = "#bae6fd"
 BADGE_SAND_BG = "#f5efe6"
 BADGE_SAND_TEXT = "#713f12"
 BADGE_SAND_BORDER = "#e7d5b7"
+
+# --- Role tables: one mapping per theme ---------------------------------
+# The role layer is data. A role name maps to the colour that role
+# wears *in a theme*, so switching theme is a table swap: the palette
+# stays, the components stay, the views stay - only the mapping moves.
+#
+# `light` is the table the app paints today (the aliases above).
+# `dark` is the second table. Dark mode is planned in five steps and
+# this is step one: the mapping exists first, so the per-theme
+# stylesheet, the per-theme contrast contract, the painted assets and
+# the both-themes gallery have something to select.
+#
+# The role *names* never change between themes - only what a name
+# resolves to.
+
+# Every role the app paints. The light table is derived from these
+# names (the aliases above stay the one source of truth for what
+# light looks like); the dark table declares the same names, so a
+# table swap can never miss a role.
+_ROLE_NAMES: tuple[str, ...] = (
+    "TEXT_PRIMARY",
+    "TEXT_MUTED",
+    "TEXT_SUBTLE",
+    "TEXT_PLACEHOLDER",
+    "TEXT_ON_ACCENT",
+    "TEXT_ON_TINT",
+    "TEXT_ON_SECONDARY",
+    "TEXT_ON_ERROR",
+    "TEXT_DANGER",
+    "TEXT_SUCCESS",
+    "TEXT_WARNING",
+    "TEXT_AMBER",
+    "TEXT_DISABLED",
+    "TEXT_BLOCKED",
+    "SURFACE_PAGE",
+    "SURFACE_CARD",
+    "SURFACE_TINT",
+    "SURFACE_SUBTLE",
+    "SURFACE_ROW",
+    "SURFACE_HEADER",
+    "SURFACE_RAISED",
+    "SURFACE_ALT",
+    "SURFACE_DISABLED",
+    "BORDER_SUBTLE",
+    "BORDER_STRONG",
+    "BORDER_CONTROL",
+    "BORDER_DISABLED",
+    "ACCENT_PRIMARY",
+    "ACCENT_PRIMARY_HOVER",
+    "ACCENT_PRIMARY_PRESSED",
+    "ACCENT_PRIMARY_DISABLED",
+    "ACCENT_TINT",
+    "ACCENT_FOCUS_TINT",
+    "ACCENT_FOCUS_RING",
+    "ACCENT_PRIMARY_DEEP",
+    "ACCENT_SECONDARY",
+    "ACCENT_TERTIARY",
+    "STATE_ERROR_BG",
+    "STATE_ERROR_SURFACE",
+    "STATE_ERROR_BORDER",
+    "STATE_ERROR_TEXT",
+    "STATE_ERROR_GRAPHIC",
+    "STATE_SUCCESS_TEXT",
+    "STATE_SUCCESS_GRAPHIC",
+    "STATE_WARNING_TEXT",
+    "STATE_WARNING_GRAPHIC",
+    "BADGE_NEUTRAL_BG",
+    "BADGE_NEUTRAL_TEXT",
+    "BADGE_NEUTRAL_BORDER",
+    "BADGE_BLUE_BG",
+    "BADGE_BLUE_TEXT",
+    "BADGE_BLUE_BORDER",
+    "BADGE_GREEN_BG",
+    "BADGE_GREEN_TEXT",
+    "BADGE_GREEN_BORDER",
+    "BADGE_RED_BG",
+    "BADGE_RED_TEXT",
+    "BADGE_RED_BORDER",
+    "BADGE_RED_SOFT_BG",
+    "BADGE_RED_SOFT_TEXT",
+    "BADGE_RED_SOFT_BORDER",
+    "BADGE_GREY_BG",
+    "BADGE_GREY_TEXT",
+    "BADGE_GREY_BORDER",
+    "BADGE_GREEN_SOFT_BG",
+    "BADGE_GREEN_SOFT_TEXT",
+    "BADGE_GREEN_SOFT_BORDER",
+    "BADGE_INDIGO_BG",
+    "BADGE_INDIGO_TEXT",
+    "BADGE_INDIGO_BORDER",
+    "BADGE_ORANGE_BG",
+    "BADGE_ORANGE_TEXT",
+    "BADGE_ORANGE_BORDER",
+    "BADGE_VIOLET_BG",
+    "BADGE_VIOLET_TEXT",
+    "BADGE_VIOLET_BORDER",
+    "BADGE_AMBER_BG",
+    "BADGE_AMBER_TEXT",
+    "BADGE_AMBER_BORDER",
+    "BADGE_TEAL_BG",
+    "BADGE_TEAL_TEXT",
+    "BADGE_TEAL_BORDER",
+    "BADGE_PINK_BG",
+    "BADGE_PINK_TEXT",
+    "BADGE_PINK_BORDER",
+    "BADGE_LIME_BG",
+    "BADGE_LIME_TEXT",
+    "BADGE_LIME_BORDER",
+    "BADGE_SKY_BG",
+    "BADGE_SKY_TEXT",
+    "BADGE_SKY_BORDER",
+    "BADGE_SAND_BG",
+    "BADGE_SAND_TEXT",
+    "BADGE_SAND_BORDER",
+)
+
+# The light table: today's colours, read from the aliases above so
+# there is exactly one source of truth for what light looks like.
+LIGHT_ROLE_TABLE: dict[str, str] = {name: globals()[name] for name in _ROLE_NAMES}
+
+# The dark table: the same roles, painted on a dark surface. The brand
+# stays blue (the palette does not move), but the ink flips: on a dark
+# surface the body ink is light, and text on the brand fill turns dark
+# so it still clears 4.5:1.
+DARK_ROLE_TABLE: dict[str, str] = {
+    "TEXT_PRIMARY": "#e8eaf2",
+    "TEXT_MUTED": "#b7bccb",
+    "TEXT_SUBTLE": "#9aa0b3",
+    "TEXT_PLACEHOLDER": "#9aa0b3",
+    "TEXT_ON_ACCENT": "#0b1220",
+    "TEXT_ON_TINT": "#c8cddb",
+    "TEXT_ON_SECONDARY": "#e8eaf2",
+    "TEXT_ON_ERROR": "#ffffff",
+    "TEXT_DANGER": "#ffb4ab",
+    "TEXT_SUCCESS": "#7ee2a8",
+    "TEXT_WARNING": "#ffcf7a",
+    "TEXT_AMBER": "#f0c36a",
+    "TEXT_DISABLED": "#8b91a3",
+    "TEXT_BLOCKED": "#b7bccb",
+    "SURFACE_PAGE": "#11131a",
+    "SURFACE_CARD": "#191c25",
+    "SURFACE_TINT": "#232735",
+    "SURFACE_SUBTLE": "#1f2330",
+    "SURFACE_ROW": "#1f2330",
+    "SURFACE_HEADER": "#242938",
+    "SURFACE_RAISED": "#2a3040",
+    "SURFACE_ALT": "#20242f",
+    "SURFACE_DISABLED": "#252936",
+    "BORDER_SUBTLE": "#343a4b",
+    "BORDER_STRONG": "#4a5165",
+    "BORDER_CONTROL": "#6b7488",
+    "BORDER_DISABLED": "#333849",
+    "ACCENT_PRIMARY": "#6ea8ff",
+    "ACCENT_PRIMARY_HOVER": "#8bbaff",
+    "ACCENT_PRIMARY_PRESSED": "#4d8bff",
+    "ACCENT_PRIMARY_DISABLED": "#3d5a8f",
+    "ACCENT_TINT": "#1c3357",
+    "ACCENT_FOCUS_TINT": "#24406b",
+    "ACCENT_FOCUS_RING": "#8bbaff",
+    "ACCENT_PRIMARY_DEEP": "#b4c5ff",
+    "ACCENT_SECONDARY": "#2b3348",
+    "ACCENT_TERTIARY": "#a9a7ff",
+    "STATE_ERROR_BG": "#4a1c1c",
+    "STATE_ERROR_SURFACE": "#33191c",
+    "STATE_ERROR_BORDER": "#ffb4ab",
+    "STATE_ERROR_TEXT": "#ffdad6",
+    "STATE_ERROR_GRAPHIC": "#d92d20",
+    "STATE_SUCCESS_TEXT": "#7ee2a8",
+    "STATE_SUCCESS_GRAPHIC": "#4ade80",
+    "STATE_WARNING_TEXT": "#ffcf7a",
+    "STATE_WARNING_GRAPHIC": "#fbbf24",
+    "BADGE_NEUTRAL_BG": "#2b3040",
+    "BADGE_NEUTRAL_TEXT": "#d6dae6",
+    "BADGE_NEUTRAL_BORDER": "#454c60",
+    "BADGE_BLUE_BG": "#16345e",
+    "BADGE_BLUE_TEXT": "#cfe1ff",
+    "BADGE_BLUE_BORDER": "#2f5b96",
+    "BADGE_GREEN_BG": "#123c2a",
+    "BADGE_GREEN_TEXT": "#bbf7d0",
+    "BADGE_GREEN_BORDER": "#166534",
+    "BADGE_RED_BG": "#4d1717",
+    "BADGE_RED_TEXT": "#fecaca",
+    "BADGE_RED_BORDER": "#7f1d1d",
+    "BADGE_RED_SOFT_BG": "#3a1a1a",
+    "BADGE_RED_SOFT_TEXT": "#fecaca",
+    "BADGE_RED_SOFT_BORDER": "#7f1d1d",
+    "BADGE_GREY_BG": "#3b4252",
+    "BADGE_GREY_TEXT": "#e2e8f0",
+    "BADGE_GREY_BORDER": "#4b5563",
+    "BADGE_GREEN_SOFT_BG": "#123524",
+    "BADGE_GREEN_SOFT_TEXT": "#bbf7d0",
+    "BADGE_GREEN_SOFT_BORDER": "#166534",
+    "BADGE_INDIGO_BG": "#232a5e",
+    "BADGE_INDIGO_TEXT": "#c7d2fe",
+    "BADGE_INDIGO_BORDER": "#3730a3",
+    "BADGE_ORANGE_BG": "#4a2c10",
+    "BADGE_ORANGE_TEXT": "#fed7aa",
+    "BADGE_ORANGE_BORDER": "#9a3412",
+    "BADGE_VIOLET_BG": "#2e2359",
+    "BADGE_VIOLET_TEXT": "#ddd6fe",
+    "BADGE_VIOLET_BORDER": "#4c1d95",
+    "BADGE_AMBER_BG": "#453012",
+    "BADGE_AMBER_TEXT": "#fde68a",
+    "BADGE_AMBER_BORDER": "#92400e",
+    "BADGE_TEAL_BG": "#103b38",
+    "BADGE_TEAL_TEXT": "#99f6e4",
+    "BADGE_TEAL_BORDER": "#0f766e",
+    "BADGE_PINK_BG": "#4a1636",
+    "BADGE_PINK_TEXT": "#fbcfe8",
+    "BADGE_PINK_BORDER": "#9d174d",
+    "BADGE_LIME_BG": "#2b3d12",
+    "BADGE_LIME_TEXT": "#d9f99d",
+    "BADGE_LIME_BORDER": "#3f6212",
+    "BADGE_SKY_BG": "#0c3040",
+    "BADGE_SKY_TEXT": "#bae6fd",
+    "BADGE_SKY_BORDER": "#075985",
+    "BADGE_SAND_BG": "#3d2f1c",
+    "BADGE_SAND_TEXT": "#e7d5b7",
+    "BADGE_SAND_BORDER": "#713f12",
+}
+
+# Every theme the app can select.
+ROLE_TABLES: dict[str, dict[str, str]] = {
+    "light": LIGHT_ROLE_TABLE,
+    "dark": DARK_ROLE_TABLE,
+}
+
+# The theme the app paints.
+ACTIVE_THEME = "light"
+
+
+def role_table(theme: str | None = None) -> Mapping[str, str]:
+    """The role mapping for a theme (the active one by default)."""
+    name = theme or ACTIVE_THEME
+    table = ROLE_TABLES.get(name)
+    if table is None:
+        raise KeyError(f"unknown theme {name!r}; known themes: {sorted(ROLE_TABLES)}")
+    return table
+
+
+def role(name: str, theme: str | None = None) -> str:
+    """Resolve one role name to the colour it wears in a theme."""
+    table = role_table(theme)
+    try:
+        return table[name]
+    except KeyError:
+        raise KeyError(
+            f"unknown role {name!r} in theme {theme or ACTIVE_THEME!r}"
+        ) from None
+
+
+def set_active_theme(name: str) -> None:
+    """Select the active role table.
+
+    The role names stay the same; only the table they resolve through
+    changes. The theme's own rules read the module's role values when
+    they build a rule, so a repaint after the swap follows the new
+    table.
+
+    The kit and the views import role values by name, so they keep the
+    table they imported until the per-theme stylesheet step repaints
+    them - until then the app runs on light. The contrast contract is
+    still the light one, for the same reason.
+    """
+    global ACTIVE_THEME
+    table = role_table(name)
+    ACTIVE_THEME = name
+    globals().update(table)
+
 
 # --- Typography (Qt QSS uses px) ---
 FONT_FAMILY = "Inter, 'Segoe UI', sans-serif"
@@ -1362,6 +1637,22 @@ def apply_theme(app) -> None:
     app.setFont(font)
     app.setStyleSheet(global_qss())
     _install_interaction_tracking(app)
+    _log_active_role_table()
+
+
+def _log_active_role_table() -> None:
+    """Record the role table the app is painting (the Log page shows it).
+
+    A theme is a table of role values; naming the live table in the log
+    says which one the pixels came from, without opening a debugger.
+    """
+    try:
+        from curation.applog import log as _log
+
+        table = role_table()
+        _log(f"theme-role-table-{ACTIVE_THEME}-roles-{len(table)}")
+    except Exception:
+        pass
 
 
 def action_button_style(primary: bool = False) -> str:

@@ -66,13 +66,14 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <div class="flow">
 <div class="step"><b><span class="n">1</span>Palette</b><code>ui/theme.py</code> &mdash; what a colour <i>is</i>: <code>PRIMARY</code>, <code>SURFACE_CONTAINER_LOW</code>, <code>ERROR</code>. Raw values, no meaning attached.</div>
 <div class="arrow">&rarr;</div>
-<div class="step"><b><span class="n">2</span>Role</b>What a colour is <i>for</i>: <code>ACCENT_PRIMARY</code>, <code>SURFACE_CARD</code>, <code>TEXT_DANGER</code>. Plain aliases over the palette, so a theme swap is a table edit.</div>
+<div class="step"><b><span class="n">2</span>Role</b>What a colour is <i>for</i>: <code>ACCENT_PRIMARY</code>, <code>SURFACE_CARD</code>, <code>TEXT_DANGER</code>. A mapping over the palette, one table per theme, so a theme swap is a table edit.</div>
 <div class="arrow">&rarr;</div>
 <div class="step"><b><span class="n">3</span>Component</b>The kit (<code>ui/widgets.py</code>): <code>make_action_button()</code>, <code>make_badge()</code>, <code>make_list()</code>. What the user touches.</div>
 </div>
 <div class="callout">Only <code>ui/theme.py</code> and <code>ui/widgets.py</code> may name a palette entry. A view names a role (<code>SURFACE_CARD</code>), the kit builds the component, and the theme owns the rules. The rules are checked, not reviewed: <code>ui/tests/test_theme_conformance.py</code> fails the build when a view paints for itself, names a raw colour, builds a raw input widget, or builds a button sheet by hand.</div>
 
 <h3>The role layer</h3>
+<p>The role names are stable; what a name <i>resolves to</i> is not. <code>ui/theme.py</code> holds one table per theme &mdash; <code>LIGHT_ROLE_TABLE</code> (what the app paints today) and <code>DARK_ROLE_TABLE</code> &mdash; over the same 94 role names, plus a resolver (<code>theme.role(name, theme=None)</code>) and a switch (<code>theme.set_active_theme(name)</code>). The palette stays one palette (<code>PRIMARY</code> is still <code>#004ccd</code>); the table decides which colour each role wears in which theme. <code>ui/tests/test_theme_role_tables.py</code> holds the contract: the light mappings did not move, both tables declare the same roles, and the dark table clears the same contrast floors on its own surfaces. Dark mode itself is not shipped yet &mdash; see the dark-mode steps in the <a href="development.html">development docs</a>.</p>
 <table>
 <tr><th>Group</th><th>Roles</th><th>What it is for</th></tr>
 <tr><td>Text</td><td><code>TEXT_PRIMARY</code>, <code>TEXT_MUTED</code>, <code>TEXT_SUBTLE</code>, <code>TEXT_ON_ACCENT</code>, <code>TEXT_ON_TINT</code>, <code>TEXT_ON_SECONDARY</code>, <code>TEXT_ON_ERROR</code>, <code>TEXT_DANGER</code>, <code>TEXT_SUCCESS</code>, <code>TEXT_WARNING</code>, <code>TEXT_AMBER</code>, <code>TEXT_DISABLED</code></td><td>Copy on a known surface. Each role names the surface it is meant to sit on, which is what makes the pairing checkable.</td></tr>
