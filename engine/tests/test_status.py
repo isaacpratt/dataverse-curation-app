@@ -5,19 +5,19 @@ from engine.checks.base import CheckResult
 from engine.status import classify, file_status, status_label, summarize
 
 
-def _info(check_id="format.csv.pii"):
+def _info(check_id: str = "format.csv.pii") -> CheckResult:
     return CheckResult(check_id=check_id, level="info", passed=True, message="ok")
 
 
-def _warn(check_id="format.csv.pii"):
+def _warn(check_id: str = "format.csv.pii") -> CheckResult:
     return CheckResult(check_id=check_id, level="warning", passed=False, message="issue")
 
 
-def _err(check_id="format.csv.openable"):
+def _err(check_id: str = "format.csv.openable") -> CheckResult:
     return CheckResult(check_id=check_id, level="error", passed=False, message="bad")
 
 
-def test_classify_skipped_wins():
+def test_classify_skipped_wins() -> None:
     assert classify(missing_library("format.xlsx.openable", "openpyxl")) == "skipped"
     assert classify(skipped("format.csv.pii", "n/a")) == "skipped"
     assert classify(_info()) == "passed"
@@ -25,7 +25,7 @@ def test_classify_skipped_wins():
     assert classify(_err()) == "failed-error"
 
 
-def test_summarize_counts():
+def test_summarize_counts() -> None:
     summary = summarize([_info(), _warn(), _err(), missing_library("x", "y")])
     assert summary["passed"] == 1
     assert summary["failed-warning"] == 1
@@ -34,7 +34,7 @@ def test_summarize_counts():
     assert summary["failed"] == 2
 
 
-def test_file_status_rank():
+def test_file_status_rank() -> None:
     assert file_status([]) == ("unchecked", 0)
     assert file_status([_info()])[0] == "clean"
     assert file_status([_warn()])[0] == "warning"
@@ -43,7 +43,7 @@ def test_file_status_rank():
     assert file_status([_info(), missing_library("x", "y")])[0] == "passed-skipped"
 
 
-def test_status_label_mentions_counts():
+def test_status_label_mentions_counts() -> None:
     assert "4 passed" in status_label([_info(), _info(), _info(), _info()])
     assert status_label([]) == "No automated check"
     assert status_label([missing_library("x", "y")]).startswith("Skipped")
