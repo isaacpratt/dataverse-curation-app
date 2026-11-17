@@ -1610,6 +1610,27 @@ def make_line_edit(placeholder: str = "", parent: QWidget | None = None, *,
     return field
 
 
+class _ComboPopupRowDelegate(QStyledItemDelegate):
+    """Paint combo-box popup rows at the app's menu row metrics (dv-tkz).
+
+    The app sheet declares ``QAbstractItemView::item`` with min-height
+    22px and 6px vertical padding (~34px rows), but the popup measures
+    items through the delegate, not the stylesheet — rows painted at
+    ~20px and clipped descenders. Sizing from the font keeps the row at
+    the declared contract at any display scaling.
+    """
+
+    _ROW_HEIGHT = 34  # 22px min-height + 2 x 6px padding
+
+    def sizeHint(self, option, index):  # noqa: N802 (Qt naming)
+        hint = super().sizeHint(option, index)
+        try:
+            font_h = option.fontMetrics.height()
+        except Exception:
+            font_h = 12
+        return QSize(hint.width(), max(self._ROW_HEIGHT, font_h + 12))
+
+
 class _NoWheelCombo(QComboBox):
     """QComboBox that ignores the mouse-wheel until it has been clicked.
 
@@ -1661,6 +1682,8 @@ def make_combo(items=None, parent: QWidget | None = None, *, height: int = 36,
     combo.setFixedHeight(height)
     combo.setMinimumWidth(min_width)
     combo.setCursor(Qt.PointingHandCursor)
+    # Popup rows honor the app's menu row metrics (dv-tkz).
+    combo.view().setItemDelegate(_ComboPopupRowDelegate(combo))
     if tip:
         combo.setToolTip(tip)
     for entry in items or []:
