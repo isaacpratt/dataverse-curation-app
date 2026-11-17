@@ -82,8 +82,8 @@ from ui.theme import (
 from ui.widgets import (
     AppTable,
     AppTree,
-    WorkflowRail,
     RingProgress,
+    WorkflowRail,
     add_info_tip,
     disposition_label,
     fit_tree_height,

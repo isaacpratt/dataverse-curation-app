@@ -111,8 +111,9 @@ def test_worker_cancel_before_start_never_touches_network(qapp, tmp_path):
 
 
 def test_log_legend_is_selectable_and_coloured(win, qapp):
-    from ui.theme import STATE_ERROR_GRAPHIC, STATE_WARNING_GRAPHIC, TEXT_MUTED
     from PySide6.QtCore import Qt
+
+    from ui.theme import STATE_ERROR_GRAPHIC, STATE_WARNING_GRAPHIC, TEXT_MUTED
 
     win._on_log_toggled(True)
     try:
@@ -121,20 +122,19 @@ def test_log_legend_is_selectable_and_coloured(win, qapp):
         page = win._log_page
         labels = {lbl.text(): lbl for lbl in page.findChildren(QLabel)}
         assert "Error" in labels and "Warning" in labels, "severity legend missing"
-        
+
         # Verify selectability
         for text in ["Error", "Warning", "Info · Debug"]:
             lbl = labels[text]
             assert lbl.textInteractionFlags() & Qt.TextSelectableByMouse, f"Label {text} should be selectable"
-        
+
         # Verify colors (as per dv-2e7 requirements)
         err, warn, info = labels["Error"], labels["Warning"], labels["Info · Debug"]
         assert STATE_ERROR_GRAPHIC in err.styleSheet()
         assert STATE_WARNING_GRAPHIC in warn.styleSheet()
         assert TEXT_MUTED in info.styleSheet()
-        
+
     finally:
         win._on_log_toggled(False)
         for _ in range(10):
             qapp.processEvents()
-

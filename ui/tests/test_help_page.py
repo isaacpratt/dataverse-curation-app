@@ -40,9 +40,8 @@ def test_each_registered_tip_is_findable_by_search(win):
     try:
         from ui.help_index import help_entries
 
-        pane = win._ensure_help()
+        win._ensure_help()
         for _g, name, text in help_entries():
-            # The Help search matches name and body text case-insensitively.
             hits = [
                 (g, n, tx) for g, n, tx in help_entries()
                 if text.lower() in f"{n} {tx}".lower()

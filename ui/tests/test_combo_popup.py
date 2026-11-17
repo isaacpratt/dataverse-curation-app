@@ -8,7 +8,6 @@ now installs a row delegate sized from the font at any display scaling.
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import Qt
 
 
 def test_combo_popup_rows_meet_the_menu_contract(qapp):

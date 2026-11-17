@@ -818,14 +818,13 @@ class SettingsPane(QWidget):
             except Exception:
                 pass
             status_item.setToolTip(
-                (
-                    f"{t('settings.extensions.installed_lower')}: {resolved}"
-                    if resolved
-                    else f"{t('settings.extensions.not_installed')}\n" + (
-                        t("settings.extensions.configured", configured=configured)
-                        if configured
-                        else t("settings.extensions.add_path_tip")
-                    )
+                f"{t('settings.extensions.installed_lower')}: {resolved}"
+                if resolved
+                else f"{t('settings.extensions.not_installed')}\n"
+                + (
+                    t("settings.extensions.configured", configured=configured)
+                    if configured
+                    else t("settings.extensions.add_path_tip")
                 )
             )
             self.ext_table.setItem(row, 1, status_item)

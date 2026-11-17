@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui.i18n import t
+from ui.ring import RingProgress
 from ui.theme import (
     ACCENT_FOCUS_RING,
     ACCENT_PRIMARY,
@@ -85,7 +86,6 @@ from ui.theme import (
     transparent_surface_qss,
     workflow_step_qss,
 )
-from ui.ring import RingProgress
 from ui.workflow import STEP_ORDER, Workflow
 
 __all__ = [
@@ -1890,7 +1890,7 @@ class WorkflowRail(QWidget):
             btn.setFlat(True)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setMinimumWidth(0)
-            # MinimumExpanding ensures buttons take available space but don't 
+            # MinimumExpanding ensures buttons take available space but don't
             # force the window wider than 960px.
             btn.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
             btn.clicked.connect(lambda _c, k=key: self.stepClicked.emit(k))

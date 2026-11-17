@@ -6,7 +6,6 @@ whole story. Rebuilt on every show so the index covers pages opened
 during the session — a few dozen string copies, microseconds of work.
 """
 
-from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -18,6 +17,14 @@ from PySide6.QtWidgets import (
 
 from ui.help_index import GROUP_ORDER, grouped, help_entries
 from ui.i18n import t
+from ui.theme import (
+    BORDER_SUBTLE,
+    SURFACE_CARD,
+    page_background_qss,
+    surface_frame_qss,
+    transparent_surface_qss,
+)
+from ui.widgets import make_caption_label, make_page_heading, make_search_field
 
 # Literal keys: the strings test validates that every catalogue key is used
 # and every t() literal exists — no t(f"...") constructions here.
@@ -28,14 +35,6 @@ _GROUP_KEYS = {
     "Respond": "help.groups.respond",
     "General": "help.groups.general",
 }
-from ui.theme import (
-    BORDER_SUBTLE,
-    SURFACE_CARD,
-    page_background_qss,
-    surface_frame_qss,
-    transparent_surface_qss,
-)
-from ui.widgets import make_caption_label, make_page_heading, make_search_field
 
 
 class HelpPane(QWidget):

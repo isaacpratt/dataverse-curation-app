@@ -17,8 +17,8 @@ def pane(qapp, tmp_path, monkeypatch):
 
     monkeypatch.setattr(SettingsPane, "_start_size_worker", lambda self: None)
 
-    import importlib.metadata
     import builtins
+    import importlib.metadata
 
     real_import = builtins.__import__
 
