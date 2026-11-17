@@ -52,20 +52,23 @@ def make_release(
     feed_version: str | None = None,
     releases_entry: str | None = None,
     setup_bytes: int = NEW_ENOUGH,
+    channel: str = check_pack.CHANNEL,
 ) -> Path:
     """Write the five files `vpk pack` produces, shaped like the real ones."""
     directory.mkdir(parents=True, exist_ok=True)
-    nupkg = directory / check_pack.nupkg_name(version)
+    nupkg = directory / check_pack.nupkg_name(version, channel=channel)
     with zipfile.ZipFile(nupkg, "w") as zf:
-        zf.writestr(f"{check_pack.PACK_ID}.nuspec", nuspec or _nuspec(version=version))
+        zf.writestr(
+            f"{check_pack.PACK_ID}.nuspec", nuspec or _nuspec(version=version, channel=channel)
+        )
         if include_main_exe:
             # vpk puts app content under lib/app/ rather than the archive root.
             zf.writestr(f"lib/app/{check_pack.MAIN_EXE}", b"MZ" + b"\0" * 64)
         zf.writestr("lib/app/_internal/python313.dll", b"\0" * 32)
 
-    with open(directory / check_pack.setup_exe_name(), "wb") as handle:
+    with open(directory / check_pack.setup_exe_name(channel=channel), "wb") as handle:
         handle.truncate(setup_bytes)
-    with open(directory / check_pack.portable_name(), "wb") as handle:
+    with open(directory / check_pack.portable_name(channel=channel), "wb") as handle:
         handle.truncate(64)
 
     asset = {
@@ -77,10 +80,10 @@ def make_release(
         "SHA256": "CD" * 32,
         "Size": nupkg.stat().st_size,
     }
-    (directory / check_pack.feed_name()).write_text(
+    (directory / check_pack.feed_name(channel=channel)).write_text(
         json.dumps({"Assets": [asset]}), encoding="utf-8"
     )
-    (directory / "RELEASES").write_text(
+    (directory / check_pack.releases_index_name(channel)).write_text(
         releases_entry or f"{asset['SHA1']} {nupkg.name} {asset['Size']}\n",
         encoding="utf-8",
     )
@@ -189,3 +192,34 @@ def test_rebuilding_a_version_replaces_only_that_version(tmp_path: Path) -> None
     assert removed == ["DataverseDocent-0.2.0-full.nupkg"]
     assert not (release / "DataverseDocent-0.2.0-full.nupkg").exists()
     assert (other / "DataverseDocent-0.1.0-full.nupkg").exists()
+
+
+def test_artifact_names_carry_the_channel(tmp_path: Path) -> None:
+    assert check_pack.nupkg_name("0.9.9") == "DataverseDocent-0.9.9-full.nupkg"
+    assert (
+        check_pack.nupkg_name("0.9.9", channel="win-beta")
+        == "DataverseDocent-0.9.9-win-beta-full.nupkg"
+    )
+    assert check_pack.releases_index_name("win-beta") == "RELEASES-win-beta"
+    assert check_pack.releases_index_name() == "RELEASES"
+
+
+def test_a_prerelease_channel_pack_verifies_against_that_channel(tmp_path: Path) -> None:
+    release = make_release(tmp_path / "releases", channel="win-beta")
+
+    assert check_pack.check_release(release, version=VERSION, channel="win-beta") == []
+    # The default (stable) expectation must fail on the beta folder: the
+    # artifacts carry the beta name and releases.win-beta.json.
+    problems = check_pack.check_release(release, version=VERSION)
+    assert any("missing DataverseDocent-win-Setup.exe" in p for p in problems)
+    assert any("releases.win.json" in p for p in problems)
+
+    feed = json.loads((release / "releases.win-beta.json").read_text(encoding="utf-8"))
+    assert feed["Assets"][0]["FileName"] == "DataverseDocent-0.2.0-win-beta-full.nupkg"
+    assert feed["Assets"][0]["PackageId"] == check_pack.PACK_ID
+
+
+def test_a_wrong_main_exe_is_reported_not_raised(tmp_path: Path) -> None:
+    release = make_release(tmp_path / "releases", channel="win-beta")
+    problems = check_pack.check_release(release, version=VERSION, channel="win-beta", main_exe="Other.exe")
+    assert any("nuspec mainExe" in p for p in problems)

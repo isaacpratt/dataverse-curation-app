@@ -132,6 +132,12 @@ def main(argv: list[str] | None = None) -> int:
         help=f"package version (default: engine.__version__ = {APP_VERSION})",
     )
     parser.add_argument(
+        "--channel",
+        default=check_pack.CHANNEL,
+        choices=check_pack.CHANNELS,
+        help="release channel (default: win; win-beta for prereleases)",
+    )
+    parser.add_argument(
         "--no-replace",
         action="store_true",
         help="refuse to rebuild a version that is already in the output folder",
@@ -162,20 +168,20 @@ def main(argv: list[str] | None = None) -> int:
 
     vpk = find_vpk()
     started = time.perf_counter()
-    code = pack(build_dir, out_dir, version, vpk)
+    code = pack(build_dir, out_dir, version, vpk, args.channel)
     elapsed = time.perf_counter() - started
     if code != 0:
         print(f"vpk pack failed ({code}) after {elapsed:.0f} s", file=sys.stderr)
         return code or 1
 
-    problems = check_pack.check_release(out_dir, version=version)
+    problems = check_pack.check_release(out_dir, version=version, channel=args.channel)
     if problems:
         print(f"{out_dir} is not a shippable release:", file=sys.stderr)
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return 1
 
-    setup = out_dir / check_pack.setup_exe_name(channel=check_pack.CHANNEL)
+    setup = out_dir / check_pack.setup_exe_name(channel=args.channel)
     print(
         f"packed {version} in {elapsed:.0f} s: {setup.name} "
         f"({setup.stat().st_size / 1e6:.0f} MB), "

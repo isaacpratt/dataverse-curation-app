@@ -69,10 +69,17 @@ def is_installed_build() -> bool:
     exe_dir = _frozen_exe_dir()
     if exe_dir is None:
         return False
+    # Authoritative answer first: the Velopack runtime knows its own
+    # package (an installer registers an uninstall entry; the portable zip
+    # carries a .portable marker). Only meaningful for an installed build;
+    # any failure - including a source run - falls back to the layout.
     try:
-        from velopack import UpdateManager  # type: ignore[import-not-found]
+        from velopack import GithubSource, UpdateManager
 
-        portable = UpdateManager.get_is_portable()
+        from engine.feed import REPO_URL
+
+        manager = UpdateManager(GithubSource(REPO_URL, None, False))
+        portable = manager.get_is_portable()
         if isinstance(portable, bool):
             return not portable
     except Exception:

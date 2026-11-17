@@ -37,6 +37,8 @@ Thumbs.db
 .openchamber/
 # Probe artefacts (tools/probes writes a PNG of the card it checked).
 queue_card.png
+about-updates-fresh.png
+about-updates-pending.png
 
 # Beads / Dolt files (added by bd init)
 .dolt/

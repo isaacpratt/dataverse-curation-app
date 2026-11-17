@@ -24,6 +24,7 @@ dependencies = [
     "chardet>=5.2",
     "hush-scan>=0.1.0,<0.2",
     "piigex>=0.2.0,<0.3",
+    "velopack==1.2.161",
 ]
 
 # PEP 735 dependency group: `uv sync --group dev` (or pip >=25.1
