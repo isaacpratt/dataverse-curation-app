@@ -149,7 +149,7 @@ def test_step_order_and_accessible_names_are_stable():
 @pytest.fixture
 def detail(qapp, tmp_path):
     from curation.config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from ui.dataset import DatasetDetailView
 
     cfg = Config()
     cfg.dataverse.base_url = "https://demo.borealisdata.ca"

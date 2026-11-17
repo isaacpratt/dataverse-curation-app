@@ -22,7 +22,7 @@ def test_human_size_decimal_boundaries():
 def test_human_size_all_call_sites_share():
     from ui.checks_tree import _human_size as checks_size
     from ui.dashboard import _human_size as dash_size
-    from ui.dataset_detail import _human_size as detail_size
+    from ui.dataset.helpers import _human_size as detail_size
     from ui.download_dialog import _human_size as dl_size
     from ui.settings_dialog import SettingsPane
 
@@ -35,7 +35,7 @@ def test_human_size_all_call_sites_share():
 def test_human_size_gb_and_tb():
     from ui.checks_tree import _human_size as checks_size
     from ui.dashboard import _human_size as dash_size
-    from ui.dataset_detail import _human_size as detail_size
+    from ui.dataset.helpers import _human_size as detail_size
     from ui.download_dialog import _human_size as dl_size
 
     for fn in (checks_size, dash_size, detail_size, dl_size):

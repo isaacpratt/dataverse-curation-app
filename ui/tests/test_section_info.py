@@ -30,7 +30,7 @@ def test_long_help_is_wrapped_for_the_tooltip(qapp):
 
 def test_dataset_sections_get_info_tips_and_no_legend(qapp):
     from curation.config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from ui.dataset import DatasetDetailView
 
     view = DatasetDetailView(
         Config(),

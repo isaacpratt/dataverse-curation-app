@@ -14,6 +14,7 @@ dataverse-curation-app/
 │   ├── runner.py         # run_report / list_planned_checks
 │   └── tests/            # pytest suite (212 tests; see CI)
 ├── ui/                   # PySide6 views (main window, dashboard, detail, settings/about panes, log page, workers, dialogs, theme, widgets incl. AppTable content-fit, progress ring)
+│   └── dataset/          # the dataset detail page: page.py facade + one module per section, over the shared contract state.py (DetailState)
 │   ├── theme.py          # palette -> semantic roles -> contrast contract -> one button system
 │   ├── widgets.py        # the component kit (every view builds its controls through it)
 │   ├── gallery.py        # the component gallery: every kit component on one page

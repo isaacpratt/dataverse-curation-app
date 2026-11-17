@@ -59,7 +59,7 @@ if TYPE_CHECKING:
     # only known to the type checker (dv-hcg.28). The annotations live
     # on instance attributes, which Python never evaluates at runtime.
     from ui.about_pane import AboutPane
-    from ui.dataset_detail import DatasetDetailView
+    from ui.dataset import DatasetDetailView
     from ui.log_panel import LogPage
     from ui.review_config import ReviewConfigView
     from ui.settings_dialog import SettingsPane
@@ -901,7 +901,7 @@ class MainWindow(QMainWindow):
         # Imported here, not at module level: the detail view drags in the
         # whole network stack (requests, the Dataverse client, download manager,
         # metadata rules). None of it is needed to show the dashboard.
-        from ui.dataset_detail import DatasetDetailView
+        from ui.dataset import DatasetDetailView
 
         if self._detail is not None:
             # Adopt still-running workers so destroying the view cannot kill

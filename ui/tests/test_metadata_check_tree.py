@@ -71,7 +71,7 @@ def _metadata() -> dict:
 @pytest.fixture
 def detail(qapp, tmp_path):
     from curation.config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from ui.dataset import DatasetDetailView
 
     cfg = Config()
     cfg.app.workspace = Path(tmp_path)

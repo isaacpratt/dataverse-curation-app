@@ -33,9 +33,9 @@ def detail(win, qapp):
 @pytest.fixture
 def quiet_commit(monkeypatch):
     """Silence the modal result dialogs a commit raises."""
-    monkeypatch.setattr("ui.dataset_detail.show_info", lambda *a, **k: None)
-    monkeypatch.setattr("ui.dataset_detail.show_warning", lambda *a, **k: None)
-    monkeypatch.setattr("ui.dataset_detail.show_critical", lambda *a, **k: None)
+    monkeypatch.setattr("ui.dialogs.show_info", lambda *a, **k: None)
+    monkeypatch.setattr("ui.dialogs.show_warning", lambda *a, **k: None)
+    monkeypatch.setattr("ui.dialogs.show_critical", lambda *a, **k: None)
 
 
 def _choose_instance_label(detail, label="Approved"):

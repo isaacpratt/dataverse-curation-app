@@ -143,7 +143,7 @@ def test_cancelling_a_check_run_resets_the_header(det):
 
 def test_a_failed_check_run_stays_failed_on_the_page(det, monkeypatch):
     """The failure does not disappear when the dialog is closed."""
-    monkeypatch.setattr("ui.dataset_detail.show_critical", lambda *a, **k: None)
+    monkeypatch.setattr("ui.dialogs.show_critical", lambda *a, **k: None)
     det._on_checks_error("RuntimeError: the check engine fell over")
     try:
         assert det._status.isVisible(), "the failure must stay on the page"

@@ -51,8 +51,22 @@ def _placeholders(value: str) -> set[str]:
     return out
 
 
+def _package_files() -> list[Path]:
+    """Every module in a ``ui/`` sub-package (the view tree, not the tests).
+
+    The dataset detail page lives in ``ui/dataset/`` (dv-hcg.22), so the
+    scans below must walk the sub-packages too — a module the scan does
+    not see is a module whose copy the catalogue cannot police.
+    """
+    files: list[Path] = []
+    for sub in sorted(p for p in _UI_DIR.iterdir() if p.is_dir() and p.name != "tests"):
+        files += sorted(sub.rglob("*.py"))
+    return files
+
+
 def _python_files() -> list[Path]:
     files = sorted(_UI_DIR.glob("*.py"))
+    files += _package_files()
     files += sorted((_UI_DIR / "tests").glob("*.py"))
     entry = _UI_DIR.parent / "main.py"
     if entry.is_file():
@@ -63,6 +77,7 @@ def _python_files() -> list[Path]:
 def _app_files() -> list[Path]:
     """Application code only — tests never count as a catalogue reference."""
     files = sorted(_UI_DIR.glob("*.py"))
+    files += _package_files()
     entry = _UI_DIR.parent / "main.py"
     if entry.is_file():
         files.append(entry)
@@ -286,9 +301,11 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         "dashboard: crawl started": "startup-probe label (opt-in temp file)",
         "JetBrains Mono": "font family name for the mono face",
     },
-    "ui/dataset_detail.py": {
+    "ui/dataset/header_section.py": {
         "<a href='": "rich-text link markup",
         "; text-decoration:none;'>": "rich-text link markup",
+    },
+    "ui/dataset/checks_section.py": {
         "not executed": "needle matched against an engine check description",
     },
     "ui/log_panel.py": {

@@ -87,7 +87,7 @@ if _TYPE_CHECKING:  # pragma: no cover
     import PySide6.QtWidgets  # noqa: F401
 
     import ui.dashboard
-    import ui.dataset_detail
+    import ui.dataset
     import ui.main_window
     import ui.review_config
     import ui.settings_dialog

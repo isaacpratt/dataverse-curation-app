@@ -16,7 +16,7 @@ octagon-alert (warnings), check (passes) or circle-dashed (skipped).
 Expand affordance itself is painted by the tree's own branch pass
 (Lucide chevrons via ui.widgets._BranchPainting); update_carets() keeps
 folder icons in sync with live expanded state and must run after every
-expand/collapse (see dataset_detail).
+expand/collapse (see the dataset detail page, ui/dataset/).
 
 Columns: Name | Size | Format | Scan. Folder rows aggregate children counts;
 file rows show the scan aggregate (engine.status.status_label); check rows

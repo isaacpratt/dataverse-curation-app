@@ -383,6 +383,6 @@ ignore_imports = [
     "tools.probes._common -> ui.theme",
     "tools.probes.probe_card_corner -> ui.main_window",
     "tools.probes.probe_headings -> ui.main_window",
-    "tools.probes.probe_manifest_columns -> ui.dataset_detail",
+    "tools.probes.probe_manifest_columns -> ui.dataset",
     "tools.probes.probe_queue_columns -> ui.main_window",
 ]
