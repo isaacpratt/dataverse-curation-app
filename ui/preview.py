@@ -70,7 +70,7 @@ def _missing_library(lib: str) -> str:
     import sys
 
     if getattr(sys, "frozen", False):
-        return t("detail.preview.missing_lite", lib=lib)
+        return t("detail.preview.missing_build", lib=lib)
     return t("detail.preview.missing_pip", lib=lib)
 
 

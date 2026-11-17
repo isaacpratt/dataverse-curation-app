@@ -1,25 +1,22 @@
-"""Build one PyInstaller artefact (lite or full) with the shared flags.
+"""Build the Dataverse Docent PyInstaller folder.
 
-One place for the hidden imports, the verified-safe excludes, the icon and
-the data files, so the two variants cannot drift apart - they already had:
-the full build shipped ``tkinter`` and the PIL extras the lite build had
-long since dropped, and it paid for a ``--clean`` that wiped the Analysis
-cache on every rebuild.
+One artefact: ``dist/DataverseDocent/DataverseDocent.exe`` plus its
+``_internal`` payload, with ``config.example.json`` copied alongside. That
+folder is what ``poe pack`` turns into the installer and its portable zip.
 
-    uv run python tools/build_app.py --variant full
-    uv run python tools/build_app.py --variant lite --variant full
+    uv run python tools/build_app.py
 
-Variants: ``full`` carries every format library and is the installer
-payload; ``lite`` drops the heavy binary libs and relies on the Auto-Checks
-card's "Missing ..." path for SPSS/SAS/Stata/NetCDF/HDF5.
+There is no second "lite" build any more: it existed to offer a smaller
+download, and the portable zip Velopack builds from this one package already
+is that download - 102 MB instead of a 164 MB folder nobody could reach.
 
-Prints the wall time and the artefact size per variant: this is the command
-run all day, so the number belongs on screen.
+Prints the wall time and the artefact size: this is the command run all day,
+so the number belongs on screen.
 """
 
 from __future__ import annotations
 
-import argparse
+import shutil
 import subprocess
 import sys
 import time
@@ -27,11 +24,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-#: Both variants: same entry point, same windowed onedir shape, same assets.
-COMMON_ARGS = [
+#: The executable and its folder. One name, everywhere: the PyInstaller
+#: artefact, the shortcut target, the installer's --mainExe and the file a
+#: curator sees in Task Manager.
+NAME = "DataverseDocent"
+
+ARGS = [
     "--noconfirm",
     "--windowed",
     "--onedir",
+    "--name",
+    NAME,
     "--hidden-import",
     "hush",
     "--hidden-import",
@@ -52,11 +55,11 @@ COMMON_ARGS = [
     ".pyi-cache",
 ]
 
-#: Verified-safe trims, shared by both variants. The app imports only
-#: PySide6.QtCore, QtGui, QtSvg and QtWidgets (ui/icons.py needs QtSvg with
-#: its plugin); everything here either duplicates the stdlib Tk stack or is
-#: a Qt module nothing in the repo imports. Cost of keeping them: ~930 extra
-#: files to copy and scan on every build.
+#: Verified-safe trims. The app imports only PySide6.QtCore, QtGui, QtSvg and
+#: QtWidgets (ui/icons.py needs QtSvg with its plugin); everything here either
+#: duplicates the stdlib Tk stack or is a Qt module nothing in the repo
+#: imports. Cost of keeping them: ~930 extra files to copy and scan on every
+#: build.
 SAFE_EXCLUDES = [
     "tkinter",
     "turtle",
@@ -81,10 +84,7 @@ SAFE_EXCLUDES = [
     "PySide6.QtPrintSupport",
 ]
 
-#: Heavy binary libs: bundled in `full`, excluded from `lite`.
-HEAVY_EXCLUDES = ["pyreadstat", "netCDF4", "h5py", "scipy"]
-
-VARIANTS = {"lite": "curation-app-lite", "full": "curation-app-full"}
+EXAMPLE_CONFIG = ROOT / "config.example.json"
 
 
 def _dir_size_mb(path: Path) -> float:
@@ -98,38 +98,32 @@ def _dir_size_mb(path: Path) -> float:
     return total / (1024 * 1024)
 
 
-def build(variant: str) -> None:
-    """Run PyInstaller for one variant and report time + size."""
-    name = VARIANTS[variant]
-    excludes = SAFE_EXCLUDES + (HEAVY_EXCLUDES if variant == "lite" else [])
-    args = [sys.executable, "-m", "PyInstaller", *COMMON_ARGS, "--name", name]
-    for module in excludes:
+def build() -> Path:
+    """Run PyInstaller and return the folder it produced."""
+    args = [sys.executable, "-m", "PyInstaller", *ARGS]
+    for module in SAFE_EXCLUDES:
         args += ["--exclude-module", module]
     args.append("main.py")
 
     started = time.perf_counter()
     result = subprocess.run(args, cwd=ROOT)
     if result.returncode != 0:
-        raise SystemExit(f"{name}: PyInstaller failed ({result.returncode})")
+        raise SystemExit(f"{NAME}: PyInstaller failed ({result.returncode})")
     elapsed = time.perf_counter() - started
 
-    dist = ROOT / "dist" / name
+    dist = ROOT / "dist" / NAME
     if not dist.is_dir():
-        raise SystemExit(f"{name}: PyInstaller reported success but {dist} is missing")
-    print(f"{name}: {_dir_size_mb(dist):.0f} MB built in {elapsed:.0f} s")
+        raise SystemExit(f"{NAME}: PyInstaller reported success but {dist} is missing")
+
+    if EXAMPLE_CONFIG.is_file():
+        shutil.copy(EXAMPLE_CONFIG, dist / EXAMPLE_CONFIG.name)
+
+    print(f"{NAME}: {_dir_size_mb(dist):.0f} MB built in {elapsed:.0f} s -> {dist}")
+    return dist
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Build a PyInstaller artefact.")
-    parser.add_argument(
-        "--variant",
-        action="append",
-        choices=sorted(VARIANTS),
-        help="variant to build (repeatable; default: full)",
-    )
-    args = parser.parse_args(argv)
-    for variant in args.variant or ["full"]:
-        build(variant)
+def main() -> int:
+    build()
     return 0
 
 

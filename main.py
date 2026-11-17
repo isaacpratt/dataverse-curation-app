@@ -14,62 +14,11 @@ from ui.i18n import t
 mark("main.py imported")
 
 
-def _sibling_libs_path() -> Path | None:
-    """Find a sibling full-build libs folder next to a frozen exe.
-
-    Looks for `curation-app-full/` next to the exe (onefile layout: exe in
-    `dist/`, full folder beside it) or next to the folder holding the exe
-    (onedir layout: `dist/curation-app-lite/curation-app-lite.exe`, full
-    folder in `dist/`) and returns its path. The folder should be an onedir
-    PyInstaller build (or just a Python site-packages tree) — anything we
-    can prepend to sys.path to load the heavy optional libraries (pyreadstat,
-    netCDF4, h5py, …) without re-bundling them in the lite build. The lite
-    exe remains self-contained; the sibling folder is purely additive.
-    """
-    if not getattr(sys, "frozen", False):
-        return None
-    # NOTE: sys._MEIPASS is deliberately NOT used here — in onefile mode it
-    # is a temp extraction dir (whose parent is meaningless), and in onedir
-    # mode it is the _internal folder. The sibling folder always lives next
-    # to the real .exe, or next to the folder containing it (onedir).
-    exe_dir = Path(sys.executable).parent
-    for base in (exe_dir, exe_dir.parent):
-        candidate = base / "curation-app-full"
-        if candidate.exists() and candidate.is_dir():
-            return candidate.resolve()
-    return None
-
-
-def _inject_sibling_libs() -> int:
-    """Prepend the sibling libs folder to sys.path.
-
-    Returns the number of new path entries added (0 if none / not frozen).
-    """
-    folder = _sibling_libs_path()
-    if folder is None:
-        return 0
-    added = 0
-    # Precedence first: the onedir _internal dir (where PyInstaller v5+
-    # puts top-level packages), then a plain site-packages layout, then the
-    # folder root itself last (lowest precedence — never shadow stdlib).
-    for sub in (folder / "_internal", folder / "Lib" / "site-packages", folder):
-        try:
-            if sub.exists() and str(sub) not in sys.path:
-                if sub == folder:
-                    sys.path.append(str(sub))
-                else:
-                    sys.path.insert(0, str(sub))
-                added += 1
-        except Exception:
-            pass
-    return added
-
-
 # Ensure PyInstaller bundles the GUI even though it is imported lazily
 # inside main() (so --headless can run without a display).
 # These imports are TYPE_CHECKING-only at runtime to keep --headless fast
 # (~300ms + ~100MB saved by not loading Qt). PyInstaller still discovers
-# them via the explicit hidden-imports in the spec / Makefile.
+# them via the hidden-imports in tools/build_app.py.
 from typing import TYPE_CHECKING as _TYPE_CHECKING  # noqa: E402
 
 if _TYPE_CHECKING:  # pragma: no cover  # noqa: E402
@@ -130,12 +79,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     mark("args parsed")
-
-    # In frozen builds, look for a sibling `curation-app-full/` folder and
-    # prepend it to sys.path so heavy libs (pyreadstat, netCDF4, h5py, …)
-    # load without re-bundling them in the lite exe. Quiet unless found.
-    if getattr(sys, "frozen", False):
-        _inject_sibling_libs()
 
     if args.headless:
         if not args.dataset_dir:

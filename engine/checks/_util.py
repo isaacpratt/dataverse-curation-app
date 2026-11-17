@@ -47,14 +47,14 @@ def missing_library(check_id: str, lib: str) -> CheckResult:
     # "Missing: …" prefix matches the pre-run probe wording so the UI renders
     # the same amber MISSING/WARN style before and after the run.
     # Frozen (PyInstaller) builds cannot `pip install` into the bundle and
-    # may be offline — point at the full build instead.
+    # may be offline — the shipped build carries every library, so a missing
+    # one means a reinstall, not an install.
     import sys
 
     if getattr(sys, "frozen", False):
         message = (
-            f"Missing: {lib} not in this lite build — "
-            "use dist/curation-app-full/curation-app-full.exe "
-            "for full format coverage"
+            f"Missing: {lib} is not available in this build — "
+            "reinstall Dataverse Docent for full format coverage"
         )
     else:
         message = f"Missing: pip install {lib} — check not executed"

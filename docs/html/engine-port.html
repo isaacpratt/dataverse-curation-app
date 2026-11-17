@@ -29,7 +29,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <main><div class="wrap">
 
 <h2>Why Python, not portable R</h2>
-<p>Bundling portable R was evaluated and rejected as a last resort: base R is ~100 MB and the required packages (tidyverse, haven, exiftoolr, …) push a portable install to ~400 MB. The Python engine ships at ~70 MB (lite zip, ~158 MB unpacked) with identical pass/fail semantics — verified by parity tests, not by inspection.</p>
+<p>Bundling portable R was evaluated and rejected as a last resort: base R is ~100 MB and the required packages (tidyverse, haven, exiftoolr, …) push a portable install to ~400 MB. The Python engine ships at ~102 MB (portable zip, ~229 MB unpacked) with identical pass/fail semantics — verified by parity tests, not by inspection.</p>
 
 <h2>Status</h2>
 <div class="callout ok"><b>Phase 1 complete: 22 check modules ported and verified; 513 tests passing.</b> Run <code>pytest --collect-only -q</code> for the live count (218 engine + 295 UI). MATLAB <code>.mat</code> (<code>Scripts/Inspect_mat_Script.R → scipy.io</code>) stays <b>deferred</b> to keep <code>scipy</code> optional — <code>mat_check.py</code> does not exist; <code>.mat</code> files surface via <code>inventory.unchecked_types</code>. If added, it would be lazy-imported like the other heavy libs.</div>
@@ -45,7 +45,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td><code>csv</code></td><td>Delimiter sniffing with comma fallback; ragged/duplicate/email-PII mirrors the health-check report</td></tr>
 <tr><td><code>xlsx</code></td><td><code>openpyxl</code> in <code>read_only</code> mode with explicit <code>close()</code></td></tr>
 <tr><td><code>images</code> / <code>tiff</code></td><td>Synthetic fixtures (no raster samples in CUR data); <code>tiff</code> uses <code>tifffile</code></td></tr>
-<tr><td>Missing libs</td><td><code>level="warning"</code> “check not executed — pip install …” (Auto-Checks tab: <code>Missing: pip install …</code>), enabling the lite build</td></tr>
+<tr><td>Missing libs</td><td><code>level="warning"</code> “check not executed — pip install …” (Auto-Checks tab: <code>Missing: pip install …</code>); a missing library is a warning, never a failure, and the shipped build carries all of them</td></tr>
 </table>
 
 <h2>Port matrix</h2>

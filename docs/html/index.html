@@ -77,14 +77,14 @@ footer .wrap{padding:16px 24px}
 </div>
 
 <h2>Project status</h2>
-<div class="callout ok"><b>Snapshot 2026-11-12 - all six phases complete.</b> The app is feature-complete for its documented scope: 22 check modules, 513 tests (218 engine + 295 UI), 21 UI modules. Discovery is total-driven Search at <code>per_page=1000</code> plus pooled in-process inventory enrichment (no crawler dependency); the dashboard, dataset detail, downloads, auto-checks and export paths work end-to-end; lite and full <b>onedir</b> builds are packaged; startup paints and reveals the shell before cache/network work (~1 s warm, measured via <code>DOCENT_STARTUP_LOG</code>), so no blank frame or title-bar flash precedes it. The remaining plan is queued, not blocking — see below.</div>
+<div class="callout ok"><b>Snapshot 2026-11-12 - all six phases complete.</b> The app is feature-complete for its documented scope: 22 check modules, 513 tests (218 engine + 295 UI), 21 UI modules. Discovery is total-driven Search at <code>per_page=1000</code> plus pooled in-process inventory enrichment (no crawler dependency); the dashboard, dataset detail, downloads, auto-checks and export paths work end-to-end; one <b>onedir</b> build is packaged as a Velopack installer; startup paints and reveals the shell before cache/network work (~1 s warm, measured via <code>DOCENT_STARTUP_LOG</code>), so no blank frame or title-bar flash precedes it. The remaining plan is queued, not blocking — see below.</div>
 <div class="flow">
 <div class="step"><b><span class="n">0</span>Scaffold</b>Repo, GUI shell, storage <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">1</span>Engine port</b>22 checks, 513 tests <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">2</span>Report runner</b><code>run_report</code> end-to-end <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">3</span>Client + downloads</b>Search + enrichment, approval gate <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">4</span>PySide6 GUI</b>Dashboard, detail, settings, log <span class="pill p-ok">done</span></div><div class="arrow">→</div>
-<div class="step"><b><span class="n">5</span>Packaging</b>Lite onedir + full onedir <span class="pill p-ok">done</span></div>
+<div class="step"><b><span class="n">5</span>Packaging</b>One onedir build + Velopack installer <span class="pill p-ok">done</span></div>
 </div>
 
 <h2>Remaining work at a glance</h2>
@@ -96,7 +96,7 @@ footer .wrap{padding:16px 24px}
 <tr><td><b>UX</b></td><td>Remaining P2s · step-4 quick wins · busy-indicator naming</td><td><span class="pill p-warn">P2</span>–<span class="pill p-mut">P3</span></td><td><a href="proposals.html">Proposals →</a></td></tr>
 <tr><td><b>Performance</b></td><td>Measure and tune the two constants: painting window (2,000 rows) and enrichment cap (200 rows)</td><td><span class="pill p-warn">P2</span></td><td><a href="proposals.html">Proposals →</a></td></tr>
 <tr><td><b>Engine checks</b></td><td>MATLAB <code>.mat</code> and OCR parity (deferred); <code>frdr</code>/schema skipped by design</td><td><span class="pill p-mut">deferred</span></td><td><a href="proposals.html">Proposals →</a></td></tr>
-<tr><td><b>Packaging</b></td><td>Installer (Inno Setup / WiX) — portable onedir works today</td><td><span class="pill p-mut">milestone</span></td><td><a href="proposals.html">Proposals →</a></td></tr>
+<tr><td><b>Packaging</b></td><td>Code signing (SignPath) &mdash; 0.2.0 ships unsigned with a documented SmartScreen click-through</td><td><span class="pill p-mut">milestone</span></td><td><a href="proposals.html">Proposals &rarr;</a></td></tr>
 <tr><td><b>Decisions</b></td><td>auth-fallback UX for refused datasets</td><td><span class="pill p-mut">call</span></td><td><a href="proposals.html">Proposals →</a></td></tr>
 </table>
 </div>

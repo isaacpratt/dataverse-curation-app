@@ -33,7 +33,7 @@ dataverse-curation-app/
 ```bash
 uv sync                   # create .venv and install everything incl. dev group (from uv.lock; no pip needed)
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
-uv run pytest             # 779 tests (372 engine + 407 UI; run uv run pytest --collect-only -q for current count)
+uv run pytest             # 826 tests (398 engine + 428 UI; run uv run pytest --collect-only -q for current count)
 pre-commit run --all-files # optional local gate (CI runs it too); needs uv on PATH. core.hooksPath is beads-managed, so hooks are not auto-installed — run it manually or rely on CI
 uv run python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
 uv run python main.py --gallery      # the component gallery: every kit component on one page
@@ -46,18 +46,17 @@ Requirements: Python 3.10+ (Windows recommended); builds pin Python 3.11 via `.p
 ## Packaging (portable)
 
 ```bash
-poe build          # the shipped artefact: full onedir + example config (~55 s)
-poe build-all      # both artefacts (lite + full + example config, ~110 s)
-poe build-lite     # lite folder only (~50 s; the portable zip artefact)
-poe build-full     # full folder only (~55 s; the installer payload)
-poe smoke          # lite smoke test: --headless --help + frozen CSV/PII probe
+poe build          # dist/DataverseDocent/DataverseDocent.exe + config.example.json (~55 s)
+poe pack           # Velopack release directory in dist/releases (~15 s; needs .NET 8 SDK + vpk)
+poe check-pack     # verify an existing dist/releases (same check poe pack runs)
+poe smoke          # run the frozen exe: --headless --help + CSV/PII probe
 ```
 
-PyInstaller flags (hidden imports, excludes, icon, assets) live in `tools/build_app.py`, one list for both variants; it prints the wall time and artefact size. Do not rebuild for ordinary development - `uv run python main.py` starts in ~1.7 s and runs the same code; freeze only to verify frozen behaviour. `--clean` is deliberately absent: analysis re-runs anyway (~55 s of a ~85 s build) and wiping `.pyi-cache` only adds work.
+PyInstaller flags (hidden imports, excludes, icon, assets) live in `tools/build_app.py`, one list, one artefact; it prints the wall time and artefact size. Do not rebuild for ordinary development - `uv run python main.py` starts in ~1.7 s and runs the same code; freeze only to verify frozen behaviour. `--clean` is deliberately absent: analysis re-runs anyway (~55 s of a ~85 s build) and wiping `.pyi-cache` only adds work.
 
-All build commands also work identically from bare cmd/PowerShell (no Git Bash); `make` and `build-lite.ps1` were removed when poe was adopted. poe is in the dev dependency group; run it as `uv run poe …`.
+There is one build: `dist/DataverseDocent/` is what `poe pack` turns into the installer and its portable zip, so the old `lite`/`full` pair is gone (the portable zip is the smaller download it used to offer). All build commands also work identically from bare cmd/PowerShell (no Git Bash); `make` and `build-lite.ps1` were removed when poe was adopted. poe is in the dev dependency group; run it as `uv run poe …`.
 
-Outputs: `dist/curation-app-lite/curation-app-lite.exe` (onedir folder, fast launches — common formats JPG/PNG/PDF/XML/XLSX/TIFF bundled, work offline) next to `dist/curation-app-full/` (heavy libs pyreadstat/netCDF4/h5py/scipy — run its exe directly for SPSS/SAS/Stata/NetCDF/HDF5/MAT). Missing optional libs report “Missing …” in the Auto-Checks card rather than failing; JPG/PNG/GIF/BMP/WEBP fall back to a stdlib header parse when Pillow is absent.
+Outputs: `dist/DataverseDocent/DataverseDocent.exe` (onedir folder, fast launches, every format library bundled - JPG/PNG/PDF/XML/XLSX/TIFF offline plus pyreadstat/netCDF4/h5py for SPSS/SAS/Stata/NetCDF/HDF5/MAT), and `dist/releases/` with `DataverseDocent-win-Setup.exe`, `DataverseDocent-win-Portable.zip`, the `.nupkg` and the `releases.win.json` feed. Missing optional libs report “Missing …” in the Auto-Checks card rather than failing; JPG/PNG/GIF/BMP/WEBP fall back to a stdlib header parse when Pillow is absent.
 
 ## Documentation
 
