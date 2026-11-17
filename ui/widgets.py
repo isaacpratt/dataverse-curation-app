@@ -109,6 +109,7 @@ __all__ = [
     "make_split_chip",
     "make_plain_text_view",
     "make_progress_bar",
+    "fit_tree_height",
     "make_section_heading",
     "make_body_label",
     "make_caption_label",
@@ -1804,20 +1805,36 @@ class WorkflowRail(QWidget):
         self.hint = QLabel("")
         self.hint.setObjectName("CaptionSM")
         self.hint.setWordWrap(False)
-        self.hint.setMinimumWidth(0)
-        self.hint.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
+        # Ignored horizontally but with a floor: the layout may squeeze the
+        # hint at narrow widths (never to zero) without the rail's
+        # minimumSizeHint blowing past the app's 960px floor.
+        self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.hint.setMinimumWidth(80)
         self._toggle = QPushButton("")
         self._toggle.setObjectName("WorkflowStep")
         self._toggle.setFlat(True)
         self._toggle.setCursor(Qt.PointingHandCursor)
         self._toggle.setMinimumWidth(0)
-        self._toggle.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self._toggle.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self._toggle.setToolTip(t("workflow.curated.toggle_tip"))
         self._toggle.setAccessibleName(t("workflow.curated.toggle_tip"))
         self._toggle.clicked.connect(lambda _c: self.viewToggled.emit())
         self._rebuild_steps(list(STEP_ORDER))
         layout.addWidget(self.hint)
         layout.addWidget(self._toggle)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 (Qt naming)
+        """Keep the window free to stay at the 960px floor.
+
+        Qt's default minimum-size algorithm sums the buttons' size hints
+        (the seven CURATE(D) steps overflow 960px), so it would drag the
+        whole window wider on narrow screens. The rail has no intrinsic
+        width floor of its own: steps compress without a lower bound, and
+        the hint/toggle squeeze towards their own floors. Only the height
+        floor matters.
+        """
+        hint = super().minimumSizeHint()
+        return QSize(1, hint.height())
 
     def _rebuild_steps(self, keys: list[str]) -> None:
         """Rebuild the step buttons for a step set (mechanical or CURATE(D))."""
@@ -1898,3 +1915,31 @@ class WorkflowRail(QWidget):
             btn.setAccessibleDescription(step.hint)
         self.hint.setText(workflow.hint)
         self.hint.setToolTip(workflow.hint)
+
+
+def fit_tree_height(tree, row_height: int = 40, floor: int = 80) -> None:
+    """Grow a tree to its visible rows so the page scrolls, not the tree.
+
+    Content fit for flush trees on a scrolling canvas (file manifest,
+    review-config checks tree): tallies the visible rows, expanded
+    children included, and pins the tree to that height so it never
+    needs its own scrollbar. A quiet no-op on any failure.
+    """
+    try:
+        model = tree.model()
+        if model is None:
+            return
+        visible_rows = 0
+        stack = [tree.rootIndex()]
+        while stack:
+            parent = stack.pop()
+            count = model.rowCount(parent)
+            visible_rows += count
+            for r in range(count):
+                idx = model.index(r, 0, parent)
+                if model.hasChildren(idx) and tree.isExpanded(idx):
+                    stack.append(idx)
+        header_h = tree.header().height() if tree.header() else 30
+        tree.setFixedHeight(max(floor, header_h + visible_rows * row_height + 2))
+    except Exception:
+        pass
