@@ -3,12 +3,12 @@
 import ui.widgets as widgets
 from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
-from response_draft import (
+from curation.response_draft import (
     build_response,
     collect_filecheck_sections,
     collect_metadata_sections,
 )
-from storage import (
+from curation.storage import (
     DISPOSITION_TOKENS,
     RESOLVED_DISPOSITIONS,
     AppState,

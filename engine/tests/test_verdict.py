@@ -17,7 +17,7 @@ from engine.verdict import (
     finding_key,
     format_line,
 )
-from storage import finding_key as storage_finding_key
+from curation.storage import finding_key as storage_finding_key
 
 
 def _report(*checks: tuple[str, str, bool, str], path: str = "a.csv") -> DatasetReport:

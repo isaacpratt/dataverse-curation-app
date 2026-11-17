@@ -25,3 +25,12 @@ _RETRYABLE_NETWORK = (
 
 # HTTP statuses worth retrying (throttle / transient overload).
 _RETRYABLE_STATUS = (429, 503)
+
+# Refusal classification substrings (used by _refusal / expected_api_reason).
+_REFUSAL_VERSIONS = "/versions/"
+_REFUSAL_COMPARE = "/compare/"
+
+# Version specifiers probed for one dataset, in the order the app asks.
+_VERSION_DRAFT = ":draft"
+_VERSION_PUBLISHED = ":latest-published"
+_VERSION_LATEST = ":latest"

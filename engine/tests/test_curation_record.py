@@ -6,7 +6,7 @@ import json
 from curation_record import export_record
 from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
-from storage import AppState
+from curation.storage import AppState
 
 
 def _report():

@@ -5,7 +5,7 @@ must carry a bracketed reason so a result is never a silent pass.
 """
 
 
-import review_rules as rr
+import curation.review_rules as rr
 
 
 def _meta(fields=()):

@@ -7,7 +7,7 @@ from engine.checks import guidance
 from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
 from engine.report_md import render_markdown
-from response_draft import collect_filecheck_sections
+from curation.response_draft import collect_filecheck_sections
 
 CHECK_DIR = Path(__file__).resolve().parents[1] / "checks"
 _RUNNER = Path(__file__).resolve().parents[1] / "runner.py"

@@ -17,11 +17,33 @@ Stored under <workspace>/state.db. The API token never touches the database.
 """
 
 import json
+import hashlib
 import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+# Stable disposition tokens and finding identity (from master's flat
+# storage.py, kept here so master's test files can import them from
+# curation.storage).
+DISPOSITION_TOKENS = ("", "acknowledged", "fix-requested", "wontfix", "blocked")
+RESOLVED_DISPOSITIONS = frozenset({"acknowledged", "wontfix"})
+
+
+def finding_key(check_id: str, path: str = "", message: str = "") -> str:
+    """Stable identity for one finding across check re-runs.
+
+    sha1 of (check_id, path, whitespace-normalized message): a re-run that
+    reproduces a finding yields the same key, so stored dispositions and
+    notes re-attach to it, while genuinely new findings start unresolved.
+    Metadata rule findings pass the rule id as ``check_id`` and the
+    requirement text as ``message`` (path empty).
+    """
+    normalized = " ".join(str(message or "").split())
+    raw = "\x1f".join([str(check_id or ""), str(path or ""), normalized])
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS datasets (

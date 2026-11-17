@@ -5,7 +5,7 @@ Help page renders them grouped and filters as you type. Tests open the
 detail view once so its tips exist, then search the index.
 """
 
-import applog
+import curation.applog as applog
 
 
 def _open_detail_defaults(win):

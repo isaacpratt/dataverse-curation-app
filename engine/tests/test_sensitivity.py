@@ -13,7 +13,7 @@ from sensitivity import (
     ruleset_requires,
     suggested_answers,
 )
-from storage import AppState
+from curation.storage import AppState
 
 
 class TestSchema:

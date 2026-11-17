@@ -3,7 +3,7 @@
 import tempfile
 from pathlib import Path
 
-import review_rules as rr
+import curation.review_rules as rr
 from engine.checks.readme_check import (
     ReadmeSectionsCheck,
     analyse,
@@ -11,7 +11,7 @@ from engine.checks.readme_check import (
     is_readme,
 )
 from engine.report import DatasetReport
-from response_draft import collect_filecheck_sections
+from curation.response_draft import collect_filecheck_sections
 
 _COMPLETE_MD = """# My dataset
 

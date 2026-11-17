@@ -13,8 +13,8 @@ import json
 import pytest
 import requests
 
-import applog
-from dataverse_client import (
+import curation.applog as applog
+from curation.client import (
     DataverseClient,
     expected_api_reason,
     probe_skip_reason,

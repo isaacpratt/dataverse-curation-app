@@ -2,7 +2,7 @@
 
 
 import follow_ups as fu
-from storage import open_state
+from curation.storage import open_state
 
 
 class TestRevisionDetection:

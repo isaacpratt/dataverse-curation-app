@@ -8,7 +8,7 @@ enriched fields; size-only changes stay out of the diff fingerprint).
 
 import requests
 
-from dataverse_client import DataverseClient
+from curation.client import DataverseClient
 from ui.dashboard import (
     _merge_enriched_rows,
     diff_dashboard_datasets,

@@ -2,8 +2,8 @@
 
 import copy
 
-import metadata_check as mc
-import review_rules as rr
+import curation.metadata_check as mc
+import curation.review_rules as rr
 
 
 def _meta(fields=(), license_name="CC0"):
@@ -309,7 +309,7 @@ def test_rulesets_for_dataverse_wildcard():
 
 
 def test_save_load_roundtrip(tmp_path, monkeypatch):
-    import review_rules as _rr
+    import curation.review_rules as _rr
 
     target = tmp_path / "requirements_profiles.json"
     monkeypatch.setattr(_rr, "rulesets_path", lambda: target)
@@ -322,7 +322,7 @@ def test_save_load_roundtrip(tmp_path, monkeypatch):
 
 
 def test_load_memoized_and_invalidated_on_save(tmp_path, monkeypatch):
-    import review_rules as _rr
+    import curation.review_rules as _rr
 
     target = tmp_path / "requirements_profiles.json"
     monkeypatch.setattr(_rr, "rulesets_path", lambda: target)
@@ -336,12 +336,12 @@ def test_load_memoized_and_invalidated_on_save(tmp_path, monkeypatch):
 
 
 def test_deleted_ruleset_leaves_profiles(tmp_path, monkeypatch):
-    import review_rules as _rr
+    import curation.review_rules as _rr
 
     target = tmp_path / "requirements_profiles.json"
     monkeypatch.setattr(_rr, "rulesets_path", lambda: target)
     monkeypatch.setattr(_rr, "_RULESETS_MEMO", {})
-    import metadata_check as _mc
+    import curation.metadata_check as _mc
 
     pool = _rr.load_rulesets()
     pool["temp-custom"] = dict(pool["mcmaster-default"])
