@@ -1,7 +1,13 @@
 """The Version log card: the version list and the compare view."""
 
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QTableWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ui.dataset.state import DetailState
 from ui.i18n import t
@@ -40,6 +46,7 @@ class VersionsSection(DetailState):
             header_lay,
             t("detail.version_log.tip"),
             name=t("detail.sections.version_log"),
+            group="General",
         )
         # Flush card (manifest-tree pattern): dynamic children are edge to
         # edge and paint their own corners in _populate_version_diff.

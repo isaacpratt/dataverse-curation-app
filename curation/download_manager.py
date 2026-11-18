@@ -20,9 +20,10 @@ from curation.client import DownloadCancelled
 
 _STREAM_CHUNK = 1 << 20
 
-# Per-dataset staging locks: concurrent DownloadWorkers (or download+verify)
-# for the same PID must not interleave rmtree/extract/rename on files/.
+
 _STAGE_LOCKS: dict[str, threading.Lock] = {}
+
+
 _STAGE_LOCKS_GUARD = threading.Lock()
 
 

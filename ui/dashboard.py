@@ -167,6 +167,53 @@ _ACCESS_TIP_KEYS = {
 }
 
 
+def _access_facts(ds: dict) -> tuple[str, str]:
+    """(reason code, server detail) for what this account could read.
+
+    Empty when everything about the dataset could be read - the Access
+    column only speaks when the server refused something.
+    """
+    try:
+        access = ds.get("access")
+        if isinstance(access, dict):
+            state = str(access.get("state") or "")
+            if state and state != "readable":
+                return (
+                    str(access.get("reason") or "not_readable"),
+                    str(access.get("detail") or ""),
+                )
+        curation = ds.get("curation_access")
+        if isinstance(curation, dict) and str(curation.get("state") or "") == "unreadable":
+            return (
+                str(curation.get("reason") or "not_under_curation"),
+                str(curation.get("detail") or ""),
+            )
+    except Exception:
+        pass
+    return "", ""
+
+
+def _access_text(ds: dict) -> str:
+    """Return the Access cell: a short label, empty when there is nothing to say."""
+    reason, _detail = _access_facts(ds)
+    if not reason:
+        return ""
+    key = _ACCESS_LABEL_KEYS.get(reason)
+    return t(key) if key else t("dashboard.access.not_readable")
+
+
+def _access_tooltip(ds: dict) -> str:
+    """Why the account could not read everything (empty when it could)."""
+    reason, detail = _access_facts(ds)
+    if not reason:
+        return ""
+    key = _ACCESS_TIP_KEYS.get(reason)
+    text = t(key) if key else t("dashboard.access.tip_not_readable")
+    if detail:
+        text = f"{text}\n{t('dashboard.access.server_said', detail=detail)}"
+    return text
+
+
 # Metric-card value: the real count (DisplayLG, 22px bold) versus a named
 # pre-crawl state (StateMD, 12px muted words, 2026-10-02 P2) - the number
 # slot never shows a bare "-", so a visible "0" can only mean a completed
@@ -316,7 +363,7 @@ def local_follow_ups(workspace: Path) -> dict[str, dict]:
     One sqlite connect for the whole queue; never raises.
     """
     try:
-        from storage import open_state
+        from curation.storage import open_state
 
         if not (Path(workspace) / "state.db").exists():
             return {}
@@ -344,9 +391,9 @@ def attach_follow_ups(datasets: list, follow_ups: dict[str, dict] | None) -> Non
                 continue
         return
     try:
-        import follow_ups as _fu
+        import curation.follow_ups as _fu
     except Exception:  # pragma: no cover - module is part of the app
-        _fu = None
+        _fu = None  # type: ignore[assignment]
     for ds in datasets or []:
         try:
             pid = str(ds.get("persistent_id") or "")
@@ -635,10 +682,8 @@ class DashboardView(QWidget):
         self._table.installEventFilter(self)
         # Right-click on the queue: "Run checks for visible rows" capped at
         # the painting window (dv-9m2).
-        self._table.setContextMenuPolicy(Qt.CustomContextMenu)
-        self._table.customContextMenuRequested.connect(
-            self._show_queue_context_menu
-        )
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._show_queue_context_menu)
         # The viewport is watched too: its width changes when the vertical
         # scrollbar appears (the columns must keep filling it).
         try:
@@ -1200,7 +1245,12 @@ class DashboardView(QWidget):
         lay.setSpacing(8)
         from ui.icons import icon_label as _metric_icon
 
-        icon_map = {"tertiary": "clock", "primary": "eye", "progress": "pencil", "error": "octagon-alert"}
+        icon_map = {
+            "tertiary": "clock",
+            "primary": "eye",
+            "progress": "pencil",
+            "error": "octagon-alert",
+        }
         icon = _metric_icon(icon_map.get(accent, "circle"), size=18, color=border_color)
         # The whole chip must be the click target: mouse-transparent
         # children let press/enter/leave reach the card's eventFilter.
@@ -1481,15 +1531,13 @@ class DashboardView(QWidget):
             cancel.triggered.connect(self._on_cancel_bulk_checks)
             return menu
         count = len(self._visible_check_jobs())
-        action = menu.addAction(
-            t("dashboard.context.run_checks_visible", count=count)
-        )
+        action = menu.addAction(t("dashboard.context.run_checks_visible", count=count))
         action.setEnabled(count > 0)
         action.setToolTip(t("dashboard.context.run_checks_visible_tip"))
         action.triggered.connect(self._enqueue_visible_checks)
         return menu
 
-    def _show_queue_context_menu(self, pos) -> None:  # type: ignore[no-untyped-def]
+    def _show_queue_context_menu(self, pos) -> None:
         menu = self._build_queue_context_menu()
         menu.exec(self._table.viewport().mapToGlobal(pos))
 
@@ -1506,23 +1554,17 @@ class DashboardView(QWidget):
         count = len(jobs)
         self._bulk_enqueued = list(jobs)
         try:
-            from applog import get_app_log
+            from curation.applog import get_app_log
 
-            get_app_log().info(
-                t("dashboard.log.bulk_checks_enqueued", count=count)
-            )
+            get_app_log().info(t("dashboard.log.bulk_checks_enqueued", count=count))
         except Exception:
             pass
-        self._progress.setText(
-            t("dashboard.progress.bulk_checks_enqueued", count=count)
-        )
+        self._progress.setText(t("dashboard.progress.bulk_checks_enqueued", count=count))
         if not jobs:
             return
         if self._bulk_worker is not None:
             return
-        self._bulk_worker = BulkCheckWorker(
-            jobs, self._config.app.workspace, self
-        )
+        self._bulk_worker = BulkCheckWorker(jobs, self._config.app.workspace, self)
         self._bulk_worker.progress.connect(self._progress.setText)
         self._bulk_worker.progressFraction.connect(self._on_bulk_fraction)
         self._bulk_worker.finished.connect(self._on_bulk_checks_finished)
@@ -1551,13 +1593,13 @@ class DashboardView(QWidget):
         self._bulk_worker = None
         self._sync_status_bar()
 
-    def _on_bulk_checks_finished(self, summary) -> None:  # type: ignore[no-untyped-def]
+    def _on_bulk_checks_finished(self, summary) -> None:
         total = int(summary.get("total", 0)) if isinstance(summary, dict) else 0
         completed = int(summary.get("completed", 0)) if isinstance(summary, dict) else 0
         skipped = int(summary.get("skipped", 0)) if isinstance(summary, dict) else 0
         failed = int(summary.get("failed", 0)) if isinstance(summary, dict) else 0
         try:
-            from applog import get_app_log
+            from curation.applog import get_app_log
 
             get_app_log().info(
                 t(
@@ -1583,7 +1625,7 @@ class DashboardView(QWidget):
 
     def _on_bulk_checks_cancelled(self) -> None:
         try:
-            from applog import get_app_log
+            from curation.applog import get_app_log
 
             get_app_log().info(t("dashboard.log.bulk_checks_cancelled"))
         except Exception:
@@ -2061,10 +2103,12 @@ class DashboardView(QWidget):
                         )
                     ):
                         continue
-                if getattr(self, "_labelled_only", False):
-                    # In Progress card: rows with any curation label, any state.
-                    if not str(ds.get("curation_label") or "").strip():
-                        continue
+                # In Progress card: rows with any curation label, any state.
+                if (
+                    getattr(self, "_labelled_only", False)
+                    and not str(ds.get("curation_label") or "").strip()
+                ):
+                    continue
                 if wanted_label == _NO_LABEL_SENTINEL:
                     if str(ds.get("curation_label") or "").strip():
                         continue

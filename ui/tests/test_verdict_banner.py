@@ -5,10 +5,10 @@ import pytest
 from engine.verdict import Verdict
 
 
-@pytest.fixture()
+@pytest.fixture
 def view(qapp):
     """Create a bare DatasetDetailView with just the verdict card wired."""
-    from ui.dataset_detail import DatasetDetailView
+    from ui.dataset import DatasetDetailView
 
     v = DatasetDetailView.__new__(DatasetDetailView)
     v._report = None
@@ -28,11 +28,22 @@ def test_banner_shows_ready_and_revisions(view, qapp):
 
     view._report = None
     view._completeness_full = [
-        {"field": "Affiliation", "rule_id": "authorAffiliation",
-         "requirement": "req", "status": "incomplete", "level": "required",
-         "pending": False},
-        {"field": "ORCiD", "rule_id": "orcid", "requirement": "opt",
-         "status": "incomplete", "level": "optional", "pending": False},
+        {
+            "field": "Affiliation",
+            "rule_id": "authorAffiliation",
+            "requirement": "req",
+            "status": "incomplete",
+            "level": "required",
+            "pending": False,
+        },
+        {
+            "field": "ORCiD",
+            "rule_id": "orcid",
+            "requirement": "opt",
+            "status": "incomplete",
+            "level": "optional",
+            "pending": False,
+        },
     ]
     view._refresh_verdict()
     assert "Revisions needed" in view._verdict_label.text()
@@ -54,17 +65,22 @@ def test_chip_routes_to_owner(view, qapp):
 
     view._report = None
     view._completeness_full = [
-        {"field": "Affiliation", "rule_id": "authorAffiliation",
-         "requirement": "req", "status": "incomplete", "level": "required",
-         "pending": False},
+        {
+            "field": "Affiliation",
+            "rule_id": "authorAffiliation",
+            "requirement": "req",
+            "status": "incomplete",
+            "level": "required",
+            "pending": False,
+        },
     ]
     view._refresh_verdict()
     chips = view._verdict_card.findChildren(QPushButton)
     assert chips, "a reason chip exists"
 
     visited = []
-    view._goto_section = lambda attr: visited.append(attr)  # type: ignore[method-assign]
-    view._show_response_page = lambda: visited.append("respond")  # type: ignore[method-assign]
+    view._goto_section = lambda attr: visited.append(attr)
+    view._show_response_page = lambda: visited.append("respond")
 
     chips[0].click()
     assert visited == ["_meta_card"]
@@ -73,7 +89,8 @@ def test_chip_routes_to_owner(view, qapp):
     from engine.verdict import assess
 
     v = assess(_clean_report(), None, sensitivity={"complete": False})
-    assert v.reasons and v.reasons[0].target == "respond"
+    assert v.reasons
+    assert v.reasons[0].target == "respond"
 
 
 def _clean_report():
@@ -85,8 +102,12 @@ def _clean_report():
         label="Example",
         engine_version="test",
         files=[
-            FileEntry(path="a.csv", size_bytes=10, mime_type="text/csv",
-                      checks=[CheckResult("format.csv.content", "info", True, "parsed")]),
+            FileEntry(
+                path="a.csv",
+                size_bytes=10,
+                mime_type="text/csv",
+                checks=[CheckResult("format.csv.content", "info", True, "parsed")],
+            ),
         ],
     )
 

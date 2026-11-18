@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -38,7 +38,7 @@ class VarCoverageCheck(Check):
     """Dataset-level check for whether a stranger can tell what each variable means."""
 
     check_id = "metadata.var_coverage"
-    extensions = set()  # dataset-level
+    extensions: ClassVar[set[str]] = set()  # dataset-level
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         return self.run_dataset(files, context=None)
@@ -59,9 +59,7 @@ class VarCoverageCheck(Check):
                     details={"skipped": True, "required": "inventory"},
                 )
             ]
-        tabular = [
-            e for e in inventory if isinstance(e, dict) and e.get("tabular")
-        ]
+        tabular = [e for e in inventory if isinstance(e, dict) and e.get("tabular")]
         if not tabular:
             return [
                 CheckResult(
@@ -81,11 +79,7 @@ class VarCoverageCheck(Check):
         variables_map: dict[str, dict[str, dict[str, str]]] = {}
         for entry in tabular:
             path = str(entry.get("path") or entry.get("label") or "")
-            variables = (
-                variable_metadata.get(path)
-                if isinstance(variable_metadata, dict)
-                else None
-            )
+            variables = variable_metadata.get(path) if isinstance(variable_metadata, dict) else None
             cov = coverage_of(variables)
             if cov is None:
                 undocumented.append(path)
@@ -136,9 +130,7 @@ class VarCoverageCheck(Check):
                     check_id=self.check_id,
                     level="info",
                     passed=True,
-                    message=(
-                        f"Variable documentation present for all {covered} tabular file(s)"
-                    ),
+                    message=(f"Variable documentation present for all {covered} tabular file(s)"),
                     details={"tabular_files": covered},
                 )
             )

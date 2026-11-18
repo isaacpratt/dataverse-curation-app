@@ -3,11 +3,11 @@
 import pytest
 
 
-@pytest.fixture()
+@pytest.fixture
 def view(qapp, tmp_path):
     """Create a bare DatasetDetailView wired to a throwaway workspace."""
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     try:
         cfg = Config.load(None)
@@ -22,12 +22,12 @@ def view(qapp, tmp_path):
     v._inventory = []
     v._sensitivity_answers = {}
     v._logged = []
-    v._state = lambda: __import__("storage").open_state(cfg.app.workspace)
+    v._state = lambda: __import__("curation.storage", fromlist=["x"]).open_state(cfg.app.workspace)  # type: ignore[method-assign]
 
     def _log(action, notes="", details=None):
         v._logged.append((action, notes))
 
-    v._log_action = _log
+    v._log_action = _log  # type: ignore[method-assign]
     v._refresh_dataset_log = lambda: None  # type: ignore[method-assign]
     return v
 
@@ -50,9 +50,17 @@ def test_suggestions_prefill_with_data(view):
     from engine.report import DatasetReport, FileEntry
 
     view._report = DatasetReport(
-        persistent_id="p", label="l", engine_version="t",
-        files=[FileEntry(path="a.csv", size_bytes=1, mime_type="text/csv",
-                         checks=[CheckResult("format.csv.content", "info", True, "ok")])],
+        persistent_id="p",
+        label="l",
+        engine_version="t",
+        files=[
+            FileEntry(
+                path="a.csv",
+                size_bytes=1,
+                mime_type="text/csv",
+                checks=[CheckResult("format.csv.content", "info", True, "ok")],
+            )
+        ],
     )
     view._inventory = [{"path": "a.csv"}]
     card = view._build_sensitivity_card()
@@ -95,7 +103,7 @@ class TestApproveGate:
         assert "0 of 5" in msg
 
     def test_gate_passes_complete(self, view):
-        from sensitivity import QUESTION_IDS
+        from curation.sensitivity import QUESTION_IDS
 
         view._ruleset = {"requires_sensitivity": True}
         view._sensitivity_answers = dict.fromkeys(QUESTION_IDS, "no")

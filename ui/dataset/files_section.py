@@ -1,19 +1,39 @@
 """The File Manifest card: the files, the tree, the filters and the download state."""
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QInputDialog,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ui import dialogs
-from ui.dataset.helpers import _human_size, _manifest_display_for_entry
+from ui.dataset.helpers import (
+    _human_size,
+    _manifest_display_for_entry,
+)
 from ui.dataset.state import DetailState
 from ui.i18n import t
+
+if TYPE_CHECKING:
+    from ui.preview import PreviewCard
+
 from ui.status_text import status_text
-from ui.theme import SURFACE_PAGE, SURFACE_SUBTLE, band_qss, transparent_surface_qss
+from ui.theme import (
+    SURFACE_PAGE,
+    SURFACE_SUBTLE,
+    band_qss,
+    transparent_surface_qss,
+)
 from ui.widgets import (
     AppTree,
     add_info_tip,
+    fit_tree_height,
     make_action_button,
     make_card,
     make_combo,
@@ -33,6 +53,7 @@ class FilesSection(DetailState):
             header_lay,
             t("detail.files.tip"),
             name=t("detail.sections.file_manifest"),
+            group="Queue",
         )
         _body_unused.setContentsMargins(0, 0, 0, 0)
         _body_unused.setSpacing(0)
@@ -85,6 +106,14 @@ class FilesSection(DetailState):
         )
         self._scan_filter.currentIndexChanged.connect(lambda _i: self._apply_file_filter_internal())
         tools_lay.addWidget(self._scan_filter)
+        # Variable-dictionary draft (dv-tfy): one CSV per tabular file from
+        # the variable metadata the coverage check fetched.
+        self._dictionary_btn = make_action_button(
+            t("detail.dictionary.action"), kind="secondary", size="md"
+        )
+        self._dictionary_btn.setToolTip(t("detail.dictionary.tip"))
+        self._dictionary_btn.clicked.connect(self._on_draft_dictionary)
+        tools_lay.addWidget(self._dictionary_btn)
         # Reset columns button - restores default widths/order
         self._file_reset_btn = make_reset_columns_button(
             "",
@@ -112,6 +141,9 @@ class FilesSection(DetailState):
         self._file_tree.clicked.connect(self._on_tree_clicked)
         self._file_tree.expanded.connect(self._on_tree_expansion_changed)
         self._file_tree.collapsed.connect(self._on_tree_expansion_changed)
+        # Right-click a check node to set its disposition (dv-32x).
+        self._file_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._file_tree.customContextMenuRequested.connect(self._on_file_context_menu)
         # No internal scrollbars: the manifest card grows to fit every
         # visible row and the page canvas scrolls instead.
         self._file_tree.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -216,7 +248,6 @@ class FilesSection(DetailState):
             pass
 
     def _populate_from_inventory(self) -> None:
-        self._all_file_rows = []
         total = 0
         for e in self._inventory if isinstance(self._inventory, list) else []:
             if not isinstance(e, dict):
@@ -442,6 +473,7 @@ class FilesSection(DetailState):
             self._is_staged,
             _human_size,
             inventory=self._inventory if isinstance(self._inventory, list) else None,
+            dispositions=self._dispositions_map(),
         )
         # The header's signals are blocked while the tree is rebuilt and
         # the columns are fitted to their content: sectionResized persists
@@ -499,28 +531,10 @@ class FilesSection(DetailState):
         """Grow the manifest tree to its visible rows (no inner scroll).
 
         The tree lives on the page's scroll canvas, so an inner scrollbar
-        only traps the wheel. Every expanded row contributes its 30px
-        row height plus the header band.
+        only traps the wheel. Delegates to the kit's content-fit helper
+        (the same one the review-config checks tree uses).
         """
-        try:
-            tree = self._file_tree
-            model = tree.model()
-            visible_rows = 0
-            if model is not None:
-                stack = [tree.rootIndex()]
-                while stack:
-                    parent = stack.pop()
-                    count = model.rowCount(parent)
-                    visible_rows += count
-                    for r in range(count):
-                        idx = model.index(r, 0, parent)
-                        if model.hasChildren(idx) and tree.isExpanded(idx):
-                            stack.append(idx)
-            row_h = 30
-            header_h = tree.header().height() or 30
-            tree.setFixedHeight(max(80, header_h + visible_rows * row_h + 2))
-        except Exception:
-            pass
+        fit_tree_height(self._file_tree, row_height=30, floor=80)
 
     def _sync_tree_carets(self) -> None:
         """Re-sync folder icons with the manifest tree's expanded state."""
@@ -587,3 +601,134 @@ class FilesSection(DetailState):
         # Legacy table slot (pre-tree). Kept so old signal wiring fails
         # loudly in one place instead of scattered AttributeErrors.
         return None
+
+    def _on_draft_dictionary(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+        """Write a variable-dictionary draft CSV for one tabular file (dv-tfy)."""
+        from PySide6.QtWidgets import QFileDialog
+
+        from engine.checks.varmeta_check import write_dictionary_draft
+
+        variables_by_path: dict[str, dict] = {}
+        if self._report is not None:
+            for check in getattr(self._report, "dataset_checks", []) or []:
+                if getattr(check, "check_id", "") != "metadata.var_coverage":
+                    continue
+                vmap = (getattr(check, "details", {}) or {}).get("variables")
+                if isinstance(vmap, dict):
+                    variables_by_path = {
+                        str(path): vars_
+                        for path, vars_ in vmap.items()
+                        if isinstance(vars_, dict) and vars_
+                    }
+                break
+        # No report yet (or the check skipped the fetch): ask Dataverse
+        # directly for the tabular files, best effort, capped like the worker.
+        if not variables_by_path and self._client is not None and isinstance(self._inventory, list):
+            for entry in self._inventory[:50]:
+                if not isinstance(entry, dict) or not entry.get("tabular"):
+                    continue
+                if not entry.get("id"):
+                    continue
+                try:
+                    meta = self._client.get_variable_metadata(str(entry["id"]))
+                except Exception:
+                    meta = None
+                if isinstance(meta, dict) and meta:
+                    path = str(entry.get("path") or entry.get("label") or "")
+                    variables_by_path[path] = meta
+        options = sorted(variables_by_path)
+        if not options:
+            dialogs.show_info(
+                self,
+                t("detail.dictionary.action"),
+                t("detail.dictionary.none"),
+            )
+            return
+        chosen = options[0]
+        if len(options) > 1:
+            chosen, ok = QInputDialog.getItem(
+                self,
+                t("detail.dictionary.pick_title"),
+                t("detail.dictionary.pick_label"),
+                options,
+                0,
+                False,
+            )
+            if not ok or not chosen:
+                return
+        variables = variables_by_path.get(chosen) or {}
+        if not variables:
+            dialogs.show_info(
+                self,
+                t("detail.dictionary.action"),
+                t("detail.dictionary.none"),
+            )
+            return
+        try:
+            self._dl_mgr.reports_dir(self._pid).mkdir(parents=True, exist_ok=True)
+            start = str(
+                self._dl_mgr.reports_dir(self._pid)
+                / (f"{Path(chosen).stem or 'variables'}-dictionary.csv")
+            )
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                t("detail.dictionary.save_title"),
+                start,
+                t("detail.dictionary.csv_filter"),
+                options=QFileDialog.Option.DontUseNativeDialog,
+            )
+        except Exception as exc:
+            dialogs.show_critical(
+                self,
+                t("detail.dictionary.action"),
+                t("detail.dictionary.failed", exc=exc),
+            )
+            return
+        if not path:
+            return
+        try:
+            out = write_dictionary_draft(Path(path), variables)
+        except Exception as exc:
+            dialogs.show_warning(
+                self,
+                t("detail.dictionary.action"),
+                t("detail.dictionary.failed", exc=exc),
+            )
+            return
+        self._set_status(t("detail.dictionary.saved", path=str(out)), tone="success")
+        self._log_action(
+            "dictionary_drafted",
+            t("detail.dictionary.saved_log", name=out.name),
+            {"path": str(out), "file": chosen, "variables": len(variables)},
+        )
+
+    def _build_preview_card(self) -> "PreviewCard":
+        """Sidebar file preview (dv-koz): the head of the clicked manifest file."""
+        from ui.preview import PreviewCard
+
+        return PreviewCard(on_open_folder=self._on_open_folder, parent=self)
+
+    def _show_preview_for_file(self, path: str) -> None:
+        """Route a manifest click into the preview card (dv-koz)."""
+        try:
+            staged = self._dl_mgr.files_dir(self._pid)
+        except Exception:
+            staged = None
+        if self._preview_card is None:
+            return
+        candidate = (Path(staged) / path) if staged else Path(path)
+        try:
+            if candidate.is_file():
+                kind = self._preview_card.set_path(candidate, rel=path)
+            else:
+                kind = self._preview_card.set_not_staged(rel=path)
+        except Exception:
+            kind = "error"
+        try:
+            self._log_action(
+                "preview_rendered",
+                path,
+                {"path": str(path), "kind": str(kind)},
+            )
+        except Exception:
+            pass

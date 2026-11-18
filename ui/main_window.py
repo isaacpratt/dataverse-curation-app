@@ -14,6 +14,7 @@ collection alias).
 # ctypes at module level: only struct *layouts* live here (no handles), so
 # this is safe on every platform; all real Win32 calls stay Windows-gated.
 import ctypes
+from typing import Any, Protocol
 
 from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
@@ -30,7 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config import Config
+from curation.config import Config
 from ui.dashboard import DashboardView
 from ui.dialogs import show_warning
 from ui.i18n import t
@@ -90,8 +91,12 @@ def _declare_dwm_signatures(dwmapi, margins_type) -> None:
 
 
 class _RECT(ctypes.Structure):
-    _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
-                ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+    _fields_ = [
+        ("left", ctypes.c_long),
+        ("top", ctypes.c_long),
+        ("right", ctypes.c_long),
+        ("bottom", ctypes.c_long),
+    ]
 
 
 class _MARGINS(ctypes.Structure):
@@ -112,18 +117,42 @@ class _POINT(ctypes.Structure):
 
 
 class _WINDOWPLACEMENT(ctypes.Structure):
-    _fields_ = [("length", ctypes.c_uint), ("flags", ctypes.c_uint),
-                ("showCmd", ctypes.c_uint), ("ptMinPosition", _POINT),
-                ("ptMaxPosition", _POINT), ("rcNormalPosition", _RECT)]
+    _fields_ = [
+        ("length", ctypes.c_uint),
+        ("flags", ctypes.c_uint),
+        ("showCmd", ctypes.c_uint),
+        ("ptMinPosition", _POINT),
+        ("ptMaxPosition", _POINT),
+        ("rcNormalPosition", _RECT),
+    ]
 
 
 class _MONITORINFO(ctypes.Structure):
-    _fields_ = [("cbSize", ctypes.c_uint), ("rcMonitor", _RECT),
-                ("rcWork", _RECT), ("dwFlags", ctypes.c_uint)]
+    _fields_ = [
+        ("cbSize", ctypes.c_uint),
+        ("rcMonitor", _RECT),
+        ("rcWork", _RECT),
+        ("dwFlags", ctypes.c_uint),
+    ]
 
 
-class _NCCALCSIZE_PARAMS(ctypes.Structure):
+class _NccalcsizeParams(ctypes.Structure):
     _fields_ = [("rgrc", _RECT * 3), ("lppos", ctypes.c_void_p)]
+
+
+class _DwmWindow(Protocol):
+    """The slice of a window the DWM helpers need.
+
+    The real window (MainWindow) and the test doubles in
+    ``ui/tests/test_dwm_frame.py`` both satisfy it, so the frame and cloak
+    helpers can be exercised without a live QWidget (dv-hcg.28).
+    """
+
+    _hwnd: int
+
+    def winId(self) -> int: ...
+
+    def isMaximized(self) -> bool: ...
 
 
 _SW_SHOWMAXIMIZED = 3
@@ -140,11 +169,9 @@ def _user32():
     if not existing:
         handle.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
         handle.MonitorFromWindow.restype = wintypes.HANDLE
-        handle.GetMonitorInfoW.argtypes = [wintypes.HANDLE,
-                                           ctypes.POINTER(_MONITORINFO)]
+        handle.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_MONITORINFO)]
         handle.GetMonitorInfoW.restype = wintypes.BOOL
-        handle.GetWindowPlacement.argtypes = [wintypes.HWND,
-                                              ctypes.POINTER(_WINDOWPLACEMENT)]
+        handle.GetWindowPlacement.argtypes = [wintypes.HWND, ctypes.POINTER(_WINDOWPLACEMENT)]
         handle.GetWindowPlacement.restype = wintypes.BOOL
         globals()["_USER32_CONFIGURED"] = True
     return handle
@@ -162,8 +189,7 @@ def _work_area_for_hwnd(hwnd: int):
         from ctypes import wintypes
 
         user32 = _user32()
-        monitor = user32.MonitorFromWindow(wintypes.HWND(hwnd),
-                                           _MONITOR_DEFAULTTONEAREST)
+        monitor = user32.MonitorFromWindow(wintypes.HWND(hwnd), _MONITOR_DEFAULTTONEAREST)
         if not monitor:
             return None
         info = _MONITORINFO()
@@ -194,8 +220,7 @@ def _maximized_client_rect(hwnd: int):
         user32 = _user32()
         placement = _WINDOWPLACEMENT()
         placement.length = ctypes.sizeof(_WINDOWPLACEMENT)
-        if not user32.GetWindowPlacement(wintypes.HWND(hwnd),
-                                         ctypes.byref(placement)):
+        if not user32.GetWindowPlacement(wintypes.HWND(hwnd), ctypes.byref(placement)):
             return None
         if int(placement.showCmd) != _SW_SHOWMAXIMIZED:
             return None
@@ -220,16 +245,16 @@ _WIN_BTN_QSS = (
     f"QPushButton {{ background: transparent; color: {TEXT_PRIMARY}; border: none; "
     "border-radius: 0px; }"
     # Keyboard-focus tint: before hover so hover feedback wins when both apply.
-    f"QPushButton[focusVisible=\"true\"] {{ background: {ACCENT_FOCUS_TINT}; }}"
-    f"QPushButton:hover, QPushButton[hovered=\"true\"] {{ "
+    f'QPushButton[focusVisible="true"] {{ background: {ACCENT_FOCUS_TINT}; }}'
+    f'QPushButton:hover, QPushButton[hovered="true"] {{ '
     f"background: {SURFACE_RAISED}; }}"
     f"QPushButton:pressed {{ background: {ACCENT_SECONDARY}; }}"
 )
 _WIN_CLOSE_QSS = (
     f"QPushButton {{ background: transparent; color: {TEXT_PRIMARY}; border: none; "
     "border-radius: 0px; }"
-    f"QPushButton[focusVisible=\"true\"] {{ background: {ACCENT_FOCUS_TINT}; }}"
-    f"QPushButton:hover, QPushButton[hovered=\"true\"] {{ "
+    f'QPushButton[focusVisible="true"] {{ background: {ACCENT_FOCUS_TINT}; }}'
+    f'QPushButton:hover, QPushButton[hovered="true"] {{ '
     f"background: {STATE_ERROR_GRAPHIC}; color: {TEXT_ON_ACCENT}; }}"
     f"QPushButton:pressed {{ background: {STATE_ERROR_BG}; color: {TEXT_ON_ACCENT}; }}"
 )
@@ -240,10 +265,10 @@ _SEPARATOR_QSS = surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, radius="0px")
 # QStyle standard pixmaps: the exact glyphs Windows paints in a native
 # caption (text characters never matched them, especially restore).
 _CAPTION_GLYPHS = {
-    "min": QStyle.SP_TitleBarMinButton,
-    "max": QStyle.SP_TitleBarMaxButton,
-    "restore": QStyle.SP_TitleBarNormalButton,
-    "close": QStyle.SP_TitleBarCloseButton,
+    "min": QStyle.StandardPixmap.SP_TitleBarMinButton,
+    "max": QStyle.StandardPixmap.SP_TitleBarMaxButton,
+    "restore": QStyle.StandardPixmap.SP_TitleBarNormalButton,
+    "close": QStyle.StandardPixmap.SP_TitleBarCloseButton,
 }
 
 # Caption labels come from the catalogue. The tables keep every lookup
@@ -272,13 +297,13 @@ def _tinted_icon(source: QIcon, color: str, size: int = 16) -> QIcon:
     try:
         pm = source.pixmap(size, size)
         out = QPixmap(pm.size())
-        out.fill(Qt.transparent)
+        out.fill(Qt.GlobalColor.transparent)
         painter = QPainter(out)
         try:
             # Draw the glyph first, then recolour it: SourceIn keeps the
             # source's alpha but replaces its RGB with the fill colour.
             painter.drawPixmap(0, 0, pm)
-            painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
             painter.fillRect(out.rect(), QColor(color))
         finally:
             painter.end()
@@ -303,11 +328,9 @@ class _CaptionButton(QPushButton):
         # TopNav is 48px, so the hover fill meets both edges (no floating
         # 32px chip in the middle of the bar).
         self.setFixedSize(46, 48)
-        self.setCursor(Qt.PointingHandCursor)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(t(_CAPTION_KEYS.get(kind, _CAPTION_KEYS["close"])))
-        self.setAccessibleName(
-            t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"]))
-        )
+        self.setAccessibleName(t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"])))
         self.setIconSize(QSize(14, 14))
         # theme-allow: a frameless window's caption button is window chrome,
         # not an app button (square caption face, red close hover) — the kit's
@@ -326,17 +349,13 @@ class _CaptionButton(QPushButton):
             return
         self._kind = kind
         self.setToolTip(t(_CAPTION_KEYS.get(kind, _CAPTION_KEYS["close"])))
-        self.setAccessibleName(
-            t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"]))
-        )
+        self.setAccessibleName(t(_CAPTION_A11Y_KEYS.get(kind, _CAPTION_A11Y_KEYS["close"])))
         self._apply_icon()
 
     def _apply_icon(self) -> None:
         try:
             glyph = self.style().standardIcon(_CAPTION_GLYPHS[self._kind])
-            if self._kind == "close" and (
-                self._hovered or self.underMouse() or self.isDown()
-            ):
+            if self._kind == "close" and (self._hovered or self.underMouse() or self.isDown()):
                 glyph = _tinted_icon(glyph, TEXT_ON_ACCENT, 14)
             self.setIcon(glyph)
         except Exception:
@@ -410,7 +429,7 @@ class MainWindow(QMainWindow):
         # Qt fallback drag in eventFilter. A bare FramelessWindowHint window
         # (WS_POPUP, no caption) gets NO DWM shadow even with an extended
         # glass frame, which is how the border/shadow went missing before.
-        self.setWindowFlags(Qt.Window)
+        self.setWindowFlags(Qt.WindowType.Window)
         self._drag_pos = None
         self._border_width = 8
         # Native handle cache for use inside nativeEvent: NEVER call winId()
@@ -435,17 +454,15 @@ class MainWindow(QMainWindow):
         nav_lay.setContentsMargins(12, 0, 0, 0)
         nav_lay.setSpacing(6)
 
-        self._nav_dashboard = AppButton(
-            t("main.nav.dashboard"), kind="nav-active", size=None
-        )
-        self._nav_dashboard.setCursor(Qt.PointingHandCursor)
+        self._nav_dashboard = AppButton(t("main.nav.dashboard"), kind="nav-active", size=None)
+        self._nav_dashboard.setCursor(Qt.CursorShape.PointingHandCursor)
         self._nav_dashboard.setFixedHeight(32)
         self._nav_dashboard.setToolTip(t("main.nav.dashboard_tip"))
         self._nav_dashboard.clicked.connect(self._show_dashboard)
         nav_lay.addWidget(self._nav_dashboard)
 
         sep = QFrame()
-        sep.setFrameShape(QFrame.VLine)
+        sep.setFrameShape(QFrame.Shape.VLine)
         sep.setStyleSheet(_SEPARATOR_QSS)
         sep.setFixedWidth(1)
         nav_lay.addWidget(sep)
@@ -454,7 +471,7 @@ class MainWindow(QMainWindow):
         # left). Icon-only: Lucide glyph, label lives in the tooltip.
         self._nav_settings = AppButton("", kind="nav", size=None)
         self._nav_settings.setCheckable(True)
-        self._nav_settings.setCursor(Qt.PointingHandCursor)
+        self._nav_settings.setCursor(Qt.CursorShape.PointingHandCursor)
         self._nav_settings.setFixedSize(32, 32)
         self._nav_settings.setToolTip(t("main.nav.settings"))
         self._nav_settings.setAccessibleName(t("main.nav.settings"))
@@ -462,7 +479,7 @@ class MainWindow(QMainWindow):
         nav_lay.addWidget(self._nav_settings)
 
         self._nav_requirements = AppButton("", kind="nav", size=None)
-        self._nav_requirements.setCursor(Qt.PointingHandCursor)
+        self._nav_requirements.setCursor(Qt.CursorShape.PointingHandCursor)
         self._nav_requirements.setFixedSize(32, 32)
         self._nav_requirements.setToolTip(t("main.nav.rules"))
         self._nav_requirements.setAccessibleName(t("main.nav.rules"))
@@ -471,7 +488,7 @@ class MainWindow(QMainWindow):
 
         self._nav_log = AppButton("", kind="nav", size=None)
         self._nav_log.setCheckable(True)
-        self._nav_log.setCursor(Qt.PointingHandCursor)
+        self._nav_log.setCursor(Qt.CursorShape.PointingHandCursor)
         self._nav_log.setFixedSize(32, 32)
         self._nav_log.setToolTip(t("main.nav.log"))
         self._nav_log.setAccessibleName(t("main.nav.log"))
@@ -480,7 +497,7 @@ class MainWindow(QMainWindow):
 
         self._nav_help_index = AppButton("", kind="nav", size=None)
         self._nav_help_index.setCheckable(True)
-        self._nav_help_index.setCursor(Qt.PointingHandCursor)
+        self._nav_help_index.setCursor(Qt.CursorShape.PointingHandCursor)
         self._nav_help_index.setFixedSize(32, 32)
         self._nav_help_index.setToolTip(t("main.nav.help"))
         self._nav_help_index.setAccessibleName(t("main.nav.help"))
@@ -490,7 +507,7 @@ class MainWindow(QMainWindow):
         self._nav_help = AppButton("", kind="nav", size=None)
         self._nav_help.setCheckable(True)
         self._nav_help.setFixedSize(32, 32)
-        self._nav_help.setCursor(Qt.PointingHandCursor)
+        self._nav_help.setCursor(Qt.CursorShape.PointingHandCursor)
         self._nav_help.setToolTip(t("main.nav.about"))
         self._nav_help.setAccessibleName(t("main.nav.about"))
         self._nav_help.toggled.connect(self._on_about_toggled)
@@ -498,7 +515,7 @@ class MainWindow(QMainWindow):
         self._sync_nav_icons()
 
         sep2 = QFrame()
-        sep2.setFrameShape(QFrame.VLine)
+        sep2.setFrameShape(QFrame.Shape.VLine)
         sep2.setStyleSheet(_SEPARATOR_QSS)
         sep2.setFixedWidth(1)
         nav_lay.addWidget(sep2)
@@ -507,7 +524,7 @@ class MainWindow(QMainWindow):
         self._chips_wrap = QWidget()
         self._chips_wrap.setObjectName("ChipsWrap")
         self._chips_wrap.setStyleSheet(transparent_surface_qss("ChipsWrap"))
-        self._chips_wrap.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self._chips_wrap.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self._chips_lay = QHBoxLayout(self._chips_wrap)
         self._chips_lay.setContentsMargins(4, 0, 8, 0)
         self._chips_lay.setSpacing(8)
@@ -552,9 +569,21 @@ class MainWindow(QMainWindow):
         # does not garbage-collect them (required on some bindings).
         try:
             self._shortcuts = [
-                QShortcut(QKeySequence("Ctrl+,", QKeySequence.PortableText), self, self._open_settings),  # type: ignore[arg-type]
-                QShortcut(QKeySequence("Ctrl+L", QKeySequence.PortableText), self, self._show_log),  # type: ignore[arg-type]
-                QShortcut(QKeySequence("Alt+Left", QKeySequence.PortableText), self, self._show_dashboard),  # type: ignore[arg-type]
+                QShortcut(
+                    QKeySequence("Ctrl+,", QKeySequence.SequenceFormat.PortableText),
+                    self,
+                    self._open_settings,
+                ),
+                QShortcut(
+                    QKeySequence("Ctrl+L", QKeySequence.SequenceFormat.PortableText),
+                    self,
+                    self._show_log,
+                ),
+                QShortcut(
+                    QKeySequence("Alt+Left", QKeySequence.SequenceFormat.PortableText),
+                    self,
+                    self._show_dashboard,
+                ),
             ]
         except Exception:
             self._shortcuts = []
@@ -576,17 +605,17 @@ class MainWindow(QMainWindow):
         # alone lays out a 112-row rules table), and none of them is needed
         # to show the dashboard. The lazy builders below add a page to the
         # stack the first time its nav entry is used.
-        self._review_config = None
-        self._settings = None
-        self._settings_page = None
-        self._about = None
-        self._about_page = None
-        self._help = None
-        self._help_page = None
-        self._log_page = None
+        self._review_config: Any = None
+        self._settings: Any = None
+        self._settings_page: Any = None
+        self._about: Any = None
+        self._about_page: Any = None
+        self._help: Any = None
+        self._help_page: Any = None
+        self._log_page: Any = None
         # Content role to return to when a settings/about/help page closes.
         self._pane_return: str | None = None
-        self._detail = None
+        self._detail: Any = None
 
         # First run with no instance configured: Settings is the only useful
         # page, so build it now (this is the one deliberate eager pane).
@@ -619,7 +648,7 @@ class MainWindow(QMainWindow):
         """
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setStyleSheet(page_background_qss())
         scroll.setWidget(pane)
         return scroll
@@ -767,9 +796,7 @@ class MainWindow(QMainWindow):
     def _sync_nav_icons(self) -> None:
         """Match each icon's tint to the text colour its state uses."""
         try:
-            self._set_nav_icon(
-                self._nav_settings, "settings", self._nav_settings.isChecked()
-            )
+            self._set_nav_icon(self._nav_settings, "settings", self._nav_settings.isChecked())
             self._set_nav_icon(
                 self._nav_requirements,
                 "square-pen",
@@ -804,10 +831,9 @@ class MainWindow(QMainWindow):
         """
         try:
             role = self._content_role()
-            if role == "settings" and name != "settings":
-                if not self._can_leave_settings():
-                    self._refresh_nav_state()
-                    return False
+            if role == "settings" and name != "settings" and not self._can_leave_settings():
+                self._refresh_nav_state()
+                return False
             if name in ("settings", "about", "help"):
                 # Exclusive like before: opening a page switches stack.
                 if role not in ("settings", "about", "help"):
@@ -830,11 +856,10 @@ class MainWindow(QMainWindow):
                 page = self._ensure_log()
                 if self._stack.currentWidget() is not page:
                     self._stack.setCurrentWidget(page)
-            elif name is None:
+            elif name is None and role in ("settings", "about", "help", "log"):
                 # Close pane: return to previous content if we're in settings/about/help/log.
-                if role in ("settings", "about", "help", "log"):
-                    self._stack.setCurrentWidget(self._role_widget(getattr(self, "_pane_return", None)))
-                    self._pane_return = None
+                self._stack.setCurrentWidget(self._role_widget(getattr(self, "_pane_return", None)))
+                self._pane_return = None
             # Any other name: stack untouched.
         except Exception:
             pass
@@ -903,7 +928,7 @@ class MainWindow(QMainWindow):
         # Imported here, not at module level: the detail view drags in the
         # whole network stack (requests, dataverse_client, download manager,
         # metadata rules). None of it is needed to show the dashboard.
-        from ui.dataset_detail import DatasetDetailView
+        from ui.dataset import DatasetDetailView
 
         if self._detail is not None:
             # Adopt still-running workers so destroying the view cannot kill
@@ -932,10 +957,13 @@ class MainWindow(QMainWindow):
             if len(self._open_pids) > 6:
                 self._open_pids = self._open_pids[-6:]
         cached = self._metadata_cache.get(persistent_id)
-        cached_meta, cached_inv = (cached if cached else (None, None))
+        cached_meta, cached_inv = cached if cached else (None, None)
         self._detail = DatasetDetailView(
-            self._config, persistent_id, title,
-            cached_metadata=cached_meta, cached_inventory=cached_inv,
+            self._config,
+            persistent_id,
+            title,
+            cached_metadata=cached_meta,
+            cached_inventory=cached_inv,
             dataset_hint=row if isinstance(row, dict) else None,
         )
         self._detail.backRequested.connect(self._show_dashboard)
@@ -958,7 +986,7 @@ class MainWindow(QMainWindow):
     def _rebuild_chips(self) -> None:
         while self._chips_lay.count():
             item = self._chips_lay.takeAt(0)
-            w = item.widget()
+            w = item.widget() if item is not None else None
             if w:
                 w.deleteLater()
         if not self._open_pids:
@@ -968,9 +996,10 @@ class MainWindow(QMainWindow):
             return
         # No dataset chip reads active while the dashboard is showing — the
         # Dashboard tab owns the highlight there.
-        if self._stack.currentWidget() is self._dashboard:
-            active_pid = None
-        elif getattr(self, "_review_config", None) is not None and self._stack.currentWidget() is self._review_config:
+        if self._stack.currentWidget() is self._dashboard or (
+            getattr(self, "_review_config", None) is not None
+            and self._stack.currentWidget() is self._review_config
+        ):
             active_pid = None
         elif self._detail is not None:
             active_pid = getattr(self._detail, "_pid", None)
@@ -1145,7 +1174,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
-            if event.type() == QEvent.WindowStateChange:
+            if event.type() == QEvent.Type.WindowStateChange:
                 self._update_max_icon()
                 self._apply_dwm_frame()
                 QTimer.singleShot(300, self._heal_caption_strip)
@@ -1158,9 +1187,7 @@ class MainWindow(QMainWindow):
         # client nor a transient native caption can flash on screen.
         try:
             if not getattr(self, "_revealed", False):
-                self._cloaked = self._cloak_window(True) or bool(
-                    getattr(self, "_cloaked", False)
-                )
+                self._cloaked = self._cloak_window(True) or bool(getattr(self, "_cloaked", False))
         except Exception:
             pass
         try:
@@ -1240,13 +1267,12 @@ class MainWindow(QMainWindow):
                 0,
                 0,
                 0,
-                SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER
-                | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+                SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
             )
         except Exception:
             pass
 
-    def _cloak_window(self, cloaked: bool) -> bool:
+    def _cloak_window(self: _DwmWindow, cloaked: bool) -> bool:
         """Add or remove this window from DWM composition (Windows only).
 
         A cloaked window keeps painting normally but is never composited, so
@@ -1277,7 +1303,7 @@ class MainWindow(QMainWindow):
         except Exception:
             return False
 
-    def _apply_dwm_frame(self) -> None:
+    def _apply_dwm_frame(self: _DwmWindow) -> None:
         """Restore the standard Windows border + drop shadow.
 
         Frameless windows lose the DWM frame entirely (no border, no
@@ -1314,7 +1340,7 @@ class MainWindow(QMainWindow):
             _declare_dwm_signatures(dwmapi, _MARGINS)
 
             try:
-                from applog import get_app_log as _get_log
+                from curation.applog import get_app_log as _get_log
             except Exception:
                 _get_log = None  # type: ignore[assignment]
 
@@ -1335,10 +1361,7 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
 
-            if self.isMaximized():
-                margins = _MARGINS(0, 0, 0, 0)
-            else:
-                margins = _MARGINS(1, 1, 1, 1)
+            margins = _MARGINS(0, 0, 0, 0) if self.isMaximized() else _MARGINS(1, 1, 1, 1)
             hr_frame = dwmapi.DwmExtendFrameIntoClientArea(
                 wintypes.HWND(hwnd), ctypes.byref(margins)
             )
@@ -1383,20 +1406,32 @@ class MainWindow(QMainWindow):
 
             if obj is self._topnav and not _sys.platform.startswith("win"):
                 etype = event.type()
-                if etype == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
-                    if not self.isMaximized() and not self._topnav_is_interactive(event.position().toPoint()):
-                        self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                if (
+                    etype == QEvent.Type.MouseButtonPress
+                    and event.button() == Qt.MouseButton.LeftButton
+                ):
+                    if not self.isMaximized() and not self._topnav_is_interactive(
+                        event.position().toPoint()
+                    ):
+                        self._drag_pos = (
+                            event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                        )
                         return True
-                elif etype == QEvent.MouseMove:
-                    if self._drag_pos is not None and event.buttons() & Qt.LeftButton and not self.isMaximized():
+                elif etype == QEvent.Type.MouseMove:
+                    if (
+                        self._drag_pos is not None
+                        and event.buttons() & Qt.MouseButton.LeftButton
+                        and not self.isMaximized()
+                    ):
                         self.move(event.globalPosition().toPoint() - self._drag_pos)
                         return True
-                elif etype == QEvent.MouseButtonRelease:
+                elif etype == QEvent.Type.MouseButtonRelease:
                     self._drag_pos = None
-                elif etype == QEvent.MouseButtonDblClick:
-                    if not self._topnav_is_interactive(event.position().toPoint()):
-                        self._on_max_restore()
-                        return True
+                elif etype == QEvent.Type.MouseButtonDblClick and not self._topnav_is_interactive(
+                    event.position().toPoint()
+                ):
+                    self._on_max_restore()
+                    return True
         except Exception:
             pass
         try:
@@ -1404,7 +1439,7 @@ class MainWindow(QMainWindow):
         except Exception:
             return False
 
-    def nativeEvent(self, eventType, message):
+    def nativeEvent(self, event_type, message):  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Custom-frame handling on Windows.
 
         WM_NCCALCSIZE strips the native caption/borders (whole window becomes
@@ -1420,12 +1455,12 @@ class MainWindow(QMainWindow):
             if _sys.platform.startswith("win"):
                 etype = ""
                 try:
-                    etype = bytes(eventType).decode("ascii", "ignore")
+                    etype = bytes(event_type).decode("ascii", "ignore")
                 except Exception:
                     try:
-                        etype = eventType.data().decode("ascii", "ignore")
+                        etype = event_type.data().decode("ascii", "ignore")
                     except Exception:
-                        etype = str(eventType)
+                        etype = str(event_type)
                 if "windows_generic_MSG" in etype:
                     import ctypes
 
@@ -1468,7 +1503,7 @@ class MainWindow(QMainWindow):
                                 if msg.wParam:
                                     rct = ctypes.cast(
                                         int(msg.lParam),
-                                        ctypes.POINTER(_NCCALCSIZE_PARAMS),
+                                        ctypes.POINTER(_NccalcsizeParams),
                                     ).contents.rgrc[0]
                                 else:
                                     rct = ctypes.cast(
@@ -1493,7 +1528,7 @@ class MainWindow(QMainWindow):
                             y -= 0x10000
                         global_pt = QPoint(x, y)
                         if not self.rect().contains(self.mapFromGlobal(global_pt)):
-                            return super().nativeEvent(eventType, message)
+                            return super().nativeEvent(event_type, message)
                         # Buttons under the point stay HTCLIENT: that is
                         # what keeps them out of the HTCAPTION drag path
                         # below, and it gives standard client behavior.
@@ -1510,7 +1545,10 @@ class MainWindow(QMainWindow):
                         try:
                             for btn in self._topnav.findChildren(QPushButton):
                                 try:
-                                    if not (btn.isVisible() and btn.rect().contains(btn.mapFromGlobal(global_pt))):
+                                    if not (
+                                        btn.isVisible()
+                                        and btn.rect().contains(btn.mapFromGlobal(global_pt))
+                                    ):
                                         continue
                                     return True, HTCLIENT
                                 except Exception:
@@ -1566,7 +1604,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
-            return super().nativeEvent(eventType, message)
+            return super().nativeEvent(event_type, message)
         except Exception:
             return False, 0
 

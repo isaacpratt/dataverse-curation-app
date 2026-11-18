@@ -17,6 +17,8 @@ a new check cannot land without its guidance.
 
 from __future__ import annotations
 
+from typing import Any
+
 # check_id -> (rationale, remediation)
 GUIDANCE: dict[str, tuple[str, str]] = {
     # -- format families (always-emit parents) ----------------------------
@@ -489,7 +491,7 @@ def title_for(check_id: str) -> str:
     return TITLES.get(str(check_id or "").strip(), "")
 
 
-def for_result(result) -> tuple[str, str]:
+def for_result(result: Any) -> tuple[str, str]:
     """Guidance for a CheckResult: bespoke fields first, registry second."""
     rationale = str(getattr(result, "rationale", "") or "")
     remediation = str(getattr(result, "remediation", "") or "")

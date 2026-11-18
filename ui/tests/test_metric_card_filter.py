@@ -9,9 +9,7 @@ def _mval(card):
     # The value label carries its theme token as its object name
     # (DisplayLG / StateMD), so it is found by type, not by a fixed name.
     labels = [
-        lbl
-        for lbl in card.findChildren(QLabel)
-        if lbl.objectName() in ("DisplayLG", "StateMD")
+        lbl for lbl in card.findChildren(QLabel) if lbl.objectName() in ("DisplayLG", "StateMD")
     ]
     return labels[0].text() if labels else None
 
@@ -49,7 +47,9 @@ def test_in_progress_card_counts_and_filters_any_label(win, monkeypatch):
     assert [_mval(c) for c in dash._metric_cards][2] == "2"
     try:
         dash._on_metric_clicked("progress")
-        assert dash._state_filter.currentIndex() == 0, "In Progress leaves the combo on All Datasets"
+        assert dash._state_filter.currentIndex() == 0, (
+            "In Progress leaves the combo on All Datasets"
+        )
         assert dash._labelled_only is True
         assert {d["persistent_id"] for d in dash._datasets} == {"p1", "p3"}
     finally:

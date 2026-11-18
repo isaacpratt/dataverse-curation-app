@@ -62,7 +62,7 @@ def test_childfields_order_is_borealis_display_order() -> None:
 
 def test_subfield_rows_survive_the_review_config_union(monkeypatch: pytest.MonkeyPatch) -> None:
     """Rule-config union must keep parent-linked rows after save/load."""
-    from curation import review_rules as rr
+    import curation.review_rules as rr
 
     normalized = rr._normalize_ruleset(
         "x",

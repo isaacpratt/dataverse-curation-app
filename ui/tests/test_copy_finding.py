@@ -17,20 +17,32 @@ def _metadata() -> dict:
                 "citation": {
                     "fields": [
                         {"typeName": "title", "value": "A study"},
-                        {"typeName": "author", "value": [
-                            {
-                                "authorName": _fv("Ada Lovelace"),
-                                "authorAffiliation": _fv("Lab"),
-                                "authorIdentifierScheme": _fv("ORCID"),
-                                "authorIdentifier": _fv("0000-0002-1825-0097"),
-                            },
-                        ]},
-                        {"typeName": "datasetContact", "value": [
-                            {"datasetContactName": _fv("Ada Lovelace")},
-                        ]},
-                        {"typeName": "dsDescription", "value": [
-                            {"dsDescriptionValue": _fv("Desc."), "dsDescriptionDate": _fv("2026-01-01")},
-                        ]},
+                        {
+                            "typeName": "author",
+                            "value": [
+                                {
+                                    "authorName": _fv("Ada Lovelace"),
+                                    "authorAffiliation": _fv("Lab"),
+                                    "authorIdentifierScheme": _fv("ORCID"),
+                                    "authorIdentifier": _fv("0000-0002-1825-0097"),
+                                },
+                            ],
+                        },
+                        {
+                            "typeName": "datasetContact",
+                            "value": [
+                                {"datasetContactName": _fv("Ada Lovelace")},
+                            ],
+                        },
+                        {
+                            "typeName": "dsDescription",
+                            "value": [
+                                {
+                                    "dsDescriptionValue": _fv("Desc."),
+                                    "dsDescriptionDate": _fv("2026-01-01"),
+                                },
+                            ],
+                        },
                         {"typeName": "subject", "value": ["Computer and Information Science"]},
                         {"typeName": "depositor", "value": "Ada Lovelace"},
                         {"typeName": "dateOfDeposit", "value": "2026-01-02"},
@@ -43,8 +55,8 @@ def _metadata() -> dict:
 
 @pytest.fixture
 def view(qapp, tmp_path):
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     cfg = Config()
     cfg.app.workspace = Path(tmp_path)

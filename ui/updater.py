@@ -49,7 +49,7 @@ def _resolve_workspace(workspace) -> Path | None:
     if workspace is not None:
         return Path(workspace)
     try:
-        from config import Config
+        from curation.config import Config
 
         return Path(Config.load(None).app.workspace)
     except Exception:
@@ -60,7 +60,7 @@ def _pref_get(key: str, default=None, workspace=None):
     ws = _resolve_workspace(workspace)
     if ws is None:
         return default
-    from storage import read_ui_pref
+    from curation.storage import read_ui_pref
 
     return read_ui_pref(ws, key, default)
 
@@ -69,7 +69,7 @@ def _pref_set(key: str, value, workspace=None) -> None:
     ws = _resolve_workspace(workspace)
     if ws is None:
         return
-    from storage import write_ui_pref
+    from curation.storage import write_ui_pref
 
     write_ui_pref(ws, key, value)
 
@@ -122,7 +122,7 @@ def classify_error(exc: BaseException) -> str:
 
 def _log_failure(detail: str) -> None:
     try:
-        import applog
+        import curation.applog as applog
 
         applog.log(f"{_LOG_TAG} {detail}")
     except Exception:
@@ -141,7 +141,7 @@ def make_update_manager():
         source = velopack.GithubSource(REPO_URL, None, False)
         options = velopack.UpdateOptions(
             False,  # AllowVersionDowngrade: only move forward
-            10,     # MaximumDeltasBeforeFallback (Velopack default)
+            10,  # MaximumDeltasBeforeFallback (Velopack default)
         )
         manager = velopack.UpdateManager(source, options)
         # Portable builds expose no locator and cannot self-replace.

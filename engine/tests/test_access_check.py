@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from curation import review_rules as rr
+import curation.review_rules as rr
 from engine.checks.access_check import AccessCheck
 from engine.runner import run_report
 

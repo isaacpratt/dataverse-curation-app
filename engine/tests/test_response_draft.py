@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from curation import review_rules as rr
+import curation.review_rules as rr
 from curation.response_draft import build_response, render_response
 from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry

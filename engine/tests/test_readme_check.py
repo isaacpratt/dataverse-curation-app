@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 
 import curation.review_rules as rr
+from curation.response_draft import collect_filecheck_sections
 from engine.checks.readme_check import (
     ReadmeSectionsCheck,
     analyse,
@@ -11,7 +12,6 @@ from engine.checks.readme_check import (
     is_readme,
 )
 from engine.report import DatasetReport
-from curation.response_draft import collect_filecheck_sections
 
 _COMPLETE_MD = """# My dataset
 
@@ -147,10 +147,13 @@ def test_check_without_readme_is_skipped_not_passed_silently():
 def test_ruleset_can_override_sections():
     ruleset = {
         "section_rules": [
-            {"id": "overview", "label": "Overview", "level": "required",
-             "probes": ["overview"]},
-            {"id": "ethics", "label": "Ethics statement", "level": "required",
-             "probes": ["ethics"]},
+            {"id": "overview", "label": "Overview", "level": "required", "probes": ["overview"]},
+            {
+                "id": "ethics",
+                "label": "Ethics statement",
+                "level": "required",
+                "probes": ["ethics"],
+            },
         ]
     }
     with tempfile.TemporaryDirectory() as tmp:
@@ -172,18 +175,14 @@ def test_best_readme_wins():
 def test_default_ruleset_exposes_section_rules():
     rs = rr.get_ruleset("mcmaster-default")
     sections = rr.readme_sections(rs)
-    assert [s["id"] for s in sections] == [
-        "overview", "files", "methods", "missing", "access"
-    ]
+    assert [s["id"] for s in sections] == ["overview", "files", "methods", "missing", "access"]
     assert rr.readme_sections({})[0]["id"] == "overview"
 
 
 def test_response_letter_lists_missing_sections():
     with tempfile.TemporaryDirectory() as tmp:
         results = _run(tmp, "README.md", _PARTIAL_MD)
-    report = DatasetReport(
-        persistent_id="p", label="l", engine_version="t", dataset_checks=results
-    )
+    report = DatasetReport(persistent_id="p", label="l", engine_version="t", dataset_checks=results)
     sections = collect_filecheck_sections(rr.get_ruleset("mcmaster-default"), report)
     assert len(sections) == 1
     message = sections[0]["message"]

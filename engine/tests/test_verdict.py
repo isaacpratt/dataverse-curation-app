@@ -1,5 +1,6 @@
 """Readiness verdict (dv-6nv): levels and reasons from crafted inputs."""
 
+from curation.storage import finding_key as storage_finding_key
 from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
 from engine.verdict import (
@@ -17,7 +18,6 @@ from engine.verdict import (
     finding_key,
     format_line,
 )
-from curation.storage import finding_key as storage_finding_key
 
 
 def _report(*checks: tuple[str, str, bool, str], path: str = "a.csv") -> DatasetReport:
@@ -41,21 +41,33 @@ def _report(*checks: tuple[str, str, bool, str], path: str = "a.csv") -> Dataset
 
 
 REQUIRED_ROW = {
-    "field": "Affiliation", "rule_id": "authorAffiliation",
-    "requirement": "McMaster — Recommended", "value": "—",
-    "status": "incomplete", "level": "required", "pending": False,
+    "field": "Affiliation",
+    "rule_id": "authorAffiliation",
+    "requirement": "McMaster — Recommended",
+    "value": "—",
+    "status": "incomplete",
+    "level": "required",
+    "pending": False,
 }
 OPTIONAL_ROW = {
-    "field": "ORCiD", "rule_id": "orcid",
-    "requirement": "optional", "value": "—",
-    "status": "incomplete", "level": "optional", "pending": False,
+    "field": "ORCiD",
+    "rule_id": "orcid",
+    "requirement": "optional",
+    "value": "—",
+    "status": "incomplete",
+    "level": "optional",
+    "pending": False,
 }
 
 
 SKIPPED_ROW = {
-    "field": "Subject", "rule_id": "field:citation.subject",
-    "requirement": "off", "value": "—",
-    "status": "skipped", "level": "unchecked", "pending": False,
+    "field": "Subject",
+    "rule_id": "field:citation.subject",
+    "requirement": "off",
+    "value": "—",
+    "status": "skipped",
+    "level": "unchecked",
+    "pending": False,
 }
 
 
@@ -109,8 +121,9 @@ class TestLevels:
         assert REASON_WARNINGS in [r.key for r in verdict.reasons]
 
     def test_sensitivity_pending_is_blocked(self):
-        verdict = assess(_report(("format.csv.content", "info", True, "parsed")),
-                         sensitivity={"complete": False})
+        verdict = assess(
+            _report(("format.csv.content", "info", True, "parsed")), sensitivity={"complete": False}
+        )
         assert verdict.level == LEVEL_BLOCKED
         assert REASON_SENSITIVITY in [r.key for r in verdict.reasons]
 

@@ -3,41 +3,66 @@
 from typing import ClassVar
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
-from curation.metadata_check import DEFAULT_PROFILE, PROFILES
+from curation.metadata_check import (
+    DEFAULT_PROFILE,
+    PROFILES,
+)
+from curation.storage import finding_key
 from ui.dataset.state import DetailState
 from ui.i18n import t
 from ui.theme import (
+    ACCENT_PRIMARY,
+    BORDER_SUBTLE,
+    STATE_ERROR_BG,
+    STATE_ERROR_BORDER,
     STATE_ERROR_GRAPHIC,
-    STATE_SUCCESS_GRAPHIC,
+    STATE_ERROR_SURFACE,
+    STATE_ERROR_TEXT,
+    STATE_WARNING_GRAPHIC,
+    SURFACE_ALT,
+    SURFACE_SUBTLE,
+    SURFACE_TINT,
     TEXT_AMBER,
     TEXT_DANGER,
     TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SUBTLE,
+    TEXT_ON_ACCENT,
     TEXT_SUCCESS,
+    surface_frame_qss,
     transparent_surface_qss,
 )
-from ui.widgets import AppTree, add_info_tip, make_card, make_combo, make_reset_columns_button
+from ui.widgets import (
+    add_info_tip,
+    make_action_button,
+    make_badge,
+    make_caption_label,
+    make_card,
+    make_combo,
+    make_disposition_combo,
+    make_small_body_label,
+)
 
 
 class MetadataSection(DetailState):
     """The Metadata card: the profile picker, the metadata tree and the results."""
 
     _META_SINGLE_ENTRY_FIELDS: ClassVar[set[tuple[str, str]]] = {("citation", "dsdescription")}
-
     _META_ACRONYMS: ClassVar[set[str]] = {"id", "url", "uri", "doi", "orcid", "api", "html", "pdf"}
-
     _META_KEY_OVERRIDES: ClassVar[dict[str, str]] = {
         "dsDescription": "Description",
         "dsDescriptionValue": "Description",
         "dsDescriptionDate": "Date",
         "keywordValue": "Keyword",
     }
-
-    _META_ENTRY_IDENTITY_KEYS = (
+    _META_ENTRY_IDENTITY_KEYS: ClassVar[tuple[str, ...]] = (
         "authorName",
         "contributorName",
         "publicationCitation",
@@ -50,9 +75,9 @@ class MetadataSection(DetailState):
             header_lay,
             t("detail.metadata_check.tip"),
             name=t("detail.sections.metadata_check"),
+            group="Checks",
         )
-        # Flush card (manifest-tree pattern): zero body margins; the table
-        # bleeds edge-to-edge.
+        # Rows read like the Auto-Checks card; its horizontal inset matches.
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
         # x/xx summary lives in the header, right next to the title (the
@@ -72,12 +97,13 @@ class MetadataSection(DetailState):
         meta_tools_lay = QHBoxLayout(meta_tools)
         meta_tools_lay.setContentsMargins(16, 8, 16, 8)
         meta_tools_lay.setSpacing(8)
-        # Complete/incomplete filter for the checklist table.
+        # Complete/incomplete filter for the checklist.
         self._meta_filter = make_combo(
             [
                 (t("detail.metadata_check.filter_all"), "all"),
                 (t("detail.metadata_check.filter_complete"), "complete"),
                 (t("detail.metadata_check.filter_incomplete"), "incomplete"),
+                (t("detail.metadata_check.filter_unchecked"), "unchecked"),
             ],
             min_width=110,
             tip=t("detail.metadata_check.filter_tip"),
@@ -94,64 +120,30 @@ class MetadataSection(DetailState):
         self._profile_combo.setCurrentIndex(idx)
         self._profile_combo.currentIndexChanged.connect(self._on_profile_changed)
         meta_tools_lay.addWidget(self._profile_combo)
-        self._meta_reset_btn = make_reset_columns_button(
-            "",
-            tip=t("detail.metadata_check.reset_columns_tip"),
-            accessible_name=t("detail.metadata_check.reset_columns_a11y"),
-            fallback_text=t("common.reset"),
-        )
-        self._meta_reset_btn.clicked.connect(self._on_reset_meta_view)
-        meta_tools_lay.addWidget(self._meta_reset_btn)
         meta_tools_lay.addStretch()
         body.addWidget(meta_tools)
-        # Every check with its status — an expandable tree
-        # (Check | Level | Block | Value | Status). Requirement text lives in the
-        # Check cell's tooltip. A repeatable field expands into one child
-        # per entry (Author 1, Author 2, …) and one grandchild per
-        # subfield (Name, Affiliation, Identifier, …), so a compound value
-        # is readable instead of being flattened into one line.
-        from PySide6.QtGui import QStandardItemModel as _QStandardItemModel
-        from PySide6.QtWidgets import QHeaderView
-
-        self._meta_check_tree = AppTree(row_height=30, flush=True)
-        self._meta_model = _QStandardItemModel(0, 5, self)
-        self._meta_model.setHorizontalHeaderLabels(
-            ["Check", t("detail.metadata_check.level_header"), "Block", "Value", "Status"]
-        )
-        self._meta_check_tree.setModel(self._meta_model)
-        _meta_hdr = self._meta_check_tree.header()
-        # Every column is Interactive so each boundary drags - including
-        # Value|Status, whose Stretch/ResizeToContents pair used to ignore
-        # the mouse (dv-dmv). Value still absorbs the slack and elides
-        # long text, but it does so through _fit_meta_value_column, not a
-        # Stretch mode (a Stretch section cannot be resized by hand).
-        _meta_hdr.setStretchLastSection(False)
-        for col in range(5):
-            _meta_hdr.setSectionResizeMode(col, QHeaderView.ResizeMode.Interactive)
-        self._meta_check_tree.setColumnWidth(0, 170)
-        self._meta_check_tree.setColumnWidth(1, 110)
-        self._meta_check_tree.setColumnWidth(2, 120)
-        self._meta_check_tree.setColumnWidth(3, 260)
-        self._meta_check_tree.setColumnWidth(4, 120)
-        self._meta_check_tree.expanded.connect(self._on_meta_tree_expansion_changed)
-        self._meta_check_tree.collapsed.connect(self._on_meta_tree_expansion_changed)
-        self._track_table_widths("dataset_meta", _meta_hdr)
-        # No internal scrollbars: the card always fits every row; the page
-        # canvas scrolls instead. Height is fitted in _fit_meta_tree_height.
-        self._meta_check_tree.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._meta_check_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._meta_check_tree.setFixedHeight(80)
-        body.addWidget(self._meta_check_tree)
+        # One card per check (dv-h70), the Auto-Checks idiom: icon + bold
+        # title + one-line verdict sentence + right-aligned badge, with an
+        # expandable drawer for compound entries and block section headers.
+        # The page canvas scrolls — the card itself never scrolls.
+        self._meta_body = QWidget()
+        self._meta_body_lay = QVBoxLayout(self._meta_body)
+        self._meta_body_lay.setContentsMargins(16, 12, 16, 12)
+        self._meta_body_lay.setSpacing(8)
+        self._meta_row_results: list[dict] = []
+        self._meta_row_widgets: list[tuple[QFrame, int]] = []
+        self._meta_body_lay.addWidget(self._meta_pending_row())
+        body.addWidget(self._meta_body)
         return card
 
     def _apply_meta_filter(self) -> None:
-        """Apply the Complete/Incomplete filter by rebuilding the tree.
+        """Apply the filter by rebuilding the rows.
 
-        The tree is small and model-driven, so rebuilding is simpler and
-        safer than hiding rows: a hidden parent would keep its children
-        orphaned in the model. The card then refits its height.
+        The result set is small, so rebuilding is simpler and safer than
+        hiding rows. The page canvas scrolls — the card itself never grows
+        an inner scrollbar.
         """
-        if not hasattr(self, "_meta_check_tree"):
+        if not hasattr(self, "_meta_body_lay"):
             return
         try:
             mode = self._meta_filter.currentData() or "all"
@@ -161,8 +153,12 @@ class MetadataSection(DetailState):
         if mode == "complete":
             results = [r for r in results if r.get("status") == "complete"]
         elif mode == "incomplete":
-            results = [r for r in results if r.get("status") != "complete"]
-        self._build_meta_tree(results)
+            results = [r for r in results if r.get("status") == "incomplete"]
+        elif mode == "unchecked":
+            results = list(getattr(self, "_unchecked_results", []))
+        else:
+            results = [r for r in results if r.get("status") in ("complete", "incomplete")]
+        self._build_meta_rows(results)
 
     def _pretty_meta_key(self, key: str) -> str:
         """Human label for a metadata key (``authorAffiliation`` → Affiliation)."""
@@ -284,206 +280,6 @@ class MetadataSection(DetailState):
             dash,
         )
 
-    def _build_meta_tree(self, results: list[dict]) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-        """Rebuild the Check | Level | Block | Value | Status tree from results."""
-        from PySide6.QtGui import QBrush, QStandardItem
-
-        tree = self._meta_check_tree
-        model = self._meta_model
-        model.removeRows(0, model.rowCount())
-
-        def _item(
-            text: str,
-            *,
-            tooltip: str = "",
-            bold: bool = False,
-            color: str | None = None,
-            italic: bool = False,
-        ) -> QStandardItem:
-            item = QStandardItem(str(text))
-            item.setEditable(False)
-            if tooltip:
-                item.setToolTip(tooltip)
-            if color:
-                item.setForeground(QBrush(QColor(color)))
-            font = item.font()
-            if bold:
-                font.setBold(True)
-            if italic:
-                font.setItalic(True)
-            item.setFont(font)
-            return item
-
-        from ui.icons import icon as _icon
-
-        for result in results:
-            ok = result.get("status") == "complete"
-            status_text = (
-                t("detail.metadata_check.status_complete")
-                if ok
-                else t("detail.metadata_check.status_incomplete")
-            )
-            requirement = str(result.get("requirement") or "")
-            value_text = str(result.get("value", t("common.em_dash")))
-            required = str(result.get("level") or "required") == "required"
-            level_text = (
-                t("detail.metadata_check.level_required")
-                if required
-                else t("detail.metadata_check.level_optional")
-            )
-            field_item = _item(
-                str(result.get("field") or ""),
-                tooltip=requirement,
-                bold=True,
-                color=TEXT_PRIMARY if ok else TEXT_DANGER,
-            )
-            level_item = _item(
-                level_text,
-                tooltip=t("detail.metadata_check.level_tip"),
-                bold=required,
-                color=TEXT_PRIMARY if required else TEXT_MUTED,
-            )
-            block_item = _item(
-                self._meta_block_label(str(result.get("block") or "")),
-                tooltip=(
-                    self._meta_block_label(str(result.get("block") or ""))
-                    + (f"\n\n{requirement}" if requirement else "")
-                ),
-            )
-            value_item = _item(
-                value_text,
-                tooltip=requirement + t("detail.metadata_check.value_tooltip", value=value_text),
-            )
-            status_item = _item(
-                status_text,
-                tooltip=requirement,
-                bold=True,
-                color=TEXT_SUCCESS if ok else TEXT_DANGER,
-            )
-            try:
-                status_item.setIcon(
-                    _icon("check", color=STATE_SUCCESS_GRAPHIC)
-                    if ok
-                    else _icon("x", color=STATE_ERROR_GRAPHIC)
-                )
-            except Exception:
-                pass
-            parent = [field_item, level_item, block_item, value_item, status_item]
-
-            def _sub_row(sub_label, sub_value):
-                return [
-                    _item(sub_label, color=TEXT_MUTED),
-                    _item(""),
-                    _item(""),
-                    _item(
-                        sub_value,
-                        tooltip=sub_value,
-                        italic=sub_value == t("common.em_dash"),
-                        color=TEXT_SUBTLE if sub_value == t("common.em_dash") else None,
-                    ),
-                    _item(""),
-                ]
-
-            for label, summary, subs in self._meta_value_entries(result):
-                if label:
-                    child = [
-                        _item(label, color=TEXT_MUTED, bold=True),
-                        _item(""),
-                        _item(""),
-                        _item(summary, tooltip=summary),
-                        _item(""),
-                    ]
-                    parent[0].appendRow(child)
-                    for sub_label, sub_value in subs:
-                        child[0].appendRow(_sub_row(sub_label, sub_value))
-                else:
-                    # Single-compound children attach directly to the parent
-                    # row; a child equal to the parent Value is dropped.
-                    for sub_label, sub_value in subs:
-                        if sub_value and str(sub_value) == value_text:
-                            continue
-                        parent[0].appendRow(_sub_row(sub_label, sub_value))
-            model.appendRow(parent)
-
-        try:
-            tree.blockSignals(True)
-            tree.expandAll()
-        finally:
-            tree.blockSignals(False)
-        self._fit_meta_tree_height()
-        # Size the fixed columns to their content (with sane caps), then
-        # hand the leftover width to Value. Programmatic: wrapped in the
-        # layout's suppressed scope so a rebuild never overwrites the
-        # widths the user dragged (only their own gestures persist).
-        try:
-            layout = self._layout_for("dataset_meta", tree.header())
-            with layout.suppressed():
-                for col, floor, ceiling in (
-                    (0, 170, 320),
-                    (1, 88, 130),
-                    (2, 100, 220),
-                    (4, 90, 160),
-                ):
-                    tree.resizeColumnToContents(col)
-                    tree.setColumnWidth(col, max(floor, min(ceiling, tree.columnWidth(col))))
-        except Exception:
-            pass
-        self._fit_meta_value_column()
-
-    def _on_meta_tree_expansion_changed(self, _index=None) -> None:
-        self._fit_meta_tree_height()
-
-    def _fit_meta_value_column(self) -> None:
-        """Give the metadata table's Value column the leftover width.
-
-        With every column Interactive (so the Value|Status boundary
-        drags - dv-dmv) no section stretches; this keeps the (scrollbar
-        -less) table filling its card instead of leaving a gap after
-        Status. Programmatic, so it never persists over a user's drag.
-        """
-        try:
-            tree = self._meta_check_tree
-        except AttributeError:
-            return
-        hdr = tree.header()
-        if hdr is None or hdr.count() < 5:
-            return
-        # Value column is at index 3 (Check | Level | Block | Value | Status).
-        others = sum(hdr.sectionSize(i) for i in range(hdr.count()) if i != 3)
-        target = max(48, tree.viewport().width() - others)
-        if hdr.sectionSize(3) == target:
-            return
-        try:
-            layout = self._layout_for("dataset_meta", hdr)
-            with layout.suppressed():
-                hdr.resizeSection(3, target)
-        except Exception:
-            try:
-                hdr.resizeSection(3, target)
-            except Exception:
-                pass
-
-    def _fit_meta_tree_height(self) -> None:
-        """Grow the checks tree to its visible rows (no inner scrollbar)."""
-        try:
-            tree = self._meta_check_tree
-            model = tree.model()
-            visible_rows = 0
-            if model is not None:
-                stack = [tree.rootIndex()]
-                while stack:
-                    parent = stack.pop()
-                    count = model.rowCount(parent)
-                    visible_rows += count
-                    for r in range(count):
-                        idx = model.index(r, 0, parent)
-                        if model.hasChildren(idx) and tree.isExpanded(idx):
-                            stack.append(idx)
-            header_h = tree.header().height() or 30
-            tree.setFixedHeight(max(80, header_h + visible_rows * 30 + 2))
-        except Exception:
-            pass
-
     def _meta_block_label(self, block: str) -> str:
         """Display name for a metadata block id (catalog label, else capitalized)."""
         try:
@@ -522,17 +318,23 @@ class MetadataSection(DetailState):
             from curation.metadata_check import check_with_ruleset
 
             full, ruleset = check_with_ruleset(
-                metadata, self._profile, self._inventory, self._staged_dir_or_none()
+                metadata,
+                self._profile,
+                self._inventory,
+                self._staged_dir_or_none(),
+                include_unchecked=True,
             )
-            self._completeness_full = full
+            self._completeness_full = [r for r in full if r.get("status") != "skipped"]
+            self._unchecked_results = [r for r in full if r.get("status") == "skipped"]
             self._ruleset = ruleset
-            results = [dict(r) for r in full]
+            results = [dict(r) for r in self._completeness_full]
         except Exception:
             from curation.metadata_check import check_metadata_completeness
 
             results = check_metadata_completeness(
                 metadata, profile=self._profile, inventory=self._inventory
             )
+            self._unchecked_results = []
             self._completeness_full = [
                 {
                     **r,
@@ -565,19 +367,16 @@ class MetadataSection(DetailState):
         # Auto-checks header belongs to the checks summary (see
         # _refresh_curation_preview); leave it alone once a report exists.
         if self._report is None:
-            self._auto_summary.setText(
+            self._set_auto_summary(
                 t(
                     "detail.metadata_check.fields_complete",
                     complete=complete,
                     total=total,
                 )
             )
-        # Full per-check tree: Check | Level | Block | Value | Status
-        # (requirement in the Check cell's tooltip). Repeatable fields grow child rows
-        # per entry and grandchild rows per subfield.
+        self._meta_loaded = True
         self._meta_results = results
-        # Apply the active Complete/Incomplete filter; it rebuilds the tree
-        # and refits the card height to the visible rows (no inner scroll).
+        # Apply the active filter; it rebuilds the rows (no inner scroll).
         self._apply_meta_filter()
         # Keep the Response draft in sync (preserves manual edits).
         try:
@@ -597,3 +396,319 @@ class MetadataSection(DetailState):
             self._raw_btn.setIcon(_icon("chevron-up" if vis else "chevron-right"))
         except Exception:
             pass
+
+    def _build_meta_rows(self, results: list[dict]) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+        """Rebuild the rows; the caller has already applied the filter."""
+        lay = self._meta_body_lay
+        self._clear_meta_body()
+        self._meta_row_results = list(results)
+
+        if not results:
+            if getattr(self, "_meta_loaded", False):
+                lay.addWidget(make_small_body_label(t("detail.metadata_check.no_results")))
+            else:
+                lay.addWidget(self._meta_pending_row())
+            return
+
+        # Group by block, citation first, then alphabetical by display name.
+        groups: dict[str, list[tuple[int, dict]]] = {}
+        for idx, r in enumerate(results):
+            groups.setdefault(str(r.get("block") or "other"), []).append((idx, r))
+
+        def _group_key(block: str):
+            return (
+                0 if block.lower() == "citation" else 1,
+                (self._meta_block_label(block) or block).lower(),
+            )
+
+        for block in sorted(groups, key=_group_key):
+            rows = groups[block]
+            checked = [r for _i, r in rows if r.get("status") != "skipped"]
+            complete = sum(1 for r in checked if r.get("status") == "complete")
+            # Rows first: the section header's toggle needs the row widgets.
+            # Entries carry an is_drawer flag so collapsing the block only
+            # hides what the user had open, never forces a drawer shut.
+            widgets: list[tuple[QFrame, bool]] = []
+            for idx, result in rows:
+                row, drawer = self._meta_row(result, idx)
+                widgets.append((row, False))
+                if drawer is not None:
+                    widgets.append((drawer, True))
+            label = self._meta_block_label(block) or (block[:1].upper() + block[1:])
+            if checked:
+                counts_text = t(
+                    "detail.metadata_check.block_counts",
+                    complete=complete,
+                    total=len(checked),
+                )
+            else:
+                counts_text = t("detail.metadata_check.block_unchecked")
+            frame, btn, chev = self._meta_section_header(label, counts_text)
+            open_state = {"open": True}
+
+            def _toggle(_c=False, _rows=widgets, _open=open_state, _chev=chev):
+                opening = not _open["open"]
+                _open["open"] = opening
+                for w, is_drawer in _rows:
+                    if is_drawer:
+                        # Restore the drawer's own open state, not "always
+                        # visible" — a collapsed block must not reopen it.
+                        w.setVisible(opening and bool(w.property("drawer_open")))
+                    else:
+                        w.setVisible(opening)
+                from PySide6.QtCore import QSize
+
+                from ui.icons import icon as _ic
+
+                _chev.setPixmap(
+                    _ic(
+                        "chevron-down" if opening else "chevron-right", color=TEXT_MUTED, size=16
+                    ).pixmap(QSize(16, 16))
+                )
+
+            btn.clicked.connect(_toggle)
+            lay.addWidget(frame)
+            for w, _is_drawer in widgets:
+                lay.addWidget(w)
+        lay.addStretch(1)
+
+    def _meta_row(self, result: dict, idx: int):  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+        """One rule as an Auto-Checks row; returns (row, drawer_or_None)."""
+        dash = t("common.em_dash")
+        status = str(result.get("status") or "incomplete")
+        rule_id = str(result.get("rule_id") or "")
+        requirement = str(result.get("requirement") or "")
+        # dv-7w3: a pending row means "no data yet", not a finding — no
+        # disposition controls; render it muted so it can't read as one.
+        pending = bool(result.get("pending"))
+        level_required = str(result.get("level") or "required") == "required"
+        label = str(result.get("field") or "")
+        value_text = str(result.get("value") or dash)
+
+        frame = QFrame()
+        frame.setObjectName("AutoCheckRow")
+        frame.setProperty("meta_field", label)
+        frame.setProperty("meta_block", str(result.get("block") or ""))
+        frame.setProperty("meta_rule_id", str(result.get("rule_id") or ""))
+        from ui.icons import icon as _icon
+        from ui.icons import icon_label as _icon_label
+
+        if pending:
+            # Pending = no data yet: muted row, neutral badge, no bar.
+            frame.setStyleSheet(
+                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+            )
+            icon_name, icon_color = "circle-dashed", TEXT_MUTED
+            badge_text = t("detail.metadata_check.status_pending")
+            badge_bg, badge_fg = SURFACE_ALT, TEXT_MUTED
+        elif status == "complete":
+            frame.setStyleSheet(
+                surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+            )
+            icon_name, icon_color = "check", ACCENT_PRIMARY
+            badge_text = t("detail.metadata_check.status_complete")
+            badge_bg, badge_fg = ACCENT_PRIMARY, TEXT_ON_ACCENT
+        elif status == "skipped":
+            frame.setStyleSheet(
+                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+            )
+            icon_name, icon_color = "circle-dashed", TEXT_MUTED
+            badge_text = t("detail.metadata_check.status_unchecked")
+            badge_bg, badge_fg = SURFACE_ALT, TEXT_MUTED
+        elif level_required:
+            frame.setStyleSheet(
+                surface_frame_qss(
+                    STATE_ERROR_BG, STATE_ERROR_BORDER, selector="QFrame#AutoCheckRow"
+                )
+            )
+            icon_name, icon_color = "octagon-x", STATE_ERROR_GRAPHIC
+            badge_text = t("detail.metadata_check.status_incomplete")
+            badge_bg, badge_fg = STATE_ERROR_BG, STATE_ERROR_TEXT
+        else:
+            frame.setStyleSheet(
+                surface_frame_qss(
+                    STATE_ERROR_SURFACE, STATE_ERROR_BORDER, selector="QFrame#AutoCheckRow"
+                )
+            )
+            icon_name, icon_color = "octagon-alert", STATE_WARNING_GRAPHIC
+            badge_text = t("detail.metadata_check.status_incomplete")
+            badge_bg, badge_fg = STATE_ERROR_BG, STATE_ERROR_TEXT
+
+        lay = QHBoxLayout(frame)
+        lay.setContentsMargins(10, 8, 10, 8)
+        lay.setSpacing(8)
+        if not pending:
+            # dv-onk: no coloured bar; the required/optional distinction
+            # stays on the tooltip (both levels described).
+            frame.setToolTip(t("detail.metadata_check.level_tip"))
+        lay.addWidget(_icon_label(icon_name, size=16, color=icon_color))
+
+        txt = QVBoxLayout()
+        txt.setSpacing(1)
+        title = QLabel(label or dash)
+        title.setObjectName("LabelStrongSM")
+        txt.addWidget(title)
+        txt.addWidget(make_caption_label(value_text))
+        lay.addLayout(txt, 1)
+
+        # dv-32x: inline disposition controls on incomplete findings, and
+        # the right-click menu as a secondary path (top-level rows only).
+        disposition_key = ""
+        if status == "incomplete" and not pending:
+            disposition_key = finding_key(rule_id or label, "", requirement or label)
+            current = self._dispositions_map().get(disposition_key, {})
+            token = str(current.get("disposition") or "")
+            note = str(current.get("note") or "")
+            combo = make_disposition_combo(
+                token,
+                on_change=lambda tok, k=disposition_key: self._on_disposition_changed(k, tok),
+            )
+            lay.addWidget(combo)
+            note_btn = make_action_button(
+                t("detail.disposition.note_action"), kind="ghost", size="sm"
+            )
+            if note:
+                note_btn.setToolTip(note)
+            note_btn.clicked.connect(
+                lambda _c=False, k=disposition_key: self._on_edit_disposition_note(k)
+            )
+            lay.addWidget(note_btn)
+            frame.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            frame.customContextMenuRequested.connect(
+                lambda pos, k=disposition_key: self._show_disposition_menu(
+                    k, frame.mapToGlobal(pos)
+                )
+            )
+
+        # Compound fields (authors, contacts, …) expand into a drawer.
+        drawer = None
+        try:
+            entries = self._meta_value_entries(result)
+        except Exception:
+            entries = []
+        if entries:
+            drawer = self._meta_drawer(entries)
+            drawer.setProperty("drawer_open", False)
+            drawer.hide()
+            btn = QToolButton(frame)
+            btn.setAutoRaise(True)
+            btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+            btn.setIcon(_icon("chevron-right", color=TEXT_MUTED, size=14))
+            btn.setFixedSize(28, 28)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setToolTip(t("detail.metadata_check.drawer_tip"))
+
+            def _toggle_drawer(_c=False, _d=drawer, _btn=btn):
+                opening = _d.isHidden()
+                _d.setVisible(opening)
+                # Section collapse/expand reads this to restore the drawer's
+                # own open state instead of forcing it open.
+                _d.setProperty("drawer_open", opening)
+                _btn.setIcon(
+                    _icon("chevron-down" if opening else "chevron-right", color=TEXT_MUTED, size=14)
+                )
+
+            btn.clicked.connect(_toggle_drawer)
+            lay.addWidget(btn)
+
+        badge = make_badge(
+            badge_text,
+            background=badge_bg,
+            foreground=badge_fg,
+            border=BORDER_SUBTLE,
+        )
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(badge)
+        copy_text = f"{label} — {value_text}"
+        if requirement:
+            copy_text += f"  ({requirement})"
+        lay.addWidget(self._finding_overflow_button(copy_text))
+
+        if requirement:
+            frame.setToolTip(
+                requirement + t("detail.metadata_check.value_tooltip", value=value_text)
+            )
+        else:
+            frame.setToolTip(value_text)
+        self._meta_row_widgets.append((frame, idx))
+        return frame, drawer
+
+    def _meta_drawer(self, entries: list[tuple[str, str, list]]) -> QFrame:
+        """Build the inline expansion for a compound field, one block per entry."""
+        frame = QFrame()
+        frame.setObjectName("AutoCheckRow")
+        frame.setStyleSheet(
+            surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+        )
+        lay = QVBoxLayout(frame)
+        lay.setContentsMargins(38, 6, 12, 8)
+        lay.setSpacing(6)
+        for label, summary, subs in entries:
+            if label:
+                entry = QLabel(label)
+                entry.setObjectName("LabelStrongSM")
+                lay.addWidget(entry)
+                if summary:
+                    lay.addWidget(make_caption_label(summary))
+            for sub_label, sub_value in subs:
+                lay.addWidget(
+                    make_caption_label(
+                        t(
+                            "checks.check_text.detail_line",
+                            label=sub_label,
+                            value=sub_value,
+                        )
+                    )
+                )
+        return frame
+
+    def _meta_section_header(self, label: str, counts_text: str):
+        """Block heading: chevron + bold label + counts; click toggles the block."""
+        from PySide6.QtCore import QSize
+
+        from ui.icons import icon as _icon
+
+        frame = QFrame()
+        frame.setObjectName("MetaSectionHeader")
+        lay = QHBoxLayout(frame)
+        lay.setContentsMargins(2, 4, 2, 2)
+        lay.setSpacing(6)
+        chev = QLabel()
+        chev.setFixedSize(20, 20)
+        chev.setPixmap(_icon("chevron-down", color=TEXT_MUTED, size=14).pixmap(QSize(16, 16)))
+        btn = make_action_button(label, kind="ghost", size="sm")
+        counts = make_caption_label(counts_text)
+        lay.addWidget(chev)
+        lay.addWidget(btn)
+        lay.addWidget(counts)
+        lay.addStretch(1)
+        return frame, btn, chev
+
+    def _clear_meta_body(self) -> None:
+        lay = self._meta_body_lay
+        while lay.count():
+            item = lay.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.deleteLater()
+        self._meta_row_results = []
+        self._meta_row_widgets = []
+
+    def _meta_pending_row(self) -> QFrame:
+        """Return the placeholder shown until completeness has been evaluated."""
+        frame = QFrame()
+        frame.setObjectName("AutoCheckRow")
+        frame.setStyleSheet(
+            surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+        )
+        lay = QHBoxLayout(frame)
+        lay.setContentsMargins(10, 8, 10, 8)
+        lay.setSpacing(8)
+        from ui.icons import icon_label as _icon_label
+
+        lay.addWidget(_icon_label("database", size=16, color=TEXT_MUTED))
+        lay.addWidget(make_small_body_label(t("detail.metadata_check.pending_body")), 1)
+        btn = make_action_button(t("detail.header.load_metadata"), kind="secondary", size="sm")
+        btn.clicked.connect(lambda _c=False: self._on_load_metadata())
+        lay.addWidget(btn)
+        return frame

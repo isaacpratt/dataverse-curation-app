@@ -2,13 +2,45 @@
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QLabel
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+)
 
+from curation.storage import finding_key
+from ui.check_titles import (
+    check_summary,
+    check_title,
+)
 from ui.dataset.helpers import _pill_state
 from ui.dataset.state import DetailState
 from ui.i18n import t
-from ui.theme import ACCENT_PRIMARY, selectable_labels
-from ui.widgets import make_small_body_label, set_badge_label
+from ui.theme import (
+    ACCENT_PRIMARY,
+    BORDER_SUBTLE,
+    FONT_BODY,
+    STATE_ERROR_BG,
+    STATE_ERROR_BORDER,
+    STATE_SUCCESS_GRAPHIC,
+    STATE_WARNING_GRAPHIC,
+    SURFACE_CARD,
+    SURFACE_SUBTLE,
+    SURFACE_TINT,
+    TEXT_AMBER,
+    TEXT_DANGER,
+    TEXT_MUTED,
+    TEXT_SUCCESS,
+    selectable_labels,
+    status_strip_qss,
+    surface_frame_qss,
+)
+from ui.widgets import (
+    make_action_button,
+    make_small_body_label,
+    set_badge_label,
+)
 
 
 class HeaderSection(DetailState):
@@ -144,6 +176,7 @@ class HeaderSection(DetailState):
                 if w is not None:
                     w.deleteLater()
             if not files:
+                self._finding_keys = []
                 if (
                     self._inventory is not None
                     and len(self._inventory) == 0
@@ -151,10 +184,10 @@ class HeaderSection(DetailState):
                 ):
                     ph = make_small_body_label(t("detail.auto_checks.no_files_in_dataverse"))
                     # A measured zero, not a placeholder — name it (2026-10-02 P2).
-                    self._auto_summary.setText(t("detail.auto_checks.no_file_checks"))
+                    self._set_auto_summary(t("detail.auto_checks.no_file_checks"))
                 else:
                     ph = make_small_body_label(t("detail.auto_checks.no_file_list"))
-                    self._auto_summary.setText(t("detail.auto_checks.not_run"))
+                    self._set_auto_summary(t("detail.auto_checks.not_run"))
                 self._auto_body.addWidget(ph)
                 return
             # Count will_run
@@ -166,7 +199,7 @@ class HeaderSection(DetailState):
                     c for f in self._report.files for c in f.checks
                 ]
                 summary = summarize(all_results)
-                self._auto_summary.setText(
+                self._set_auto_summary(
                     t(
                         "detail.auto_checks.summary_counts",
                         passed=summary["passed"],
@@ -175,8 +208,40 @@ class HeaderSection(DetailState):
                         skipped=summary["skipped"],
                     )
                 )
+                from engine.status import classify
+
+                # Findings carry a stable disposition key (dv-32x): failed
+                # rows get an inline disposition combo; passes/skips don't.
+                finding_keys: list[str] = []
                 for c in self._report.dataset_checks:
-                    row = self._auto_row(c.check_id, c.message, c.passed, c.level)
+                    kind = classify(c)
+                    key = (
+                        finding_key(c.check_id, "", c.message)
+                        if kind in ("failed-error", "failed-warning")
+                        else ""
+                    )
+                    if key:
+                        finding_keys.append(key)
+                    detail_lines = None
+                    if c.check_id == "metadata.readme_sections":
+                        secs = (c.details or {}).get("sections")
+                        if isinstance(secs, list):
+                            detail_lines = [
+                                (
+                                    str(s.get("label") or s.get("id") or ""),
+                                    bool(s.get("found")),
+                                )
+                                for s in secs
+                                if isinstance(s, dict)
+                            ]
+                    row = self._auto_row(
+                        check_title(c.check_id),
+                        check_summary(c),
+                        c.passed,
+                        c.level,
+                        disposition_key=key,
+                        detail_lines=detail_lines,
+                    )
                     try:
                         from ui.checks_tree import format_details_tooltip
 
@@ -189,8 +254,6 @@ class HeaderSection(DetailState):
                 # skipped checks (missing library) that did not run.
                 # Passes stay in the manifest tree only — they are the
                 # bulk and the tree shows them per file.
-                from engine.status import classify
-
                 file_findings = [
                     (f, c)
                     for f in self._report.files
@@ -199,28 +262,41 @@ class HeaderSection(DetailState):
                 ]
                 for f, c in file_findings:
                     kind = classify(c)
+                    # dv-dcd: the heading is the check's name and the caption
+                    # says what was found — never the check_id or the raw
+                    # "<filename>: <engine return>" message.
                     desc = t(
                         "detail.auto_checks.file_result_format",
                         path=f.path,
-                        message=c.message,
+                        message=check_summary(c, f.path),
                     )
                     if kind == "skipped":
                         row = self._auto_row(
-                            c.check_id,
+                            check_title(c.check_id),
                             desc,
                             True,
                             "warning",
                             badge=t("status.badges.skipped"),
                         )
                     else:
-                        row = self._auto_row(c.check_id, desc, c.passed, c.level)
+                        key = finding_key(c.check_id, f.path, c.message)
+                        finding_keys.append(key)
+                        row = self._auto_row(
+                            check_title(c.check_id),
+                            desc,
+                            c.passed,
+                            c.level,
+                            disposition_key=key,
+                        )
                     try:
                         from ui.checks_tree import format_details_tooltip
 
-                        row.setToolTip(format_details_tooltip(c))
+                        row.setToolTip(format_details_tooltip(c, f.path))
                     except Exception:
                         pass
                     self._auto_body.addWidget(row)
+                self._finding_keys = finding_keys
+                self._refresh_finding_summary()
                 if (
                     not self._report.dataset_checks
                     and not file_findings
@@ -232,7 +308,8 @@ class HeaderSection(DetailState):
             else:
                 # Only checks that will actually run for this dataset's
                 # files (checks with no matching files are not listed).
-                self._auto_summary.setText(t("detail.auto_checks.will_run", count=will))
+                self._finding_keys = []
+                self._set_auto_summary(t("detail.auto_checks.will_run", count=will))
                 if not will:
                     ph = make_small_body_label(t("detail.auto_checks.no_matching_checks"))
                     self._auto_body.addWidget(ph)
@@ -253,32 +330,39 @@ class HeaderSection(DetailState):
                         "format.xlsx": "openpyxl",
                     }
                     pip_pkg = lib_map.get(p["check_id"], "")
-                    missing = ""
+                    missing = False
                     if pip_pkg:
                         try:
                             __import__(pip_pkg if pip_pkg != "Pillow" else "PIL")
                         except ImportError:
-                            missing = t("detail.auto_checks.missing_pip", package=pip_pkg)
-                    status = missing or t("detail.auto_checks.will_run_badge")
-                    # Interpret for row styling: missing = warn, else pass tone
+                            missing = True
+                    applies = t(
+                        "detail.auto_checks.will_run_applies",
+                        file_types=p.get("file_types") or t("common.em_dash"),
+                    )
+                    # dv-dcd: name the check, explain what it will look at,
+                    # and say plainly when its optional library is absent.
                     if missing:
                         row = self._auto_row(
-                            p["check_id"],
-                            p["description"],
+                            check_title(p["check_id"]),
+                            t(
+                                "detail.auto_checks.missing_detail",
+                                applies=applies,
+                                package=pip_pkg,
+                            ),
                             False,
                             "warning",
                             badge=t("detail.auto_checks.badge_missing"),
                         )
                     else:
                         row = self._auto_row(
-                            p["check_id"],
-                            p["description"],
+                            check_title(p["check_id"]),
+                            applies,
                             True,
                             "info",
-                            badge=t("detail.auto_checks.badge_pass"),
+                            badge=t("detail.auto_checks.will_run_badge"),
                         )
-                    # Add subtitle with file_types + status
-                    row.setToolTip(f"{p['description']}\n\n{status}")
+                    row.setToolTip(applies)
                     self._auto_body.addWidget(row)
         except Exception:
             pass
@@ -287,9 +371,43 @@ class HeaderSection(DetailState):
         except Exception:
             pass
 
-    def _set_status(self, msg: str) -> None:
-        self._status.setText(msg)
-        self._status.setVisible(bool(msg))
+    def _set_status(self, msg: str, tone: str = "info") -> None:
+        """Set the status strip. tone: info (quiet) | success | error.
+
+        Success/error wear body-size high-contrast text and an icon so a
+        confirmation reads at a glance (dv-3wc); the message persists
+        until the next _set_status call (no timers).
+        """
+        text = str(msg or "")
+        visible = bool(text)
+        self._status.setText(text)
+        try:
+            from ui.icons import icon as _icon
+
+            if tone == "success":
+                color, name = TEXT_SUCCESS, "check"
+            elif tone == "error":
+                color, name = TEXT_DANGER, "x"
+            else:
+                color, name = None, None
+            if name is not None:
+                self._status_icon.setPixmap(_icon(name, color=color, size=16).pixmap(16, 16))
+                self._status_icon.show()
+            else:
+                self._status_icon.hide()
+            self._status.setStyleSheet(
+                status_strip_qss(
+                    SURFACE_CARD,
+                    BORDER_SUBTLE,
+                    color or TEXT_MUTED,
+                    font_size=FONT_BODY,
+                    weight=600 if name is not None else None,
+                )
+            )
+        except Exception:
+            pass
+        self._status.setVisible(visible)
+        self._status_row.setVisible(visible)
 
     @staticmethod
     def _dress_pill(pill: QLabel, text: str, label: str) -> None:
@@ -316,3 +434,103 @@ class HeaderSection(DetailState):
             self._ring.hide()
         except Exception:
             pass
+
+    def _build_verdict_card(self) -> QFrame:
+        """Readiness banner (dv-6nv): one synthesized answer, top of page."""
+        from ui.icons import icon as _icon
+
+        card = QFrame()
+        card.setObjectName("VerdictCard")
+        lay = QHBoxLayout(card)
+        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setSpacing(10)
+        self._verdict_icon = QLabel()
+        try:
+            self._verdict_icon.setPixmap(_icon("circle-dashed", color=TEXT_MUTED).pixmap(18, 18))
+        except Exception:
+            pass
+        lay.addWidget(self._verdict_icon)
+        self._verdict_label = QLabel(t("detail.verdict.level_unreviewed"))
+        self._verdict_label.setObjectName("LabelStrongSM")
+        self._verdict_label.setTextFormat(Qt.TextFormat.RichText)
+        self._verdict_label.setWordWrap(True)
+        lay.addWidget(self._verdict_label)
+        lay.addStretch(1)
+        self._verdict_chips = QHBoxLayout()
+        self._verdict_chips.setSpacing(6)
+        lay.addLayout(self._verdict_chips)
+        card.setToolTip(t("detail.verdict.banner_tip"))
+        return card
+
+    def _refresh_verdict(self) -> None:
+        """Recompute + paint the readiness banner from in-memory state."""
+        try:
+            from engine.verdict import assess
+            from ui.icons import icon as _icon
+
+            verdict = assess(
+                self._report,
+                self._completeness_full,
+                self._dispositions_map(),
+            )
+            faces = {
+                "ready": (SURFACE_TINT, STATE_SUCCESS_GRAPHIC, TEXT_SUCCESS, "check"),
+                "revisions": (SURFACE_TINT, STATE_WARNING_GRAPHIC, TEXT_AMBER, "octagon-alert"),
+                "blocked": (STATE_ERROR_BG, STATE_ERROR_BORDER, TEXT_DANGER, "octagon-x"),
+                "unreviewed": (SURFACE_SUBTLE, BORDER_SUBTLE, TEXT_MUTED, "circle-dashed"),
+            }
+            bg, border, ink, icon_name = faces.get(verdict.level, faces["unreviewed"])
+            self._verdict_card.setStyleSheet(
+                surface_frame_qss(bg, border, selector="QFrame#VerdictCard")
+            )
+            try:
+                self._verdict_icon.setPixmap(_icon(icon_name, color=ink).pixmap(18, 18))
+            except Exception:
+                pass
+            self._verdict_label.setText(
+                f"<span style='color: {ink};'>"
+                + t(_VERDICT_LEVEL_KEYS.get(verdict.level, "detail.verdict.level_unreviewed"))
+                + "</span>"
+            )
+            while self._verdict_chips.count():
+                item = self._verdict_chips.takeAt(0)
+                w = item.widget() if item is not None else None
+                if w is not None:
+                    w.setParent(None)  # unparent now; deleteLater is async
+                    w.deleteLater()
+            for reason in verdict.reasons:
+                key = _VERDICT_REASON_KEYS.get(reason.key)
+                if not key:
+                    continue
+                chip = make_action_button(t(key, count=reason.count), kind="chip", size="sm")
+                chip.setToolTip(t("detail.verdict.banner_tip"))
+                chip.clicked.connect(lambda _c=False, tgt=reason.target: self._on_verdict_chip(tgt))
+                self._verdict_chips.addWidget(chip)
+        except Exception:
+            pass
+
+    def _on_verdict_chip(self, target: str) -> None:
+        """Navigate to the card that owns a selected reason chip."""
+        try:
+            if target == "respond":
+                self._show_response_page()
+            elif target:
+                self._goto_section(target)
+        except Exception:
+            pass
+
+
+_VERDICT_REASON_KEYS = {
+    "required-missing": "detail.verdict.reason_required",
+    "optional-missing": "detail.verdict.reason_optional",
+    "errors": "detail.verdict.reason_errors",
+    "warnings": "detail.verdict.reason_warnings",
+    "sensitivity": "detail.verdict.reason_sensitivity",
+}
+
+_VERDICT_LEVEL_KEYS = {
+    "ready": "detail.verdict.level_ready",
+    "revisions": "detail.verdict.level_revisions",
+    "blocked": "detail.verdict.level_blocked",
+    "unreviewed": "detail.verdict.level_unreviewed",
+}

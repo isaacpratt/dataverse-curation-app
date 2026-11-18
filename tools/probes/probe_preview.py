@@ -29,7 +29,7 @@ def _stage_content(tmp: Path) -> tuple[Path, Path]:
 
 
 def main() -> int:
-    app, cfg = boot()
+    app, _cfg = boot()
     from PySide6.QtWidgets import QMainWindow, QVBoxLayout, QWidget
 
     report = Report("preview card at 960px")
@@ -74,7 +74,10 @@ def main() -> int:
         f"min={card.minimumSizeHint().width()}",
     )
 
-    card.set_path(big, rel="big.csv", )
+    card.set_path(
+        big,
+        rel="big.csv",
+    )
     for _ in range(6):
         app.processEvents()
     report.check(card._open_btn.isVisible(), "too-large file offers the Open folder fallback")

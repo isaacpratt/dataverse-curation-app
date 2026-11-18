@@ -2,14 +2,28 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import (
+    Qt,
+    QTimer,
+)
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ui import dialogs
 from ui.dataset.state import DetailState
 from ui.i18n import t
-from ui.theme import FONT_BODY, TEXT_AMBER, TEXT_DANGER
+from ui.theme import (
+    FONT_BODY,
+    TEXT_AMBER,
+    TEXT_DANGER,
+)
 from ui.widgets import (
     add_info_tip,
     make_action_button,
@@ -66,6 +80,7 @@ class ResponseSection(DetailState):
             _h,
             t("detail.response.findings_tip"),
             name=t("detail.response.findings_card"),
+            group="Respond",
         )
         self._response_list = make_list()
         self._response_list.setMinimumHeight(240)
@@ -78,6 +93,7 @@ class ResponseSection(DetailState):
             _h2,
             t("detail.response.draft_tip"),
             name=t("detail.response.draft_a11y"),
+            group="Respond",
         )
         self._response_edit = make_multiline_input(
             t("detail.response.draft_placeholder"),
@@ -108,6 +124,9 @@ class ResponseSection(DetailState):
         cols.addWidget(draft_card, 2)
 
         lay.addLayout(cols, 1)
+
+        self._sensitivity_card = self._build_sensitivity_card()
+        lay.addWidget(self._sensitivity_card)
 
         # Assessment Action (moved from the review-page sidebar): the
         # response workflow reads left-to-right, top-to-bottom —
@@ -183,6 +202,7 @@ class ResponseSection(DetailState):
                 self._report,
                 self._title,
                 self._pid,
+                dispositions=self._dispositions_map(),
             )
             self._response_sections = sections
             self._rebuild_findings_list(keep_checks=False)
@@ -384,7 +404,7 @@ class ResponseSection(DetailState):
             from PySide6.QtWidgets import QApplication
 
             QApplication.clipboard().setText(self._response_edit.toPlainText())
-            self._set_status(t("detail.status.response_copied"))
+            self._set_status(t("detail.status.response_copied"), tone="success")
         except Exception:
             pass
 
@@ -444,7 +464,7 @@ class ResponseSection(DetailState):
             t("detail.status.response_saved_log", name=out.name),
             {"path": str(out)},
         )
-        self._set_status(t("detail.status.response_saved", name=out.name))
+        self._set_status(t("detail.status.response_saved", name=out.name), tone="success")
 
     def _response_draft_path(self):
         try:

@@ -12,9 +12,6 @@ from collections import deque
 from datetime import datetime
 
 _LOCK = threading.Lock()
-_BUFFER: deque[str] = deque(maxlen=2000)
-
-_logger = logging.getLogger("curation_app")
 
 
 _REDACT_PATTERNS = [
@@ -34,6 +31,12 @@ _REDACT_PATTERNS = [
     # URLs with ?key=/token=/api_key= query params.
     (re.compile(r"([?&](?:key|token|api_key)=)[^&\s]*", re.IGNORECASE), r"\1***"),
 ]
+
+
+_BUFFER: deque[str] = deque(maxlen=2000)
+
+
+_logger = logging.getLogger("dataverse_docent")
 
 
 def _redact(message: str) -> str:
@@ -77,7 +80,7 @@ def get_app_log() -> type["AppLog"]:
 
 
 class AppLog:
-    """Namespace used by the Dataverse client for structured logging."""
+    """Namespace used by dataverse_client for structured logging."""
 
     @staticmethod
     def warn(message: str) -> None:
@@ -107,8 +110,30 @@ class AppLog:
         except Exception:
             pass
 
+    @staticmethod
+    def expected(message: str) -> None:
+        """Log a server answer that is the documented answer, not a bug.
 
-def log_response(method: str, url: str, status: int, elapsed_ms: int, summary: str = "") -> None:
+        The message still carries the true call and response; the EXPECTED
+        word only says the refusal is expected for that endpoint (for
+        example a draft this account may not read). The Log page paints
+        these in the muted tone instead of the error red.
+        """
+        log(f"EXPECTED: {message}")
+        try:
+            _logger.info(_redact(message))
+        except Exception:
+            pass
+
+
+def log_response(
+    method: str,
+    url: str,
+    status: int,
+    elapsed_ms: int,
+    summary: str = "",
+    context: str = "",
+) -> None:
     """Log one completed HTTP response (method, url, status code, elapsed ms)."""
     # Strip query-string secrets from URLs before storing.
     try:
@@ -122,4 +147,9 @@ def log_response(method: str, url: str, status: int, elapsed_ms: int, summary: s
     msg = f"{method} {safe_url} → {status} ({elapsed_ms} ms)"
     if summary:
         msg += f" — {summary}"
+    if context:
+        # Context is appended, never substituted: the call, the status and
+        # the timing stay exactly as the server answered them. The marker
+        # is the same word the Log page paints in the muted tone.
+        msg += f" — EXPECTED: {context}"
     log(msg)

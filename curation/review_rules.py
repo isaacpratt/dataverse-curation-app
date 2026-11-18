@@ -23,11 +23,57 @@ Schema (requirements_profiles.json v2):
          "case_sensitive": false,
          "response_template": "..."}
       ],
+      "section_rules": [
+        {"id": "overview", "label": "Dataset & file overview",
+         "level": "required|optional", "probes": ["overview", "about"]}
+      ],
       "filecheck_templates": {"<check_id>": "...", "*": "..."},
-      "response_header": "...", "response_footer": "..."
+      "response_header": "...", "response_footer": "...",
+      "requires_sensitivity": true
     }
   }
 }
+
+Optional per-ruleset ``"requires_sensitivity": true`` (dv-3c2) marks the
+ruleset's collections as requiring the sensitivity & ethics review
+(sensitivity.py) before an Approve decision can commit.
+
+Optional per-ruleset ``"section_rules"`` (dv-81q) overrides the README
+section list the depth check scores (see ``DEFAULT_README_SECTIONS``);
+when absent, the built-in five sections apply.
+
+Field rule handlers accept an optional ``"params"`` object (dv-5id). The
+general-purpose ``"looks_correct"`` handler checks that a value is not just
+present but plausibly correct. Supported params (all optional, all tolerant
+of sloppy JSON: numbers as strings, lists as comma/newline-separated text):
+
+  min_length            int   — plain fields: concatenated text shorter than
+                                this fails; dotted compound paths: every
+                                entry fails its own minimum
+  regex                 str   — value (or text leaf) must match; search mode
+                                unless ``"regex_mode": "full"`` (fullmatch)
+  regex_mode            str   — "search" (default) or "full"
+  blocklist             list  — case-insensitive substring phrases to reject
+  not_common_placeholders bool — built-in list of obvious placeholders
+                                (lorem ipsum, todo, tbd, no description, …)
+  not_all_caps          bool  — rejects values written entirely in caps
+  controlled_vocabulary list  — every nonempty text leaf must equal a token
+                                (case-insensitive); a vacuous payload with no
+                                checkable value fails closed
+  date                  bool  — every text leaf must be a parseable date
+                                (ISO: YYYY, YYYY-MM, YYYY-MM-DD, or ISO
+                                datetimes)
+  date_order            bool  — compound field: per item, the ``start``- and
+                                ``end``-named children must parse to dates in
+                                order (start <= end). Nothing to compare
+                                fails closed.
+  url                   bool  — http(s) scheme and a dotted hostname
+
+Every looks_correct failure carries a bracketed reason in the displayed
+value (e.g. ``"… [too short: 12 of 50 characters]"``) so a result is never a
+silent pass, and an empty value reports incomplete. An invalid ``regex``
+pattern fails the rule closed with ``[rule error: …]`` instead of raising;
+a looks_correct rule with no effective checks also fails closed.
 
 Built-ins (mcmaster-default, minimal) reproduce the legacy hard-coded
 McMaster/Minimal checks exactly (same labels + requirement strings), so a
@@ -39,18 +85,102 @@ from __future__ import annotations
 import fnmatch
 import json as _json
 import re
+from datetime import date as _date
+from datetime import datetime as _datetime
 from pathlib import Path
 from typing import Any
 
 RULESETS_VERSION = 2
 
-# Memo for load_rulesets(): {"sig": (path, mtime_ns, size), "pool": {...}}.
-# Shared read-only result — see load_rulesets docstring.
+
 _RULESETS_MEMO: dict[str, Any] = {}
 
+
 FIELD_LEVELS = ("required", "optional", "unchecked")
+
+
 CONTENT_SCOPES = ("filenames", "metadata", "file-content")
+
+
 CONTENT_MATCHES = ("filename-glob", "substring", "regex")
+
+
+DEFAULT_README_SECTIONS: list[dict[str, Any]] = [
+    {
+        "id": "overview",
+        "label": "Dataset & file overview",
+        "level": "required",
+        "probes": ["overview", "description", "about", "summary", "purpose", "what is"],
+    },
+    {
+        "id": "files",
+        "label": "File inventory & naming",
+        "level": "required",
+        "probes": ["file", "inventory", "folder", "directory", "contents", "naming", "structure"],
+    },
+    {
+        "id": "methods",
+        "label": "Methodology",
+        "level": "required",
+        "probes": [
+            "method",
+            "procedure",
+            "protocol",
+            "instrument",
+            "sampling",
+            "data collection",
+            "processing",
+            "experiment",
+        ],
+    },
+    {
+        "id": "missing",
+        "label": "Missing-data codes",
+        "level": "optional",
+        "probes": ["missing", "sentinel", "n/a", "not applicable", "blank", "null"],
+    },
+    {
+        "id": "access",
+        "label": "Sharing, access & licensing",
+        "level": "required",
+        "probes": [
+            "access",
+            "licen",
+            "sharing",
+            "reuse",
+            "terms",
+            "restriction",
+            "citation",
+            "contact",
+            "rights",
+        ],
+    },
+]
+
+
+def readme_sections(ruleset: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Section rules for the README depth check, defaults when unset."""
+    raw = (ruleset or {}).get("section_rules") if isinstance(ruleset, dict) else None
+    if not isinstance(raw, list) or not raw:
+        raw = DEFAULT_README_SECTIONS
+    out: list[dict[str, Any]] = []
+    for rule in raw:
+        if not isinstance(rule, dict) or not rule.get("id"):
+            continue
+        probes = rule.get("probes")
+        if not isinstance(probes, list):
+            probes = [str(rule.get("label") or rule["id"])]
+        out.append(
+            {
+                "id": str(rule["id"]),
+                "label": str(rule.get("label") or rule["id"]),
+                "level": rule.get("level")
+                if rule.get("level") in ("required", "optional")
+                else "required",
+                "probes": [str(p).lower() for p in probes if str(p).strip()],
+            }
+        )
+    return out or [dict(rule) for rule in DEFAULT_README_SECTIONS]
 
 
 def _rule_scopes(rule: dict[str, Any]) -> list[str]:
@@ -69,8 +199,7 @@ def _rule_scopes(rule: dict[str, Any]) -> list[str]:
 
 DEFAULT_RULESET_KEY = "mcmaster-default"
 
-# Fallback catalog used when the live metadatablocks schema is unavailable
-# (offline / no permission). The Review-config page prefers the live schema.
+
 FIELD_CATALOG: list[dict[str, str]] = [
     {"block": "citation", "field": "title", "label": "Title"},
     {"block": "citation", "field": "author", "label": "Author"},
@@ -152,10 +281,6 @@ def rulesets_path() -> Path:
             except Exception:
                 pass
         return Path(_file_name())
-
-
-# --------------------------------------------------------------------------
-# Built-ins (mirror the legacy hard-coded checks)
 
 
 def _mc_req(text: str) -> str:
@@ -349,12 +474,14 @@ def _builtin_mcmaster() -> dict[str, Any]:
         "dataverses": ["*"],
         "field_rules": field_rules,
         "content_rules": content_rules,
+        "section_rules": [dict(r) for r in DEFAULT_README_SECTIONS],
         "filecheck_templates": {
             "*": "{check_id}: {message}",
             "inventory.zero_byte": "The file '{path}' is empty (0 bytes). Please remove it or upload the complete file.",
             "inventory.unchecked_types": "Some files need manual review: {message}",
             "inventory.restricted_files": "The dataset has {message}. Please confirm the access conditions for these files.",
             "inventory.embargoed_files": "The dataset has {message}. Please confirm the embargo date and terms of access.",
+            "metadata.readme_sections": "The README is missing these standard sections: {readme_sections}. Please add them so the data can be reused without contacting you.",
         },
         "response_header": (
             "Hello,\n\nThank you for depositing your dataset ({dataset_title}, {persistent_id}). "
@@ -406,11 +533,7 @@ def builtin_rulesets() -> dict[str, dict[str, Any]]:
     return {"mcmaster-default": _builtin_mcmaster(), "minimal": _builtin_minimal()}
 
 
-# --------------------------------------------------------------------------
-# Load / save
-
-
-def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
+def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     if not isinstance(raw, dict):
         return None
     builtin = builtin_rulesets().get(key, {})
@@ -420,6 +543,9 @@ def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
         "dataverses": raw.get("dataverses", builtin.get("dataverses", ["*"])),
         "field_rules": raw.get("field_rules", builtin.get("field_rules", [])),
         "content_rules": raw.get("content_rules", builtin.get("content_rules", [])),
+        "section_rules": raw.get(
+            "section_rules", builtin.get("section_rules", DEFAULT_README_SECTIONS)
+        ),
         "filecheck_templates": raw.get(
             "filecheck_templates", builtin.get("filecheck_templates", {})
         ),
@@ -432,6 +558,8 @@ def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
         out["field_rules"] = []
     if not isinstance(out["content_rules"], list):
         out["content_rules"] = []
+    if not isinstance(out["section_rules"], list):
+        out["section_rules"] = [dict(r) for r in DEFAULT_README_SECTIONS]
     if not isinstance(out["filecheck_templates"], dict):
         out["filecheck_templates"] = {}
     # Copy rule dicts: normalization fills defaults in place and must never
@@ -442,6 +570,11 @@ def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
     out["content_rules"] = [
         dict(r) for r in out["content_rules"] if isinstance(r, dict) and r.get("id")
     ]
+    out["section_rules"] = [
+        dict(r) for r in out["section_rules"] if isinstance(r, dict) and r.get("id")
+    ]
+    if not out["section_rules"]:
+        out["section_rules"] = [dict(r) for r in DEFAULT_README_SECTIONS]
     out["filecheck_templates"] = dict(out["filecheck_templates"])
     out["dataverses"] = list(out["dataverses"])
     for r in out["field_rules"]:
@@ -465,6 +598,14 @@ def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:
         r.setdefault("pattern", "")
         r.setdefault("case_sensitive", False)
         r.setdefault("response_template", "")
+    for r in out["section_rules"]:
+        if r.get("level") not in ("required", "optional"):
+            r["level"] = "required"
+        r.setdefault("label", str(r.get("id") or ""))
+        probes = r.get("probes")
+        if not isinstance(probes, list):
+            probes = [str(r.get("label") or r.get("id") or "")]
+        r["probes"] = [str(p) for p in probes if str(p).strip()]
     return out
 
 
@@ -580,10 +721,6 @@ def rulesets_for_dataverse(
         return [(DEFAULT_RULESET_KEY, b[DEFAULT_RULESET_KEY])]
 
 
-# --------------------------------------------------------------------------
-# Evaluation (imports metadata_check lazily to avoid a cycle)
-
-
 def _mc() -> Any:
     from curation import metadata_check as _m
 
@@ -617,7 +754,8 @@ def _leaf_text(node: Any) -> str:
     node = _unwrap(node)
     if node is None:
         return ""
-    if isinstance(node, list):
+    if isinstance(node, (list, dict)):
+        # Never leak a dict repr into a verdict; a composite leaf is no text.
         return ""
     if isinstance(node, bool):
         return "true" if node else "false"
@@ -740,6 +878,327 @@ def _orcid_dotted(m: Any, blocks: dict[str, Any], block: str, field: str) -> tup
     return (not missing), shown
 
 
+_LC_PLACEHOLDERS = (
+    "lorem ipsum",
+    "lorem",
+    "todo",
+    "tbd",
+    "no description",
+    "no description yet",
+    "placeholder",
+    "sample text",
+    "sample data",
+    "asdf",
+    "xxx",
+    "test test",
+    "enter description",
+    "your description",
+    "fill me in",
+    "n/a (no",
+)
+
+
+def _lc_strlist(value: Any) -> list[str]:
+    """Normalise a token list param: list, or comma/semicolon/newline text."""
+    if isinstance(value, list):
+        parts = [str(x) for x in value]
+    elif isinstance(value, str):
+        parts = re.split(r"[\n,;]+", value)
+    else:
+        parts = []
+    return [p.strip() for p in parts if p and str(p).strip()]
+
+
+def _lc_params(rule: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """Tolerant params for a looks_correct rule.
+
+    Returns (params, error). Tolerance is for sloppy JSON (numbers as
+    strings, lists as comma/newline-separated text), never for values
+    that would silently disable a configured check: anything unusable
+    fails the rule closed with a bracketed rule error instead.
+    """
+    p = rule.get("params") if isinstance(rule, dict) else None
+    p = p if isinstance(p, dict) else {}
+    error = ""
+    raw_min = p.get("min_length")
+    min_length = 0
+    if raw_min not in (None, "", 0):
+        try:
+            min_length = int(raw_min)
+            if min_length < 0:
+                error = f"min_length must be >= 0, got {raw_min!r}"
+        except (TypeError, ValueError):
+            error = f"invalid min_length {raw_min!r}"
+    regex = str(p.get("regex") or "").strip()
+    mode = str(p.get("regex_mode") or "search").strip().lower()
+    if "regex_mode" in p and mode not in ("search", "full"):
+        error = error or f"invalid regex_mode {p.get('regex_mode')!r}"
+    return {
+        "min_length": max(0, min_length),
+        "regex": regex,
+        "regex_mode": "full" if mode == "full" else "search",
+        "blocklist": [b.lower() for b in _lc_strlist(p.get("blocklist"))],
+        "controlled_vocabulary": _lc_strlist(p.get("controlled_vocabulary")),
+        "not_common_placeholders": bool(p.get("not_common_placeholders")),
+        "not_all_caps": bool(p.get("not_all_caps")),
+        "date": bool(p.get("date")),
+        "date_order": bool(p.get("date_order")),
+        "url": bool(p.get("url")),
+    }, error
+
+
+def _lc_clip(text: Any, limit: int = 60) -> str:
+    s = re.sub(r"\s+", " ", str(text if text is not None else "")).strip()
+    return s if len(s) <= limit else s[: limit - 1] + "…"
+
+
+def _lc_partial_date(text: str) -> _date | None:
+    """Parse ISO-ish dates: YYYY, YYYY-MM, YYYY-MM-DD, or ISO datetimes."""
+    s = " ".join(str(text or "").split()).strip()
+    if not s:
+        return None
+    head = s.split("T", 1)[0].split(" ", 1)[0].strip()
+    m = re.match(r"^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$", head)
+    try:
+        if m:
+            year = int(m.group(1))
+            month = int(m.group(2) or 1)
+            day = int(m.group(3) or 1)
+            return _date(year, month, day)
+        dt = _datetime.fromisoformat(s.replace("Z", "+00:00").replace("z", "+00:00"))
+        return dt.date()
+    except ValueError:
+        return None
+
+
+def _lc_url_ok(text: str) -> bool:
+    from urllib.parse import urlsplit
+
+    try:
+        u = urlsplit(str(text or "").strip())
+    except Exception:
+        return False
+    if u.scheme.lower() not in ("http", "https"):
+        return False
+    host = u.hostname or ""
+    return "." in host and not host.startswith(".") and not host.endswith(".")
+
+
+def _lc_texts_of(node: Any) -> list[str]:
+    """Every nonempty text leaf below a value, wrappers unwrapped."""
+    out: list[str] = []
+
+    def walk(v: Any) -> None:
+        v = _unwrap(v)
+        if v is None or isinstance(v, (bool, int, float)):
+            return
+        if isinstance(v, str):
+            s = v.strip()
+            if s:
+                out.append(s)
+            return
+        if isinstance(v, dict):
+            for vv in v.values():
+                walk(vv)
+            return
+        if isinstance(v, list):
+            for item in v:
+                walk(item)
+
+    walk(node)
+    return out
+
+
+def _lc_key_side(key: Any) -> str | None:
+    """'start'/'end' when a key carries a whole-word side token.
+
+    Word-token match: ``restarts`` doesn't count as start, and camelCase
+    boundaries split ``timePeriodCoveredStart``/``startDateTime`` cleanly.
+    """
+    words = re.split(
+        r"[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])",
+        str(key or ""),
+    )
+    low = {w.lower() for w in words if w}
+    if "start" in low:
+        return "start"
+    if "end" in low:
+        return "end"
+    return None
+
+
+def _lc_text_checks(texts: list[str], p: dict[str, Any], per_leaf: bool = False) -> str:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    """Per-leaf checks; returns the first bracketed reason or "".
+
+    ``per_leaf`` applies to dotted compound paths ("author.affiliation"):
+    every entry is its own unit (an affiliation of "W" fails its own
+    minimum). Plain multi-value fields measure the concatenated content,
+    which is what a description's "at least 50 characters" means.
+    """
+    if p["min_length"]:
+        if per_leaf:
+            for text in texts:
+                if len(text) < p["min_length"]:
+                    return f"too short: {len(text)} of {p['min_length']} characters"
+        else:
+            total = len(" ".join(texts).strip())
+            if total < p["min_length"]:
+                return f"too short: {total} of {p['min_length']} characters"
+    rx = p["regex"]
+    if rx:
+        try:
+            compiled = re.compile(rx)
+        except re.error:
+            return f"rule error: invalid regex {rx!r}"
+        for text in texts:
+            matched = (
+                compiled.fullmatch(text) if p["regex_mode"] == "full" else compiled.search(text)
+            )
+            if not matched:
+                return f"does not match {rx!r}"
+    for text in texts:
+        low = text.lower()
+        if p["not_common_placeholders"]:
+            for phrase in _LC_PLACEHOLDERS:
+                if phrase in low:
+                    return f"placeholder text: {phrase!r}"
+        if p["not_all_caps"]:
+            cased = [c for c in text if c.isalpha()]
+            if cased and all(c.isupper() for c in cased) and len(cased) >= 2:
+                return "all caps"
+        if p["blocklist"]:
+            for phrase in p["blocklist"]:
+                if phrase in low:
+                    return f"blocked phrase: {phrase!r}"
+        if p["controlled_vocabulary"]:
+            vocab = {v.strip().lower() for v in p["controlled_vocabulary"]}
+            if low not in vocab:
+                return f"not in vocabulary: {_lc_clip(text)}"
+        if p["date"] and _lc_partial_date(text) is None:
+            return f"date not parseable: {_lc_clip(text)}"
+        if p["url"] and not _lc_url_ok(text):
+            return f"not a plausible URL: {_lc_clip(text)}"
+    return ""
+
+
+def _looks_correct(
+    m: Any, blocks: dict[str, Any], block: str, field: str, rule: dict[str, Any]
+) -> tuple[bool, str]:
+    """Entry-correctness verdict for a field rule; never raises.
+
+    Empty value -> incomplete ("—"). Every failure carries a bracketed
+    reason so a finding is never a silent pass. A rule with no effective
+    check configured also fails closed with ``[no entry checks configured]``.
+    """
+    p, params_error = _lc_params(rule)
+    dotted = "." in str(field or "")
+    if params_error:
+        return False, f"[rule error: {params_error}]"
+    if dotted:
+        # date_order is meaningless per-leaf (it needs the compound parent);
+        # drop it so a dotted rule configured with only date_order fails
+        # closed below instead of passing untested.
+        p = dict(p, date_order=False)
+        # Dotted paths ("author.authorIdentifier") address compound children;
+        # a missing/empty leaf fails the rule like the nonempty path does.
+        leaves = _field_path(blocks, block, field) or []
+        texts = [_leaf_text(x) for x in leaves]
+        if not texts or any(not t for t in texts):
+            return False, "—"
+        shown = _leaves_value(leaves)
+        raw = None
+    else:
+        raw = m._field(blocks, block, field)
+        texts = _lc_texts_of(raw)
+        if not texts:
+            return False, "—"
+        shown = m._display_value(raw)
+
+    if not any(_lc_effective(p)):
+        return False, f"{shown} [no entry checks configured]"
+
+    residual = p
+    if p["date_order"] and not dotted:
+        shown_pairs, reason = _lc_date_order(raw, p)
+        if reason:
+            return False, f"{shown_pairs or shown} [{reason}]"
+        shown = shown_pairs or shown
+        # The range check ran; do not charge the same dates twice.
+        residual = dict(p, date_order=False)
+
+    if any(_lc_effective(residual)):
+        reason = _lc_text_checks(
+            texts,
+            residual,
+            per_leaf=dotted,
+        )
+        if reason:
+            return False, f"{shown} [{reason}]"
+    return True, shown
+
+
+def _lc_effective(p: dict[str, Any]) -> list[bool]:
+    return [
+        bool(p["min_length"]),
+        bool(p["regex"]),
+        bool(p["blocklist"]),
+        bool(p["controlled_vocabulary"]),
+        bool(p["not_common_placeholders"]),
+        bool(p["not_all_caps"]),
+        bool(p["date"]),
+        bool(p["url"]),
+        bool(p["date_order"]),
+    ]
+
+
+def _lc_date_order(raw: Any, p: dict[str, Any]) -> tuple[str, str]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    """Per item in a compound field: start-named <= end-named children.
+
+    An item carrying a start without an end (or vice versa) is a partial
+    pair: it never silently passes. When no complete pair exists at all,
+    the rule fails closed and says how many entries were one-sided.
+    """
+    items = raw if isinstance(raw, list) else [raw]
+    pairs: list[tuple[str, str]] = []
+    partial = 0
+    for item in items:
+        if not isinstance(item, dict):
+            item = _unwrap(item)
+        if not isinstance(item, dict):
+            continue
+        sides = {side: key for key in item for side in (_lc_key_side(key),) if side}
+        start_key, end_key = sides.get("start"), sides.get("end")
+        if start_key is None or end_key is None:
+            if start_key is not None or end_key is not None:
+                partial += 1
+            continue
+        st = _leaf_text(item.get(start_key))
+        en = _leaf_text(item.get(end_key))
+        if st and en:
+            pairs.append((st, en))
+        else:
+            partial += 1
+    if not pairs:
+        if partial:
+            return (
+                "",
+                f"no complete date range ({partial} one-sided {'entry' if partial == 1 else 'entries'})",
+            )
+        return "", "no checkable value for date range"
+    shown = "; ".join(f"{st} → {en}" for st, en in pairs[:3])
+    if len(pairs) > 3:
+        shown += f" (+{len(pairs) - 3} more)"
+    for st, en in pairs:
+        d1, d2 = _lc_partial_date(st), _lc_partial_date(en)
+        if d1 is None:
+            return shown, f"date not parseable: {_lc_clip(st)}"
+        if d2 is None:
+            return shown, f"date not parseable: {_lc_clip(en)}"
+        if d1 > d2:
+            return shown, f"date range reversed: {_lc_clip(st)} is after {_lc_clip(en)}"
+    return shown, ""
+
+
 def _eval_handler(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     handler: str,
     metadata: dict[str, Any],
@@ -757,9 +1216,13 @@ def _eval_handler(  # noqa: C901 - grandfathered; complexity burns down as dv-hc
     if "." in str(field or ""):
         if handler == "orcid":
             return _orcid_dotted(m, blocks, block, field)
+        if handler == "looks_correct":
+            return _looks_correct(m, blocks, block, field, rule)
         leaves = _field_path(blocks, block, field) or []
         ok = bool(leaves) and all(m._nonempty(_unwrap(x)) for x in leaves)
         return ok, _leaves_value(leaves)
+    if handler == "looks_correct":
+        return _looks_correct(m, blocks, block, field, rule)
     if handler == "nonempty":
         raw = m._field(blocks, block, field)
         return m._nonempty(raw), m._display_value(raw)
@@ -1101,8 +1564,6 @@ def _match_file_content(rule: dict[str, Any], staged_dir: Any) -> tuple[bool | N
     return result
 
 
-# Suffixes never worth decoding as text (checked by byte search instead of
-# burning time on decoded binary mush that also risks false positives).
 _BINARY_SUFFIXES = frozenset(
     {
         ".sav",
@@ -1154,11 +1615,16 @@ _BINARY_SUFFIXES = frozenset(
     }
 )
 
+
 _MAX_CONTENT_FILES = 100
+
+
 _MAX_CONTENT_BYTES = 1 << 20
+
+
 _MAX_CONTENT_FILE_SIZE = 5 * 1024 * 1024
 
-# Memo for _match_file_content: {(root, sig, pattern, match, case): result}.
+
 _CONTENT_MEMO: dict[Any, tuple[bool | None, str]] = {}
 
 
@@ -1315,14 +1781,40 @@ def evaluate_content_rule(
     }
 
 
-def evaluate_ruleset(
+def evaluate_ruleset(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     metadata: dict[str, Any],
     ruleset: dict[str, Any],
     inventory: list[dict[str, Any]] | None = None,
     staged_dir: Any = None,
+    include_unchecked: bool = False,
 ) -> list[dict[str, Any]]:
-    """Run every enabled rule. 'unchecked' field rules are skipped. Never raises."""
+    """Run every enabled rule. Never raises.
+
+    ``'unchecked'`` field rules are skipped by default — no rule runs on a
+    field the curator said not to check. With ``include_unchecked=True`` a
+    display-only ``status="skipped"`` row is synthesized for each unchecked
+    rule (level ``unchecked``, value ``—``) so the UI can offer a "not
+    checked" view; they carry no verdict and no disposition key.
+    """
     results: list[dict[str, Any]] = []
+    # Pre-scan: ids of the checked field rules, so a synthesized unchecked
+    # row never duplicates a rule the curator actually enabled (the checked
+    # row wins ties). Also dedupes the synthesized rows themselves.
+    field_rules_raw = [
+        fr for fr in (ruleset or {}).get("field_rules") or [] if isinstance(fr, dict)
+    ]
+    checked_ids: set[str] = set()
+    for fr in field_rules_raw:
+        if (fr.get("level") or "required") == "unchecked":
+            continue
+        block = str(fr.get("block") or "citation")
+        field = str(fr.get("field") or "")
+        handler = str(fr.get("handler") or "nonempty")
+        rid = f"field:{block}.{field}"
+        if handler != "nonempty":
+            rid += f":{handler}"
+        checked_ids.add(rid)
+    checked_seen: set[str] = set(checked_ids)  # checked ids + synthesized ids
     try:
         blocks = _blocks(metadata or {})
     except Exception:
@@ -1343,23 +1835,40 @@ def evaluate_ruleset(
         try:
             if not isinstance(fr, dict):
                 continue
-            if (fr.get("level") or "required") == "unchecked":
-                continue
             block = str(fr.get("block") or "citation")
             field = str(fr.get("field") or "")
             label = str(fr.get("label") or field)
             req = str(fr.get("requirement") or "")
             level = fr.get("level") if fr.get("level") in ("required", "optional") else "required"
             handler = str(fr.get("handler") or "nonempty")
-            ok, val = _eval_handler(
-                handler, metadata or {}, blocks, block, field, fr, inventory=inventory
-            )
             # rule_id carries the handler: several rules may share one field
             # (author names vs ORCiDs both live on citation.author) and the
             # Response findings list keys off rule_id.
             rule_id = f"field:{block}.{field}"
             if handler != "nonempty":
                 rule_id += f":{handler}"
+            if (fr.get("level") or "required") == "unchecked":
+                if include_unchecked and rule_id not in checked_seen:
+                    checked_seen.add(rule_id)
+                    results.append(
+                        {
+                            "rule_id": rule_id,
+                            "kind": "field",
+                            "field": label,
+                            "requirement": req,
+                            "value": "—",
+                            "status": "skipped",
+                            "level": "unchecked",
+                            "pending": False,
+                            "response_template": str(fr.get("response_template") or ""),
+                            "block": block,
+                            "name": field,
+                        }
+                    )
+                continue
+            ok, val = _eval_handler(
+                handler, metadata or {}, blocks, block, field, fr, inventory=inventory
+            )
             results.append(
                 {
                     "rule_id": rule_id,
@@ -1375,8 +1884,27 @@ def evaluate_ruleset(
                     "name": field,
                 }
             )
-        except Exception:
-            continue
+        except Exception as exc:
+            # A crashing rule must surface as a finding, never vanish —
+            # a missing required row is a silent pass.
+            try:
+                results.append(
+                    {
+                        "rule_id": rule_id,
+                        "kind": "field",
+                        "field": label,
+                        "requirement": req,
+                        "value": f"[rule error: {_lc_clip(exc)}]",
+                        "status": "incomplete",
+                        "level": level,
+                        "pending": False,
+                        "response_template": str(fr.get("response_template") or ""),
+                        "block": block,
+                        "name": field,
+                    }
+                )
+            except Exception:
+                continue
     for cr in (ruleset or {}).get("content_rules") or []:
         try:
             if not isinstance(cr, dict):

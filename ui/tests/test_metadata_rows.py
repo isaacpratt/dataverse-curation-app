@@ -25,31 +25,40 @@ def _metadata() -> dict:
                 "citation": {
                     "fields": [
                         {"typeName": "title", "value": "A study"},
-                        {"typeName": "author", "value": [
-                            {
-                                "authorName": _fv("Ada Lovelace"),
-                                "authorAffiliation": _fv("Analytical Engine Lab"),
-                                "authorIdentifierScheme": _fv("ORCID"),
-                                "authorIdentifier": _fv("0000-0002-1825-0097"),
-                            },
-                            {
-                                "authorName": _fv("Grace Hopper"),
-                                "authorAffiliation": _fv(""),
-                            },
-                        ]},
-                        {"typeName": "datasetContact", "value": [
-                            {
-                                "datasetContactName": _fv("Ada Lovelace"),
-                                "datasetContactAffiliation": _fv("Analytical Engine Lab"),
-                                "datasetContactEmail": _fv("ada@example.org"),
-                            }
-                        ]},
-                        {"typeName": "dsDescription", "value": [
-                            {
-                                "dsDescriptionValue": _fv("A description."),
-                                "dsDescriptionDate": _fv("2026-01-01"),
-                            }
-                        ]},
+                        {
+                            "typeName": "author",
+                            "value": [
+                                {
+                                    "authorName": _fv("Ada Lovelace"),
+                                    "authorAffiliation": _fv("Analytical Engine Lab"),
+                                    "authorIdentifierScheme": _fv("ORCID"),
+                                    "authorIdentifier": _fv("0000-0002-1825-0097"),
+                                },
+                                {
+                                    "authorName": _fv("Grace Hopper"),
+                                    "authorAffiliation": _fv(""),
+                                },
+                            ],
+                        },
+                        {
+                            "typeName": "datasetContact",
+                            "value": [
+                                {
+                                    "datasetContactName": _fv("Ada Lovelace"),
+                                    "datasetContactAffiliation": _fv("Analytical Engine Lab"),
+                                    "datasetContactEmail": _fv("ada@example.org"),
+                                }
+                            ],
+                        },
+                        {
+                            "typeName": "dsDescription",
+                            "value": [
+                                {
+                                    "dsDescriptionValue": _fv("A description."),
+                                    "dsDescriptionDate": _fv("2026-01-01"),
+                                }
+                            ],
+                        },
                         {"typeName": "subject", "value": ["Computer and Information Science"]},
                         {"typeName": "depositor", "value": "Ada Lovelace"},
                         {"typeName": "dateOfDeposit", "value": "2026-01-02"},
@@ -62,8 +71,8 @@ def _metadata() -> dict:
 
 @pytest.fixture
 def detail(qapp, tmp_path):
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     cfg = Config()
     cfg.app.workspace = Path(tmp_path)
@@ -156,7 +165,9 @@ def test_author_entries_expand_in_the_drawer(detail):
     entry_heads = [line for line in labels if line.startswith("Author ")]
     assert entry_heads == ["Author 1", "Author 2"]
     assert any(line.startswith("Name: Ada Lovelace") for line in labels)
-    assert any(line.startswith("Affiliation: —") for line in labels), "an empty affiliation must stay visible"
+    assert any(line.startswith("Affiliation: —") for line in labels), (
+        "an empty affiliation must stay visible"
+    )
     # toggle back
     chevrons[0].click()
     assert drawer.isHidden()
@@ -190,7 +201,7 @@ def pending_detail(qapp, tmp_path, monkeypatch):
     That rule cannot be evaluated (no staged dir), so the engine returns a
     pending row — a real gap, not a finding; the row must not read as one.
     """
-    import review_rules as _rr
+    import curation.review_rules as _rr
 
     target = tmp_path / "requirements_profiles.json"
     monkeypatch.setattr(_rr, "rulesets_path", lambda: target)
@@ -204,20 +215,26 @@ def pending_detail(qapp, tmp_path, monkeypatch):
         "field_rules": [dict(base["field_rules"][0])],
         "content_rules": [
             {
-                "id": "content-scan", "label": "Content scan",
-                "level": "required", "requirement": "probe pending rule",
-                "scope": ["file-content"], "match": "substring",
-                "pattern": "zebra", "case_sensitive": False,
+                "id": "content-scan",
+                "label": "Content scan",
+                "level": "required",
+                "requirement": "probe pending rule",
+                "scope": ["file-content"],
+                "match": "substring",
+                "pattern": "zebra",
+                "case_sensitive": False,
                 "response_template": "zebra",
             }
         ],
-        "filecheck_templates": {}, "response_header": "hi", "response_footer": "bye",
+        "filecheck_templates": {},
+        "response_header": "hi",
+        "response_footer": "bye",
     }
     pool["pending-probe"] = probe
     _rr.save_rulesets(pool)
 
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     cfg = Config()
     cfg.app.workspace = Path(tmp_path)
@@ -229,6 +246,7 @@ def pending_detail(qapp, tmp_path, monkeypatch):
         cached_inventory=[],
     )
     view._profile = "pending-probe"
+    assert view._metadata is not None
     view._populate_completeness(view._metadata)
     for _ in range(5):
         qapp.processEvents()
@@ -245,7 +263,7 @@ def test_pending_row_renders_muted_without_disposition(pending_detail):
     row = pending[0]
     assert "Pending" in _labels_in(row)
     assert not row.findChildren(QComboBox), "a pending row carries no disposition combo"
-    assert row.contextMenuPolicy() != Qt.CustomContextMenu, (
+    assert row.contextMenuPolicy() != Qt.ContextMenuPolicy.CustomContextMenu, (
         "a pending row must not carry the right-click disposition menu"
     )
     # Required level, but no money-test bar and no error face for pending.
@@ -293,13 +311,21 @@ def test_complete_filter_rebuilds_the_rows(detail):
 
 
 def test_unchecked_filter_shows_ghost_rows(detail):
-    detail._unchecked_results = [{
-        "rule_id": "field:citation.title", "kind": "field",
-        "field": "Title", "requirement": "off by ruleset",
-        "value": "—", "status": "skipped", "level": "unchecked",
-        "pending": False, "response_template": "",
-        "block": "citation", "name": "title",
-    }]
+    detail._unchecked_results = [
+        {
+            "rule_id": "field:citation.title",
+            "kind": "field",
+            "field": "Title",
+            "requirement": "off by ruleset",
+            "value": "—",
+            "status": "skipped",
+            "level": "unchecked",
+            "pending": False,
+            "response_template": "",
+            "block": "citation",
+            "name": "title",
+        }
+    ]
     detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("unchecked"))
     rows = _rows(detail)
     assert [w.property("meta_field") for w in rows] == ["Title"]
@@ -307,7 +333,8 @@ def test_unchecked_filter_shows_ghost_rows(detail):
     # The ghost row never leaks into the default or Complete views
     detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("all"))
     fields = [w.property("meta_field") for w in _rows(detail)]
-    assert fields and "Title" in fields
+    assert fields
+    assert "Title" in fields
     assert _labels_in(_row(detail, "Title")) != ["—"]
 
 
@@ -315,7 +342,7 @@ def test_section_headers_group_the_blocks(detail):
     from PySide6.QtWidgets import QPushButton
 
     lay = detail._meta_body_lay
-    buttons = []
+    buttons: list = []
     for i in range(lay.count()):
         widget = lay.itemAt(i).widget()
         if widget is not None and widget.objectName() == "MetaSectionHeader":
@@ -328,7 +355,8 @@ def test_section_toggles_collapse_the_block(detail):
 
     lay = detail._meta_body_lay
     header = next(
-        lay.itemAt(i).widget() for i in range(lay.count())
+        lay.itemAt(i).widget()
+        for i in range(lay.count())
         if lay.itemAt(i).widget() is not None
         and lay.itemAt(i).widget().objectName() == "MetaSectionHeader"
     )
@@ -346,7 +374,8 @@ def test_drawer_keeps_its_open_state_across_section_collapse(detail):
 
     lay = detail._meta_body_lay
     header = next(
-        lay.itemAt(i).widget() for i in range(lay.count())
+        lay.itemAt(i).widget()
+        for i in range(lay.count())
         if lay.itemAt(i).widget() is not None
         and lay.itemAt(i).widget().objectName() == "MetaSectionHeader"
     )
@@ -358,24 +387,29 @@ def test_drawer_keeps_its_open_state_across_section_collapse(detail):
     chevrons[0].click()
     assert not drawer.isHidden()
     btn.click()
-    assert row.isHidden() and drawer.isHidden()
+    assert row.isHidden()
+    assert drawer.isHidden()
     btn.click()
-    assert not row.isHidden() and not drawer.isHidden()
+    assert not row.isHidden()
+    assert not drawer.isHidden()
     # Close the drawer, collapse and re-expand: it stays closed.
     chevrons[0].click()
     assert drawer.isHidden()
     btn.click()
     btn.click()
-    assert not row.isHidden() and drawer.isHidden()
+    assert not row.isHidden()
+    assert drawer.isHidden()
 
 
 def test_note_without_disposition_defaults_to_acknowledged(detail, monkeypatch):
-    written = {}
+    written: dict = {}
 
     class _State:
         def list_finding_dispositions(self, pid):
-            return {key: {"disposition": tok, "note": note, "updated_at": ""}
-                    for key, (tok, note) in written.items()}
+            return {
+                key: {"disposition": tok, "note": note, "updated_at": ""}
+                for key, (tok, note) in written.items()
+            }
 
         def set_finding_disposition(self, pid, key, token, note=""):
             written[key] = (token, note)
@@ -387,10 +421,11 @@ def test_note_without_disposition_defaults_to_acknowledged(detail, monkeypatch):
             pass
 
     monkeypatch.setattr(detail, "_state", lambda: _State())
-    import PySide6.QtWidgets as _qw
+    from PySide6 import QtWidgets
 
     monkeypatch.setattr(
-        _qw.QInputDialog, "getMultiLineText",
+        QtWidgets.QInputDialog,
+        "getMultiLineText",
         staticmethod(lambda *a, **kw: ("looks fine manually", True)),
     )
     detail._dispositions_cache = {}

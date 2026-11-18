@@ -14,10 +14,21 @@ from typing import Any
 import requests
 
 from curation.applog import get_app_log
+from curation.client.access import _mark_readable, _mark_restricted
 from curation.client.constants import _RETRYABLE_NETWORK, _STREAM_CHUNK
-from curation.client.errors import DownloadCancelled, GuestbookRequired, _RetryOriginal
+from curation.client.errors import (
+    DownloadCancelled,
+    GuestbookRequired,
+    _RetryOriginal,
+    _with_refusal,
+)
 from curation.client.http import _error_message, _throttle_delay
-from curation.client.parsers import _summarize_version_data, is_draft_dataset
+from curation.client.parsers import (
+    _summarize_version_data,
+    _version_last_update,
+    is_draft_dataset,
+)
+from curation.client.refusals import probe_skip_reason, version_probe_order
 
 
 class _DownloadsMixin:
@@ -34,12 +45,21 @@ class _DownloadsMixin:
         identifier: str,
         version: str = "draft",
         fall_back_on_auth: bool = False,
+        order: list[str] | None = None,
     ) -> tuple[dict[str, Any], str, list[str]]:
         """Fetch the raw `data` payload for one dataset version.
 
         Tries `version` first (correct lowercase, e.g. `:draft`), then
         `:latest` / `:latest-published`, then an unversioned metadata read.
         Returns `(data, used_version, tried)`.
+
+        `order` overrides that sequence with an explicit list of version
+        specifiers — the dashboard enrichment passes the order derived from
+        the search payload, so the app never asks for a version the search
+        already ruled out (a :draft probe on a published dataset is always
+        answered "not permitted"). An empty list means "probe no version":
+        the unversioned dataset read answers with the version the account
+        may see, in one call. `None` keeps the default sequence.
 
         With `fall_back_on_auth=False` (the default, used for the actual
         check inventory) an auth failure (401/403) fails fast — retrying
@@ -50,21 +70,29 @@ class _DownloadsMixin:
         failure on one version only means "you may not see that
         version" — a published dataset has no readable draft, and a
         guest token cannot see drafts at all. Enrichment then tries the
-        next version, and raises only if EVERY version was refused (which
-        does mean the token itself is bad).
+        next version. When EVERY version was refused, the unversioned
+        dataset read decides: if that answers, the account can see the
+        dataset but not its versions (an expected, version-scoped refusal);
+        only a refusal there too means the dataset is out of reach.
         """
         tried: list[str] = []
-        auth_errors: list[Exception] = []
-        for ver in (version, "latest", "latest-published"):
+        auth_errors: list[tuple[Exception, str, int]] = []
+        candidates = list(order) if order is not None else [version, "latest", "latest-published"]
+        for ver in candidates:
             api_version = ver if ver.startswith(":") else f":{ver.lower()}"
+            vpath = (
+                f"/api/datasets/:persistentId/versions/{api_version}"
+                if ":" in identifier
+                else f"/api/datasets/{identifier}/versions/{api_version}"
+            )
             try:
                 if ":" in identifier:
                     payload = self._get_json(
-                        f"/api/datasets/:persistentId/versions/{api_version}",
+                        vpath,
                         params={"persistentId": identifier},
                     )
                 else:
-                    payload = self._get_json(f"/api/datasets/{identifier}/versions/{api_version}")
+                    payload = self._get_json(vpath)
                 return payload.get("data", {}), api_version, tried
             except requests.HTTPError as exc:
                 resp = getattr(exc, "response", None)
@@ -75,9 +103,8 @@ class _DownloadsMixin:
                         # Auth failure: do not silently try other versions.
                         raise
                     # "You may not see this version" — remember it and try
-                    # the next one. A refusal on EVERY version means the
-                    # token itself is bad, which the caller must know.
-                    auth_errors.append(exc)
+                    # the next one.
+                    auth_errors.append((exc, vpath, status))
                     get_app_log().info(
                         f"Version {api_version} not readable for {identifier} "
                         f"({status}), trying next version"
@@ -89,10 +116,27 @@ class _DownloadsMixin:
                     )
                     continue
                 raise
-        # Every version was refused (401/403) — the token cannot read this
-        # dataset at all. Surface it so the caller can abort the batch.
+        # Every version was refused (401/403). Before calling it a token
+        # failure, try the unversioned read: the account may see the
+        # dataset itself while every version of it stays out of reach —
+        # that is an expected refusal, not a broken token.
         if auth_errors:
-            raise auth_errors[-1]
+            try:
+                payload = self._get_json(
+                    "/api/datasets/:persistentId"
+                    if ":" in identifier
+                    else f"/api/datasets/{identifier}",
+                    params={"persistentId": identifier} if ":" in identifier else None,
+                )
+            except requests.HTTPError as exc:
+                resp = getattr(exc, "response", None)
+                status = resp.status_code if resp is not None else 0
+                if status not in (401, 403):
+                    raise
+                # The dataset itself is out of reach for this account.
+                raise _with_refusal(auth_errors[-1]) from None
+            data = payload.get("data", {})
+            return data, "unversioned", tried
         # fallback: try without version (latest published)
         payload = self._get_json(
             "/api/datasets/:persistentId" if ":" in identifier else f"/api/datasets/{identifier}",
@@ -113,27 +157,42 @@ class _DownloadsMixin:
         """Patch thin search rows with live inventory sums + depositor + state.
 
         For each row lacking `total_size_bytes`, fetches one version doc
-        (`:draft`, falling back like `get_file_inventory`) and patches
-        `total_size_bytes` (summed), `file_count` (only when the search
-        value is falsy), `depositor` (only when the version carries one),
-        `state` (never clobbering an "In Review" lock confirmation), and
-        `has_draft` (set True when the `:draft` doc answers). Patched rows
-        get `size_enriched=True`; rows beyond `max_rows` keep thin data and
-        get `size_pending=True` so the UI can say so. Never embeds file
-        arrays — sums and counts only.
+        and patches `total_size_bytes` (summed), `file_count` (only when the
+        search value is falsy), `depositor` (only when the version carries
+        one), `state` (never clobbering an "In Review" lock confirmation),
+        and `has_draft` (set True when the `:draft` doc answers). Patched
+        rows get `size_enriched=True`; rows beyond `max_rows` keep thin
+        data and get `size_pending=True` so the UI can say so. Never
+        embeds file arrays — sums and counts only.
+
+        The version probed comes from the search payload (see
+        `version_probe_order`): the dataset read alone answers for a
+        published or deaccessioned row (one call), and a row under
+        curation is probed at `:draft` first, because that is the only
+        version a curator cares about. Rows the account may not read are
+        marked, not dropped: they carry an `access` fact with the machine
+        reason code and the server's own message, so the dashboard can
+        say why.
 
         Drafts go first so a capped run enriches curation candidates before
         published rows. Per-item isolation: one dataset's failure never
-        fails the batch. Auth failure (401/403) aborts the remaining
-        queue — every later item would fail the same way. Never raises;
-        returns {"attempted", "enriched", "pending", "auth_failed"}.
+        fails the batch, and a refusal on one dataset never stops the
+        others (the search call already proved the token works). Never
+        raises; returns {"attempted", "enriched", "pending", "auth_failed",
+        "restricted"}.
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         try:
             rows = [d for d in (datasets or []) if isinstance(d, dict)]
         except Exception:
-            return {"attempted": 0, "enriched": 0, "pending": 0, "auth_failed": 0}
+            return {
+                "attempted": 0,
+                "enriched": 0,
+                "pending": 0,
+                "auth_failed": 0,
+                "restricted": 0,
+            }
         candidates = [
             ds
             for ds in rows
@@ -156,18 +215,35 @@ class _DownloadsMixin:
             "enriched": 0,
             "pending": len(candidates) - len(todo),
             "auth_failed": 0,
+            "restricted": 0,
         }
         if not todo:
             return result
 
         def _fetch_one(ds: dict[str, Any]) -> tuple[dict[str, Any], tuple[Any, ...]]:
             pid = str(ds.get("persistent_id") or "")
+            # The search payload already says which versions can exist —
+            # probe only those (a :draft probe on a published dataset is
+            # always answered "not permitted").
+            order = version_probe_order(ds)
+            skip_reason = probe_skip_reason(ds)
+            if skip_reason:
+                get_app_log().info(f"Skipping version probes for {pid}: {skip_reason}")
             # fall_back_on_auth: a published dataset has no readable draft
             # and a guest token cannot see drafts at all — fall through to
             # the published version instead of failing the dataset.
-            data, used_version, _tried = self._fetch_version_data(pid, fall_back_on_auth=True)
+            data, used_version, _tried = self._fetch_version_data(
+                pid, fall_back_on_auth=True, order=order
+            )
             files, depositor, state, files_known = _summarize_version_data(data)
-            return ds, (files, depositor, state, used_version, files_known)
+            return ds, (
+                files,
+                depositor,
+                state,
+                used_version,
+                files_known,
+                _version_last_update(data),
+            )
 
         def _auth_denied(exc: BaseException) -> bool:
             try:
@@ -196,13 +272,24 @@ class _DownloadsMixin:
                         _ds, summary = fut.result()
                     except Exception as exc:
                         if _auth_denied(exc):
-                            result["auth_failed"] = 1
-                            for f in futures:
-                                f.cancel()
-                            break
+                            # The dataset is out of reach for this account.
+                            # That is an expected answer, not a broken
+                            # token: mark the row and keep going.
+                            _mark_restricted(ds, exc)
+                            result["restricted"] += 1
+                            continue
                         continue
                     try:
-                        files, depositor, state, used_version, files_known = summary
+                        (
+                            files,
+                            depositor,
+                            state,
+                            used_version,
+                            files_known,
+                            last_update,
+                        ) = summary
+                        if last_update:
+                            ds["draft_updated_at"] = last_update
                         if files_known:
                             ds["total_size_bytes"] = sum(
                                 int(f.get("size_bytes") or 0) for f in files
@@ -220,8 +307,11 @@ class _DownloadsMixin:
                             ds["depositor"] = depositor
                         if state and "REVIEW" not in str(ds.get("state") or "").upper():
                             ds["state"] = state
-                        if used_version == ":draft":
+                        if used_version == ":draft" or str(state or "").upper() == "DRAFT":
+                            # The dataset read answers with the draft when
+                            # the account may see it — that is a draft.
                             ds["has_draft"] = True
+                        _mark_readable(ds, used_version, str(ds.get("state") or ""))
                         result["enriched"] += 1
                     except Exception:
                         continue
@@ -491,23 +581,6 @@ class _DownloadsMixin:
                 "exists on this Dataverse and that the API token can access it."
             )
         return dest
-
-    def get_tabular_ingest_status(self, file_id: str) -> dict[str, Any]:
-        """Tabular ingest status for one file (GET /api/files/{id}/ingestStatus).
-
-        Returns {"status": str, "error": str} with "" on unavailable/failed
-        calls — never raises (ingest status is advisory UI data).
-        """
-        try:
-            payload = self._get_json(f"/api/files/{file_id}/ingestStatus")
-        except Exception:
-            return {"status": "", "error": ""}
-        data = payload.get("data") if isinstance(payload, dict) else None
-        if not isinstance(data, dict):
-            return {"status": "", "error": ""}
-        status = str(data.get("status") or data.get("ingestStatus") or data.get("state") or "")
-        error = str(data.get("errorMessage") or data.get("error") or data.get("ingestError") or "")
-        return {"status": status, "error": error}
 
     def download_datafile_original(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         self,

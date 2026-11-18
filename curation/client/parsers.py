@@ -790,3 +790,22 @@ def parse_dataset_versions(data: Any) -> list[dict[str, str]]:
             }
         )
     return out
+
+
+def _version_last_update(data: Any) -> str:
+    """Best-effort version ``lastUpdateTime`` from a version payload (dv-5eg).
+
+    Used to tell whether the depositor touched the draft since a
+    revisions-requested decision; "" when the server did not say.
+    """
+    try:
+        version_data = _version_files_data(data)
+        if isinstance(version_data, dict):
+            ts = str(version_data.get("lastUpdateTime") or "")
+            if ts:
+                return ts
+        if isinstance(data, dict):
+            return str(data.get("lastUpdateTime") or "")
+    except Exception:
+        pass
+    return ""

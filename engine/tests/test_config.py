@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from curation import config as cfg_module
+import curation.config as cfg_module
 from curation.config import DEFAULT_CONFIG_PATH, Config
 
 
@@ -343,7 +343,7 @@ def test_chmod_failure_logs_warning_without_token(
 ) -> None:
     import os
 
-    from curation import applog
+    import curation.applog as applog
 
     def _boom(_path: Path, _mode: str) -> None:
         raise OSError("read-only filesystem")
@@ -365,7 +365,7 @@ def test_icacls_failure_logs_warning_without_token(
 ) -> None:
     import subprocess
 
-    from curation import applog
+    import curation.applog as applog
 
     class _Out:
         returncode = 1

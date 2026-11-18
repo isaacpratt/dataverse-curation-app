@@ -1,19 +1,17 @@
 """Finding dispositions (dv-32x): finding_key stability, storage round-trip, and the response-draft exclusion of "Won't fix" findings."""
 
-import ui.widgets as widgets
-from engine.checks.base import CheckResult
-from engine.report import DatasetReport, FileEntry
 from curation.response_draft import (
     build_response,
     collect_filecheck_sections,
     collect_metadata_sections,
 )
 from curation.storage import (
-    DISPOSITION_TOKENS,
     RESOLVED_DISPOSITIONS,
     AppState,
     finding_key,
 )
+from engine.checks.base import CheckResult
+from engine.report import DatasetReport, FileEntry
 
 # ---------------------------------------------------------------- keys
 
@@ -36,9 +34,8 @@ class TestFindingKey:
         key = finding_key("authorAffiliation", "", "McMaster — Recommended")
         assert key == finding_key("authorAffiliation", "", "McMaster — Recommended ")
 
-    def test_tokens_match_kit(self):
-        """Storage and the widget kit must agree on the canonical tokens."""
-        assert widgets.DISPOSITION_TOKENS == DISPOSITION_TOKENS
+    # The kit/storage token agreement is checked in ui/tests (it
+    # legitimately imports the kit, the engine must stay Qt-free).
 
 
 # ------------------------------------------------------------- storage
@@ -50,6 +47,7 @@ class TestStorageRoundTrip:
         key = finding_key("format.csv.pii", "a.csv", "2 emails")
         st.set_finding_disposition("pid", key, "wontfix", "contact person")
         got = st.get_finding_disposition("pid", key)
+        assert got is not None
         assert got["disposition"] == "wontfix"
         assert got["note"] == "contact person"
         assert list(st.list_finding_dispositions("pid")) == [key]
@@ -61,6 +59,7 @@ class TestStorageRoundTrip:
         st.set_finding_disposition("pid", key, "acknowledged", "")
         st.set_finding_disposition("pid", key, "blocked", "waiting on IRB")
         got = st.get_finding_disposition("pid", key)
+        assert got is not None
         assert got["disposition"] == "blocked"
         assert got["note"] == "waiting on IRB"
         st.close()
@@ -81,6 +80,7 @@ class TestStorageRoundTrip:
         st.close()
         st2 = AppState(tmp_path / "state.db")
         got = st2.get_finding_disposition("pid", key)
+        assert got is not None
         assert got["disposition"] == "fix-requested"
         st2.close()
 
@@ -98,7 +98,7 @@ class TestStorageRoundTrip:
         st.close()
 
     def test_resolved_set(self):
-        assert RESOLVED_DISPOSITIONS == frozenset({"acknowledged", "wontfix"})
+        assert frozenset({"acknowledged", "wontfix"}) == RESOLVED_DISPOSITIONS
 
 
 # ------------------------------------------------------- response draft
@@ -110,25 +110,43 @@ def _report() -> DatasetReport:
         label="Example",
         engine_version="test",
         dataset_checks=[
-            CheckResult(check_id="inventory.extensions", level="warning",
-                        passed=False, message="1 executable file"),
+            CheckResult(
+                check_id="inventory.extensions",
+                level="warning",
+                passed=False,
+                message="1 executable file",
+            ),
         ],
         files=[
-            FileEntry(path="a.csv", size_bytes=10, mime_type="text/csv",
-                      checks=[
-                          CheckResult(check_id="format.csv.pii", level="warning",
-                                      passed=False, message="2 emails found"),
-                      ]),
+            FileEntry(
+                path="a.csv",
+                size_bytes=10,
+                mime_type="text/csv",
+                checks=[
+                    CheckResult(
+                        check_id="format.csv.pii",
+                        level="warning",
+                        passed=False,
+                        message="2 emails found",
+                    ),
+                ],
+            ),
         ],
     )
 
 
 def _completeness() -> list[dict]:
     return [
-        {"field": "Affiliation", "rule_id": "authorAffiliation",
-         "requirement": "McMaster — Recommended", "value": "—",
-         "status": "incomplete", "level": "required", "pending": False,
-         "response_template": ""},
+        {
+            "field": "Affiliation",
+            "rule_id": "authorAffiliation",
+            "requirement": "McMaster — Recommended",
+            "value": "—",
+            "status": "incomplete",
+            "level": "required",
+            "pending": False,
+            "response_template": "",
+        },
     ]
 
 
@@ -143,23 +161,27 @@ class TestResponseDraftExclusion:
     def test_wontfix_excluded_from_draft(self):
         disp = {
             finding_key("format.csv.pii", "a.csv", "2 emails found"): {
-                "disposition": "wontfix", "note": "contact person"},
+                "disposition": "wontfix",
+                "note": "contact person",
+            },
         }
-        md, sections = build_response({}, _completeness(), _report(), "", "",
-                                      dispositions=disp)
+        md, sections = build_response({}, _completeness(), _report(), "", "", dispositions=disp)
         assert "2 emails found" not in md
         by_key = {s["finding_key"]: s for s in sections}
         assert by_key[finding_key("format.csv.pii", "a.csv", "2 emails found")]["included"] is False
         # Other findings stay included.
-        assert by_key[finding_key("inventory.extensions", "", "1 executable file")]["included"] is True
+        assert (
+            by_key[finding_key("inventory.extensions", "", "1 executable file")]["included"] is True
+        )
 
     def test_other_dispositions_stay_included(self):
         disp = {
             finding_key("inventory.extensions", "", "1 executable file"): {
-                "disposition": "acknowledged", "note": ""},
+                "disposition": "acknowledged",
+                "note": "",
+            },
         }
-        md, sections = build_response({}, _completeness(), _report(), "", "",
-                                      dispositions=disp)
+        md, _sections = build_response({}, _completeness(), _report(), "", "", dispositions=disp)
         assert "1 executable file" in md
         assert md.strip()  # draft still renders
 
@@ -168,11 +190,18 @@ class TestResponseDraftExclusion:
         assert collect_filecheck_sections({}, _report()) != []
 
     def test_skipped_rows_emit_no_sections(self):
-        rows = _completeness() + [{
-            "field": "Subject", "rule_id": "field:citation.subject",
-            "requirement": "off", "value": "—",
-            "status": "skipped", "level": "unchecked", "pending": False,
-            "response_template": "",
-        }]
+        rows = [
+            *_completeness(),
+            {
+                "field": "Subject",
+                "rule_id": "field:citation.subject",
+                "requirement": "off",
+                "value": "—",
+                "status": "skipped",
+                "level": "unchecked",
+                "pending": False,
+                "response_template": "",
+            },
+        ]
         sections = collect_metadata_sections({}, rows)
         assert [s["label"] for s in sections] == ["Affiliation"]

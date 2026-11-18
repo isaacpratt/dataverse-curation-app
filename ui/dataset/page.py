@@ -5,8 +5,18 @@ pages, the scrolling main column and the sticky sidebar) and nothing
 else; every section's behaviour lives in its own module next door.
 """
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtCore import (
+    Qt,
+    QTimer,
+)
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from curation.client import DataverseClient
 from curation.config import Config
@@ -16,7 +26,7 @@ from ui.dataset.actions_section import ActionsSection
 from ui.dataset.checks_section import ChecksSection
 from ui.dataset.files_section import FilesSection
 from ui.dataset.header_section import HeaderSection
-from ui.dataset.helpers import _SECTION_LINKS, _format_metadata
+from ui.dataset.helpers import _format_metadata
 from ui.dataset.log_rail import LogRail
 from ui.dataset.metadata_load import MetadataLoadSection
 from ui.dataset.metadata_section import MetadataSection
@@ -25,7 +35,6 @@ from ui.dataset.state import DetailState
 from ui.dataset.versions_section import VersionsSection
 from ui.dataset.workflow_section import WorkflowSection
 from ui.i18n import t
-from ui.ring import RingProgress
 from ui.table_layout import TableLayout
 from ui.theme import (
     BORDER_SUBTLE,
@@ -41,6 +50,7 @@ from ui.theme import (
     transparent_surface_qss,
 )
 from ui.widgets import (
+    RingProgress,
     WorkflowRail,
     make_action_button,
     make_badge,
@@ -49,7 +59,11 @@ from ui.widgets import (
     make_page_heading,
     make_progress_bar,
 )
-from ui.workers import CheckWorker, DownloadWorker, MetadataWorker
+from ui.workers import (
+    CheckWorker,
+    DownloadWorker,
+    MetadataWorker,
+)
 
 
 class DatasetDetailView(
@@ -93,23 +107,31 @@ class DatasetDetailView(
         title: str,
         cached_metadata: dict | None = None,
         cached_inventory: list | None = None,
+        dataset_hint: dict | None = None,
     ) -> None:
         super().__init__()
         self._config = config
         self._pid = persistent_id
         self._title = title or persistent_id
+        # What the dashboard already knew about this dataset (the search
+        # payload's state and access facts). It saves the detail view from
+        # asking for versions that cannot exist.
+        self._dataset_hint: dict = dataset_hint if isinstance(dataset_hint, dict) else {}
         self._report = None
         self._inventory: list[dict] = cached_inventory or []
-        self._metadata: dict | None = cached_metadata
         # One declaration for the file-row table (path, size, ext, path);
         # it is filled by _populate_from_inventory and the staged scan.
         self._all_file_rows: list[tuple[str, int, str, str]] = []
+        self._metadata: dict | None = cached_metadata
         self._guestbook: dict | None = None
         self._account: dict = {}
         self._curation: dict = {}
         self._version_diff: dict | None = None
         self._versions: list = []
         self._timestamps: dict = {}
+        # Open depositor follow-up for this dataset (dv-5eg), refreshed from
+        # storage on load and after a decision commits; None when closed.
+        self._follow_up: dict | None = None
         self._review_submissions: list = []
         self._in_review: bool = False
         self._profile = DEFAULT_PROFILE
@@ -132,6 +154,16 @@ class DatasetDetailView(
         self._response_dirty = False
         self._response_loading = False
         self._response_save_timer: QTimer | None = None
+        # The first metadata load is deferred by a beat (so the view is on
+        # screen before the network calls start). It must belong to THIS
+        # view: `QTimer.singleShot` keeps a functor, not a connection, so
+        # it would still fire after the view was destroyed — calling a
+        # method on a deleted QObject aborts the process (dv-n1d).
+        self._auto_load_timer = QTimer(self)
+        self._auto_load_timer.setSingleShot(True)
+        self._auto_load_timer.timeout.connect(self._on_load_metadata)
+        # Sensitivity & ethics review (dv-3c2): answers load with the card.
+        self._sensitivity_answers: dict = {}
 
         self._client = DataverseClient(config.dataverse.base_url, config.dataverse.api_token)
         self._dl_mgr = DownloadManager(self._client, config.app.workspace)
@@ -298,21 +330,31 @@ class DatasetDetailView(
         self._history_btn.setToolTip(t("detail.header.export_reports_tip"))
         self._history_btn.clicked.connect(self._on_export)
         actions_row.addWidget(self._history_btn)
+        self._record_btn = make_action_button(
+            t("detail.header.export_record"), kind="secondary", size="md"
+        )
+        self._record_btn.setToolTip(t("detail.header.export_record_tip"))
+        self._record_btn.clicked.connect(self._on_export_record)
+        actions_row.addWidget(self._record_btn)
         self._load_meta_btn = make_action_button(
             t("detail.header.load_metadata"), kind="secondary", size="md"
         )
         self._load_meta_btn.setToolTip(t("detail.header.load_metadata_tip"))
         self._load_meta_btn.clicked.connect(self._on_load_metadata)
         actions_row.addWidget(self._load_meta_btn)
-        # Sections menu: the sidebar's navigation, reachable even when
-        # the sidebar itself is folded away on a narrow window.
-        self._sections_btn = make_action_button(t("detail.sections.title"), kind="chip")
-        self._sections_btn.setToolTip(t("detail.sidebar.sections_tip"))
-        self._sections_menu = QMenu(self._sections_btn)
-        self._sections_btn.setMenu(self._sections_menu)
-        self._sections_menu.aboutToShow.connect(self._fill_sections_menu)
-        self._sections_btn.setVisible(False)
-        actions_row.addWidget(self._sections_btn)
+        # Sidebar show/hide toggle — the one layout control for the sidebar;
+        # the rail is navigation, this is chrome (dv-6wb).
+        self._sidebar_toggle_btn = make_action_button("", kind="secondary", size="md")
+        try:
+            from ui.icons import icon as _side_icon
+
+            self._sidebar_toggle_btn.setIcon(_side_icon("chevron-right"))
+        except Exception:
+            self._sidebar_toggle_btn.setText(t("detail.sidebar.collapse_a11y"))
+        self._sidebar_toggle_btn.setToolTip(t("detail.sidebar.collapse_tip"))
+        self._sidebar_toggle_btn.setAccessibleName(t("detail.sidebar.collapse_a11y"))
+        self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
+        actions_row.addWidget(self._sidebar_toggle_btn)
         actions_col.addLayout(actions_row)
         # Run checks as primary (always enabled; warns when nothing is staged)
         self._check_btn = make_action_button(
@@ -335,17 +377,28 @@ class DatasetDetailView(
         header_row.addLayout(actions_col, 0)
         top_lay.addLayout(header_row)
 
-        # Status + progress (subtle). The strip carries body-size text
-        # (13px): it is the page's only running commentary - "Checks
-        # complete - 3 findings across 42 files" - and at caption size it
-        # was the smallest, least readable line in the app.
+        # Status + progress: a composed strip (icon slot + message) so a
+        # confirmation reads as unmissable success at a glance (dv-3wc).
+        # Info messages keep a quiet face; success/error wear the body-size
+        # high-contrast text and an icon.
+        self._status_row = QWidget()
+        self._status_row.setObjectName("StatusStrip")
+        self._status_row.setStyleSheet(transparent_surface_qss("StatusStrip"))
+        _status_lay = QHBoxLayout(self._status_row)
+        _status_lay.setContentsMargins(0, 0, 0, 0)
+        _status_lay.setSpacing(8)
+        self._status_icon = QLabel(self._status_row)
+        self._status_icon.hide()
+        _status_lay.addWidget(self._status_icon)
         self._status = QLabel("")
         self._status.setStyleSheet(
             status_strip_qss(SURFACE_CARD, BORDER_SUBTLE, TEXT_MUTED, font_size=FONT_BODY)
         )
         self._status.setWordWrap(True)
         self._status.setVisible(False)
-        top_lay.addWidget(self._status)
+        _status_lay.addWidget(self._status, 1)
+        self._status_row.hide()
+        top_lay.addWidget(self._status_row)
         self._progress = make_progress_bar(height=6)
         self._progress.setVisible(False)
         top_lay.addWidget(self._progress)
@@ -361,14 +414,23 @@ class DatasetDetailView(
         # six steps, each navigates only — no step ever runs an action.
         self._rail = WorkflowRail()
         self._rail.stepClicked.connect(self._on_workflow_step)
+        self._rail.viewToggled.connect(self._on_rail_view_toggled)
         top_lay.addWidget(self._rail)
 
         # ---- Main column content (inside main_scroll canvas) ----
-        # MAIN column: completeness → files → auto-checks → version diff
+        # MAIN column: verdict → completeness → files → auto-checks → version diff
         main_wrap = QVBoxLayout()
         main_wrap.setSpacing(20)
         main_wrap.setContentsMargins(0, 0, 0, 0)
         self._main_wrap = main_wrap
+
+        # Depositor follow-up banner (dv-5eg): shown while a revisions
+        # decision is awaiting the depositor, and again once the draft moves.
+        self._follow_up_card = self._build_follow_up_card()
+        main_wrap.addWidget(self._follow_up_card)
+
+        self._verdict_card = self._build_verdict_card()
+        main_wrap.addWidget(self._verdict_card)
 
         self._meta_card = self._build_metadata_card()
         main_wrap.addWidget(self._meta_card)
@@ -409,15 +471,19 @@ class DatasetDetailView(
         main_container.setStyleSheet(transparent_surface_qss("DetailMainContainer"))
         canvas_lay.addWidget(main_container)
 
-        # SIDEBAR (right, sticky): navigation → dataset log
+        # SIDEBAR (right, sticky): the sticky rail is the navigation map;
+        # the sidebar keeps only chrome (preview, dataset log) + fold toggle.
         # (Assessment Action moved to the Response page.)
         side_wrap = QVBoxLayout()
         side_wrap.setSpacing(20)
         side_wrap.setContentsMargins(12, 12, 24, 24)
         self._side_wrap = side_wrap
 
-        self._nav_card = self._build_nav_card()
-        side_wrap.addWidget(self._nav_card)
+        # In-app file preview (dv-koz): shows the head of the file the
+        # curator clicked in the manifest; degrades to Missing-library
+        # notices or an Open-folder fallback when it can't render.
+        self._preview_card = self._build_preview_card()
+        side_wrap.addWidget(self._preview_card)
 
         self._dataset_log_card = self._build_dataset_log_card()
         # Stretch factor 1: the log owns the sidebar's free vertical space
@@ -487,11 +553,11 @@ class DatasetDetailView(
             self._refresh_decision_options()
             self._refresh_dataset_log()
             if not session_cached:
-                QTimer.singleShot(100, self._on_load_metadata)
+                self._auto_load_timer.start(100)
         else:
             self._refresh_files_placeholder()
             self._refresh_dataset_log()
-            QTimer.singleShot(100, self._on_load_metadata)
+            self._auto_load_timer.start(100)
 
         if self._report is not None:
             # Cached checks report (auto-saved on every run): results are
@@ -529,11 +595,11 @@ class DatasetDetailView(
         except Exception:
             pass
 
+        self._install_shortcuts()
+
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._sync_sidebar()
-        # The metadata Value column tracks the card width (dv-dmv).
-        self._fit_meta_value_column()
 
     def _layout_for(self, name: str, header) -> "TableLayout":
         """Return the persisted-layout controller for a header (one per header).
@@ -607,7 +673,24 @@ class DatasetDetailView(
                 return
             self._sidebar_collapsed = collapsed
             self._side_scroll.setVisible(not collapsed)
-            self._sections_btn.setVisible(collapsed)
+            try:
+                from ui.icons import icon as _side_icon
+
+                self._sidebar_toggle_btn.setIcon(
+                    _side_icon("chevron-left" if collapsed else "chevron-right")
+                )
+            except Exception:
+                pass
+            self._sidebar_toggle_btn.setToolTip(
+                t("detail.sidebar.collapse_tip")
+                if not collapsed
+                else t("detail.sidebar.show_action")
+            )
+            self._sidebar_toggle_btn.setAccessibleName(
+                t("detail.sidebar.collapse_a11y")
+                if not collapsed
+                else t("detail.sidebar.show_action")
+            )
             self._move_dataset_log(to_sidebar=not collapsed)
         except Exception:
             pass
@@ -617,19 +700,6 @@ class DatasetDetailView(
         try:
             self._sidebar_user_collapsed = not self._sidebar_collapsed
             self._sync_sidebar()
-        except Exception:
-            pass
-
-    def _fill_sections_menu(self) -> None:
-        """Rebuild the top bar's Sections menu (the folded sidebar's nav)."""
-        try:
-            self._sections_menu.clear()
-            show = self._sections_menu.addAction(t("detail.sidebar.show_action"))
-            show.triggered.connect(self._toggle_sidebar)
-            self._sections_menu.addSeparator()
-            for key, attr in _SECTION_LINKS:
-                action = self._sections_menu.addAction(t(key))
-                action.triggered.connect(lambda _checked=False, a=attr: self._goto_section(a))
         except Exception:
             pass
 
@@ -681,3 +751,50 @@ class DatasetDetailView(
             except Exception:
                 continue
         return out
+
+    def _install_shortcuts(self) -> None:
+        """Power-path accelerators for the per-dataset loop.
+
+        Scoped to this view (WidgetWithChildrenShortcut): the chords fire
+        only while focus is inside the detail view, never from the dashboard
+        or a pane. Consistent with the app-level shortcuts in main_window.py.
+        """
+        from PySide6.QtGui import QKeySequence, QShortcut
+
+        def _sc(seq: str, handler):
+            sc = QShortcut(
+                QKeySequence(seq, QKeySequence.SequenceFormat.PortableText), self, handler
+            )
+            sc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            return sc
+
+        self._shortcuts = [
+            _sc("Ctrl+Return", self._on_ctrl_enter),
+            _sc("Ctrl+Enter", self._on_ctrl_enter),
+            _sc("Ctrl+D", self._on_download),
+            _sc("Ctrl+Shift+O", self._on_open_folder),
+        ]
+
+    def _on_ctrl_enter(self) -> None:
+        """One chord, two contexts: Commit on the Response page, else Run checks."""
+        try:
+            if self._pages.currentIndex() == 1:
+                self._on_commit()
+                return
+        except Exception:
+            pass
+        self._on_run_checks()
+
+    def cancel_pending_loads(self) -> None:
+        """Stop the deferred first load (the view is being replaced).
+
+        The auto-load timer is bound to this view, but the view may be
+        replaced before the timer fires: the pending callback would then
+        start a worker on a view that is about to be destroyed, and
+        destroying a view with a running QThread child aborts the
+        process (dv-n1d).
+        """
+        try:
+            self._auto_load_timer.stop()
+        except Exception:
+            pass

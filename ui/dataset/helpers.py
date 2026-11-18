@@ -1,22 +1,14 @@
 """Shared helpers and tables for the dataset detail page.
 
 The formatting helpers the sections use to render file sizes, file
-icons, manifest rows, the status pill and raw metadata, plus the
-table of sections the page can jump to.  They live here so every
-section renders the same values the same way.
+icons, manifest rows, the status pill and raw metadata.  They live here
+so every section renders the same values the same way.
 """
 
 import json
 from pathlib import Path
 
 from ui.i18n import t
-
-_SECTION_LINKS: tuple[tuple[str, str], ...] = (
-    ("detail.sections.metadata_check", "_meta_card"),
-    ("detail.sections.file_manifest", "_file_card"),
-    ("detail.sections.auto_checks", "_auto_card"),
-    ("detail.sections.version_log", "_version_card"),
-)
 
 
 def _human_size(n: int) -> str:

@@ -17,33 +17,11 @@ Stored under <workspace>/state.db. The API token never touches the database.
 """
 
 import json
-import hashlib
 import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
-# Stable disposition tokens and finding identity (from master's flat
-# storage.py, kept here so master's test files can import them from
-# curation.storage).
-DISPOSITION_TOKENS = ("", "acknowledged", "fix-requested", "wontfix", "blocked")
-RESOLVED_DISPOSITIONS = frozenset({"acknowledged", "wontfix"})
-
-
-def finding_key(check_id: str, path: str = "", message: str = "") -> str:
-    """Stable identity for one finding across check re-runs.
-
-    sha1 of (check_id, path, whitespace-normalized message): a re-run that
-    reproduces a finding yields the same key, so stored dispositions and
-    notes re-attach to it, while genuinely new findings start unresolved.
-    Metadata rule findings pass the rule id as ``check_id`` and the
-    requirement text as ``message`` (path empty).
-    """
-    normalized = " ".join(str(message or "").split())
-    raw = "\x1f".join([str(check_id or ""), str(path or ""), normalized])
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
-
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS datasets (
@@ -83,11 +61,73 @@ CREATE TABLE IF NOT EXISTS curation_actions (
     notes TEXT DEFAULT '',
     details_json TEXT DEFAULT '{}'
 );
+CREATE TABLE IF NOT EXISTS finding_dispositions (
+    dataset_id TEXT NOT NULL,
+    finding_key TEXT NOT NULL,
+    disposition TEXT NOT NULL DEFAULT '',
+    note TEXT DEFAULT '',
+    updated_at TEXT,
+    PRIMARY KEY (dataset_id, finding_key)
+);
+CREATE TABLE IF NOT EXISTS sensitivity_reviews (
+    dataset_id TEXT PRIMARY KEY,
+    answers_json TEXT DEFAULT '{}',
+    note TEXT DEFAULT '',
+    updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS follow_ups (
+    dataset_id TEXT PRIMARY KEY,
+    opened_at TEXT NOT NULL,
+    decision_label TEXT DEFAULT '',
+    last_update TEXT DEFAULT '',
+    updated_at TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_curation_actions_dataset
     ON curation_actions(dataset_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_curation_actions_action
     ON curation_actions(action, dataset_id);
 """
+
+
+SortOrder = Callable[[int], Any]
+
+
+"""How a persisted sort order (an int) becomes the header's own type.
+
+A real Qt header wants ``Qt.SortOrder``; a duck-typed header (the tests)
+takes the plain int. The core stays Qt-free and the view layer supplies
+the converter - see ``ui/table_layout.py``.
+"""
+
+
+"""Schema version of one entry in ``table_layout.json``.
+
+Bump when the meaning of a key changes. Entries without a version are
+legacy (v0) and still readable; entries with a newer version are ignored
+rather than half-applied.
+"""
+
+
+DISPOSITION_TOKENS = ("", "acknowledged", "fix-requested", "wontfix", "blocked")
+
+
+RESOLVED_DISPOSITIONS = frozenset({"acknowledged", "wontfix"})
+
+
+def finding_key(check_id: str, path: str = "", message: str = "") -> str:
+    """Stable identity for one finding across check re-runs.
+
+    sha1 of (check_id, path, whitespace-normalized message): a re-run that
+    reproduces a finding yields the same key, so stored dispositions and
+    notes re-attach to it, while genuinely new findings start unresolved.
+    Metadata rule findings pass the rule id as ``check_id`` and the
+    requirement text as ``message`` (path empty).
+    """
+    import hashlib
+
+    normalized = " ".join(str(message or "").split())
+    raw = "\x1f".join([str(check_id or ""), str(path or ""), normalized])
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
 def _utcnow_iso() -> str:
@@ -211,6 +251,205 @@ class AppState:
             )
         return out
 
+    # -- finding dispositions (dv-32x) ------------------------------------
+
+    def set_finding_disposition(
+        self,
+        dataset_id: str,
+        key: str,
+        disposition: str,
+        note: str = "",
+    ) -> None:
+        """Record (or clear, with disposition="") one finding's disposition."""
+        key = str(key or "")
+        if not key:
+            return
+        token = str(disposition or "")
+        if token and token not in DISPOSITION_TOKENS:
+            token = ""
+        with self._lock:
+            if token:
+                self._conn.execute(
+                    "INSERT INTO finding_dispositions "
+                    "(dataset_id, finding_key, disposition, note, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT(dataset_id, finding_key) DO UPDATE SET "
+                    "disposition=excluded.disposition, note=excluded.note, "
+                    "updated_at=excluded.updated_at",
+                    (dataset_id, key, token, str(note or ""), _utcnow_iso()),
+                )
+            else:
+                self._conn.execute(
+                    "DELETE FROM finding_dispositions WHERE dataset_id = ? AND finding_key = ?",
+                    (dataset_id, key),
+                )
+            self._conn.commit()
+
+    def get_finding_disposition(self, dataset_id: str, key: str) -> dict[str, Any] | None:
+        """One finding's disposition row, or None when unset."""
+        cur = self._conn.execute(
+            "SELECT disposition, note, updated_at FROM finding_dispositions "
+            "WHERE dataset_id = ? AND finding_key = ?",
+            (dataset_id, key),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return {
+            "disposition": str(row["disposition"] or ""),
+            "note": str(row["note"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def list_finding_dispositions(self, dataset_id: str) -> dict[str, dict[str, Any]]:
+        """{finding_key: {disposition, note, updated_at}} for one dataset."""
+        cur = self._conn.execute(
+            "SELECT finding_key, disposition, note, updated_at "
+            "FROM finding_dispositions WHERE dataset_id = ?",
+            (dataset_id,),
+        )
+        out: dict[str, dict[str, Any]] = {}
+        for row in cur.fetchall():
+            out[str(row["finding_key"])] = {
+                "disposition": str(row["disposition"] or ""),
+                "note": str(row["note"] or ""),
+                "updated_at": str(row["updated_at"] or ""),
+            }
+        return out
+
+    def get_sensitivity_review(self, dataset_id: str) -> dict[str, Any] | None:
+        """One dataset's sensitivity questionnaire, or None when never saved."""
+        cur = self._conn.execute(
+            "SELECT answers_json, note, updated_at FROM sensitivity_reviews WHERE dataset_id = ?",
+            (dataset_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        try:
+            answers = json.loads(row["answers_json"] or "{}")
+        except Exception:
+            answers = {}
+        if not isinstance(answers, dict):
+            answers = {}
+        return {
+            "answers": answers,
+            "note": str(row["note"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def set_sensitivity_review(
+        self, dataset_id: str, answers: dict[str, Any], note: str = ""
+    ) -> None:
+        """Upsert one dataset's sensitivity questionnaire (never raises)."""
+        payload = {str(k): str(v or "") for k, v in (answers or {}).items()}
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO sensitivity_reviews "
+                "(dataset_id, answers_json, note, updated_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(dataset_id) DO UPDATE SET "
+                "answers_json=excluded.answers_json, note=excluded.note, "
+                "updated_at=excluded.updated_at",
+                (
+                    dataset_id,
+                    json.dumps(payload, ensure_ascii=False),
+                    str(note or ""),
+                    _utcnow_iso(),
+                ),
+            )
+            self._conn.commit()
+
+    # -- depositor follow-ups (dv-5eg) ------------------------------------
+
+    def open_follow_up(
+        self,
+        dataset_id: str,
+        decision_label: str = "",
+        opened_at: str | None = None,
+    ) -> None:
+        """Open (or refresh) the waiting-on-depositor state for a dataset.
+
+        ``opened_at`` is preserved on a re-open so "since <date>" keeps the
+        original request date when the curator re-sends revisions.
+        """
+        ts = opened_at or _utcnow_iso()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO follow_ups "
+                "(dataset_id, opened_at, decision_label, updated_at) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(dataset_id) DO UPDATE SET "
+                "decision_label=excluded.decision_label, "
+                "updated_at=excluded.updated_at",
+                (dataset_id, ts, str(decision_label or ""), _utcnow_iso()),
+            )
+            self._conn.commit()
+
+    def close_follow_up(self, dataset_id: str) -> bool:
+        """Close a follow-up; True when one was open."""
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM follow_ups WHERE dataset_id = ?", (dataset_id,))
+            self._conn.commit()
+            return int(cur.rowcount or 0) > 0
+
+    def set_follow_up_last_update(self, dataset_id: str, last_update: str) -> None:
+        """Record the observed draft lastUpdateTime for an open follow-up."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE follow_ups SET last_update = ?, updated_at = ? WHERE dataset_id = ?",
+                (str(last_update or ""), _utcnow_iso(), dataset_id),
+            )
+            self._conn.commit()
+
+    def get_follow_up(self, dataset_id: str) -> dict[str, Any] | None:
+        """One dataset's follow-up (with derived state), or None."""
+        _fu: Any = None
+        try:
+            import curation.follow_ups as _fu
+        except Exception:  # pragma: no cover - module is part of the app
+            pass
+        cur = self._conn.execute(
+            "SELECT dataset_id, opened_at, decision_label, last_update "
+            "FROM follow_ups WHERE dataset_id = ?",
+            (dataset_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        opened_at = str(row["opened_at"] or "")
+        last_update = str(row["last_update"] or "")
+        state = _fu.state_for(opened_at, last_update) if _fu is not None else ""
+        return {
+            "dataset_id": str(row["dataset_id"] or ""),
+            "opened_at": opened_at,
+            "decision_label": str(row["decision_label"] or ""),
+            "last_update": last_update,
+            "state": state,
+        }
+
+    def list_follow_ups(self) -> dict[str, dict[str, Any]]:
+        """{persistent_id: follow-up} for every open follow-up."""
+        _fu: Any = None
+        try:
+            import curation.follow_ups as _fu
+        except Exception:  # pragma: no cover - module is part of the app
+            pass
+        cur = self._conn.execute(
+            "SELECT dataset_id, opened_at, decision_label, last_update FROM follow_ups"
+        )
+        out: dict[str, dict[str, Any]] = {}
+        for row in cur.fetchall():
+            opened_at = str(row["opened_at"] or "")
+            last_update = str(row["last_update"] or "")
+            out[str(row["dataset_id"])] = {
+                "dataset_id": str(row["dataset_id"] or ""),
+                "opened_at": opened_at,
+                "decision_label": str(row["decision_label"] or ""),
+                "last_update": last_update,
+                "state": (_fu.state_for(opened_at, last_update) if _fu is not None else ""),
+            }
+        return out
+
     def last_action(self, dataset_id: str, action: str) -> dict[str, Any] | None:
         """Newest action of a given type, or None."""
         cur = self._conn.execute(
@@ -241,7 +480,40 @@ def open_state(workspace: Path) -> AppState:
 
 
 _SIZE_CACHE_NAME = "dataset_sizes.json"
+
+
 _TABLE_LAYOUT_NAME = "table_layout.json"
+
+
+_UI_PREFS_NAME = "ui_prefs.json"
+
+
+def read_ui_pref(workspace: Path, key: str, default: Any = None) -> Any:
+    """One UI preference from <workspace>/ui_prefs.json (never raises)."""
+    try:
+        raw = json.loads((Path(workspace) / _UI_PREFS_NAME).read_text(encoding="utf-8"))
+    except Exception:
+        return default
+    if not isinstance(raw, dict):
+        return default
+    value = raw.get(key, default)
+    return value if value is not None else default
+
+
+def write_ui_pref(workspace: Path, key: str, value: Any) -> None:
+    """Persist one UI preference (best-effort, never raises)."""
+    try:
+        path = Path(workspace) / _UI_PREFS_NAME
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except Exception:
+            raw = {}
+        if not isinstance(raw, dict):
+            raw = {}
+        raw[key] = value
+        _atomic_write_json(path, raw)
+    except Exception:
+        pass
 
 
 def read_size_cache(workspace: Path) -> dict[str, dict[str, Any]]:
@@ -305,16 +577,9 @@ def _enum_int(value: Any) -> int:
     return 0
 
 
-SortOrder = Callable[[int], Any]
-"""How a persisted sort order (an int) becomes the header's own type.
-
-A real Qt header wants ``Qt.SortOrder``; a duck-typed header (the tests)
-takes the plain int. The core stays Qt-free and the view layer supplies
-the converter - see ``ui/table_layout.py``.
-"""
-
-
 TABLE_LAYOUT_VERSION = 1
+
+
 """Schema version of one entry in ``table_layout.json``.
 
 Bump when the meaning of a key changes. Entries without a version are
@@ -539,6 +804,62 @@ def clear_table_state(workspace: Path, name: str) -> None:
         _atomic_write_json(path, raw)
     except Exception:
         pass
+
+
+def remap_table_layout_entry(
+    workspace: Path,
+    name: str,
+    new_to_old: list[int | None],
+    default_width: int = 120,
+) -> bool:
+    """Re-shape a persisted table layout onto a new column layout.
+
+    ``new_to_old[new_index]`` is the index that column had in the entry
+    saved by an older build (``None`` for a brand-new column, which gets
+    ``default_width``). Widths and hidden flags are re-mapped; order and
+    the sort indicator are dropped (they are column-index specific and a
+    renumbered column could inherit the wrong meaning). The rewritten
+    entry keeps the current schema version. Returns True when an entry
+    was rewritten; False when nothing matched (no file, wrong shape
+    already, or an unreadable entry) — in which case the normal
+    column-count validation in ``restore_table_state`` still protects
+    the table.
+    """
+    try:
+        path = _table_layout_path(workspace)
+        if not path.exists():
+            return False
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return False
+        entry = raw.get(name)
+        if not isinstance(entry, dict):
+            return False
+        widths = entry.get("widths")
+        if not isinstance(widths, list) or not widths:
+            return False
+        if len(widths) == len(new_to_old):
+            return False  # already the new shape
+        mapping = [idx for idx in new_to_old if idx is not None]
+        if not mapping or max(mapping) >= len(widths):
+            return False
+        new_widths = [
+            int(widths[old]) if old is not None else int(default_width) for old in new_to_old
+        ]
+        new_entry: dict[str, Any] = {
+            "v": TABLE_LAYOUT_VERSION,
+            "widths": new_widths,
+        }
+        hidden = entry.get("hidden")
+        if isinstance(hidden, list) and len(hidden) == len(widths):
+            new_entry["hidden"] = [
+                bool(hidden[old]) if old is not None else False for old in new_to_old
+            ]
+        raw[name] = new_entry
+        _atomic_write_json(path, raw)
+        return True
+    except Exception:
+        return False
 
 
 def restore_table_state(

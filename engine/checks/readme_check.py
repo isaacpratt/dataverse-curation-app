@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -85,9 +85,7 @@ def analyse(text: str, sections: list[dict[str, Any]]) -> dict[str, Any]:
             }
         )
     missing = [r["label"] for r in rows if not r["found"]]
-    missing_required = [
-        r["label"] for r in rows if not r["found"] and r["level"] == "required"
-    ]
+    missing_required = [r["label"] for r in rows if not r["found"] and r["level"] == "required"]
     return {
         "sections": rows,
         "found": [r["label"] for r in rows if r["found"]],
@@ -100,7 +98,7 @@ class ReadmeSectionsCheck(Check):
     """Dataset-level check for whether the README is any good, not just present."""
 
     check_id = "metadata.readme_sections"
-    extensions = set()  # dataset-level
+    extensions: ClassVar[set[str]] = set()  # dataset-level
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         return self.run_dataset(files, context=None)
@@ -108,7 +106,7 @@ class ReadmeSectionsCheck(Check):
     def run_dataset(
         self, files: list[Path], context: dict[str, Any] | None = None
     ) -> list[CheckResult]:
-        from review_rules import readme_sections
+        from curation.review_rules import readme_sections
 
         context = context or {}
         sections = readme_sections(context.get("ruleset"))

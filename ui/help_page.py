@@ -60,7 +60,7 @@ class HelpPane(QWidget):
         outer.addWidget(self._search)
 
         self._scroll = QScrollArea()
-        self._scroll.setFrameShape(QFrame.NoFrame)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._scroll.setWidgetResizable(True)
         self._canvas = QWidget()
         self._canvas.setObjectName("HelpCanvas")
@@ -88,9 +88,7 @@ class HelpPane(QWidget):
     def _entry_block(self, name: str, text: str) -> QFrame:
         block = QFrame()
         block.setObjectName("Card")
-        block.setStyleSheet(
-            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card")
-        )
+        block.setStyleSheet(surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card"))
         lay = QVBoxLayout(block)
         lay.setContentsMargins(14, 10, 14, 10)
         lay.setSpacing(4)
@@ -109,7 +107,7 @@ class HelpPane(QWidget):
         # Clear the column.
         while self._column.count():
             item = self._column.takeAt(0)
-            w = item.widget()
+            w = item.widget() if item is not None else None
             if w is not None:
                 w.setParent(None)
                 w.deleteLater()
@@ -132,13 +130,13 @@ class HelpPane(QWidget):
 
     def _log_build(self) -> None:
         try:
-            from applog import get_app_log
+            from curation.applog import get_app_log
 
             get_app_log().info(t("help.built_log", count=len(help_entries())))
         except Exception:
             pass
 
-    def showEvent(self, event):  # noqa: N802 (Qt naming)
+    def showEvent(self, event):
         super().showEvent(event)
         # Re-index so tips from lazily opened pages (Settings, Review
         # configuration, dataset detail) appear without an app restart.

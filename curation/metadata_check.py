@@ -27,10 +27,12 @@ PROFILES: dict[str, dict[str, Any]] = {
     },
 }
 
+
 DEFAULT_PROFILE = "McMaster"
 
-# Legacy profile key -> v2 ruleset key (custom rulesets use their own key).
+
 PROFILE_TO_RULESET = {"McMaster": "mcmaster-default", "Minimal": "minimal"}
+
 
 _FILE_NAME = "requirements_profiles.json"
 
@@ -38,38 +40,21 @@ _FILE_NAME = "requirements_profiles.json"
 def profiles_path() -> Path:
     """Canonical location of the editable requirement profiles.
 
-    Frozen exe: next to the executable (CWD is arbitrary there), falling
-    back one level above — the folder holding the build, where onefile-era
-    launches kept the file — so an exe inside its own onedir subfolder
-    still finds an existing profiles file; with none anywhere, resolve
-    above the build folder so a fresh write survives rebuilds (PyInstaller
-    wipes its output folder). Dev runs: the current working directory
-    (repo root). One helper so the checker and the Requirements dialog
-    always read/write the same file.
+    One policy for every user-editable file, so the checker, the
+    Requirements dialog and the ruleset loader always agree: installed
+    builds keep it under the per-user app data folder (an update replaces
+    the install folder, an uninstall deletes it), portable builds beside
+    the exe, dev runs in the working directory. See
+    `config.resolve_user_file`.
     """
-    import sys
+    import curation.config as config
 
-    if getattr(sys, "frozen", False):
-        try:
-            exe_dir = Path(sys.executable).parent
-            for candidate in (exe_dir / _FILE_NAME, exe_dir.parent / _FILE_NAME):
-                if candidate.exists():
-                    return candidate
-            return exe_dir.parent / _FILE_NAME
-        except Exception:
-            pass
-    return Path(_FILE_NAME)
+    return config.resolve_user_file(_FILE_NAME)
 
 
-# Keys PROFILES gained from v2 rulesets (tracked so deleted rulesets can be
-# removed again on refresh, not just added).
 _V2_PROFILE_KEYS: set[str] = set()
 
 
-# Load custom profiles from file if present (written by Requirements dialog)
-# Supports both the legacy flat shape and the v2 {version, rulesets} shape
-# (written by the Review-configuration page). v2 rulesets appear as extra
-# PROFILES entries so the dataset combo lists them.
 def _register_rulesets_in_profiles() -> None:
     try:
         from curation import review_rules as _rr
@@ -123,7 +108,9 @@ except Exception as exc:
     except Exception:
         pass
 
+
 _register_rulesets_in_profiles()
+
 
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
 
@@ -647,15 +634,18 @@ def check_with_ruleset(
     inventory: list[dict[str, Any]] | None = None,
     staged_dir: Any = None,
     rulesets: dict[str, Any] | None = None,
+    include_unchecked: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Full rule evaluation (keeps rule_id/level/pending for the Response pane)."""
-    from curation import review_rules as _rr
+    import curation.review_rules as _rr
 
     pool = rulesets if isinstance(rulesets, dict) else _rr.load_rulesets()
     # get_ruleset resolves legacy profile names ("McMaster"/"Minimal") and
     # falls back to the default for unknown keys.
     ruleset = _rr.get_ruleset(ruleset_key, pool)
-    return _rr.evaluate_ruleset(metadata or {}, ruleset, inventory, staged_dir), ruleset
+    return _rr.evaluate_ruleset(
+        metadata or {}, ruleset, inventory, staged_dir, include_unchecked=include_unchecked
+    ), ruleset
 
 
 def refresh_profiles_from_rulesets() -> None:
@@ -666,7 +656,6 @@ def refresh_profiles_from_rulesets() -> None:
         pass
 
 
-# Back-compat alias used by older code
 def check_completeness(
     metadata: dict[str, Any],
     profile: str = DEFAULT_PROFILE,

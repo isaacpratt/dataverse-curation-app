@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from curation import config as config_mod
-from curation import metadata_check
+import curation.config as config_mod
+import curation.metadata_check as metadata_check
 
 
 def _freeze(monkeypatch: pytest.MonkeyPatch, exe: Path) -> None:
@@ -257,7 +257,7 @@ def test_user_data_dir_prefers_appdata_on_windows(
 def test_rulesets_path_follows_the_profiles_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, appdata: Path
 ) -> None:
-    import review_rules
+    import curation.review_rules as review_rules
 
     _installed(monkeypatch, tmp_path)
     _no_velopack(monkeypatch)

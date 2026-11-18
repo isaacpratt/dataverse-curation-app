@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -86,15 +86,17 @@ def _dispositions_markdown(dispositions: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def export_record(dataset_dir: Path,
-                  report: Any = None,
-                  response_text: str = "",
-                  actions: list[dict[str, Any]] | None = None,
-                  dispositions: dict[str, Any] | None = None,
-                  sensitivity: dict[str, Any] | None = None,
-                  decision: str = "",
-                  curation_label: str = "",
-                  staged_dir: Path | None = None) -> Path:
+def export_record(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    dataset_dir: Path,
+    report: Any = None,
+    response_text: str = "",
+    actions: list[dict[str, Any]] | None = None,
+    dispositions: dict[str, Any] | None = None,
+    sensitivity: dict[str, Any] | None = None,
+    decision: str = "",
+    curation_label: str = "",
+    staged_dir: Path | None = None,
+) -> Path:
     """Write one dated curation-record folder; return its path.
 
     Every input is optional: the record contains whatever the review
@@ -102,7 +104,7 @@ def export_record(dataset_dir: Path,
     hard I/O errors (the caller reports them).
     """
     dataset_dir = Path(dataset_dir)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     record_dir = dataset_dir / "curation-record" / stamp
     if record_dir.exists():
         # Same-second re-run: never clobber — take the next free suffix.
@@ -117,8 +119,7 @@ def export_record(dataset_dir: Path,
         "persistent_id": str(getattr(report, "persistent_id", "") or ""),
         "label": str(getattr(report, "label", "") or ""),
         "engine_version": str(getattr(report, "engine_version", "") or ""),
-        "exported_at": datetime.now(timezone.utc)
-        .isoformat(timespec="seconds"),
+        "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "curation_label": curation_label,
         "decision": decision,
         "artifacts": {},
@@ -141,14 +142,12 @@ def export_record(dataset_dir: Path,
     index["artifacts"]["curation_log.md"] = True
 
     disp = dict(dispositions or {})
-    _write_text(record_dir / "dispositions.json",
-                json.dumps(disp, indent=2, ensure_ascii=False))
+    _write_text(record_dir / "dispositions.json", json.dumps(disp, indent=2, ensure_ascii=False))
     index["artifacts"]["dispositions.json"] = True
     index["disposition_count"] = len(disp)
 
     sens = dict(sensitivity or {})
-    _write_text(record_dir / "sensitivity.json",
-                json.dumps(sens, indent=2, ensure_ascii=False))
+    _write_text(record_dir / "sensitivity.json", json.dumps(sens, indent=2, ensure_ascii=False))
     index["artifacts"]["sensitivity.json"] = True
     if isinstance(sens.get("answers"), dict):
         index["sensitivity_answered"] = sum(
@@ -156,9 +155,14 @@ def export_record(dataset_dir: Path,
         )
 
     if decision or curation_label:
-        _write_text(record_dir / "decision.json",
-                    json.dumps({"decision": decision, "curation_label": curation_label},
-                               indent=2, ensure_ascii=False))
+        _write_text(
+            record_dir / "decision.json",
+            json.dumps(
+                {"decision": decision, "curation_label": curation_label},
+                indent=2,
+                ensure_ascii=False,
+            ),
+        )
         index["artifacts"]["decision.json"] = True
 
     # Fixity: a sha256 manifest of the staged files, plus per-artifact
@@ -176,6 +180,5 @@ def export_record(dataset_dir: Path,
     for artifact in sorted(record_dir.iterdir()):
         if artifact.is_file() and artifact.name != "index.json":
             index["artifacts"][artifact.name] = _sha256_file(artifact)
-    _write_text(record_dir / "index.json",
-                json.dumps(index, indent=2, ensure_ascii=False))
+    _write_text(record_dir / "index.json", json.dumps(index, indent=2, ensure_ascii=False))
     return record_dir

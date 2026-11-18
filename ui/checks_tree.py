@@ -4,7 +4,7 @@ Carbon Tree View-inspired behavior (caret-left expanders, indented children,
 arrow-key navigation via QTreeView) implemented natively in PySide6 with the
 app's existing palette — Carbon web components are not available on desktop.
 
-Node kinds (Qt.UserRole dict on column-0 item):
+Node kinds (Qt.ItemDataRole.UserRole dict on column-0 item):
   folder: {"kind": "folder", "dir": str, "base": str}
   file:   {"kind": "file", "path": str, "base": str}
   check:  {"kind": "check", "path": str, "check_id": str}
@@ -27,8 +27,8 @@ the Scan column and a details tooltip.
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
+from curation.storage import finding_key
 from engine.status import classify
-from storage import finding_key
 from ui.check_titles import check_summary, check_title
 from ui.i18n import t
 from ui.icons import file_icon, icon, status_icon
@@ -42,7 +42,7 @@ COLUMNS = [
     t("checks.columns.scan"),
 ]
 
-_KIND_ROLE = Qt.UserRole + 1
+_KIND_ROLE = Qt.ItemDataRole.UserRole + 1
 
 # Legacy text glyphs (pre-Lucide). Kept so update_carets() can strip them
 # from any model built before the icon switch; nothing emits them anymore.
@@ -53,13 +53,13 @@ def _strip_legacy_caret(text: str) -> str:
     try:
         for prefix in _CARET_PREFIXES:
             if text.startswith(prefix):
-                return text[len(prefix):]
+                return text[len(prefix) :]
     except Exception:
         pass
     return text
 
 
-def update_carets(model, is_expanded) -> None:
+def update_carets(model, is_expanded) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Sync folder icons + names with the tree's live expanded state.
 
     model: QStandardItemModel built by build_tree_model.
@@ -152,11 +152,7 @@ def variable_coverage(report) -> dict[str, dict[str, int]]:
             return {}
         coverage = details.get("coverage")
         if isinstance(coverage, dict):
-            return {
-                str(path): dict(cov)
-                for path, cov in coverage.items()
-                if isinstance(cov, dict)
-            }
+            return {str(path): dict(cov) for path, cov in coverage.items() if isinstance(cov, dict)}
         return {}
     return {}
 
@@ -169,8 +165,9 @@ def _new_item(text: str, tooltip: str = "") -> QStandardItem:
     return item
 
 
-def build_tree_model(rows, report=None, is_staged=None, human_size=None,
-                     inventory=None, dispositions=None) -> QStandardItemModel:
+def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    rows, report=None, is_staged=None, human_size=None, inventory=None, dispositions=None
+) -> QStandardItemModel:
     """Build the folder>file>check model.
 
     rows: list of (path, size_bytes, fmt, original) like _all_file_rows.
@@ -220,9 +217,7 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
                 parent_item.setIcon(icon("folder"))
             except Exception:
                 pass
-            parent_item.setData(
-                {"kind": "folder", "dir": parent, "base": label}, _KIND_ROLE
-            )
+            parent_item.setData({"kind": "folder", "dir": parent, "base": label}, _KIND_ROLE)
             size_item = _new_item("")
             fmt_item = _new_item("")
             scan_item = _new_item("")
@@ -250,8 +245,7 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
                 ingest_error = str(inv_entry.get("ingest_error") or "").strip()
                 if ingest_status or ingest_error:
                     bits = (
-                        [t("checks.ingest_status", status=ingest_status)]
-                        if ingest_status else []
+                        [t("checks.ingest_status", status=ingest_status)] if ingest_status else []
                     )
                     if ingest_error:
                         bits.append(t("checks.ingest_error", error=ingest_error))
@@ -259,10 +253,7 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
             entry = by_path.get(path)
             checks = list(entry.checks) if entry else []
             if report is None:
-                scan = (
-                    t("checks.run_after_download") if not staged
-                    else t("common.not_checked")
-                )
+                scan = t("checks.run_after_download") if not staged else t("common.not_checked")
                 tip = path
             elif entry is None:
                 scan = t("checks.not_in_report")
@@ -272,9 +263,11 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
                 tip = f"{path}\n{t('checks.no_auto_format')}"
             else:
                 scan = status_text(checks)
-                tip = path + "\n" + "\n".join(
-                    f"[{c.level}] {c.check_id}: {c.message}" for c in checks
-                )[:2000]
+                tip = (
+                    path
+                    + "\n"
+                    + "\n".join(f"[{c.level}] {c.check_id}: {c.message}" for c in checks)[:2000]
+                )
             # Append restriction/ingest notes to the Scan tooltip too.
             if note:
                 tip = tip + note
@@ -290,12 +283,8 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
                     # coverage; never take down the manifest-tree build.
                     labeled = total = 0
                 if total or labeled:
-                    scan = scan + t(
-                        "checks.var_coverage_suffix", labeled=labeled, total=total
-                    )
-                    tip = tip + "\n" + t(
-                        "checks.var_coverage_tip", labeled=labeled, total=total
-                    )
+                    scan = scan + t("checks.var_coverage_suffix", labeled=labeled, total=total)
+                    tip = tip + "\n" + t("checks.var_coverage_tip", labeled=labeled, total=total)
             base = path.split("/")[-1]
             name_item = _new_item(base, tip)
             try:
@@ -308,9 +297,12 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
             scan_item = _new_item(scan, tip)
             file_row = [name_item, size_item, fmt_item, scan_item]
             for check in checks:
-                kind = {"passed": "pass", "failed-warning": "warn",
-                        "failed-error": "fail", "skipped": "skip"}.get(
-                            classify(check), "pass")
+                kind = {
+                    "passed": "pass",
+                    "failed-warning": "warn",
+                    "failed-error": "fail",
+                    "skipped": "skip",
+                }.get(classify(check), "pass")
                 # Disposition reflection (dv-32x): the label joins the Scan
                 # text so a resolved finding reads as dealt-with at a glance.
                 token = ""
@@ -342,8 +334,12 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
                 except Exception:
                     pass
                 c_name.setData(
-                    {"kind": "check", "path": path, "check_id": check.check_id,
-                     "msg": check.message},
+                    {
+                        "kind": "check",
+                        "path": path,
+                        "check_id": check.check_id,
+                        "msg": check.message,
+                    },
                     _KIND_ROLE,
                 )
                 c_size = _new_item("")
@@ -405,10 +401,13 @@ def build_tree_model(rows, report=None, is_staged=None, human_size=None,
 def node_kind(index) -> dict:
     try:
         from PySide6.QtCore import QModelIndex
+        from PySide6.QtGui import QStandardItemModel
 
         if not isinstance(index, QModelIndex) or not index.isValid():
             return {}
         model = index.model()
+        if not isinstance(model, QStandardItemModel):
+            return {}
         item = model.itemFromIndex(model.index(index.row(), 0, index.parent()))
         data = item.data(_KIND_ROLE) if item else None
         return data if isinstance(data, dict) else {}

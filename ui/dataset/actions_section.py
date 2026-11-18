@@ -2,14 +2,39 @@
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QWidget,
+)
 
 from curation.download_manager import DownloadManager
+from curation.sensitivity import (
+    QUESTIONS,
+    answered_count,
+    is_complete,
+    ruleset_requires,
+    suggested_answers,
+)
 from ui import dialogs
 from ui.dataset.state import DetailState
 from ui.download_dialog import DownloadApprovalDialog
 from ui.i18n import t
-from ui.theme import FONT_SMALL
+from ui.theme import (
+    BORDER_SUBTLE,
+    FONT_SMALL,
+    STATE_WARNING_GRAPHIC,
+    SURFACE_SUBTLE,
+    SURFACE_TINT,
+    TEXT_AMBER,
+    TEXT_MUTED,
+    TEXT_SUCCESS,
+    surface_frame_qss,
+)
 from ui.widgets import (
     add_info_tip,
     make_action_button,
@@ -18,6 +43,7 @@ from ui.widgets import (
     make_combo,
     make_field_label,
     make_multiline_input,
+    make_small_body_label,
 )
 from ui.workers import DownloadWorker
 
@@ -31,6 +57,7 @@ class ActionsSection(DetailState):
             _header,
             t("detail.assessment.tip"),
             name=t("detail.sections.assessment_action"),
+            group="Respond",
         )
         body.setContentsMargins(16, 16, 16, 16)
         body.setSpacing(12)
@@ -61,6 +88,8 @@ class ActionsSection(DetailState):
         row = QHBoxLayout()
         row.addStretch()
         commit = make_action_button(t("detail.assessment.commit"), kind="primary", size="md")
+        commit.setToolTip(t("detail.assessment.commit_tip"))
+        commit.setAccessibleName(t("detail.assessment.commit"))
         commit.clicked.connect(self._on_commit)
         self._commit_btn = commit
         row.addWidget(commit)
@@ -199,6 +228,13 @@ class ActionsSection(DetailState):
             )
             return
         _options, from_labels = self._decision_choices()
+        # Sensitivity gate (dv-3c2): a collection whose ruleset requires
+        # the review must complete it before an Approve decision commits.
+        if decision == t("detail.decision.option_approve"):
+            blocked, gate_msg = self._sensitivity_blocks()
+            if blocked:
+                dialogs.show_warning(self, t("detail.sensitivity.gate_title"), gate_msg)
+                return
         # The gate: a remote write asks first, and the answer decides
         # whether anything at all happens - no log entry, no workflow
         # step, no push.
@@ -218,6 +254,9 @@ class ActionsSection(DetailState):
             f"{decision}" + (t("detail.decision.log_notes", notes=notes[:200]) if notes else ""),
             {"decision": decision, "notes": notes[:2000]},
         )
+        # Depositor follow-up (dv-5eg): a revisions decision opens one;
+        # any other decision closes it.
+        self._sync_follow_up(decision)
         # A recorded decision closes the last workflow step (the Dataverse
         # push may still fail; that is surfaced by the dialog below).
         self._decision_committed = True
@@ -276,7 +315,10 @@ class ActionsSection(DetailState):
             self._refresh_files_placeholder()
             self._check_btn.setEnabled(True)
             self._check_btn.setToolTip(t("detail.header.run_checks_tip_staged"))
-            self._set_status(t("detail.download.all_verified_skip", count=len(inventory)))
+            self._set_status(
+                t("detail.download.all_verified_skip", count=len(inventory)),
+                tone="success",
+            )
             self._log_action(
                 "downloaded",
                 t("detail.download.already_staged", count=len(inventory)),
@@ -371,7 +413,7 @@ class ActionsSection(DetailState):
         # Belt-and-braces: staged files exist now, so checks are available.
         self._check_btn.setEnabled(self._dl_mgr.files_dir(self._pid).exists())
         self._check_btn.setToolTip(t("detail.header.run_checks_tip_staged"))
-        self._set_status(t("detail.status.downloaded_to", path=staged))
+        self._set_status(t("detail.status.downloaded_to", path=staged), tone="success")
         self._log_action(
             "downloaded",
             t("detail.status.staged_to", path=staged),
@@ -482,6 +524,331 @@ class ActionsSection(DetailState):
                 "detail.status.reports_saved",
                 markdown=md_path.name,
                 json=json_path.name,
-            )
+            ),
+            tone="success",
         )
         self._refresh_workflow()
+
+    def _build_follow_up_card(self) -> QFrame:
+        """Waiting-on-depositor banner (dv-5eg), above the verdict banner."""
+        card = QFrame()
+        card.setObjectName("FollowUpCard")
+        lay = QHBoxLayout(card)
+        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setSpacing(10)
+        self._follow_up_icon = QLabel()
+        lay.addWidget(self._follow_up_icon)
+        self._follow_up_label = QLabel("")
+        self._follow_up_label.setObjectName("LabelStrongSM")
+        self._follow_up_label.setWordWrap(True)
+        lay.addWidget(self._follow_up_label, 1)
+        self._follow_up_checks_btn = make_action_button(
+            t("detail.follow_up.run_checks"), kind="primary", size="sm"
+        )
+        self._follow_up_checks_btn.clicked.connect(self._on_run_checks)
+        self._follow_up_checks_btn.setVisible(False)
+        lay.addWidget(self._follow_up_checks_btn)
+        self._follow_up_changes_btn = make_action_button(
+            t("detail.follow_up.changes"), kind="secondary", size="sm"
+        )
+        self._follow_up_changes_btn.clicked.connect(lambda: self._on_workflow_step("changes"))
+        lay.addWidget(self._follow_up_changes_btn)
+        card.setVisible(False)
+        return card
+
+    def _refresh_follow_up(self) -> None:
+        """Paint the follow-up banner from in-memory + stored state."""
+        from ui.icons import icon as _icon
+
+        opened_at = ""
+        state = ""
+        try:
+            st = self._state()
+            try:
+                row = st.get_follow_up(self._pid)
+            finally:
+                try:
+                    st.close()
+                except Exception:
+                    pass
+            if isinstance(row, dict):
+                opened_at = str(row.get("opened_at") or "")
+                state = str(row.get("state") or "")
+        except Exception:
+            pass
+        try:
+            last_update = str((self._timestamps or {}).get("lastUpdateTime") or "")
+        except Exception:
+            last_update = ""
+        if opened_at and last_update:
+            try:
+                from curation import follow_ups as _fu
+
+                state = _fu.state_for(opened_at, last_update)
+            except Exception:
+                pass
+        self._follow_up = {"opened_at": opened_at, "state": state} if opened_at else None
+        if not opened_at:
+            self._follow_up_card.setVisible(False)
+            return
+        updated = state == "depositor_updated"
+        try:
+            self._follow_up_icon.setPixmap(
+                _icon(
+                    "triangle-alert" if updated else "clock",
+                    color=TEXT_AMBER if updated else TEXT_MUTED,
+                ).pixmap(18, 18)
+            )
+        except Exception:
+            pass
+        self._follow_up_card.setStyleSheet(
+            surface_frame_qss(
+                SURFACE_TINT if updated else SURFACE_SUBTLE,
+                STATE_WARNING_GRAPHIC if updated else BORDER_SUBTLE,
+                selector="QFrame#FollowUpCard",
+            )
+        )
+        self._follow_up_label.setText(
+            t(
+                "detail.follow_up.updated" if updated else "detail.follow_up.awaiting",
+                date=opened_at[:10],
+            )
+        )
+        self._follow_up_checks_btn.setVisible(bool(updated))
+        self._follow_up_changes_btn.setVisible(bool(updated))
+        self._follow_up_card.setVisible(True)
+
+    def _note_follow_up_update(self) -> None:
+        """Persist the observed draft lastUpdateTime for an open follow-up."""
+        try:
+            last_update = str((self._timestamps or {}).get("lastUpdateTime") or "")
+            if not last_update:
+                return
+            st = self._state()
+            try:
+                if st.get_follow_up(self._pid):
+                    st.set_follow_up_last_update(self._pid, last_update)
+            finally:
+                try:
+                    st.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        self._refresh_follow_up()
+
+    def _sync_follow_up(self, decision: str) -> None:
+        """Open/close the follow-up from a committed decision (dv-5eg)."""
+        try:
+            from curation import follow_ups as _fu
+
+            is_revision = _fu.is_revision_decision(decision, t("detail.decision.option_revisions"))
+            st = self._state()
+            try:
+                if is_revision:
+                    st.open_follow_up(self._pid, decision_label=decision)
+                else:
+                    closed = st.close_follow_up(self._pid)
+                    if closed:
+                        self._log_action(
+                            "follow_up_closed",
+                            t("detail.follow_up.log_closed"),
+                        )
+            finally:
+                try:
+                    st.close()
+                except Exception:
+                    pass
+            if is_revision:
+                self._log_action("follow_up_opened", t("detail.follow_up.log_opened"))
+        except Exception:
+            pass
+        self._refresh_follow_up()
+
+    def _build_sensitivity_card(self) -> QFrame:
+        """Questionnaire card on the Response page, above the decision."""
+        card, body, _title, header = make_card(t("detail.sensitivity.title"))
+        add_info_tip(
+            header,
+            t("detail.sensitivity.tip"),
+            name=t("detail.sensitivity.title"),
+            group="General",
+        )
+        body.setContentsMargins(16, 12, 16, 12)
+        body.setSpacing(8)
+        self._load_sensitivity_review()
+        self._sensitivity_status = QLabel("")
+        self._sensitivity_status.setObjectName("StateMD")
+        self._sensitivity_status.setTextFormat(Qt.TextFormat.RichText)
+        body.addWidget(self._sensitivity_status)
+        self._sensitivity_combos: dict[str, QComboBox] = {}
+        suggestions = self._sensitivity_suggestions()
+        for q in QUESTIONS:
+            qid = str(q.get("id") or "")
+            prompt = make_small_body_label(str(q.get("prompt") or ""), wrap=True)
+            prompt.setToolTip(str(q.get("help") or ""))
+            body.addWidget(prompt)
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            combo = make_combo(
+                [
+                    (t("detail.sensitivity.answer_unset"), ""),
+                    (t("detail.sensitivity.answer_yes"), "yes"),
+                    (t("detail.sensitivity.answer_no"), "no"),
+                ],
+                height=28,
+                min_width=120,
+                tip=str(q.get("help") or ""),
+            )
+            stored = str((self._sensitivity_answers or {}).get(qid) or "")
+            combo.setCurrentIndex({"": 0, "yes": 1, "no": 2}.get(stored, 0))
+            combo.currentIndexChanged.connect(lambda _i, qid=qid: self._on_sensitivity_answer(qid))
+            self._sensitivity_combos[qid] = combo
+            row.addWidget(combo)
+            caption = make_caption_label("")
+            if stored and stored == suggestions.get(qid):
+                word = (
+                    t("detail.sensitivity.answer_yes")
+                    if stored == "yes"
+                    else t("detail.sensitivity.answer_no")
+                )
+                caption.setText(t("detail.sensitivity.suggested", value=word))
+            row.addWidget(caption, 1)
+            wrap = QWidget()
+            wrap.setLayout(row)
+            body.addWidget(wrap)
+        self._refresh_sensitivity_status()
+        return card
+
+    def _refresh_sensitivity_card(self) -> None:
+        """Re-pull stored answers + suggestions after metadata/checks load."""
+        combos = getattr(self, "_sensitivity_combos", {})
+        if not combos:
+            return
+        self._load_sensitivity_review()
+        for qid, combo in combos.items():
+            stored = str((self._sensitivity_answers or {}).get(qid) or "")
+            combo.blockSignals(True)
+            combo.setCurrentIndex({"": 0, "yes": 1, "no": 2}.get(stored, 0))
+            combo.blockSignals(False)
+        self._refresh_sensitivity_status()
+
+    def _refresh_sensitivity_status(self) -> None:
+        try:
+            answered = answered_count(self._sensitivity_answers)
+            total = len(QUESTIONS)
+            color = TEXT_SUCCESS if is_complete(self._sensitivity_answers) else TEXT_AMBER
+            self._sensitivity_status.setText(
+                f"<span style='color: {color};'>"
+                + t("detail.sensitivity.status_caption", answered=answered, total=total)
+                + "</span>"
+            )
+        except Exception:
+            pass
+
+    def _on_sensitivity_answer(self, qid: str) -> None:
+        """One answer changed: persist, refresh the caption, log."""
+        combo = getattr(self, "_sensitivity_combos", {}).get(qid)
+        if combo is None:
+            return
+        token = str(combo.currentData() or "")
+        answers = dict(getattr(self, "_sensitivity_answers", {}) or {})
+        if token in ("yes", "no"):
+            answers[qid] = token
+        else:
+            answers.pop(qid, None)
+        self._sensitivity_answers = answers
+        try:
+            st = self._state()
+            if st is not None:
+                st.set_sensitivity_review(self._pid, answers)
+        except Exception:
+            return
+        self._refresh_sensitivity_status()
+        self._log_action(
+            "sensitivity_reviewed",
+            t(
+                "detail.sensitivity.log_note",
+                answered=answered_count(answers),
+                total=len(QUESTIONS),
+            ),
+            {"answered": answered_count(answers)},
+        )
+
+    def _sensitivity_blocks(self) -> tuple[bool, str]:
+        """(blocked, message) for an Approve decision under this ruleset."""
+        try:
+            if not ruleset_requires(self._ruleset):
+                return False, ""
+            if is_complete(self._sensitivity_answers):
+                return False, ""
+            return True, t(
+                "detail.sensitivity.gate_body",
+                answered=answered_count(self._sensitivity_answers),
+                total=len(QUESTIONS),
+            )
+        except Exception:
+            return False, ""
+
+    def _sensitivity_suggestions(self) -> dict:
+        """Machine-suggested answers from the report + inventory."""
+        try:
+            return suggested_answers(self._report, self._inventory)
+        except Exception:
+            return {}
+
+    def _load_sensitivity_review(self) -> None:
+        """Restore stored answers, plus machine suggestions where nothing is stored."""
+        try:
+            st = self._state()
+            data = st.get_sensitivity_review(self._pid) if st is not None else None
+        except Exception:
+            data = None
+        answers = dict((data or {}).get("answers") or {})
+        for qid, suggestion in self._sensitivity_suggestions().items():
+            if qid not in answers and suggestion in ("yes", "no"):
+                answers[qid] = suggestion
+        self._sensitivity_answers = answers
+
+    def _on_export_record(self) -> None:
+        """One click: the dated curation-record folder (dv-vwt)."""
+        try:
+            from curation.curation_record import export_record
+
+            st = self._state()
+            actions = st.list_actions(self._pid, limit=500) if st is not None else []
+            decision_row = st.last_action(self._pid, "decision") if st is not None else None
+            decision = str((decision_row or {}).get("notes") or "")
+            dispositions = st.list_finding_dispositions(self._pid) if st is not None else {}
+            sensitivity_data = st.get_sensitivity_review(self._pid) if st is not None else None
+            try:
+                response_text = self._response_edit.toPlainText()
+            except Exception:
+                response_text = ""
+            try:
+                staged = self._dl_mgr.files_dir(self._pid)
+            except Exception:
+                staged = None
+            record_dir = export_record(
+                self._dl_mgr.dataset_dir(self._pid),
+                report=self._report,
+                response_text=response_text,
+                actions=actions,
+                dispositions=dispositions,
+                sensitivity=sensitivity_data,
+                decision=decision,
+                curation_label=str((self._curation or {}).get("label") or ""),
+                staged_dir=staged if (staged and staged.exists()) else None,
+            )
+            self._log_action(
+                "curation_record_exported",
+                t("detail.status.record_saved_log", name=record_dir.name),
+                {"path": str(record_dir)},
+            )
+            self._set_status(t("detail.status.record_saved", path=record_dir), tone="success")
+        except Exception as exc:
+            dialogs.show_warning(
+                self,
+                t("detail.header.export_record"),
+                t("detail.status.record_failed", exc=exc),
+            )

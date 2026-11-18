@@ -12,6 +12,7 @@ import sys
 import time
 import types
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -32,7 +33,9 @@ class FakeInfo:
 
 
 class FakeManager:
-    def __init__(self, *, info="1.2.0", portable=False, download_ok=True, error: Exception | None = None):
+    def __init__(
+        self, *, info="1.2.0", portable=False, download_ok=True, error: Exception | None = None
+    ):
         self.info_version = info
         self.portable = portable
         self.download_ok = download_ok
@@ -137,7 +140,9 @@ def test_no_update_available_reports_up_to_date(tmp_path: Path) -> None:
 
 
 def test_a_failed_check_is_a_value_not_an_exception(tmp_path: Path) -> None:
-    outcome = updater.check_for_updates(manager=FakeManager(error=BoomError("403 rate limit")), workspace=tmp_path)
+    outcome = updater.check_for_updates(
+        manager=FakeManager(error=BoomError("403 rate limit")), workspace=tmp_path
+    )
 
     assert outcome["status"] == "failed"
     assert outcome["reason"] == "rate_limited"
@@ -165,7 +170,7 @@ def test_feed_without_velopack_returns_unavailable() -> None:
 
 
 def test_portable_build_returns_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = types.ModuleType("velopack")
+    fake: Any = types.ModuleType("velopack")
     captured: dict[str, object] = {}
 
     class Options:
@@ -196,7 +201,7 @@ def test_portable_build_returns_unavailable(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @pytest.mark.parametrize(
-    "exc,reason",
+    ("exc", "reason"),
     [
         (BoomError("403 rate limit exceeded"), "rate_limited"),
         (ConnectionResetError("reset by peer"), "network"),
@@ -210,10 +215,12 @@ def test_error_classification(exc: Exception, reason: str) -> None:
 
 
 def test_a_failure_writes_one_log_line(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import applog
+    import curation.applog as applog
 
     applog.clear()
-    outcome = updater.check_for_updates(manager=FakeManager(error=BoomError("boom")), force=True, workspace=tmp_path)
+    outcome = updater.check_for_updates(
+        manager=FakeManager(error=BoomError("boom")), force=True, workspace=tmp_path
+    )
     matching = [line for line in applog.lines() if "Update check:" in line]
     assert outcome["status"] == "failed"
     assert len(matching) == 1
@@ -224,7 +231,9 @@ def test_a_failure_writes_one_log_line(tmp_path: Path, monkeypatch: pytest.Monke
 # ------------------------------------------------------------------
 
 
-def test_the_check_worker_emits_its_outcome(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_the_check_worker_emits_its_outcome(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(updater, "make_update_manager", lambda: FakeManager(info="0.2.0"))
     monkeypatch.setattr(updater, "is_check_due", lambda **_: True)
     outcomes: list[dict] = []
@@ -236,7 +245,9 @@ def test_the_check_worker_emits_its_outcome(monkeypatch: pytest.MonkeyPatch, tmp
     assert outcomes == [{"status": "update_available", "version": "0.2.0"}]
 
 
-def test_the_download_worker_reports_progress_in_order(qapp, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_the_download_worker_reports_progress_in_order(
+    qapp, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     manager = FakeManager(info="0.2.0")
     monkeypatch.setattr(updater, "make_update_manager", lambda: manager)
     monkeypatch.setattr(updater, "_resolve_workspace", lambda ws: tmp_path)

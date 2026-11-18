@@ -55,6 +55,7 @@ class MetadataLoadSection(DetailState):
             self._pid,
             self,
             collection=_collection,
+            draft_hint=self._draft_hint(),
         )
         self._meta_worker.finished.connect(self._on_metadata_finished)
         self._meta_worker.error.connect(self._on_metadata_error)
@@ -77,7 +78,7 @@ class MetadataLoadSection(DetailState):
         self._progress.setVisible(False)
         self._load_meta_btn.setEnabled(True)
         self._inventory = inventory if isinstance(inventory, list) else []
-        self._metadata = metadata if isinstance(metadata, dict) else None
+        self._metadata = metadata
         self._curation = curation if isinstance(curation, dict) else {}
         self._version_diff = version_diff if isinstance(version_diff, dict) else {}
         self._changes_loaded = True
@@ -86,26 +87,37 @@ class MetadataLoadSection(DetailState):
         self._guestbook = guestbook if isinstance(guestbook, dict) else None
         account = extra.get("account")
         self._account = account if isinstance(account, dict) else {}
-        versions = extra.get("versions")
-        self._versions = versions if isinstance(versions, list) else []
-        timestamps = extra.get("timestamps")
-        self._timestamps = timestamps if isinstance(timestamps, dict) else {}
-        review_submissions = extra.get("review_submissions")
+        self._versions = extra.get("versions") if isinstance(extra.get("versions"), list) else []
+        self._timestamps = (
+            extra.get("timestamps") if isinstance(extra.get("timestamps"), dict) else {}
+        )
         self._review_submissions = (
-            review_submissions if isinstance(review_submissions, list) else []
+            extra.get("review_submissions")
+            if isinstance(extra.get("review_submissions"), list)
+            else []
         )
         self._in_review = bool(extra.get("in_review", False))
         self._update_header_link(metadata)
         self._update_curation_pill()
         self._populate_version_diff()
         self._refresh_decision_options()
+        self._refresh_sensitivity_card()
         self._raw_view.setPlainText(_format_metadata(metadata))
         self._populate_completeness(metadata)
+        self._note_follow_up_update()
         self.metadataLoaded.emit(self._pid, metadata, self._inventory)
         self._refresh_curation_preview()
         self._refresh_dataset_log()
         inv_failed = bool(extra.get("inventory_failed", False))
         self._inventory_ok = not inv_failed
+        refusal: dict = {}
+        try:
+            refusals = extra.get("refusals")
+            if isinstance(refusals, dict):
+                refusal = refusals.get("inventory") or {}
+        except Exception:
+            refusal = {}
+        not_readable = str((refusal or {}).get("reason") or "") == "draft_not_readable"
         if not inv_failed:
             try:
                 from curation.storage import write_size_entry
@@ -128,7 +140,11 @@ class MetadataLoadSection(DetailState):
             "metadata_loaded" if not inv_failed else "metadata_failed",
             t("detail.status.inventory_count", count=len(self._inventory))
             if not inv_failed
-            else t("detail.status.file_list_failed_short"),
+            else (
+                t("detail.status.file_list_not_readable_short")
+                if not_readable
+                else t("detail.status.file_list_failed_short")
+            ),
             {"file_count": len(self._inventory)},
         )
         if inv_failed:
@@ -136,11 +152,21 @@ class MetadataLoadSection(DetailState):
             # and offer the retry instead of implying zero files.
             from ui.checks_tree import build_tree_model as _btm
 
-            self._set_status(t("detail.status.file_list_failed"))
-            self._file_tree.setModel(_btm([], None))
-            self._all_file_rows = []
-            self._file_footer_left.setText(t("detail.status.file_list_failed_footer"))
-            self._file_footer_right.setText("")
+            if not_readable:
+                # The server refused because this account is not in the
+                # dataset's curation scope — an expected answer, not a
+                # broken load.
+                self._set_status(t("detail.status.file_list_not_readable"))
+                self._file_tree.setModel(_btm([], None))
+                self._all_file_rows = []
+                self._file_footer_left.setText(t("detail.status.file_list_not_readable_footer"))
+                self._file_footer_right.setText("")
+            else:
+                self._set_status(t("detail.status.file_list_failed"), tone="error")
+                self._file_tree.setModel(_btm([], None))
+                self._all_file_rows = []
+                self._file_footer_left.setText(t("detail.status.file_list_failed_footer"))
+                self._file_footer_right.setText("")
         elif self._inventory:
             self._populate_from_inventory()
             self._set_status(
@@ -180,10 +206,28 @@ class MetadataLoadSection(DetailState):
         if self._metadata is not None:
             self._populate_completeness(self._metadata)
 
-    def _on_reset_meta_view(self) -> None:
+    def _draft_hint(self) -> bool | None:
+        """Whether this dataset is under curation, as the queue row knew.
+
+        True/False when the dashboard row says so, None when it does not
+        (the detail view then asks for everything). A row whose access the
+        account does not have counts as "not under curation" for the
+        purpose of skipping reads: those reads would be refused anyway.
+        """
         try:
-            self._reset_table_view("dataset_meta", self._meta_check_tree.header())
-            if self._metadata is not None:
-                self._populate_completeness(self._metadata)
+            hint = self._dataset_hint or {}
+            if not hint:
+                return None
+            access = hint.get("access")
+            if isinstance(access, dict):
+                state = str(access.get("state") or "")
+                if state and state != "readable":
+                    return False
+            if "has_draft" in hint:
+                return bool(hint.get("has_draft"))
+            state = str(hint.get("state") or "").upper()
+            if not state:
+                return None
+            return state == "DRAFT" or "REVIEW" in state
         except Exception:
-            pass
+            return None

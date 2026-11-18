@@ -44,9 +44,24 @@ IMAGE_MAX_PX = 240
 PDF_SNIPPET_CHARS = 600
 
 _TEXT_EXTS = {
-    ".txt", ".md", ".markdown", ".rst", ".tex", ".rmd",
-    ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf",
-    ".log", ".xml", ".html", ".htm", ".csv.bak", ".texmf",
+    ".txt",
+    ".md",
+    ".markdown",
+    ".rst",
+    ".tex",
+    ".rmd",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".log",
+    ".xml",
+    ".html",
+    ".htm",
+    ".csv.bak",
+    ".texmf",
 }
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tif", ".tiff"}
 _ARCHIVE_SUFFIXES = ((".tar.gz",), (".tar.bz2",), (".tar.xz",), (".tgz",), (".txz",))
@@ -117,14 +132,18 @@ def _column_types(rows: list[list[str]]) -> list[str]:
 def _tabular_from_rows(rows: list[list[str]], source: str) -> dict[str, Any]:
     rows = [list(r) for r in rows if any(str(c).strip() for c in r)]
     if not rows:
-        return {"kind": "tabular", "source": source, "columns": [], "types": [],
-                "rows": [], "truncated": False}
+        return {
+            "kind": "tabular",
+            "source": source,
+            "columns": [],
+            "types": [],
+            "rows": [],
+            "truncated": False,
+        }
     # Drop trailing all-empty cells so short sheets don't render a wall of
     # empty columns (openpyxl iter_rows pads to max_col).
     widest = max(len(r) for r in rows) if rows else 0
-    while widest and all(
-        len(r) < widest or not str(r[widest - 1]).strip() for r in rows
-    ):
+    while widest and all(len(r) < widest or not str(r[widest - 1]).strip() for r in rows):
         widest -= 1
     rows = [r[:widest] for r in rows] if widest else [[]]
     header = [str(c) for c in rows[0][:TABLE_COLS]]
@@ -141,9 +160,7 @@ def _tabular_from_rows(rows: list[list[str]], source: str) -> dict[str, Any]:
     }
 
 
-def preview_file(
-    path: Path | str, *, max_bytes: int = MAX_PREVIEW_BYTES
-) -> dict[str, Any]:
+def preview_file(path: Path | str, *, max_bytes: int = MAX_PREVIEW_BYTES) -> dict[str, Any]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Preview one file; never raises. ``kind`` drives the renderer."""
     try:
         path = Path(path)
@@ -169,10 +186,7 @@ def preview_file(
             return _preview_spss(path, ext)
         if ext in (".nc", ".netcdf", ".h5", ".hdf5"):
             return _preview_hdf(path, ext)
-        if (
-            ext in _ARCHIVE_EXTS
-            or any(lower.endswith(s) for s in _ARCHIVE_SUFFIXES)
-        ):
+        if ext in _ARCHIVE_EXTS or any(lower.endswith(s) for s in _ARCHIVE_SUFFIXES):
             return _preview_archive(path)
         if ext in _TEXT_EXTS or ext == "":
             return _preview_text(path)
@@ -243,7 +257,8 @@ def _preview_image(path: Path) -> dict[str, Any]:
         try:
             from PIL import Image
 
-            with Image.open(path) as img:
+            img: Image.Image = Image.open(path)
+            with img:
                 width, height = img.size
                 img.thumbnail((IMAGE_MAX_PX, IMAGE_MAX_PX))
                 if img.mode not in ("RGB", "RGBA"):
@@ -325,9 +340,9 @@ def _preview_xlsx(path: Path) -> dict[str, Any]:
             ws = wb[sheet] if sheet else None
             rows: list[list[str]] = []
             if ws is not None:
-                for row in ws.iter_rows(max_row=TABLE_ROWS + 1,
-                                        max_col=TABLE_COLS,
-                                        values_only=True):
+                for row in ws.iter_rows(
+                    max_row=TABLE_ROWS + 1, max_col=TABLE_COLS, values_only=True
+                ):
                     rows.append(["" if c is None else str(c) for c in row])
             out = _tabular_from_rows(rows, "xlsx")
             out["sheet"] = sheet
@@ -349,13 +364,9 @@ def _preview_spss(path: Path, ext: str) -> dict[str, Any]:
         import pyreadstat
 
         if ext == ".sav":
-            df, meta = pyreadstat.read_sav(
-                str(path), row_limit=TABLE_ROWS + 1, metadataonly=False
-            )
+            df, meta = pyreadstat.read_sav(str(path), row_limit=TABLE_ROWS + 1, metadataonly=False)
         elif ext == ".dta":
-            df, meta = pyreadstat.read_dta(
-                str(path), row_limit=TABLE_ROWS + 1, metadataonly=False
-            )
+            df, meta = pyreadstat.read_dta(str(path), row_limit=TABLE_ROWS + 1, metadataonly=False)
         else:
             df, meta = pyreadstat.read_sas7bdat(
                 str(path), row_limit=TABLE_ROWS + 1, metadataonly=False
@@ -371,10 +382,11 @@ def _preview_spss(path: Path, ext: str) -> dict[str, Any]:
                 for row in df.head(TABLE_ROWS).itertuples(index=False)
             ]
         except Exception:
-            preview_rows = [
-                [str(v) for v in row[:TABLE_COLS]]
-                for row in list(df.values)[:TABLE_ROWS]
-            ] if df is not None else []
+            preview_rows = (
+                [[str(v) for v in row[:TABLE_COLS]] for row in list(df.values)[:TABLE_ROWS]]
+                if df is not None
+                else []
+            )
         return {
             "kind": "tabular",
             "source": ext.lstrip("."),
@@ -416,7 +428,7 @@ def _preview_hdf(path: Path, ext: str) -> dict[str, Any]:
 
             count = 0
             with h5py.File(str(path), "r") as handle:
-                for key in handle.keys():
+                for key in handle:
                     obj = handle[key]
                     lines.append(f"{key}: {'group' if isinstance(obj, h5py.Group) else 'dataset'}")
                     count += 1
@@ -489,15 +501,18 @@ class PreviewCard(QFrame):
 
     def __init__(self, on_open_folder=None, parent=None):
         super().__init__(parent)
+        self._on_open_folder = on_open_folder
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
         card, body, _title, _header = make_card(t("detail.preview.title"))
-        add_info_tip(_header, t("detail.preview.tip"), name=t("detail.preview.title"), group="Queue")
+        add_info_tip(
+            _header, t("detail.preview.tip"), name=t("detail.preview.title"), group="Queue"
+        )
         lay.addWidget(card)
 
         self._placeholder = make_caption_label(t("detail.preview.select_file"))
-        self._placeholder.setAlignment(Qt.AlignCenter)
+        self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._placeholder.setMinimumHeight(120)
         body.addWidget(self._placeholder)
 
@@ -508,7 +523,7 @@ class PreviewCard(QFrame):
 
         self._image = QLabel()
         self._image.setObjectName("PreviewImage")
-        self._image.setAlignment(Qt.AlignCenter)
+        self._image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._image.setMinimumHeight(80)
         self._image.setVisible(False)
         body.addWidget(self._image)
@@ -525,8 +540,6 @@ class PreviewCard(QFrame):
             lambda: self._on_open_folder() if self._on_open_folder else None
         )
         body.addWidget(self._open_btn)
-
-        self._on_open_folder = on_open_folder
         self._rel = ""
 
     # -- public API ---------------------------------------------------------
@@ -623,11 +636,7 @@ class PreviewCard(QFrame):
             pixmap.loadFromData(thumb, "PNG")
             self._image.setPixmap(pixmap)
             self._image.setVisible(True)
-        dims = (
-            t("detail.preview.dims", width=width, height=height, format=fmt)
-            if width
-            else fmt
-        )
+        dims = t("detail.preview.dims", width=width, height=height, format=fmt) if width else fmt
         self._note.setText(dims)
         self._note.setVisible(True)
 
@@ -637,7 +646,9 @@ def _preview_archive(path: Path) -> dict[str, Any]:
     entries: list[str] = []
     total = 0
     try:
-        if lower.endswith((".tar", ".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".txz", ".gz", ".bz2", ".xz")):
+        if lower.endswith(
+            (".tar", ".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".txz", ".gz", ".bz2", ".xz")
+        ):
             import tarfile
 
             with tarfile.open(str(path)) as handle:

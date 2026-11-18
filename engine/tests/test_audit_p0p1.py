@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from curation import applog
-from curation import config as _config_module
+import curation.applog as applog
+import curation.config as _config_module
 from curation.config import AppConfig, Config, DataverseConfig
 
 

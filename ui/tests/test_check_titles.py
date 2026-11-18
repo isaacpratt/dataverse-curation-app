@@ -99,9 +99,11 @@ def test_tooltip_is_prose_never_raw_json_or_the_id():
     tip = format_details_tooltip(result, "CA-TP4.png")
     assert "Image Validity" in tip
     assert "Valid PNG image (875x656, RGB)" in tip
-    assert "Width: 875" in tip and "Height: 656" in tip
+    assert "Width: 875" in tip
+    assert "Height: 656" in tip
     assert "format.images.valid" not in tip
-    assert "{" not in tip and "}" not in tip
+    assert "{" not in tip
+    assert "}" not in tip
 
 
 def test_tooltip_keeps_the_why_and_how_of_a_finding():
@@ -137,8 +139,7 @@ def test_state_words():
 
     assert check_state(CheckResult("format.csv.openable", "info", True, "ok")) == "Complete"
     assert (
-        check_state(CheckResult("inventory.zero_byte", "error", False, "oops"))
-        == "Needs attention"
+        check_state(CheckResult("inventory.zero_byte", "error", False, "oops")) == "Needs attention"
     )
     assert (
         check_state(
@@ -155,14 +156,16 @@ def test_manifest_row_names_the_check_and_explains_the_verdict(qapp):
     from ui.checks_tree import COLUMNS
 
     model = _tree(
-        _report([
-            CheckResult(
-                check_id="format.images.valid",
-                level="info",
-                passed=True,
-                message="CA-TP4-HH.csv: valid PNG image (875x656, RGB)",
-            )
-        ])
+        _report(
+            [
+                CheckResult(
+                    check_id="format.images.valid",
+                    level="info",
+                    passed=True,
+                    message="CA-TP4-HH.csv: valid PNG image (875x656, RGB)",
+                )
+            ]
+        )
     )
     file_item = model.item(0, 0)
     check_name = file_item.child(0, 0)
@@ -177,9 +180,7 @@ def test_manifest_row_names_the_check_and_explains_the_verdict(qapp):
 def test_manifest_check_row_keeps_its_status_icon(qapp):
     from ui.checks_tree import _KIND_ROLE
 
-    model = _tree(
-        _report([CheckResult("inventory.zero_byte", "error", False, "a.csv: empty")])
-    )
+    model = _tree(_report([CheckResult("inventory.zero_byte", "error", False, "a.csv: empty")]))
     item = model.item(0, 0).child(0, 0)
     assert item.icon().isNull() is False
     assert item.data(_KIND_ROLE)["check_id"] == "inventory.zero_byte"
@@ -187,7 +188,7 @@ def test_manifest_check_row_keeps_its_status_icon(qapp):
 
 def test_manifest_disposition_still_joins_the_scan_text(qapp):
     """dv-32x: the resolved label rides after the verdict, not instead of it."""
-    from storage import finding_key
+    from curation.storage import finding_key
 
     result = CheckResult("format.csv.structure", "warning", False, "a.csv: ragged rows")
     key = finding_key(result.check_id, "a.csv", result.message)
@@ -210,15 +211,15 @@ class _Bare:
         return {}
 
     def _finding_overflow_button(self, text):
-        from ui.dataset_detail import DatasetDetailView
+        from ui.dataset import DatasetDetailView
 
-        return DatasetDetailView._finding_overflow_button(self, text)
+        return DatasetDetailView._finding_overflow_button(self, text)  # type: ignore[arg-type]
 
 
 def _auto_row(title, desc, passed, level, badge=None):
-    from ui.dataset_detail import DatasetDetailView
+    from ui.dataset import DatasetDetailView
 
-    return DatasetDetailView._auto_row(_Bare(), title, desc, passed, level, badge)
+    return DatasetDetailView._auto_row(_Bare(), title, desc, passed, level, badge)  # type: ignore[arg-type]
 
 
 def test_auto_row_renders_the_name_as_the_heading(qapp):
@@ -232,20 +233,20 @@ def test_auto_row_renders_the_name_as_the_heading(qapp):
 
 def test_auto_checks_name_every_row_with_check_title():
     """dv-dcd regression: no call site may pass a raw check id as the name."""
-    source = Path(__file__).resolve().parents[1] / "dataset_detail.py"
-    tree = ast.parse(source.read_text(encoding="utf-8"))
+    package = Path(__file__).resolve().parents[1] / "dataset"
     offenders = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        fn = node.func
-        if getattr(fn, "attr", "") != "_auto_row" or not node.args:
-            continue
-        first = node.args[0]
-        named = isinstance(first, ast.Call) and getattr(first.func, "id", "") == "check_title"
-        if not named:
-            offenders.append(node.lineno)
+    for source in sorted(package.glob("*.py")):
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            if getattr(fn, "attr", "") != "_auto_row" or not node.args:
+                continue
+            first = node.args[0]
+            named = isinstance(first, ast.Call) and getattr(first.func, "id", "") == "check_title"
+            if not named:
+                offenders.append(f"{source.name}:{node.lineno}")
     assert offenders == [], (
-        "Auto-Checks rows must be named with check_title(); raw ids at lines "
-        f"{offenders}"
+        f"Auto-Checks rows must be named with check_title(); raw ids at {offenders}"
     )

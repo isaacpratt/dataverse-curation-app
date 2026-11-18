@@ -1,7 +1,6 @@
 """Depositor follow-up tracking (dv-5eg) — pure logic + storage round-trip."""
 
-
-import follow_ups as fu
+import curation.follow_ups as fu
 from curation.storage import open_state
 
 
@@ -56,16 +55,10 @@ class TestStateFor:
         assert fu.state_for("2026-10-14T12:30:00Z") == fu.STATE_AWAITING
 
     def test_depositor_updated_when_draft_moved(self):
-        assert (
-            fu.state_for("2026-10-14T12:30:00Z", "2026-10-16T08:00:00Z")
-            == fu.STATE_UPDATED
-        )
+        assert fu.state_for("2026-10-14T12:30:00Z", "2026-10-16T08:00:00Z") == fu.STATE_UPDATED
 
     def test_awaiting_when_draft_is_older(self):
-        assert (
-            fu.state_for("2026-10-14T12:30:00Z", "2026-10-01T08:00:00Z")
-            == fu.STATE_AWAITING
-        )
+        assert fu.state_for("2026-10-14T12:30:00Z", "2026-10-01T08:00:00Z") == fu.STATE_AWAITING
 
 
 class TestStorageRoundTrip:
@@ -98,6 +91,7 @@ class TestStorageRoundTrip:
                 opened_at="2026-10-20T00:00:00+00:00",
             )
             row = st.get_follow_up("doi:2")
+            assert row is not None
             assert row["opened_at"].startswith("2026-09-01")
             assert row["decision_label"] == "Revisions requested again"
         finally:
@@ -113,6 +107,7 @@ class TestStorageRoundTrip:
             )
             st.set_follow_up_last_update("doi:3", "2026-10-20T09:00:00Z")
             row = st.get_follow_up("doi:3")
+            assert row is not None
             assert row["state"] == fu.STATE_UPDATED
             assert row["last_update"] == "2026-10-20T09:00:00Z"
             listing = st.list_follow_ups()

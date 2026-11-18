@@ -653,9 +653,17 @@ class CheckWorker(QThread):
     # Overall check fraction (0..1) for a progress ring.
     progressFraction = Signal(float)
 
-    def __init__(self, dataset_dir: Path, persistent_id: str, label: str,
-                 inventory: list | None = None, metadata: dict | None = None,
-                 client=None, ruleset: dict | None = None, parent=None):
+    def __init__(
+        self,
+        dataset_dir: Path,
+        persistent_id: str,
+        label: str,
+        inventory: list | None = None,
+        metadata: dict | None = None,
+        client=None,
+        ruleset: dict | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         register_worker(self)
         self._dataset_dir = dataset_dir
@@ -683,7 +691,7 @@ class CheckWorker(QThread):
     def _stop_requested(self) -> bool:
         return self._cancel_requested or self.isInterruptionRequested()
 
-    def run(self) -> None:
+    def run(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         import os
         import traceback
 
@@ -707,7 +715,8 @@ class CheckWorker(QThread):
             if self._client is not None and isinstance(self._inventory, list):
                 variable_metadata = {}
                 tabular = [
-                    e for e in self._inventory
+                    e
+                    for e in self._inventory
                     if isinstance(e, dict) and e.get("tabular") and e.get("id")
                 ][:50]
                 for entry in tabular:
@@ -718,9 +727,7 @@ class CheckWorker(QThread):
                     except Exception:
                         meta = None
                     if meta:
-                        variable_metadata[
-                            str(entry.get("path") or entry.get("label") or "")
-                        ] = meta
+                        variable_metadata[str(entry.get("path") or entry.get("label") or "")] = meta
             report = run_report(
                 self._dataset_dir,
                 persistent_id=self._pid,
@@ -788,7 +795,7 @@ class BulkCheckWorker(QThread):
         import traceback
 
         try:
-            from download_manager import DownloadManager
+            from curation.download_manager import DownloadManager
             from engine.runner import run_report
 
             dl = DownloadManager(None, self._workspace)
@@ -893,8 +900,15 @@ class MetadataWorker(QThread):
     finished = Signal(dict, list, dict, dict, dict)
     error = Signal(str)
 
-    def __init__(self, base_url: str, api_token: str, persistent_id: str, parent=None,
-                 collection: str = "", draft_hint: bool | None = None):
+    def __init__(
+        self,
+        base_url: str,
+        api_token: str,
+        persistent_id: str,
+        parent=None,
+        collection: str = "",
+        draft_hint: bool | None = None,
+    ):
         super().__init__(parent)
         register_worker(self)
         self._base_url = base_url
@@ -916,8 +930,14 @@ class MetadataWorker(QThread):
         sent to be refused.
         """
         names = [
-            "metadata", "inventory", "curation", "version_diff",
-            "versions", "history", "allowed", "in_review",
+            "metadata",
+            "inventory",
+            "curation",
+            "version_diff",
+            "versions",
+            "history",
+            "allowed",
+            "in_review",
         ]
         if self._draft_hint is False:
             return [n for n in names if n not in ("curation", "version_diff", "history")]
@@ -936,7 +956,7 @@ class MetadataWorker(QThread):
             # Parallel independent fetches (was serial sum of 8x RTT).
             refusals: dict = {}
 
-            def _fetch(name: str):
+            def _fetch(name: str):  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
                 try:
                     if name == "metadata":
                         return ("metadata", client.get_dataset_metadata(self._pid))

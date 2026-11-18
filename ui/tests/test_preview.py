@@ -24,7 +24,7 @@ class TestCsvPreview:
 
     def test_invalid_csv_headers_fall_back(self, tmp_path):
         f = tmp_path / "broken.csv"
-        f.write_text("unclosed-\"quote\nrow2\n", encoding="utf-8")
+        f.write_text('unclosed-"quote\nrow2\n', encoding="utf-8")
         result = preview.preview_file(f)
         assert result["kind"] == "tabular"  # parse error degrades, never raises
 
@@ -152,7 +152,7 @@ class TestImagesAndPdf:
         assert result["pages"] == 1
 
 
-@pytest.fixture()
+@pytest.fixture
 def card(qapp):
     from ui.preview import PreviewCard
 
@@ -173,7 +173,8 @@ class TestPreviewCard:
         f.write_text("name,age\nAnn,30\n", encoding="utf-8")
         card.set_path(f, rel="data.csv")
         edits = card.findChildren(QPlainTextEdit)
-        assert edits and "Ann" in edits[0].toPlainText()
+        assert edits
+        assert "Ann" in edits[0].toPlainText()
 
     def test_not_staged_state(self, card):
         kind = card.set_not_staged("x.csv")
@@ -181,7 +182,8 @@ class TestPreviewCard:
 
     def test_too_large_offers_open_folder(self, card, monkeypatch):
         monkeypatch.setattr(
-            preview, "preview_file",
+            preview,
+            "preview_file",
             lambda p, **kw: {"kind": "too_large", "size_bytes": 10**9, "cap_bytes": 1},
         )
         kind = card.set_path(__import__("pathlib").Path("whatever.csv"))
@@ -201,7 +203,7 @@ class TestPreviewCard:
 
 class TestRouting:
     def test_set_preview_logs_and_handles_missing(self, qapp, tmp_path):
-        from ui.dataset_detail import DatasetDetailView
+        from ui.dataset import DatasetDetailView
 
         v = DatasetDetailView.__new__(DatasetDetailView)
         staged = tmp_path / "staged"
@@ -217,8 +219,8 @@ class TestRouting:
             def files_dir(self, pid):
                 return staged
 
-        v._dl_mgr = _StubDl()
-        v._log_action = lambda a, n="", d=None: v._logged.append((a, n, d))
+        v._dl_mgr = _StubDl()  # type: ignore[assignment]
+        v._log_action = lambda a, n="", d=None: v._logged.append((a, n, d))  # type: ignore[assignment]
         v._show_preview_for_file("data.csv")
         assert ("preview_rendered", "data.csv")[:2] == (v._logged[0][0], v._logged[0][1])
         assert any(d and d.get("kind") == "tabular" for _a, _n, d in v._logged)

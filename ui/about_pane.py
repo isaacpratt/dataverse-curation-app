@@ -1,5 +1,7 @@
 """About pane: non-modal stack page describing the app (replaces the popup)."""
 
+from typing import Any, ClassVar
+
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
@@ -145,11 +147,13 @@ class AboutPane(QWidget):
         self.setStyleSheet(page_background_qss("AboutPane"))
 
         # Updates section state (the feed logic lives in ui/updater.py).
-        self._update_state = "idle"  # idle|checking|unavailable|up_to_date|available|downloading|ready|failed
+        self._update_state = (
+            "idle"  # idle|checking|unavailable|up_to_date|available|downloading|ready|failed
+        )
         self._update_version: str | None = None
         self._update_pending_info = None  # velopack UpdateInfo after a successful download
-        self._check_worker = None
-        self._download_worker = None
+        self._check_worker: Any = None
+        self._download_worker: Any = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 24, 24, 24)
@@ -328,9 +332,10 @@ class AboutPane(QWidget):
             QTimer.singleShot(1600, _restore)
         except Exception:
             pass
+
     # -- Updates section -----------------------------------------------
 
-    _REASON_KEYS = {
+    _REASON_KEYS: ClassVar[dict[str, str]] = {
         "network": "about.updates.reason_network",
         "timeout": "about.updates.reason_timeout",
         "rate_limited": "about.updates.reason_rate_limited",
@@ -356,7 +361,15 @@ class AboutPane(QWidget):
         shown = _time.strftime("%Y-%m-%d %H:%M", _time.localtime(stamp))
         return t("about.updates.last_checked", when=shown)
 
-    def _set_update_controls(self, *, status: str, button: str | None, button_enabled: bool = True, show_progress: bool = False, progress: int | None = None) -> None:
+    def _set_update_controls(
+        self,
+        *,
+        status: str,
+        button: str | None,
+        button_enabled: bool = True,
+        show_progress: bool = False,
+        progress: int | None = None,
+    ) -> None:
         self._update_status.setText(status)
         self._update_last_checked.setText(self._format_checked())
         if progress is not None:
@@ -447,7 +460,9 @@ class AboutPane(QWidget):
             elif status == "failed":
                 self._update_state = "failed"
                 self._set_update_controls(
-                    status=t("about.updates.failed", reason=self._reason_text(outcome.get("reason"))),
+                    status=t(
+                        "about.updates.failed", reason=self._reason_text(outcome.get("reason"))
+                    ),
                     button=t("about.updates.check_now"),
                 )
             else:  # up_to_date | cached
@@ -479,7 +494,9 @@ class AboutPane(QWidget):
     def _on_download_progress(self, percent: int) -> None:
         version = self._update_version or ""
         self._update_progress.setValue(percent)
-        self._update_status.setText(t("about.updates.downloading", version=version, percent=percent))
+        self._update_status.setText(
+            t("about.updates.downloading", version=version, percent=percent)
+        )
 
     def _on_download_finished(self, ok: bool) -> None:
         import ui.updater as _updater

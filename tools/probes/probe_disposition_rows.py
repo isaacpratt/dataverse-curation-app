@@ -17,8 +17,8 @@ from _common import Report, boot
 
 def main() -> int:
     app, cfg = boot()
-    from storage import finding_key
-    from ui.dataset_detail import DatasetDetailView
+    from curation.storage import finding_key
+    from ui.dataset import DatasetDetailView
     from ui.widgets import DISPOSITION_TOKENS, disposition_label
 
     report = Report("finding disposition rows")
@@ -34,7 +34,7 @@ def main() -> int:
     view._auto_summary = QLabel()
 
     def _state():
-        from storage import open_state
+        from curation.storage import open_state
 
         return open_state(cfg.app.workspace)
 
@@ -47,7 +47,10 @@ def main() -> int:
 
     key = finding_key("format.csv.pii", "a.csv", "2 emails found")
     row = view._auto_row(
-        "format.csv.pii", "a.csv: 2 emails found", False, "warning",
+        "format.csv.pii",
+        "a.csv: 2 emails found",
+        False,
+        "warning",
         disposition_key=key,
     )
     report.check(row is not None, "the finding row built")
@@ -96,18 +99,16 @@ def main() -> int:
     from ui.i18n import t
 
     note_label = t("detail.disposition.note_action")
-    overflow_buttons = [
-        b for b in row.findChildren(QPushButton) if b.text() == "⋯"
-    ]
+    overflow_buttons = [b for b in row.findChildren(QPushButton) if b.text() == "⋯"]
     report.check(
-        len(overflow_buttons) == 1, "the row carries one overflow (ellipsis) action",
+        len(overflow_buttons) == 1,
+        "the row carries one overflow (ellipsis) action",
     )
-    note_buttons = [
-        b for b in row.findChildren(QPushButton) if b.text() == note_label
-    ]
+    note_buttons = [b for b in row.findChildren(QPushButton) if b.text() == note_label]
     report.check(
-        len(note_buttons) == 1, "the row carries one Note affordance",
-        f"buttons={ascii([b.text() for b in row.findChildren(QPushButton)])}",
+        len(note_buttons) == 1,
+        "the row carries one Note affordance",
+        f"buttons={[b.text() for b in row.findChildren(QPushButton)]!a}",
     )
     # A pass row carries no disposition controls.
     clean = view._auto_row("format.csv.content", "a.csv: parsed (utf-8)", True, "info")

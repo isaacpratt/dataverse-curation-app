@@ -9,6 +9,7 @@ the count.
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from PySide6.QtCore import Qt
@@ -27,20 +28,32 @@ def _metadata() -> dict:
                 "citation": {
                     "fields": [
                         {"typeName": "title", "value": "A study"},
-                        {"typeName": "author", "value": [
-                            {
-                                "authorName": _fv("Ada Lovelace"),
-                                "authorAffiliation": _fv("Lab"),
-                                "authorIdentifierScheme": _fv("ORCID"),
-                                "authorIdentifier": _fv("0000-0002-1825-0097"),
-                            },
-                        ]},
-                        {"typeName": "datasetContact", "value": [
-                            {"datasetContactName": _fv("Ada Lovelace")},
-                        ]},
-                        {"typeName": "dsDescription", "value": [
-                            {"dsDescriptionValue": _fv("Desc."), "dsDescriptionDate": _fv("2026-01-01")},
-                        ]},
+                        {
+                            "typeName": "author",
+                            "value": [
+                                {
+                                    "authorName": _fv("Ada Lovelace"),
+                                    "authorAffiliation": _fv("Lab"),
+                                    "authorIdentifierScheme": _fv("ORCID"),
+                                    "authorIdentifier": _fv("0000-0002-1825-0097"),
+                                },
+                            ],
+                        },
+                        {
+                            "typeName": "datasetContact",
+                            "value": [
+                                {"datasetContactName": _fv("Ada Lovelace")},
+                            ],
+                        },
+                        {
+                            "typeName": "dsDescription",
+                            "value": [
+                                {
+                                    "dsDescriptionValue": _fv("Desc."),
+                                    "dsDescriptionDate": _fv("2026-01-01"),
+                                },
+                            ],
+                        },
                         {"typeName": "subject", "value": ["Computer and Information Science"]},
                         {"typeName": "depositor", "value": "Ada Lovelace"},
                         {"typeName": "dateOfDeposit", "value": "2026-01-02"},
@@ -53,8 +66,8 @@ def _metadata() -> dict:
 
 @pytest.fixture
 def view(qapp, tmp_path):
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     cfg = Config()
     cfg.app.workspace = Path(tmp_path)
@@ -77,7 +90,7 @@ def view(qapp, tmp_path):
 def test_ctrl_enter_runs_checks(view):
     calls = []
     view._on_run_checks = lambda: calls.append("run")
-    QTest.keyClick(view._check_btn, Qt.Key_Return, Qt.ControlModifier)
+    QTest.keyClick(view._check_btn, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
     assert calls == ["run"]
 
 
@@ -86,7 +99,7 @@ def test_ctrl_enter_commits_on_the_response_page(view):
     committed, ran = [], []
     view._on_commit = lambda: committed.append("commit")
     view._on_run_checks = lambda: ran.append("run")
-    QTest.keyClick(view._check_btn, Qt.Key_Return, Qt.ControlModifier)
+    QTest.keyClick(view._check_btn, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
     assert committed == ["commit"]
     assert ran == [], "Ctrl+Enter on the Response page must not re-run checks"
 
@@ -97,28 +110,32 @@ def test_ctrl_enter_runs_checks_back_on_the_review_page(view):
     calls = []
     view._on_run_checks = lambda: calls.append("run")
     view._on_commit = lambda: calls.append("commit")
-    QTest.keyClick(view._check_btn, Qt.Key_Return, Qt.ControlModifier)
+    QTest.keyClick(view._check_btn, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
     assert calls == ["run"]
 
 
 def test_ctrl_d_downloads_all(view):
     calls = []
     view._on_download = lambda: calls.append("download")
-    QTest.keyClick(view._check_btn, Qt.Key_D, Qt.ControlModifier)
+    QTest.keyClick(view._check_btn, Qt.Key.Key_D, Qt.KeyboardModifier.ControlModifier)
     assert calls == ["download"]
 
 
 def test_ctrl_shift_o_opens_the_staged_folder(view):
     calls = []
     view._on_open_folder = lambda: calls.append("open")
-    QTest.keyClick(view._check_btn, Qt.Key_O, Qt.ControlModifier | Qt.ShiftModifier)
+    QTest.keyClick(
+        view._check_btn,
+        Qt.Key.Key_O,
+        Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier,
+    )
     assert calls == ["open"]
 
 
 def test_shortcuts_stay_inside_the_view(view):
     assert getattr(view, "_shortcuts", None), "the detail view must register its chords"
     for sc in view._shortcuts:
-        assert sc.context() == Qt.WidgetWithChildrenShortcut, (
+        assert sc.context() == Qt.ShortcutContext.WidgetWithChildrenShortcut, (
             "the chord fires with focus anywhere in the app; it must stay in the view"
         )
 
@@ -132,15 +149,14 @@ def test_run_button_tooltip_lists_the_chords(view):
 
 def _fake_datasets(n):
     return [
-        {"persistent_id": f"doi:10.5072/FK2/T{i:04d}", "title": f"dataset {i}"}
-        for i in range(n)
+        {"persistent_id": f"doi:10.5072/FK2/T{i:04d}", "title": f"dataset {i}"} for i in range(n)
     ]
 
 
 class _FakeBulk:
     """Stand-in for BulkCheckWorker: records the jobs, never starts a thread."""
 
-    instances = []
+    instances: ClassVar[list] = []
 
     def __init__(self, jobs, workspace, parent=None):
         from PySide6.QtCore import QObject, Signal
@@ -168,7 +184,7 @@ class _FakeBulk:
 
 
 def test_context_menu_enqueues_up_to_the_painting_cap(win, qapp, monkeypatch):
-    import applog
+    import curation.applog as applog
 
     dash = win._dashboard
     win._show_dashboard()
@@ -194,7 +210,8 @@ def test_context_menu_enqueues_up_to_the_painting_cap(win, qapp, monkeypatch):
         assert len(worker.jobs) == 2000, "the painting window caps the enqueue"
         assert len(dash._bulk_enqueued) == 2000
         logged = "\n".join(applog.lines())
-        assert "2,000" in logged and "Bulk checks enqueued" in logged
+        assert "2,000" in logged
+        assert "Bulk checks enqueued" in logged
     finally:
         dash._datasets = original_datasets
         dash._bulk_worker = original_worker
@@ -237,7 +254,8 @@ def test_context_menu_is_disabled_when_nothing_is_painted(win, qapp):
         dash._datasets = []
         menu = dash._build_queue_context_menu()
         actions = [a for a in menu.actions() if not a.isSeparator()]
-        assert actions and not actions[0].isEnabled()
+        assert actions
+        assert not actions[0].isEnabled()
     finally:
         dash._datasets = original_datasets
         dash._bulk_worker = original_worker

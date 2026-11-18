@@ -17,7 +17,7 @@ from _common import Report, boot
 
 def main() -> int:
     app, cfg = boot()
-    from ui import dataset_detail as dd
+    from ui import dataset as dd
 
     # The view fetches the dataset's metadata on a timer; the probe only
     # exercises navigation chrome, so the fetch is stubbed out (no network).
@@ -56,8 +56,7 @@ def main() -> int:
     log_card = getattr(view, "_dataset_log_card", None)
     if log_card is not None:
         found_in_main = any(
-            view._main_wrap.itemAt(i).widget() is log_card
-            for i in range(view._main_wrap.count())
+            view._main_wrap.itemAt(i).widget() is log_card for i in range(view._main_wrap.count())
         )
         report.check(found_in_main, "the dataset log moved to the page foot when folded")
 

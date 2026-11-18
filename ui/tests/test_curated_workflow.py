@@ -1,6 +1,5 @@
 """The CURATE(D) practice view (dv-sce): derivation states/counts, rail rebuild across step sets, badge letters, and toggle persistence."""
 
-
 from ui.workflow import (
     AVAILABLE,
     BLOCKED,
@@ -15,7 +14,9 @@ from ui.workflow import (
 def _ready(**kw) -> WorkflowInput:
     """Build a fully-loaded dataset baseline; tests override fields."""
     for key, value in (
-        ("staged", 3), ("total_files", 3), ("report_ready", True),
+        ("staged", 3),
+        ("total_files", 3),
+        ("report_ready", True),
     ):
         kw.setdefault(key, value)
     return WorkflowInput(metadata_loaded=True, **kw)
@@ -25,8 +26,13 @@ class TestDeriveCurated:
     def test_seven_steps_with_badges(self):
         wf = derive_curated(_ready(errors=0, warnings=0))
         assert [s.key for s in wf.steps] == [
-            "check", "understand", "request", "augment",
-            "transform", "evaluate", "document",
+            "check",
+            "understand",
+            "request",
+            "augment",
+            "transform",
+            "evaluate",
+            "document",
         ]
         assert [s.badge for s in wf.steps] == ["C", "U", "R", "A", "T", "E", "D"]
 
@@ -77,7 +83,12 @@ class TestDeriveCurated:
     def test_mechanical_derivation_ignores_new_fields(self):
         wf = derive_workflow(_ready(errors=5, warnings=5, required_missing=5))
         assert [s.key for s in wf.steps] == [
-            "metadata", "changes", "download", "checks", "export", "respond",
+            "metadata",
+            "changes",
+            "download",
+            "checks",
+            "export",
+            "respond",
         ]
 
     def test_pure_no_io(self):
@@ -112,7 +123,7 @@ class TestRail:
         assert fired == [True]
 
     def test_toggle_persists(self, qapp, tmp_path):
-        from storage import read_ui_pref, write_ui_pref
+        from curation.storage import read_ui_pref, write_ui_pref
 
         write_ui_pref(tmp_path, "rail_view", "curated")
         assert read_ui_pref(tmp_path, "rail_view", "mechanical") == "curated"

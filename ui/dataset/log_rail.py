@@ -2,11 +2,19 @@
 
 from typing import Any
 
-from PySide6.QtWidgets import QAbstractItemView, QFrame, QSizePolicy
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QFrame,
+    QSizePolicy,
+)
 
 from ui.dataset.state import DetailState
 from ui.i18n import t
-from ui.widgets import add_info_tip, make_card, make_list
+from ui.widgets import (
+    add_info_tip,
+    make_card,
+    make_list,
+)
 
 
 class LogRail(DetailState):
@@ -18,6 +26,7 @@ class LogRail(DetailState):
             _header,
             t("detail.dataset_log.tip"),
             name=t("detail.sections.dataset_log"),
+            group="Queue",
         )
         self._dataset_log = make_list()
         # Tall timeline: minimum keeps it readable on short screens, the
@@ -259,6 +268,14 @@ class LogRail(DetailState):
             "decision": t("detail.dataset_log.action_decision"),
             "exported": t("detail.dataset_log.action_exported"),
             "response_exported": t("detail.dataset_log.action_response_exported"),
+            "disposition": t("detail.dataset_log.action_disposition"),
+            "curation_record_exported": t("detail.dataset_log.action_record"),
+            "sensitivity_reviewed": t("detail.dataset_log.action_sensitivity"),
+            "dictionary_drafted": t("detail.dataset_log.action_dictionary"),
+            "follow_up_opened": t("detail.dataset_log.action_follow_up_opened"),
+            "follow_up_closed": t("detail.dataset_log.action_follow_up_closed"),
+            "preview_rendered": t("detail.dataset_log.action_preview"),
+            "nav_jump": t("detail.dataset_log.action_nav"),
         }
         for a in actions:
             act = a.get("action") or ""

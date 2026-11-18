@@ -24,7 +24,7 @@ from curation.client.caches import (
 )
 from curation.client.constants import _RETRYABLE_NETWORK
 from curation.client.downloads import _DownloadsMixin
-from curation.client.http import _throttle_delay
+from curation.client.http import _error_message, _throttle_delay
 from curation.client.parsers import (
     _version_files_data,
     locks_indicate_review,
@@ -41,6 +41,7 @@ from curation.client.parsers import (
     parse_version_compare,
     search_item_state,
 )
+from curation.client.refusals import expected_api_reason, refusal_code
 
 
 class DataverseClient(_DownloadsMixin):
@@ -120,9 +121,27 @@ class DataverseClient(_DownloadsMixin):
                             n = 0
                         summary = f"{n} item(s)" if n else ""
                 status = response.status_code
-                log_response("GET", str(response.url), status, elapsed_ms, summary)
+                # Some endpoints answer 4xx by design (a draft this account
+                # may not read, a dataset with no published version). The
+                # call and the response are logged verbatim either way —
+                # only the severity and the added context differ.
+                reason = expected_api_reason(path, status, response.text)
+                log_response(
+                    "GET",
+                    str(response.url),
+                    status,
+                    elapsed_ms,
+                    summary,
+                    context=reason,
+                )
                 if not response.ok:
-                    get_app_log().error(f"GET {response.url} → {status}: {response.text[:300]}")
+                    body_text = response.text[:300]
+                    if reason:
+                        get_app_log().expected(
+                            f"GET {response.url} → {status}: {body_text} — {reason}"
+                        )
+                    else:
+                        get_app_log().error(f"GET {response.url} → {status}: {body_text}")
                 response.raise_for_status()
                 # Reuse already-parsed body when available.
                 if body is not None:
@@ -184,11 +203,23 @@ class DataverseClient(_DownloadsMixin):
                 if response.ok:
                     summary = f"{len(response.content)} byte(s)"
                 status = response.status_code
-                log_response("GET", str(response.url), status, elapsed_ms, summary)
+                reason = expected_api_reason(path, status, response.text)
+                log_response(
+                    "GET",
+                    str(response.url),
+                    status,
+                    elapsed_ms,
+                    summary,
+                    context=reason,
+                )
                 if not response.ok:
-                    get_app_log().error(f"GET {response.url} → {status}: {response.text[:300]}")
+                    body = response.text[:300]
+                    if reason:
+                        get_app_log().expected(f"GET {response.url} → {status}: {body} — {reason}")
+                    else:
+                        get_app_log().error(f"GET {response.url} → {status}: {body}")
                 response.raise_for_status()
-                return response.text
+                return str(response.text)
             except requests.HTTPError as exc:
                 delay = _throttle_delay(exc)
                 if delay is not None and attempt < 2:
@@ -352,13 +383,23 @@ class DataverseClient(_DownloadsMixin):
                 get_app_log().info(f"Search page {page} (start={start}): empty — stopping")
                 break
             new = 0
+            dupes = 0
             for d in batch:
                 pid = d["persistent_id"]
                 if pid not in seen:
                     seen[pid] = len(all_datasets)
                     all_datasets.append(d)
                     new += 1
-                elif d.get("has_draft") and not all_datasets[seen[pid]].get("has_draft"):
+                else:
+                    # The same dataset twice in the index (a published doc
+                    # and a draft doc for it). The search total counts
+                    # documents, not datasets — these are not missing rows.
+                    dupes += 1
+                if (
+                    d.get("has_draft")
+                    and pid in seen
+                    and not all_datasets[seen[pid]].get("has_draft")
+                ):
                     # Same dataset surfaced twice (published doc shadows the
                     # draft doc): keep the draft row so in-progress versions
                     # stay visible to draft filtering.
@@ -392,12 +433,22 @@ class DataverseClient(_DownloadsMixin):
         if total_expected is not None and len(all_datasets) != total_expected:
             gap = total_expected - len(all_datasets)
             if gap > 0:
-                get_app_log().error(
-                    f"Search collected {len(all_datasets)} of {total_expected} "
-                    f"dataset(s) — {gap} missing (the index changed during the "
-                    "crawl, or the server clamps page size). Narrow the "
-                    "collection and refresh if rows are missing."
-                )
+                if dupes >= gap:
+                    # The search index counts documents, not datasets: one
+                    # dataset can be listed twice (its published doc and its
+                    # draft doc). Those were merged — nothing is missing.
+                    get_app_log().info(
+                        f"Search collected {len(all_datasets)} of {total_expected} "
+                        f"dataset(s) — {dupes} duplicate document(s) for the same "
+                        "dataset (published and draft) were merged; nothing is missing"
+                    )
+                else:
+                    get_app_log().error(
+                        f"Search collected {len(all_datasets)} of {total_expected} "
+                        f"dataset(s) — {gap} missing (the index changed during the "
+                        "crawl, or the server clamps page size). Narrow the "
+                        "collection and refresh if rows are missing."
+                    )
             else:
                 get_app_log().info(
                     f"Search collected {len(all_datasets)} dataset(s) — "
@@ -585,9 +636,18 @@ class DataverseClient(_DownloadsMixin):
         return f"/api/datasets/{identifier}/{endpoint}", None
 
     def get_curation_status(
-        self, identifier: str, include_history: bool = False
+        self,
+        identifier: str,
+        include_history: bool = False,
+        refusal: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
-        """Return the current curation label for a draft dataset, or None if unset/unavailable."""
+        """Return the current curation label for a draft dataset, or None if unset/unavailable.
+
+        `refusal` is an optional dict the caller passes in; when the server
+        refuses the read it is filled with {"status", "code", "detail"} so
+        the dashboard can say why a dataset has no curation state instead
+        of showing an empty column.
+        """
         path, base_params = self._curation_paths(identifier, "curationStatus")
         params = dict(base_params or {})
         if include_history:
@@ -597,6 +657,18 @@ class DataverseClient(_DownloadsMixin):
         except requests.HTTPError as exc:
             resp = getattr(exc, "response", None)
             if resp is not None and resp.status_code in (400, 401, 403, 404):
+                if refusal is not None:
+                    try:
+                        body = str(resp.text or "")
+                        refusal.update(
+                            {
+                                "status": int(resp.status_code),
+                                "code": refusal_code(path, resp.status_code, body),
+                                "detail": _error_message(resp),
+                            }
+                        )
+                    except Exception:
+                        pass
                 return None
             raise
         except (
@@ -1171,3 +1243,37 @@ class DataverseClient(_DownloadsMixin):
                 "verify you are reviewing the intended version"
             )
         return normalize_files(_version_files_data(data))
+
+    def get_variable_metadata(self, file_id: str) -> dict[str, dict[str, str]] | None:
+        """Variable-level metadata for one tabular file, from its DDI.
+
+        Returns ``{variable name: {"label": str, "type": str}}`` (label may
+        be empty), or None when the fetch/parse fails — callers treat None
+        as "unknown coverage", never as "no documentation".
+        """
+        try:
+            text = self._get_text(f"/api/access/datafile/{file_id}/metadata/ddi")
+            import xml.etree.ElementTree as ET
+
+            root = ET.fromstring(text)
+        except Exception:
+            return None
+        out: dict[str, dict[str, str]] = {}
+        try:
+            for var in root.iter():
+                tag = var.tag.rsplit("}", 1)[-1]
+                if tag != "var":
+                    continue
+                name = str(var.get("name") or "").strip()
+                if not name:
+                    continue
+                label = ""
+                intrvl = str(var.get("intrvl") or "")
+                for child in var:
+                    ctag = child.tag.rsplit("}", 1)[-1]
+                    if ctag == "labl":
+                        label = (child.text or "").strip()
+                out[name] = {"label": label, "type": intrvl}
+        except Exception:
+            return None
+        return out or None

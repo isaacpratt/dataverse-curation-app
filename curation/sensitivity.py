@@ -30,35 +30,35 @@ QUESTIONS: tuple[dict[str, str], ...] = (
         "id": "human-subjects",
         "prompt": "Do the data contain information collected from human subjects?",
         "help": "Trial data, survey responses, interview transcripts, "
-                "health records — anything about identifiable people.",
+        "health records — anything about identifiable people.",
         "type": "yes-no",
     },
     {
         "id": "consent-irb",
         "prompt": "Is consent / ethics approval documentation referenced?",
         "help": "A dataset description, README, or terms statement covering "
-                "consent and IRB/REB approval for the human-subjects data.",
+        "consent and IRB/REB approval for the human-subjects data.",
         "type": "yes-no",
     },
     {
         "id": "identifiers",
         "prompt": "Any direct-identifier or small-cell risk beyond the PII scan?",
         "help": "Judgment beyond the automated scan: rare combinations, "
-                "small populations, re-identification risk.",
+        "small populations, re-identification risk.",
         "type": "yes-no",
     },
     {
         "id": "indigenous-care",
         "prompt": "Do the data involve Indigenous communities (CARE considerations)?",
         "help": "CARE principles: collective benefit, authority to control, "
-                "responsibility, ethics — including data governance rights.",
+        "responsibility, ethics — including data governance rights.",
         "type": "yes-no",
     },
     {
         "id": "restricted-terms",
         "prompt": "Are restricted files covered by terms of access?",
         "help": "Every restricted file should sit under the dataset's terms "
-                "of access (the automated access check lists restricted files).",
+        "of access (the automated access check lists restricted files).",
         "type": "yes-no",
     },
 )
@@ -70,9 +70,7 @@ def is_complete(answers: dict[str, str] | None) -> bool:
     """Return True when every question carries an explicit yes/no answer."""
     if not isinstance(answers, dict):
         return False
-    return all(
-        str(answers.get(qid) or "") in (YES, NO) for qid in QUESTION_IDS
-    )
+    return all(str(answers.get(qid) or "") in (YES, NO) for qid in QUESTION_IDS)
 
 
 def answered_count(answers: dict[str, str] | None) -> int:
@@ -100,7 +98,7 @@ def _pii_findings(report: Any) -> list[Any]:
     return out
 
 
-def _restricted_paths(inventory: list[dict] | None) -> list[str]:
+def _restricted_paths(inventory: list[dict[str, Any]] | None) -> list[str]:
     out: list[str] = []
     try:
         for entry in inventory or []:
@@ -111,8 +109,9 @@ def _restricted_paths(inventory: list[dict] | None) -> list[str]:
     return out
 
 
-def suggested_answers(report: Any = None,
-                      inventory: list[dict] | None = None) -> dict[str, str | None]:
+def suggested_answers(
+    report: Any = None, inventory: list[dict[str, Any]] | None = None
+) -> dict[str, str | None]:
     """Machine-suggested answers, keyed by question id (None = human call).
 
     Only what the data can support is suggested, and only when the data is

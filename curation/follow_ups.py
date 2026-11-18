@@ -9,7 +9,7 @@ server ``lastUpdateTime`` compares against the decision timestamp
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 # Decision wording that means "the depositor must act". Instance curation
@@ -50,8 +50,8 @@ def parse_ts(value: Any) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def newer_than(last_update: Any, decision_ts: Any) -> bool:

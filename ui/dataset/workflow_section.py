@@ -1,54 +1,44 @@
 """The workflow rail and the section cards it navigates to."""
 
-from PySide6.QtWidgets import QFrame
-
-from ui.dataset.helpers import _SECTION_LINKS
+from curation.storage import (
+    read_ui_pref,
+    write_ui_pref,
+)
 from ui.dataset.state import DetailState
 from ui.i18n import t
-from ui.theme import ACCENT_PRIMARY
-from ui.widgets import make_action_button, make_card
 
 
 class WorkflowSection(DetailState):
     """The workflow rail and the section cards it navigates to."""
 
-    def _build_nav_card(self) -> QFrame:
-        """Sidebar section navigation — jumps the main column to each box."""
-        from ui.icons import icon as _nav_icon
-
-        card, body, _title, header = make_card(t("detail.sections.title"))
-        body.setSpacing(6)
-        # Collapse the sidebar. On a narrow window the 280px it holds
-        # squeezes the main column (the File Manifest tree) below a
-        # usable width, so the sidebar folds away and its links move
-        # into the top bar's Sections menu.
-        self._sidebar_collapse_btn = make_action_button("", kind="ghost", size="sm")
+    def _on_workflow_step(self, key: str) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+        """Navigate the rail only — never run a download, check or export."""
         try:
-            self._sidebar_collapse_btn.setIcon(_nav_icon("chevron-right", color=ACCENT_PRIMARY))
+            view = read_ui_pref(self._config.app.workspace, RAIL_VIEW_PREF, "mechanical")
+        except Exception:
+            view = "mechanical"
+        try:
+            self._log_action(
+                "nav_jump",
+                f"{key} ({view})",
+                {"step": str(key), "view": str(view)},
+            )
         except Exception:
             pass
-        self._sidebar_collapse_btn.setToolTip(t("detail.sidebar.collapse_tip"))
-        self._sidebar_collapse_btn.setAccessibleName(t("detail.sidebar.collapse_a11y"))
-        self._sidebar_collapse_btn.clicked.connect(self._toggle_sidebar)
-        header.addWidget(self._sidebar_collapse_btn)
-        self._nav_buttons: list = []
-        for key, attr in _SECTION_LINKS:
-            label = t(key)
-            btn = make_action_button(label, kind="link", size=None)
-            try:
-                btn.setIcon(_nav_icon("arrow-right", color=ACCENT_PRIMARY))
-            except Exception:
-                pass
-            btn.clicked.connect(lambda _c, a=attr: self._goto_section(a))
-            body.addWidget(btn)
-            self._nav_buttons.append(btn)
-        return card
-
-    def _on_workflow_step(self, key: str) -> None:
-        """Navigate the rail only — never run a download, check or export."""
         try:
             if key == "respond":
                 self._show_response_page()
+                return
+
+            # CURATE(D) practice view (dv-sce): same navigation contract,
+            # mapped onto the card that owns each practice step.
+            target = _CURATED_TARGETS.get(key)
+            if target is not None:
+                if target == "respond":
+                    self._show_response_page()
+                else:
+                    self._show_review_page()
+                    self._goto_section(target)
                 return
 
             # Review steps: return to the review page first, then scroll.
@@ -78,8 +68,27 @@ class WorkflowSection(DetailState):
     def _refresh_workflow(self) -> None:
         """Repaint the rail from flags/counts already in memory (no I/O)."""
         try:
-            from ui.workflow import WorkflowInput, derive_workflow
+            from ui.workflow import WorkflowInput, derive_curated, derive_workflow
 
+            curated = (
+                read_ui_pref(self._config.app.workspace, RAIL_VIEW_PREF, "mechanical") == "curated"
+            )
+            # Unresolved review signals from the verdict derivation (the
+            # same numbers the banner shows; resolved findings stop counting).
+            counts: dict = {}
+            try:
+                from engine.verdict import assess
+
+                counts = {
+                    r.key: r.count
+                    for r in assess(
+                        self._report,
+                        self._completeness_full,
+                        self._dispositions_map(),
+                    ).reasons
+                }
+            except Exception:
+                counts = {}
             state = WorkflowInput(
                 metadata_loaded=self._metadata is not None,
                 changes_loaded=bool(getattr(self, "_changes_loaded", False)),
@@ -91,7 +100,49 @@ class WorkflowSection(DetailState):
                 response_open=bool(getattr(self, "_in_response", False)),
                 decision_committed=bool(getattr(self, "_decision_committed", False))
                 or bool((self._curation or {}).get("label")),
+                errors=int(counts.get("errors", 0)),
+                warnings=int(counts.get("warnings", 0)),
+                required_missing=int(counts.get("required-missing", 0)),
+                optional_missing=int(counts.get("optional-missing", 0)),
             )
-            self._rail.set_workflow(derive_workflow(state))
+            workflow = derive_curated(state) if curated else derive_workflow(state)
+            self._rail.set_workflow(workflow)
+            self._rail.set_toggle_label(
+                t("workflow.curated.toggle_steps" if curated else "workflow.curated.toggle_curated")
+            )
         except Exception:
             pass
+        try:
+            self._refresh_verdict()
+        except Exception:
+            pass
+        try:
+            self._refresh_follow_up()
+        except Exception:
+            pass
+
+    def _on_rail_view_toggled(self) -> None:
+        """Flip the rail between the mechanical and CURATE(D) views."""
+        try:
+            current = read_ui_pref(self._config.app.workspace, RAIL_VIEW_PREF, "mechanical")
+            write_ui_pref(
+                self._config.app.workspace,
+                RAIL_VIEW_PREF,
+                "mechanical" if current == "curated" else "curated",
+            )
+        except Exception:
+            pass
+        self._refresh_workflow()
+
+
+RAIL_VIEW_PREF = "rail_view"
+
+_CURATED_TARGETS = {
+    "check": "_file_card",
+    "understand": "_auto_card",
+    "request": "_meta_card",
+    "augment": "_meta_card",
+    "transform": "_auto_card",
+    "evaluate": "_auto_card",
+    "document": "respond",
+}

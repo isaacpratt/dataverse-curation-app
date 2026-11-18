@@ -3,8 +3,19 @@
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QMenu,
+    QVBoxLayout,
+)
 
+from curation.storage import (
+    RESOLVED_DISPOSITIONS,
+    finding_key,
+)
 from ui import dialogs
 from ui.dataset.state import DetailState
 from ui.i18n import t
@@ -26,9 +37,12 @@ from ui.theme import (
 )
 from ui.widgets import (
     add_info_tip,
+    disposition_label,
+    make_action_button,
     make_badge,
     make_caption_label,
     make_card,
+    make_disposition_combo,
     make_field_label,
     make_small_body_label,
 )
@@ -45,6 +59,7 @@ class ChecksSection(DetailState):
             t("detail.auto_checks.intro"),
             t("detail.auto_checks.legend"),
             name=t("detail.sections.auto_checks"),
+            group="Checks",
         )
         # Named pre-run state, never "—" (2026-10-02 P2); refreshed to
         # "N check(s) will run"/counts/"No file checks" as data lands.
@@ -60,7 +75,14 @@ class ChecksSection(DetailState):
         return card
 
     def _auto_row(
-        self, check_id: str, desc: str, passed: bool, level: str, badge: str | None = None
+        self,
+        title: str,
+        desc: str,
+        passed: bool,
+        level: str,
+        badge: str | None = None,
+        disposition_key: str = "",
+        detail_lines: list[tuple[str, bool]] | None = None,
     ) -> QFrame:
         frame = QFrame()
         # Scope the row face to the row itself. A bare `QFrame` selector
@@ -138,12 +160,46 @@ class ChecksSection(DetailState):
         lay.addWidget(_icon_label(icon_name, size=16, color=icon_color))
         txt = QVBoxLayout()
         txt.setSpacing(1)
-        cid = QLabel(check_id)
+        cid = QLabel(title)
         cid.setObjectName("LabelStrongSM")
         txt.addWidget(cid)
         d = make_caption_label(desc)
         txt.addWidget(d)
+        # Per-section checklist (dv-81q): the README depth row lists every
+        # standard section with a found/missing mark under its message.
+        for label, found in detail_lines or []:
+            txt.addWidget(
+                make_caption_label(
+                    t(
+                        "detail.auto_checks.readme_section_found"
+                        if found
+                        else "detail.auto_checks.readme_section_missing",
+                        label=label,
+                    )
+                )
+            )
         lay.addLayout(txt, 1)
+        # Inline disposition controls for findings (dv-32x): the combo
+        # writes through _on_disposition_changed; Note… edits the stored
+        # note (tooltip carries it once one exists).
+        if disposition_key:
+            current = self._dispositions_map().get(disposition_key, {})
+            token = str(current.get("disposition") or "")
+            note = str(current.get("note") or "")
+            combo = make_disposition_combo(
+                token,
+                on_change=lambda tok, k=disposition_key: self._on_disposition_changed(k, tok),
+            )
+            lay.addWidget(combo)
+            note_btn = make_action_button(
+                t("detail.disposition.note_action"), kind="ghost", size="sm"
+            )
+            if note:
+                note_btn.setToolTip(note)
+            note_btn.clicked.connect(
+                lambda _c=False, k=disposition_key: self._on_edit_disposition_note(k)
+            )
+            lay.addWidget(note_btn)
         badge_lbl = make_badge(
             badge_text,
             background=badge_bg,
@@ -154,6 +210,11 @@ class ChecksSection(DetailState):
         badge_lbl.setFixedHeight(20)
         badge_lbl.setMinimumWidth(56)
         lay.addWidget(badge_lbl)
+        lay.addWidget(
+            self._finding_overflow_button(
+                t("detail.auto_checks.file_result_format", path=title, message=desc)
+            )
+        )
         return frame
 
     def _cached_report_path(self) -> Path:
@@ -193,6 +254,8 @@ class ChecksSection(DetailState):
             self._title,
             inventory=self._inventory if isinstance(self._inventory, list) else None,
             metadata=self._metadata if isinstance(self._metadata, dict) else None,
+            client=self._client,
+            ruleset=self._ruleset if isinstance(self._ruleset, dict) else None,
             parent=self,
         )
         self._check_worker.progress.connect(lambda msg: self._set_status(msg))
@@ -252,6 +315,8 @@ class ChecksSection(DetailState):
         # Update dataset-checks card + manifest tree
         self._refresh_curation_preview()
         self._apply_file_filter_internal()
+        # Sensitivity suggestions can now use real PII/access findings.
+        self._refresh_sensitivity_card()
         all_results = list(report.dataset_checks) + [c for f in report.files for c in f.checks]
         summary = summarize(all_results)
         findings = summary["failed"]
@@ -270,7 +335,8 @@ class ChecksSection(DetailState):
                 if cache_path is not None
                 else t("detail.status.report_auto_save_failed")
             )
-            + t("detail.status.use_export_for_markdown")
+            + t("detail.status.use_export_for_markdown"),
+            tone="success",
         )
         self._log_action(
             "checks_run",
@@ -312,7 +378,7 @@ class ChecksSection(DetailState):
         # The failure stays on the page: an empty status strip read as
         # "nothing happened" once the dialog was closed. The strip now
         # carries the reason and stays until the next run replaces it.
-        self._set_status(t("detail.status.checks_failed", reason=headline))
+        self._set_status(t("detail.status.checks_failed", reason=headline), tone="error")
         dialogs.show_critical(
             self, t("detail.checks.title"), headline, details=details, retry=self._on_run_checks
         )
@@ -352,9 +418,14 @@ class ChecksSection(DetailState):
                 )
             )
         elif kind == "file":
+            path = info.get("path", "")
+            # In-app preview (dv-koz): set it even without a report.
+            try:
+                self._show_preview_for_file(path)
+            except Exception:
+                pass
             if not self._report:
                 return
-            path = info.get("path", "")
             entry = next((f for f in self._report.files if f.path == path), None)
             if not entry:
                 self._set_status(t("detail.status.path_not_in_report", path=path))
@@ -376,3 +447,169 @@ class ChecksSection(DetailState):
                 )
         else:
             return
+
+    def _build_copy_menu(self, text: str):
+        """Build the one-item copy menu for a finding row (dv-18z)."""
+        from PySide6.QtWidgets import QApplication, QMenu
+
+        menu = QMenu(self)
+        action = menu.addAction(t("detail.copy_finding.action"))
+
+        def _copy():
+            QApplication.clipboard().setText(text)
+            try:
+                self._set_status(t("detail.copy_finding.copied"), tone="success")
+            except Exception:
+                pass
+
+        action.triggered.connect(_copy)
+        return menu
+
+    def _show_copy_menu(self, btn, text: str) -> None:
+        self._build_copy_menu(text).exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+
+    def _finding_overflow_button(self, text: str):
+        """⋯ ghost button opening the copy-this-finding menu (dv-18z).
+
+        One item, one job: copy a single line a curator can paste into a
+        comment or the depositor letter. No state, no log entry.
+        """
+        btn = make_action_button("⋯", kind="ghost", size="sm")
+        btn.setToolTip(t("detail.copy_finding.action"))
+        btn.setAccessibleName(t("detail.copy_finding.action"))
+        btn.clicked.connect(lambda _c=False, b=btn, s=text: self._show_copy_menu(b, s))
+        return btn
+
+    def _dispositions_map(self) -> dict:
+        """{finding_key: {disposition, note}} for this dataset (cached)."""
+        cached = getattr(self, "_dispositions_cache", None)
+        if isinstance(cached, dict):
+            return cached
+        out: dict = {}
+        try:
+            st = self._state()
+            if st is not None:
+                out = st.list_finding_dispositions(self._pid)
+        except Exception:
+            out = {}
+        self._dispositions_cache = out
+        return out
+
+    def _set_disposition(self, key: str, token: str, note: str = "", refresh: bool = False) -> None:
+        """Persist one disposition, update the cache, the log, and views."""
+        try:
+            st = self._state()
+            if st is not None:
+                st.set_finding_disposition(self._pid, key, token, note or "")
+        except Exception:
+            return
+        cache = getattr(self, "_dispositions_cache", None)
+        if isinstance(cache, dict):
+            if token:
+                cache[key] = {"disposition": token, "note": note or "", "updated_at": ""}
+            else:
+                cache.pop(key, None)
+        self._refresh_finding_summary()
+        self._refresh_workflow()
+        self._log_action(
+            "disposition",
+            (disposition_label(token) if token else t("detail.disposition.cleared"))
+            + (t("detail.dataset_log.action_notes", notes=(note or "")[:120]) if note else ""),
+            {"finding_key": key, "disposition": token},
+        )
+        if refresh:
+            # Reflection surfaces: manifest tint + response exclusion.
+            try:
+                self._apply_file_filter_internal()
+            except Exception:
+                pass
+            try:
+                self._refresh_response(force=False)
+            except Exception:
+                pass
+
+    def _on_disposition_changed(self, key: str, token: str) -> None:
+        """Combo change on an Auto-Checks row: keep the existing note."""
+        current = self._dispositions_map().get(key, {})
+        self._set_disposition(key, str(token or ""), str(current.get("note") or ""), refresh=True)
+
+    def _on_edit_disposition_note(self, key: str, token: str = "") -> None:
+        """Edit (or add) the note stored with one finding's disposition."""
+        current = self._dispositions_map().get(key, {})
+        existing = str(current.get("note") or "")
+        if not token:
+            token = str(current.get("disposition") or "")
+        if not token:
+            # A note implies the curator engaged with the finding; the
+            # mildest honest token is acknowledged. (storage issues a DELETE
+            # for an empty token, which would silently drop the note.)
+            token = "acknowledged"
+        text, ok = QInputDialog.getMultiLineText(
+            self,
+            t("detail.disposition.note_title"),
+            t("detail.disposition.note_label"),
+            existing,
+        )
+        if ok:
+            self._set_disposition(key, token, text, refresh=True)
+
+    def _show_disposition_menu(self, key: str, global_pos) -> None:
+        """Right-click menu for one finding: mark, note, or clear."""
+        current = str(self._dispositions_map().get(key, {}).get("disposition") or "")
+        menu = QMenu(self)
+        for token in ("acknowledged", "fix-requested", "wontfix", "blocked"):
+            action = menu.addAction(disposition_label(token))
+            action.setCheckable(True)
+            action.setChecked(token == current)
+            action.triggered.connect(
+                lambda _c=False, tok=token: self._set_disposition(key, tok, refresh=True)
+            )
+        menu.addSeparator()
+        note_action = menu.addAction(t("detail.disposition.note_action"))
+        note_action.triggered.connect(lambda: self._on_edit_disposition_note(key, current))
+        clear_action = menu.addAction(t("detail.disposition.clear"))
+        clear_action.triggered.connect(lambda: self._set_disposition(key, "", refresh=True))
+        menu.exec(global_pos)
+
+    def _on_file_context_menu(self, pos) -> None:
+        """Disposition menu for one check node in the file manifest tree."""
+        tree = self._file_tree
+        index = tree.indexAt(pos)
+        if not index.isValid():
+            return
+        model = tree.model()
+        item = None
+        if model is not None:
+            from PySide6.QtGui import QStandardItemModel
+
+            if isinstance(model, QStandardItemModel):
+                item = model.itemFromIndex(index.siblingAtColumn(0))
+        data = item.data(Qt.ItemDataRole.UserRole + 1) if item is not None else None
+        if not isinstance(data, dict) or data.get("kind") != "check":
+            return
+        key = finding_key(
+            str(data.get("check_id") or ""),
+            str(data.get("path") or ""),
+            str(data.get("msg") or ""),
+        )
+        self._show_disposition_menu(key, tree.viewport().mapToGlobal(pos))
+
+    def _set_auto_summary(self, text: str) -> None:
+        """Set the Auto-Checks header text, re-applying the roll-up suffix."""
+        self._auto_summary_base = text
+        self._auto_summary.setText(text + self._disposition_suffix())
+
+    def _disposition_suffix(self) -> str:
+        keys = getattr(self, "_finding_keys", [])
+        if not keys:
+            return ""
+        disp = self._dispositions_map()
+        tokens = [str(disp.get(k, {}).get("disposition") or "") for k in keys]
+        resolved = sum(1 for tok in tokens if tok in RESOLVED_DISPOSITIONS)
+        return t("detail.disposition.summary_suffix", resolved=resolved, total=len(tokens))
+
+    def _refresh_finding_summary(self) -> None:
+        base = getattr(self, "_auto_summary_base", None)
+        if base is None:
+            return
+        self._auto_summary.setText(base + self._disposition_suffix())

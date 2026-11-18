@@ -45,7 +45,9 @@ def test_tag_for_another_version_is_refused() -> None:
     assert engine.__version__ in problem
 
 
-@pytest.mark.parametrize("tag", ["0.2", "v0.2", "release-0.2.0", "v0.2.0.1", "v01.2.3", "v0.2.0rc1"])
+@pytest.mark.parametrize(
+    "tag", ["0.2", "v0.2", "release-0.2.0", "v0.2.0.1", "v01.2.3", "v0.2.0rc1"]
+)
 def test_malformed_tags_are_refused(tag: str) -> None:
     assert version_mod.tag_error(tag)
 

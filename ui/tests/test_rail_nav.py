@@ -29,10 +29,10 @@ CURATED = {
 }
 
 
-@pytest.fixture()
+@pytest.fixture
 def view(qapp, tmp_path):
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     try:
         cfg = Config.load(None)
@@ -44,9 +44,9 @@ def view(qapp, tmp_path):
     v._config = cfg
     v._pid = "doi:10.5072/FK2/NAV"
     v._report = None
-    v._dl_btn = None
-    v._check_btn = None
-    v._history_btn = None
+    v._dl_btn = None  # type: ignore[assignment]
+    v._check_btn = None  # type: ignore[assignment]
+    v._history_btn = None  # type: ignore[assignment]
     v._jumps = []
     v._responses = []
     v._statuses = []
@@ -55,7 +55,7 @@ def view(qapp, tmp_path):
     v._show_review_page = lambda: None  # type: ignore[method-assign]
     v._show_response_page = lambda: v._responses.append(1)  # type: ignore[method-assign]
     v._set_status = lambda msg, **_kw: v._statuses.append(msg)  # type: ignore[method-assign]
-    v._log_action = lambda a, n="", d=None: v._logged.append((a, n, d))
+    v._log_action = lambda a, n="", d=None: v._logged.append((a, n, d))  # type: ignore[assignment]
     return v
 
 
@@ -72,7 +72,7 @@ class TestRailNavigation:
                 assert view._jumps == [expected], f"{key}: {view._jumps}"
 
     def test_curated_steps_jump_to_their_cards(self, view, tmp_path):
-        from storage import write_ui_pref
+        from curation.storage import write_ui_pref
 
         write_ui_pref(tmp_path, "rail_view", "curated")
         for key, expected in CURATED.items():
@@ -95,7 +95,7 @@ class TestRailNavigation:
         assert view._logged[-1][2] == {"step": "checks", "view": "mechanical"}
 
     def test_nav_jump_records_curated_view(self, view, tmp_path):
-        from storage import write_ui_pref
+        from curation.storage import write_ui_pref
 
         write_ui_pref(tmp_path, "rail_view", "curated")
         view._on_workflow_step("evaluate")
@@ -103,10 +103,14 @@ class TestRailNavigation:
 
 
 class TestNavModelsRemoved:
+    @staticmethod
+    def _dataset_package_source() -> str:
+        """All of the ui/dataset/ package source (it replaced dataset_detail.py)."""
+        package = Path(__file__).resolve().parents[1] / "dataset"
+        return "\n".join(p.read_text(encoding="utf-8") for p in sorted(package.glob("*.py")))
+
     def test_sidebar_sections_card_and_top_bar_button_are_gone(self):
-        src = (
-            Path(__file__).resolve().parents[2] / "ui" / "dataset_detail.py"
-        ).read_text(encoding="utf-8")
+        src = self._dataset_package_source()
         for forbidden in (
             "_build_nav_card",
             "_SECTION_LINKS",
@@ -118,8 +122,6 @@ class TestNavModelsRemoved:
             assert forbidden not in src, forbidden
 
     def test_rail_is_always_present_and_single(self):
-        src = (
-            Path(__file__).resolve().parents[2] / "ui" / "dataset_detail.py"
-        ).read_text(encoding="utf-8")
+        src = self._dataset_package_source()
         assert "self._rail = WorkflowRail()" in src
         assert "rail" in src  # the rail is created unconditionally
