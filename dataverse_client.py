@@ -719,6 +719,44 @@ def _mark_restricted(ds: dict, exc: BaseException) -> None:
         pass
 
 
+def size_unavailable(ds: dict) -> bool:
+    """Return True when no version of this dataset could be read.
+
+    The size is not missing — it cannot be had (dv-zhf). The dashboard
+    dims the Size cell's em dash for these rows; the Access column says
+    why. A row that was read keeps its size, even when only some of its
+    versions were refused.
+    """
+    access = ds.get("access")
+    if not isinstance(access, dict):
+        return False
+    return str(access.get("state") or "") in (
+        _ACCESS_STATE_RESTRICTED,
+        _ACCESS_STATE_METADATA_ONLY,
+    )
+
+
+def _log_enrichment_refusal(ds: dict, exc: BaseException) -> None:
+    """Say in the Log page that a dataset's size could not be read.
+
+    The refusal is the server's documented answer for a dataset outside
+    the account's curation scope, so the line is EXPECTED (muted in the
+    Log page), not an error. Without it, a batch that left rows thin is
+    invisible after the fact.
+    """
+    try:
+        resp = getattr(exc, "response", None)
+        status = int(getattr(resp, "status_code", 0) or 0)
+        code = str(getattr(exc, "refusal_code", "") or "") or "not_readable"
+        pid = str(ds.get("persistent_id") or "")
+        get_app_log().expected(
+            f"Enrichment refused for {pid}: every version was refused "
+            f"(HTTP {status}, {code}) — the size stays unavailable"
+        )
+    except Exception:
+        pass
+
+
 def _version_files_data(data: Any) -> dict[str, Any]:
     """Extract the files-carrying version dict from a version `data` payload.
 
@@ -2824,6 +2862,7 @@ class DataverseClient:
                             # That is an expected answer, not a broken
                             # token: mark the row and keep going.
                             _mark_restricted(ds, exc)
+                            _log_enrichment_refusal(ds, exc)
                             result["restricted"] += 1
                             continue
                         continue

@@ -53,7 +53,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <tr><td>Date Published <i>(hidden by default)</i></td><td><code>published_at</code> / <code>publicationDate</code></td></tr>
 <tr><td>Collection <i>(hidden by default)</i></td><td><code>name_of_dataverse (identifier_of_dataverse)</code></td></tr>
 <tr><td>Files</td><td><code>fileCount</code></td></tr>
-<tr><td>Size</td><td><code>total_size_bytes</code> humanized (B/KB/MB/GB; “—” when the search record carries no byte total — exact sizes come from the download quote)</td></tr>
+<tr><td>Size</td><td><code>total_size_bytes</code> humanized (B/KB/MB/GB; “—” when the search record carries no byte total — exact sizes come from the download quote). A dimmed “—” means the size <i>cannot</i> be had: your account read no version of that dataset</td></tr>
 <tr><td>Status</td><td>Draft/review markers in <code>publicationStatuses</code> win over <code>versionState</code>; <code>In Review</code> confirmed via locks</td></tr>
 <tr><td>Access</td><td>What your account could read: <i>Draft not readable</i>, <i>Not readable</i>, <i>No published version</i> or <i>Curation state hidden</i> — empty when everything read. Hover for the reason and the server's own words</td></tr>
 <tr><td>Curation Label</td><td>Per-draft label (bulk report or <code>curationStatus</code>)</td></tr>
