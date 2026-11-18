@@ -10,7 +10,7 @@ import glob
 import pathlib
 import shutil
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 for name in ("build", "dist", ".pyi-cache"):
     shutil.rmtree(ROOT / name, ignore_errors=True)

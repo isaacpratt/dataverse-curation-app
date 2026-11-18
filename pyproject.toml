@@ -143,7 +143,7 @@ type = "simple"
 
   [tool.poe.tasks.audit]
   help = "Vulnerability scan of the locked dependency set (uv.lock via pip-audit/OSV)"
-  cmd = "python tools/audit_deps.py"
+  cmd = "python tools/audit/audit_deps.py"
 
   [tool.poe.tasks.hooks]
   help = "Run pre-commit hooks against all files"
@@ -151,15 +151,15 @@ type = "simple"
 
   [tool.poe.tasks.license-report]
   help = "Write dist/licenses.md - license inventory of the locked environment"
-  cmd = "python tools/make_licenses.py"
+  cmd = "python tools/audit/make_licenses.py"
 
   [tool.poe.tasks.sbom]
   help = "Write dist/sbom.cdx.json + dist/sbom.spdx.json - CycloneDX and SPDX SBOMs of the project venv"
-  cmd = "python tools/make_sbom.py"
+  cmd = "python tools/audit/make_sbom.py"
 
   [tool.poe.tasks.notice]
   help = "Write dist/NOTICE - attribution file for the release artefacts"
-  cmd = "python tools/make_notice.py"
+  cmd = "python tools/audit/make_notice.py"
 
   [tool.poe.tasks.release-artefacts]
   help = "Generate every release artefact: licenses.md, NOTICE, both SBOMs"
@@ -167,11 +167,11 @@ type = "simple"
 
   [tool.poe.tasks.docs-links]
   help = "Offline link/anchor check for docs/html/*.html"
-  cmd = "python tools/check_doc_links.py"
+  cmd = "python tools/docs/check_doc_links.py"
 
   [tool.poe.tasks.complexity]
   help = "Advisory cyclomatic-complexity report (radon) -> reports/complexity.md"
-  cmd = "python tools/complexity_report.py"
+  cmd = "python tools/audit/complexity_report.py"
 
   [tool.poe.tasks.contracts]
   help = "Import-linter contracts: the engine and the curation core must not import ui/Qt; the tools must not import ui"
@@ -195,30 +195,30 @@ type = "simple"
 
   [tool.poe.tasks.clean]
   help = "Remove build/, dist/, .pyi-cache/ and stray .spec files"
-  cmd = "python tools/clean_tree.py"
+  cmd = "python tools/build/clean_tree.py"
 
-  # PyInstaller flags live in tools/build_app.py (one list, one artefact:
+  # PyInstaller flags live in tools/build/build_app.py (one list, one artefact:
   # dist/DataverseDocent, with config.example.json copied in). That script
   # prints wall time + artefact size.
   [tool.poe.tasks.build]
   help = "Build dist/DataverseDocent (the app folder `poe pack` packages)"
-  cmd = "python tools/build_app.py"
+  cmd = "python tools/build/build_app.py"
 
   [tool.poe.tasks.smoke]
   help = "Headless smoke: the app exe exists, --headless --help works, frozen run reports no 'inspection failed'"
-  cmd = "python tools/smoke_app.py"
+  cmd = "python tools/build/smoke_app.py"
 
   # Velopack packaging: turns dist/DataverseDocent into dist/releases
   # (Setup.exe, portable zip, nupkg, feed) and verifies the result with
-  # tools/check_pack.py. Build-time only: needs the .NET 8 SDK plus
+  # tools/build/check_pack.py. Build-time only: needs the .NET 8 SDK plus
   # `dotnet tool install -g vpk` on the machine. Never publishes.
   [tool.poe.tasks.pack]
   help = "Pack dist/DataverseDocent into a Velopack release (dist/releases)"
-  cmd = "python tools/pack_app.py"
+  cmd = "python tools/build/pack_app.py"
 
   [tool.poe.tasks.check-pack]
   help = "Verify an existing dist/releases without rebuilding it"
-  cmd = "python tools/check_pack.py"
+  cmd = "python tools/build/check_pack.py"
 
   # NOTE on exe icons: ui/assets/16x16.png is the source for every shipped
   # exe icon (docent-mark.ico); the 64x64 docent.png is About-art only.
@@ -412,8 +412,8 @@ forbidden_modules = ["ui"]
 # links, complexity) is an operational helper that runs outside the app
 # and must stay importable without Qt.
 ignore_imports = [
-    "tools.bench_paint_window -> ui.dashboard",
-    "tools.bench_paint_window -> ui.theme",
+    "tools.perf.bench_paint_window -> ui.dashboard",
+    "tools.perf.bench_paint_window -> ui.theme",
     "tools.probes._common -> ui.theme",
     "tools.probes.probe_about_updates -> ui.about_pane",
     "tools.probes.probe_about_updates -> ui.updater",

@@ -3,7 +3,7 @@
 The dashboard's crawl patches thin search rows with live file sizes,
 one version fetch per row. How many rows it patches per refresh is a
 completeness/cost trade-off, so the number is benchmarked
-(``tools/bench_enrichment_cap.py``) and every refresh logs the cap
+(``tools/perf/bench_enrichment_cap.py``) and every refresh logs the cap
 together with the fetch count it actually spent.
 """
 
@@ -14,7 +14,7 @@ import re
 
 from ui.workers import CrawlWorker
 
-_TOOL = pathlib.Path(__file__).resolve().parents[2] / "tools" / "bench_enrichment_cap.py"
+_TOOL = pathlib.Path(__file__).resolve().parents[2] / "tools" / "perf" / "bench_enrichment_cap.py"
 
 
 def test_the_cap_is_the_measured_value():

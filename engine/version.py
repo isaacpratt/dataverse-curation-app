@@ -59,7 +59,7 @@ def tag_version(tag: str) -> str:
 def tag_error(tag: str, version: str = __version__) -> str:
     """Return why this tag cannot release this build, or "" when it can.
 
-    One sentence, printed by `tools/check_version.py` and by the release
+    One sentence, printed by `tools/build/check_version.py` and by the release
     workflow, so a bad tag fails before anything is built or published.
     """
     released = tag_version(tag)

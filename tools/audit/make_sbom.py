@@ -10,7 +10,7 @@ that ships in the lite/full artefacts):
   external binary so the release build needs nothing beyond the Python
   toolchain and stays reproducible offline.
 
-Invoked as ``uv run python tools/make_sbom.py`` (poe sbom).
+Invoked as ``uv run python tools/audit/make_sbom.py`` (poe sbom).
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 DIST = ROOT / "dist"
 
 # pip-licenses reports the raw license string from the package metadata.

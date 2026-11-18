@@ -6,7 +6,7 @@ patterns the UI borrowed, and Qt/PySide6's LGPL terms) plus the dependency
 inventory as a table. The full per-dependency license texts live in
 ``dist/licenses.md`` next to it.
 
-Invoked as ``uv run python tools/make_notice.py`` (poe notice).
+Invoked as ``uv run python tools/audit/make_notice.py`` (poe notice).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 DIST = ROOT / "dist"
 
 # Attributions that cannot be derived from the dependency inventory.

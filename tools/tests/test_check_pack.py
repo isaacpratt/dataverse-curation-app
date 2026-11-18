@@ -1,4 +1,4 @@
-"""The packed release is checked, not assumed: `tools/check_pack.py`.
+"""The packed release is checked, not assumed: `tools/build/check_pack.py`.
 
 `poe pack` and CI both call that script, so these tests define what "packed"
 means without a 229 MB PyInstaller build: a fake release directory with the
@@ -17,9 +17,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools import check_pack, pack_app  # noqa: E402
+from tools.build import check_pack, pack_app  # noqa: E402
 
-SCRIPT = ROOT / "tools" / "check_pack.py"
+SCRIPT = ROOT / "tools" / "build" / "check_pack.py"
 VERSION = "0.2.0"
 NEW_ENOUGH = 1_100_000  # a Setup.exe smaller than a megabyte is reported as truncated
 

@@ -13,9 +13,9 @@ Dataverse GET round trip), and the fetch count is counted exactly.
 
 Run::
 
-    uv run python tools/bench_enrichment_cap.py
-    uv run python tools/bench_enrichment_cap.py --rows 5000 --latency-ms 100
-    uv run python tools/bench_enrichment_cap.py --markdown   # for the docs
+    uv run python tools/perf/bench_enrichment_cap.py
+    uv run python tools/perf/bench_enrichment_cap.py --rows 5000 --latency-ms 100
+    uv run python tools/perf/bench_enrichment_cap.py --markdown   # for the docs
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ import pathlib
 import sys
 import time
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

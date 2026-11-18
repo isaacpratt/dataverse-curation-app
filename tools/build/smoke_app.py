@@ -19,7 +19,7 @@ import subprocess
 import sys
 import tempfile
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 EXE = pathlib.Path(
     os.environ.get("DOCENT_SMOKE_EXE", ROOT / "dist" / "DataverseDocent" / "DataverseDocent.exe")
 )

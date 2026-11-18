@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools import startup_probe
+from curation import startup_probe
 
 
 def test_disabled_is_a_noop(tmp_path, monkeypatch):

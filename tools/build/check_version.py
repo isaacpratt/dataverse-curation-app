@@ -3,7 +3,7 @@
 The release workflow runs this before it builds anything, and so can a
 maintainer, to see what a tag would do:
 
-    uv run python tools/check_version.py --tag v0.2.0
+    uv run python tools/build/check_version.py --tag v0.2.0
 
 With no `--tag` it reads `GITHUB_REF_NAME`, which is the tag on a tag push.
 Exit codes: 0 the tag matches (prints the version and channel), 1 mismatch
@@ -17,7 +17,7 @@ import os
 import pathlib
 import sys
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

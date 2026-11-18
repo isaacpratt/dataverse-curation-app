@@ -1,6 +1,6 @@
 """Release artefacts: SPDX SBOM, NOTICE and the license inventory.
 
-Covers the pure parts of tools/make_sbom.py and tools/make_notice.py - the
+Covers the pure parts of tools/audit/make_sbom.py and tools/audit/make_notice.py - the
 files a release attaches to a GitHub Release.
 """
 
@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import json
 
-from tools.make_notice import ATTRIBUTIONS, render_notice
-from tools.make_sbom import normalize_license, spdx_document
+from tools.audit.make_notice import ATTRIBUTIONS, render_notice
+from tools.audit.make_sbom import normalize_license, spdx_document
 
 PACKAGES = [
     {

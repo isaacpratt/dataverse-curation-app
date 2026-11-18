@@ -4,7 +4,7 @@ One artefact: ``dist/DataverseDocent/DataverseDocent.exe`` plus its
 ``_internal`` payload, with ``config.example.json`` copied alongside. That
 folder is what ``poe pack`` turns into the installer and its portable zip.
 
-    uv run python tools/build_app.py
+    uv run python tools/build/build_app.py
 
 There is no second "lite" build any more: it existed to offer a smaller
 download, and the portable zip Velopack builds from this one package already
@@ -22,7 +22,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 #: The executable and its folder. One name, everywhere: the PyInstaller
 #: artefact, the shortcut target, the installer's --mainExe and the file a

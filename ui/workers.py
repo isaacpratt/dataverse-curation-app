@@ -112,7 +112,7 @@ class CrawlWorker(QThread):
     # Dashboard enrichment bounds (approved scope): drafts first, capped,
     # sums-only, flushed to the table in batches.
     #
-    # The cap is measured, not guessed (dv-gj9; tools/bench_enrichment_cap.py,
+    # The cap is measured, not guessed (dv-gj9; tools/perf/bench_enrichment_cap.py,
     # 5,000-row synthetic collection, simulated 100 ms GET latency, 5
     # workers, exact fetch count): 200 rows costs ~4 s of background
     # enrichment (50 rows ~1 s, 400 ~8 s, 1,000 ~20 s, 5,000 ~100 s).
@@ -261,7 +261,7 @@ class CrawlWorker(QThread):
                 try:
                     n_attempted = int((enrich_stats or {}).get("attempted", 0))
                     # The cap is a measured value (dv-gj9; see
-                    # tools/bench_enrichment_cap.py): log it and the fetch
+                    # tools/perf/bench_enrichment_cap.py): log it and the fetch
                     # count every refresh so a slow refresh can be
                     # attributed to the enrichment fan-out.
                     get_app_log().info(CrawlWorker._enrichment_log_line(n_attempted))

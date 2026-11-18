@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from tools.startup_probe import mark
+from curation.startup_probe import mark
 from ui.i18n import t
 
 mark("main.py imported")
@@ -19,7 +19,7 @@ mark("main.py imported")
 # inside main() (so --headless can run without a display).
 # These imports are TYPE_CHECKING-only at runtime to keep --headless fast
 # (~300ms + ~100MB saved by not loading Qt). PyInstaller still discovers
-# them via the hidden-imports in tools/build_app.py.
+# them via the hidden-imports in tools/build/build_app.py.
 from typing import TYPE_CHECKING as _TYPE_CHECKING  # noqa: E402
 
 if _TYPE_CHECKING:  # pragma: no cover

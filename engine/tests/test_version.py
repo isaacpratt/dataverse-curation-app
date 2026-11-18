@@ -1,7 +1,7 @@
 """One version, one tag: `engine.__version__` is the only literal.
 
 The release workflow refuses a tag that disagrees with it, and
-`tools/check_version.py` is that gate - run here exactly as CI runs it.
+`tools/build/check_version.py` is that gate - run here exactly as CI runs it.
 """
 
 import os
@@ -15,7 +15,7 @@ import engine
 from engine import version as version_mod
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "tools" / "check_version.py"
+SCRIPT = ROOT / "tools" / "build" / "check_version.py"
 
 
 def test_version_is_semver() -> None:

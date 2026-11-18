@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.complexity_report import BUDGET, render_report
+from tools.audit.complexity_report import BUDGET, render_report
 
 BLOCKS = [
     {

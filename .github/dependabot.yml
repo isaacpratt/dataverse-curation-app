@@ -1,7 +1,7 @@
 # Dependency freshness: uv (Python), github-actions and pre-commit hooks.
 # Weekly, minor/patch grouped so noise stays low; major bumps arrive as
 # their own PRs so they get a real review. The audit gate in CI
-# (tools/audit_deps.py) catches vulnerabilities; this bot keeps the
+# (tools/audit/audit_deps.py) catches vulnerabilities; this bot keeps the
 # queue from rotting.
 version: 2
 updates:

@@ -487,7 +487,7 @@ class DashboardView(QWidget):
     # painted rows are capped, and the status line says how many are
     # hidden so the cap is never silent.
     #
-    # Measured, not guessed (dv-fjr; tools/bench_paint_window.py, 25k
+    # Measured, not guessed (dv-fjr; tools/perf/bench_paint_window.py, 25k
     # synthetic rows, Windows offscreen, median of 5 runs): filtering all
     # 25k rows costs ~13 ms, painting costs ~0.45 ms per row, so a full
     # repaint is ~0.9 s at 2,000 painted rows, ~2.0 s at 5,000, ~4.0 s
@@ -921,7 +921,7 @@ class DashboardView(QWidget):
         self._startup_started = True
         self._restoring = False
         try:
-            from tools.startup_probe import mark
+            from curation.startup_probe import mark
         except Exception:  # pragma: no cover - probe is optional
 
             def mark(label: str) -> None:

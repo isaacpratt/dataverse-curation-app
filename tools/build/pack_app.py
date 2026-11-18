@@ -1,11 +1,11 @@
 """Pack dist/DataverseDocent into a Velopack release with vpk, then verify it.
 
     uv run poe pack                    # build already done: dist/releases/<version>
-    uv run python tools/pack_app.py --out dist/releases
+    uv run python tools/build/pack_app.py --out dist/releases
 
 Everything users cannot repair by hand - the install folder name, the
 shortcut and Apps & Features title, the channel, the executable - comes from
-`tools/check_pack.py`, and the same module checks the result, so the builder
+`tools/build/check_pack.py`, and the same module checks the result, so the builder
 and the verifier cannot disagree about what "packed" means.
 
 vpk is a .NET tool, needed only to build: `dotnet tool install -g vpk`
@@ -26,13 +26,13 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine import __version__ as app_version  # noqa: E402
 from engine.version import parse  # noqa: E402
-from tools import check_pack  # noqa: E402
+from tools.build import check_pack  # noqa: E402
 
 
 def find_vpk() -> Path:

@@ -1,6 +1,6 @@
 """Write dist/licenses.md - the license inventory of the locked environment.
 
-Invoked as `uv run python tools/make_licenses.py` (poe license-report).
+Invoked as `uv run python tools/audit/make_licenses.py` (poe license-report).
 Runs pip-licenses inside `uv run --with pip-licenses` over the project
 venv (the locked set) and keeps the markdown report in dist/.
 """
@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 DIST = ROOT / "dist"
 
 

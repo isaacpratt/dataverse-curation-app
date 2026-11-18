@@ -13,9 +13,9 @@ keystroke that narrows it, and the sort.
 
 Run::
 
-    uv run python tools/bench_paint_window.py
-    uv run python tools/bench_paint_window.py --rows 25000 --caps 2000 5000 10000 25000
-    uv run python tools/bench_paint_window.py --markdown   # for the docs
+    uv run python tools/perf/bench_paint_window.py
+    uv run python tools/perf/bench_paint_window.py --rows 25000 --caps 2000 5000 10000 25000
+    uv run python tools/perf/bench_paint_window.py --markdown   # for the docs
 
 Nothing here touches the network or the user's workspace: the config
 has no token and the workspace is a throwaway directory.
@@ -33,7 +33,7 @@ import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

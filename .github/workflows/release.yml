@@ -91,7 +91,7 @@ jobs:
       # The one thing a tag can never survive: disagreeing with the build.
       - name: Version matches engine.__version__
         shell: pwsh
-        run: uv run python tools/check_version.py --tag "$env:TAG"
+        run: uv run python tools/build/check_version.py --tag "$env:TAG"
 
       - name: Build
         run: uv run poe build
@@ -124,11 +124,11 @@ jobs:
       # Same entry point a developer uses, so CI packs exactly what you pack.
       - name: Pack
         shell: pwsh
-        run: uv run python tools/pack_app.py --no-replace --version "$env:VERSION" --channel "$env:CHANNEL"
+        run: uv run python tools/build/pack_app.py --no-replace --version "$env:VERSION" --channel "$env:CHANNEL"
 
       - name: Verify the pack
         shell: pwsh
-        run: uv run python tools/check_pack.py --version "$env:VERSION" --channel "$env:CHANNEL"
+        run: uv run python tools/build/check_pack.py --version "$env:VERSION" --channel "$env:CHANNEL"
 
       - name: SHA256SUMS
         shell: pwsh

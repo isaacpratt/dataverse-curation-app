@@ -20,7 +20,11 @@ dataverse-curation-app/
 │   ├── gallery.py        # the component gallery: every kit component on one page
 │   ├── table_layout.py   # one layout controller per table header (persists user gestures only)
 │   └── tests/            # view suites (pytest-qt, offscreen)
-├── tools/                  # operational helpers (audit/SBOM/licenses, build, pack, smoke, doc links, complexity, benchmarks) + probes/
+├── tools/                  # operational helpers, grouped by function (run outside the app; see tools/README.md)
+│   ├── build/              # PyInstaller build, Velopack pack/check, version tag, frozen smoke, clean
+│   ├── audit/              # OSV scan, SBOM, license inventory, NOTICE, complexity report
+│   ├── docs/               # docs/html link and anchor check
+│   ├── perf/               # benchmarks for measured performance constants
 │   ├── probes/             # offscreen UI probes (queue columns, manifest columns, page headings, card corner, buttons, gallery)
 │   └── tests/              # tool-script suites (pack checks, SBOM/NOTICE, complexity report)
 ├── curation/             # the app core: no Qt, no view imports (import-linter enforces both)
@@ -32,6 +36,7 @@ dataverse-curation-app/
 │   ├── review_rules.py     # rule-driven completeness evaluation
 │   ├── applog.py           # in-memory request log (Log page)
 │   ├── storage.py          # SQLite local state + JSON caches (sizes, labels, table layout)
+│   ├── startup_probe.py    # opt-in DOCENT_STARTUP_LOG phase timings (runtime; imported by main.py)
 │   └── tests/              # curation core suites (Qt-free; fixtures under tests/fixtures/)
 ├── main.py               # entry point (GUI + --headless)
 └── config.example.json   # configuration template (copy to config.json)
@@ -61,7 +66,7 @@ poe check-pack     # verify an existing dist/releases (same check poe pack runs)
 poe smoke          # run the frozen exe: --headless --help + CSV/PII probe
 ```
 
-PyInstaller flags (hidden imports, excludes, icon, assets) live in `tools/build_app.py`, one list, one artefact; it prints the wall time and artefact size. Do not rebuild for ordinary development - `uv run python main.py` starts in ~1.7 s and runs the same code; freeze only to verify frozen behaviour. `--clean` is deliberately absent: analysis re-runs anyway (~55 s of a ~85 s build) and wiping `.pyi-cache` only adds work.
+PyInstaller flags (hidden imports, excludes, icon, assets) live in `tools/build/build_app.py`, one list, one artefact; it prints the wall time and artefact size. Do not rebuild for ordinary development - `uv run python main.py` starts in ~1.7 s and runs the same code; freeze only to verify frozen behaviour. `--clean` is deliberately absent: analysis re-runs anyway (~55 s of a ~85 s build) and wiping `.pyi-cache` only adds work.
 
 There is one build: `dist/DataverseDocent/` is what `poe pack` turns into the installer and its portable zip, so the old `lite`/`full` pair is gone (the portable zip is the smaller download it used to offer). All build commands also work identically from bare cmd/PowerShell (no Git Bash); `make` and `build-lite.ps1` were removed when poe was adopted. poe is in the dev dependency group; run it as `uv run poe …`.
 
@@ -106,7 +111,7 @@ bd dolt push          # Push beads data to remote
 Gate before handoff; run from the repository root when code (not docs-only) changed:
 
 - `uv run pytest -q` — must exit 0
-- `uv run poe typecheck` — must report `Success: no issues found`; the scope is `[tool.mypy] files` (`engine/`, `curation/`, `ui/`, `main.py`), so run bare `uv run mypy`. The engine contract and `main.py` are checked under mypy `--strict`; the UI layer is checked under the documented relaxation in `[[tool.mypy.overrides]] module = ["ui.*"]` (the "annotate everything" rules off, `check_untyped_defs` and every shape check on)
+- `uv run poe typecheck` — must report `Success: no issues found`; the scope is `[tool.mypy] files` (`engine/`, `curation/`, `tools/tests`, `ui/`, `main.py`), so run bare `uv run mypy`. The engine contract and `main.py` are checked under mypy `--strict`; the test suites and the UI layer are checked under the documented relaxation in `[[tool.mypy.overrides]]` (the "annotate everything" rules off, `check_untyped_defs` and every shape check on), with `ui.*` in its own override
 - `uv run poe contracts` — import-linter contracts must stay green: `engine/` and `curation/` may not import `ui/` or `PySide6`, and the operational helpers in `tools/` may not import `ui/` (the UI probes are the documented exception)
 - `python tools/probes/run_all.py` — must end with `all N probes passed`; mandatory for UI/theme changes, and cheap enough to always run
 - headless box? set `QT_QPA_PLATFORM=offscreen` first, or the probes fail for the wrong reason

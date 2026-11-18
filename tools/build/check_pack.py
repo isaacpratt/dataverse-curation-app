@@ -1,13 +1,13 @@
 """One definition of a correctly packed Velopack release, and the fixed identity.
 
-`tools/pack_app.py` builds the release with these values; this module checks
+`tools/build/pack_app.py` builds the release with these values; this module checks
 the result, and CI runs the same check on the artefact it uploaded. Keeping
 both in one place is the point: the ids below name filesystem locations and
 registry-free install paths a user cannot repair by hand, so a typo here is
 not a cosmetic bug.
 
-    uv run python tools/check_pack.py                 # dist/releases, engine version
-    uv run python tools/check_pack.py --dir some/dir --version 0.2.0
+    uv run python tools/build/check_pack.py                 # dist/releases, engine version
+    uv run python tools/build/check_pack.py --dir some/dir --version 0.2.0
 
 Exit codes: 0 the release directory is complete, 1 something is missing or
 disagrees (each problem on its own line), 2 no release directory at all.
@@ -22,7 +22,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

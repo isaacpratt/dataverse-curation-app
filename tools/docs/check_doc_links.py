@@ -12,7 +12,7 @@ import sys
 from html.parser import HTMLParser
 from pathlib import Path
 
-DOCS = Path(__file__).resolve().parent.parent / "docs" / "html"
+DOCS = Path(__file__).resolve().parents[2] / "docs" / "html"
 ATTRS = ("href", "src")
 SKIP = re.compile(r"^(?:https?://|mailto:|tel:|data:|javascript:|about:)", re.IGNORECASE)
 ID_RE = re.compile(r"""\bid\s*=\s*[\"']([^\"']+)[\"']|\bname\s*=\s*[\"']([^\"']+)[\"']""")

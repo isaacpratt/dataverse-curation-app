@@ -10,12 +10,13 @@ __pycache__/
 *.egg-info/
 
 # PyInstaller writes <name>.spec beside the entry point, even though the
-# flag list lives in tools/build_app.py. `poe clean` removes it.
+# flag list lives in tools/build/build_app.py. `poe clean` removes it.
 *.spec
 
-# Build and release output (dist/releases is `poe pack` output)
-build/
-dist/
+# Build and release output at the repository root (`poe build` = build/,
+# `poe pack` = dist/releases). Anchored: tools/build/ is source, not output.
+/build/
+/dist/
 # Reports written by poe tasks: complexity.md, probe screenshots, junit,
 # coverage and SBOM copies.
 reports/
