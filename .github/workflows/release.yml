@@ -98,7 +98,7 @@ jobs:
 
       # vpk is a .NET tool; build time only, nothing for the published app.
       - name: Set up .NET 8 SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
       - name: Install vpk
