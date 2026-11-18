@@ -41,7 +41,7 @@ repos:
   # codespell: en-GB_to_en-US builtin deliberately NOT enabled — this is a
   # Canadian project. Rare-word false positives are ignored in .codespellrc.
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.3
     hooks:
       - id: codespell
         types_or: [markdown, python, pyi, toml, yaml]
