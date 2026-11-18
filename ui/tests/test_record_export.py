@@ -3,11 +3,11 @@
 import pytest
 
 
-@pytest.fixture()
+@pytest.fixture
 def view(qapp, tmp_path):
     """Create a bare DatasetDetailView with stubs for the export inputs."""
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     try:
         cfg = Config.load(None)
@@ -40,16 +40,16 @@ def view(qapp, tmp_path):
         def toPlainText(self):
             return "Dear depositor…"
 
-    v._dl_mgr = _StubDl()
-    v._response_edit = _StubEdit()
-    v._state = lambda: __import__("storage").open_state(cfg.app.workspace)
+    v._dl_mgr = _StubDl()  # type: ignore[assignment]
+    v._response_edit = _StubEdit()  # type: ignore[assignment]
+    v._state = lambda: __import__("curation.storage", fromlist=["x"]).open_state(cfg.app.workspace)  # type: ignore[method-assign]
 
     def _log(action, notes="", details=None):
         v._logged.append((action, notes, details))
 
-    v._log_action = _log
+    v._log_action = _log  # type: ignore[method-assign]
     v._status_msgs = []
-    v._set_status = lambda msg, **_kw: v._status_msgs.append(msg)
+    v._set_status = lambda msg, **_kw: v._status_msgs.append(msg)  # type: ignore[method-assign]
     return v
 
 
@@ -63,7 +63,8 @@ def test_button_handler_writes_record(view):
     assert index["curation_label"] == "Approved"
     assert index["staged_files"] == 1
     assert any(a == "curation_record_exported" for a, _n, _d in view._logged)
-    assert view._status_msgs and "Curation record written" in view._status_msgs[-1]
+    assert view._status_msgs
+    assert "Curation record written" in view._status_msgs[-1]
 
 
 def test_handler_survives_missing_response_edit(view):
@@ -80,7 +81,5 @@ def test_decision_notes_flow_into_the_record(view):
     view._on_export_record()
     base = view._dl_mgr.dataset_dir(view._pid) / "curation-record"
     record = next(iter(base.iterdir()))
-    decision = __import__("json").loads(
-        (record / "decision.json").read_text(encoding="utf-8")
-    )
+    decision = __import__("json").loads((record / "decision.json").read_text(encoding="utf-8"))
     assert "Revisions" in decision["decision"]

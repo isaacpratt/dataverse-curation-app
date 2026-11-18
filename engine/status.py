@@ -6,10 +6,13 @@ details.skipped=True (see _util.missing_library/skipped), so old payloads
 without the flag keep their previous meaning.
 """
 
+from typing import Any
+
 from engine.checks.base import CheckResult
 
 
 def is_skipped(result: CheckResult) -> bool:
+    """Return True for skipped/other-missing-library style results."""
     try:
         return bool((result.details or {}).get("skipped"))
     except Exception:
@@ -27,7 +30,8 @@ def classify(result: CheckResult) -> str:
     return "failed-warning"
 
 
-def summarize(results: list) -> dict:
+def summarize(results: list[Any]) -> dict[str, Any]:
+    """Count results by level and overall status for a file set."""
     counts = {"passed": 0, "failed-error": 0, "failed-warning": 0, "skipped": 0}
     for result in results:
         counts[classify(result)] += 1
@@ -36,7 +40,7 @@ def summarize(results: list) -> dict:
     return counts
 
 
-def file_status(checks: list) -> tuple[str, int]:
+def file_status(checks: list[Any]) -> tuple[str, int]:
     """Aggregate label + rank for a file's checks.
 
     Rank (higher = worse): error(4) > warning-fail(3) > skipped-only(2) >
@@ -58,7 +62,7 @@ def file_status(checks: list) -> tuple[str, int]:
     return ("clean", 1)
 
 
-def status_label(checks: list) -> str:
+def status_label(checks: list[Any]) -> str:
     """Human scan string for tree file nodes, e.g. 'Clean · 4 passed'."""
     if not checks:
         return "No automated check"

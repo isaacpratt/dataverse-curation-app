@@ -21,7 +21,7 @@ def test_both_splitter_panes_are_noframe_scroll_areas(win):
     for i in range(2):
         pane = splitter.widget(i)
         assert isinstance(pane, QScrollArea), "each pane scrolls on its own"
-        assert pane.frameShape() == QFrame.NoFrame
+        assert pane.frameShape() == QFrame.Shape.NoFrame
 
 
 def test_checks_tree_is_sized_to_its_content(win):

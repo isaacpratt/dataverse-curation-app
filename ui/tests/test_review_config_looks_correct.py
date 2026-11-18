@@ -103,7 +103,7 @@ def test_handler_picker_seeds_a_sensible_default(win):
 
 
 def test_engine_reads_what_the_ui_writes(win):
-    import review_rules as rr
+    import curation.review_rules as rr
 
     def _check(rc, probe):
         rc._p_min.setValue(60)
@@ -111,18 +111,32 @@ def test_engine_reads_what_the_ui_writes(win):
         rs = {"field_rules": [probe]}
         meta = {
             "latestVersion": {
-                "metadataBlocks": {"citation": {"fields": [
-                    {"typeName": "alternativeUrl",
-                     "value": "Results of the 2024 soil survey and everything else worth saying here"},
-                ]}},
+                "metadataBlocks": {
+                    "citation": {
+                        "fields": [
+                            {
+                                "typeName": "alternativeUrl",
+                                "value": "Results of the 2024 soil survey and everything else worth saying here",
+                            },
+                        ]
+                    }
+                },
             },
         }
-        row = next(r for r in rr.evaluate_ruleset(meta, rs, [])
-                   if r["rule_id"] == "field:citation.alternativeUrl:looks_correct")
+        row = next(
+            r
+            for r in rr.evaluate_ruleset(meta, rs, [])
+            if r["rule_id"] == "field:citation.alternativeUrl:looks_correct"
+        )
         assert row["status"] == "complete"
-        meta["latestVersion"]["metadataBlocks"]["citation"]["fields"][0]["value"] = "no description yet"
-        row = next(r for r in rr.evaluate_ruleset(meta, rs, [])
-                   if r["rule_id"] == "field:citation.alternativeUrl:looks_correct")
+        meta["latestVersion"]["metadataBlocks"]["citation"]["fields"][0]["value"] = (
+            "no description yet"
+        )
+        row = next(
+            r
+            for r in rr.evaluate_ruleset(meta, rs, [])
+            if r["rule_id"] == "field:citation.alternativeUrl:looks_correct"
+        )
         assert row["status"] == "incomplete"
         assert "[too short" in row["value"]
 

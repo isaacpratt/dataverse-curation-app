@@ -10,7 +10,7 @@ dragged edge, a moved column, a resized window).
 import pytest
 
 
-@pytest.fixture()
+@pytest.fixture
 def dash(win, qapp):
     """Return the dashboard, on screen (the fit needs a visible table)."""
     win._show_dashboard()
@@ -21,9 +21,7 @@ def dash(win, qapp):
 
 def _visible_total(header) -> int:
     return sum(
-        header.sectionSize(i)
-        for i in range(header.count())
-        if not header.isSectionHidden(i)
+        header.sectionSize(i) for i in range(header.count()) if not header.isSectionHidden(i)
     )
 
 

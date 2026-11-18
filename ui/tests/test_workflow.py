@@ -130,9 +130,7 @@ def test_zero_file_dataset_skips_download_but_still_runs_checks():
 
 
 def test_unknown_inventory_is_not_mistaken_for_zero_files():
-    states = _states(
-        WorkflowInput(metadata_loaded=True, inventory_ok=False, total_files=0)
-    )
+    states = _states(WorkflowInput(metadata_loaded=True, inventory_ok=False, total_files=0))
     assert states["download"] != DONE
 
 
@@ -140,7 +138,9 @@ def test_step_order_and_accessible_names_are_stable():
     flow = derive_workflow(WorkflowInput(metadata_loaded=True))
     assert [s.key for s in flow.steps] == list(STEP_ORDER)
     assert flow.steps[0].accessible == "Metadata, done step"
-    assert flow.step_of("changes").accessible == "Changes, current step"
+    changes_step = flow.step_of("changes")
+    assert changes_step is not None
+    assert changes_step.accessible == "Changes, current step"
 
 
 # -- rail widget ----------------------------------------------------------
@@ -148,8 +148,8 @@ def test_step_order_and_accessible_names_are_stable():
 
 @pytest.fixture
 def detail(qapp, tmp_path):
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     cfg = Config()
     cfg.dataverse.base_url = "https://demo.borealisdata.ca"
@@ -192,9 +192,7 @@ def test_rail_download_and_export_only_focus_their_buttons(detail, monkeypatch):
     monkeypatch.setattr(detail, "_on_export", lambda: called.append("export"))
     focused = []
     monkeypatch.setattr(detail._dl_btn, "setFocus", lambda *a, **k: focused.append("download"))
-    monkeypatch.setattr(
-        detail._history_btn, "setFocus", lambda *a, **k: focused.append("export")
-    )
+    monkeypatch.setattr(detail._history_btn, "setFocus", lambda *a, **k: focused.append("export"))
     monkeypatch.setattr(detail, "_goto_section", lambda attr: None)
 
     detail._rail.buttons["download"].click()

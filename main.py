@@ -7,8 +7,9 @@ dataset directory and writes a JSON report (see docs/html/development.html).
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
-from startup_probe import mark
+from tools.startup_probe import mark
 from ui.i18n import t
 
 mark("main.py imported")
@@ -21,19 +22,19 @@ mark("main.py imported")
 # them via the hidden-imports in tools/build_app.py.
 from typing import TYPE_CHECKING as _TYPE_CHECKING  # noqa: E402
 
-if _TYPE_CHECKING:  # pragma: no cover  # noqa: E402
-    import PySide6  # noqa: F401
-    import PySide6.QtCore  # noqa: F401
-    import PySide6.QtGui  # noqa: F401
+if _TYPE_CHECKING:  # pragma: no cover
+    import PySide6
+    import PySide6.QtCore
+    import PySide6.QtGui
     import PySide6.QtWidgets  # noqa: F401
 
-    import response_draft  # noqa: F401
-    import review_rules  # noqa: F401
-    import ui.dashboard  # noqa: F401
-    import ui.dataset_detail  # noqa: F401
-    import ui.main_window  # noqa: F401
-    import ui.review_config  # noqa: F401
-    import ui.settings_dialog  # noqa: F401
+    import curation.response_draft
+    import curation.review_rules  # noqa: F401
+    import ui.dashboard
+    import ui.dataset
+    import ui.main_window
+    import ui.review_config
+    import ui.settings_dialog
     import ui.workers  # noqa: F401
 
 
@@ -62,7 +63,7 @@ def _kick_update_check() -> None:
         pass
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     parser = argparse.ArgumentParser(description=t("app.cli.description"))
     parser.add_argument(
         "--headless",
@@ -74,9 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=t("app.cli.gallery_help"),
     )
-    parser.add_argument(
-        "dataset_dir", nargs="?", help=t("app.cli.dataset_dir_help")
-    )
+    parser.add_argument("dataset_dir", nargs="?", help=t("app.cli.dataset_dir_help"))
     parser.add_argument("--out", default="curation_report.json", help=t("app.cli.out_help"))
     parser.add_argument(
         "--format",
@@ -84,9 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=("json", "md", "both"),
         help=t("app.cli.format_help"),
     )
-    parser.add_argument(
-        "--persistent-id", default="", help=t("app.cli.persistent_id_help")
-    )
+    parser.add_argument("--persistent-id", default="", help=t("app.cli.persistent_id_help"))
     parser.add_argument(
         "--export-record",
         action="store_true",
@@ -134,20 +131,11 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:
             print(t("app.cli.run_failed", exc=exc), file=sys.stderr)
             return 2
-        errors = sum(
-            1
-            for r in report.dataset_checks
-            if r.level == "error" and not r.passed
-        ) + sum(
-            1
-            for f in report.files
-            for r in f.checks
-            if r.level == "error" and not r.passed
+        errors = sum(1 for r in report.dataset_checks if r.level == "error" and not r.passed) + sum(
+            1 for f in report.files for r in f.checks if r.level == "error" and not r.passed
         )
         warnings = sum(
-            1
-            for r in report.dataset_checks
-            if r.level in {"warning", "error"} and not r.passed
+            1 for r in report.dataset_checks if r.level in {"warning", "error"} and not r.passed
         ) + sum(
             1
             for f in report.files
@@ -176,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
         # Optional curation-record bundle (dv-vwt).
         if getattr(args, "export_record", False):
             try:
-                from curation_record import export_record
+                from curation.curation_record import export_record
 
                 record_dir = export_record(
                     out_path.parent,
@@ -193,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from PySide6.QtWidgets import QApplication
 
-    from config import Config
+    from curation.config import Config
     from ui.main_window import MainWindow
 
     mark("PySide6 + ui.main_window imported")
@@ -204,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         # Corrupt config: fall back to defaults but tell the user loudly
         # instead of silently discarding their workspace/token.
         print(t("app.cli.config_warning", exc=exc), file=sys.stderr)
-        from config import Config as _Config
+        from curation.config import Config as _Config
 
         cfg = _Config()
     if args.dataverse:
@@ -226,6 +214,7 @@ def main(argv: list[str] | None = None) -> int:
         pass
     try:
         from ui.theme import apply_theme
+
         apply_theme(app)
     except Exception:
         pass
@@ -242,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
         return app.exec()
 
     # Global crash guard — show a copyable dialog instead of silently exiting
-    def _excepthook(exc_type, exc, tb):
+    def _excepthook(exc_type: Any, exc: BaseException, tb: Any) -> None:
         import traceback
 
         msg = "".join(traceback.format_exception(exc_type, exc, tb))

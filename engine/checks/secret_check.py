@@ -6,6 +6,7 @@ PyInstaller build — not an optional/excluded dependency.
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from hush import Scanner
 
@@ -26,17 +27,52 @@ class SecretCheck(Check):
     """Secret/credential scan (API keys, tokens, private keys, high-entropy)."""
 
     check_id = "format.secrets"
-    extensions = {
+    extensions: ClassVar[set[str]] = {
         # code
-        ".r", ".py", ".qmd", ".rmd", ".jl", ".m", ".f90", ".f",
-        ".cpp", ".cxx", ".cc", ".c", ".h", ".sh", ".bat", ".sql",
-        ".cs", ".java", ".tex", ".do", ".sas", ".ps1", ".pl",
-        ".rb", ".go", ".js", ".ts", ".css", ".html",
+        ".r",
+        ".py",
+        ".qmd",
+        ".rmd",
+        ".jl",
+        ".m",
+        ".f90",
+        ".f",
+        ".cpp",
+        ".cxx",
+        ".cc",
+        ".c",
+        ".h",
+        ".sh",
+        ".bat",
+        ".sql",
+        ".cs",
+        ".java",
+        ".tex",
+        ".do",
+        ".sas",
+        ".ps1",
+        ".pl",
+        ".rb",
+        ".go",
+        ".js",
+        ".ts",
+        ".css",
+        ".html",
         # text
-        ".txt", ".md", ".rst", ".log",
+        ".txt",
+        ".md",
+        ".rst",
+        ".log",
         # config
-        ".yml", ".yaml", ".json", ".toml", ".ini",
-        ".cfg", ".conf", ".env", ".properties",
+        ".yml",
+        ".yaml",
+        ".json",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".conf",
+        ".env",
+        ".properties",
         # xml: also matches xml_check; both may run on the same file
         ".xml",
     }
@@ -57,9 +93,7 @@ class SecretCheck(Check):
         scanner = Scanner(use_entropy=True, min_severity="medium")
         findings = scanner.scan_text(text, source=name)
         count = len(findings)
-        sample_note = (
-            f" (sampled first {_SAMPLE_BYTES // (1 << 20)} MiB)" if sampled else ""
-        )
+        sample_note = f" (sampled first {_SAMPLE_BYTES // (1 << 20)} MiB)" if sampled else ""
 
         if not findings:
             return [

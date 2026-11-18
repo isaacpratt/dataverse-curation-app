@@ -34,9 +34,7 @@ def _right_most_edge(pane) -> float:
     from PySide6.QtWidgets import QWidget
 
     edges = [
-        (w.geometry().x() + w.width())
-        for w in pane.findChildren(QWidget)
-        if w.isVisibleTo(pane)
+        (w.geometry().x() + w.width()) for w in pane.findChildren(QWidget) if w.isVisibleTo(pane)
     ]
     return max(edges, default=0.0)
 
@@ -44,7 +42,7 @@ def _right_most_edge(pane) -> float:
 def _seed_pending_pref(pane, cfg, version: str) -> None:
     from pathlib import Path
 
-    from storage import write_ui_pref
+    from curation.storage import write_ui_pref
 
     write_ui_pref(Path(cfg.app.workspace), "update_pending_version", version)
     write_ui_pref(Path(cfg.app.workspace), "update_check_last", int(time.time()))
@@ -101,7 +99,9 @@ def main() -> int:
         "the Restart and install action appears",
     )
     edge2 = _right_most_edge(pane2)
-    report.check(edge2 <= 960, "nothing clipped at 960 px wide (pending state)", f"rightmost {edge2:.0f} px")
+    report.check(
+        edge2 <= 960, "nothing clipped at 960 px wide (pending state)", f"rightmost {edge2:.0f} px"
+    )
 
     pane2.grab().save("about-updates-pending.png")
     pane.close()

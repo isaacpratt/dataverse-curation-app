@@ -15,14 +15,14 @@ import json
 import pytest
 from PySide6.QtWidgets import QHeaderView
 
-from storage import (
+from curation.storage import (
     TABLE_LAYOUT_VERSION,
     clear_table_state,
     table_layout_entry_valid,
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def header(qapp):
     """Build a table with three columns and a throwaway workspace."""
     import tempfile
@@ -84,7 +84,7 @@ def test_restore_reapplies_the_saved_layout(header):
 def test_reset_clears_the_saved_layout_and_restores_the_snapshot(header):
     from ui.table_layout import TableLayout
 
-    table, hdr, ws = header
+    _table, hdr, ws = header
     layout = TableLayout(ws, "probe", hdr)
     original = hdr.sectionSize(0)
     hdr.resizeSection(0, 240)
@@ -106,12 +106,10 @@ def test_reset_survives_a_restart(header):
 def test_a_layout_for_another_column_count_is_ignored(header):
     from ui.table_layout import TableLayout
 
-    table, hdr, ws = header
+    _table, hdr, ws = header
     path = ws / "table_layout.json"
     path.write_text(
-        json.dumps(
-            {"probe": {"v": TABLE_LAYOUT_VERSION, "widths": [10, 20, 30, 40, 50]}}
-        ),
+        json.dumps({"probe": {"v": TABLE_LAYOUT_VERSION, "widths": [10, 20, 30, 40, 50]}}),
         encoding="utf-8",
     )
     layout = TableLayout(ws, "probe", hdr)
@@ -167,7 +165,7 @@ def test_the_tree_widget_reports_user_gestures(qapp):
     tree.header().resizeSection(1, 150)
     assert seen == [True], "dragging an interactive section is a user gesture"
 
-    tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+    tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
     seen.clear()
     tree.header().resizeSection(0, 300)
     assert seen == [], "a stretched section is not a user gesture"

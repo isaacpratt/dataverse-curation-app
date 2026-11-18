@@ -10,10 +10,8 @@ def _tips(widget):
 
 
 def test_info_tip_sits_right_after_the_title(qapp):
-    card, _body, _title, header = make_card("Auto-Checks")
-    btn = add_info_tip(
-        header, "First paragraph.", "✓ pass · ✕ issue", name="Auto-Checks"
-    )
+    _card, _body, _title, header = make_card("Auto-Checks")
+    btn = add_info_tip(header, "First paragraph.", "✓ pass · ✕ issue", name="Auto-Checks")
 
     assert header.indexOf(btn) == 1, "the (i) belongs next to the title"
     assert btn.toolTip() == "First paragraph.\n\n✓ pass · ✕ issue"
@@ -31,8 +29,8 @@ def test_long_help_is_wrapped_for_the_tooltip(qapp):
 
 
 def test_dataset_sections_get_info_tips_and_no_legend(qapp):
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     view = DatasetDetailView(
         Config(),

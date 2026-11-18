@@ -2,7 +2,7 @@
 
 from PySide6.QtWidgets import QComboBox, QDialog
 
-from download_manager import DownloadQuote
+from curation.download_manager import DownloadQuote
 from ui.download_dialog import DownloadApprovalDialog
 
 GUESTBOOK = {
@@ -71,13 +71,14 @@ def test_account_details_prefill_and_guestbook_fields_become_a_response(qapp):
 def test_required_question_blocks_accept_until_answered(qapp):
     dlg = DownloadApprovalDialog(_quote(), guestbook=GUESTBOOK, account=ACCOUNT)
     dlg.accept()
-    assert dlg.result() != QDialog.Accepted
+    assert dlg.result() != QDialog.DialogCode.Accepted
     assert "are you reasonable?" in dlg._error.text()
 
     _, widget = dlg._question_inputs[0]
+    assert isinstance(widget, QComboBox)
     widget.setCurrentIndex(1)
     dlg.accept()
-    assert dlg.result() == QDialog.Accepted
+    assert dlg.result() == QDialog.DialogCode.Accepted
 
 
 def test_missing_required_account_field_blocks_accept(qapp):
@@ -87,8 +88,9 @@ def test_missing_required_account_field_blocks_accept(qapp):
     account["position"] = ""
     dlg = DownloadApprovalDialog(_quote(), guestbook=GUESTBOOK, account=account)
     _, widget = dlg._question_inputs[0]
+    assert isinstance(widget, QComboBox)
     widget.setCurrentIndex(1)
 
     dlg.accept()
-    assert dlg.result() != QDialog.Accepted
+    assert dlg.result() != QDialog.DialogCode.Accepted
     assert "Position" in dlg._error.text()

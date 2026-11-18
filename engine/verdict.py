@@ -72,21 +72,23 @@ class Verdict:
     reasons: tuple[Reason, ...] = ()
 
 
-def _disposition_of(dispositions: dict | None, key: str) -> str:
+def _disposition_of(dispositions: dict[str, Any] | None, key: str) -> str:
     try:
         return str((dispositions or {}).get(key, {}).get("disposition") or "")
     except Exception:
         return ""
 
 
-def _is_resolved(dispositions: dict | None, key: str) -> bool:
+def _is_resolved(dispositions: dict[str, Any] | None, key: str) -> bool:
     return _disposition_of(dispositions, key) in RESOLVED_DISPOSITIONS
 
 
-def assess(report: Any = None,
-           completeness: list[dict[str, Any]] | None = None,
-           dispositions: dict[str, Any] | None = None,
-           sensitivity: dict[str, Any] | None = None) -> Verdict:
+def assess(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    report: Any = None,
+    completeness: list[dict[str, Any]] | None = None,
+    dispositions: dict[str, Any] | None = None,
+    sensitivity: dict[str, Any] | None = None,
+) -> Verdict:
     """Derive the verdict from in-memory review signals. Never raises.
 
     completeness: rule-evaluation rows (status, level, rule_id, field,
@@ -99,8 +101,7 @@ def assess(report: Any = None,
         # Synthesized "skipped" rows from include_unchecked carry no verdict;
         # a completeness list containing only those counts as unreviewed.
         evaluable = [
-            r for r in (completeness or [])
-            if isinstance(r, dict) and r.get("status") != "skipped"
+            r for r in (completeness or []) if isinstance(r, dict) and r.get("status") != "skipped"
         ]
         has_meta = bool(evaluable)
         if not has_report and not has_meta:
@@ -110,9 +111,7 @@ def assess(report: Any = None,
         errors = warnings = 0
         if report is not None:
             try:
-                entries = [
-                    (c, "") for c in list(getattr(report, "dataset_checks", None) or [])
-                ] + [
+                entries = [(c, "") for c in list(getattr(report, "dataset_checks", None) or [])] + [
                     (c, str(getattr(f, "path", "") or ""))
                     for f in list(getattr(report, "files", None) or [])
                     for c in list(getattr(f, "checks", None) or [])
@@ -121,8 +120,11 @@ def assess(report: Any = None,
                     kind = classify(c)
                     if kind not in ("failed-error", "failed-warning"):
                         continue
-                    key = finding_key(str(getattr(c, "check_id", "") or ""), path,
-                                      str(getattr(c, "message", "") or ""))
+                    key = finding_key(
+                        str(getattr(c, "check_id", "") or ""),
+                        path,
+                        str(getattr(c, "message", "") or ""),
+                    )
                     if _is_resolved(dispositions, key):
                         continue
                     if kind == "failed-error":
@@ -160,17 +162,17 @@ def assess(report: Any = None,
         if errors:
             reasons.append(Reason(REASON_ERRORS, errors, REASON_TARGETS[REASON_ERRORS]))
         if required_missing:
-            reasons.append(Reason(REASON_REQUIRED, required_missing,
-                                  REASON_TARGETS[REASON_REQUIRED]))
+            reasons.append(
+                Reason(REASON_REQUIRED, required_missing, REASON_TARGETS[REASON_REQUIRED])
+            )
         if warnings:
-            reasons.append(Reason(REASON_WARNINGS, warnings,
-                                  REASON_TARGETS[REASON_WARNINGS]))
+            reasons.append(Reason(REASON_WARNINGS, warnings, REASON_TARGETS[REASON_WARNINGS]))
         if optional_missing:
-            reasons.append(Reason(REASON_OPTIONAL, optional_missing,
-                                  REASON_TARGETS[REASON_OPTIONAL]))
+            reasons.append(
+                Reason(REASON_OPTIONAL, optional_missing, REASON_TARGETS[REASON_OPTIONAL])
+            )
         if sensitivity_pending:
-            reasons.append(Reason(REASON_SENSITIVITY, 1,
-                                  REASON_TARGETS[REASON_SENSITIVITY]))
+            reasons.append(Reason(REASON_SENSITIVITY, 1, REASON_TARGETS[REASON_SENSITIVITY]))
 
         if errors or sensitivity_pending:
             level = LEVEL_BLOCKED
@@ -190,6 +192,4 @@ def format_line(verdict: Verdict) -> str:
     """
     if not verdict.reasons:
         return verdict.level
-    return verdict.level + " — " + "; ".join(
-        f"{r.key}:{r.count}" for r in verdict.reasons
-    )
+    return verdict.level + " — " + "; ".join(f"{r.key}:{r.count}" for r in verdict.reasons)

@@ -9,6 +9,7 @@ a content listing. Formats without a native Python reader are reported as
 import tarfile
 import zipfile
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -43,7 +44,17 @@ class ContainersCheck(Check):
     """Archive check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.containers"
-    extensions = {".zip", ".tar", ".tgz", ".tbz2", ".7z", ".rar", ".gz", ".bz2", ".xz"}
+    extensions: ClassVar[set[str]] = {
+        ".zip",
+        ".tar",
+        ".tgz",
+        ".tbz2",
+        ".7z",
+        ".rar",
+        ".gz",
+        ".bz2",
+        ".xz",
+    }
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
@@ -68,10 +79,7 @@ class ContainersCheck(Check):
                 check_id="format.containers.valid",
                 level="warning",
                 passed=False,
-                message=(
-                    f"{name}: no native reader for '{suffix}' - "
-                    "manual verification required"
-                ),
+                message=(f"{name}: no native reader for '{suffix}' - manual verification required"),
             ),
             _skipped(
                 "format.containers.unsafe_entry",
@@ -260,9 +268,7 @@ class ContainersCheck(Check):
                 level="info",
                 passed=True,
                 message=f"{name}: tar readable ({len(members)} members)",
-                details={
-                    "entries": [m.name for m in members[:_MAX_ENTRIES_LISTED]]
-                },
+                details={"entries": [m.name for m in members[:_MAX_ENTRIES_LISTED]]},
             )
         ]
         if unsafe:

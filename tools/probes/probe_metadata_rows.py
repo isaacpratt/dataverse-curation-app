@@ -28,24 +28,36 @@ def _metadata() -> dict:
                 "citation": {
                     "fields": [
                         {"typeName": "title", "value": "A study"},
-                        {"typeName": "author", "value": [
-                            {
-                                "authorName": _fv("Ada Lovelace"),
-                                "authorAffiliation": _fv("Analytical Engine Lab"),
-                                "authorIdentifierScheme": _fv("ORCID"),
-                                "authorIdentifier": _fv("0000-0002-1825-0097"),
-                            },
-                            {
-                                "authorName": _fv("Grace Hopper"),
-                                "authorAffiliation": _fv(""),
-                            },
-                        ]},
-                        {"typeName": "datasetContact", "value": [
-                            {"datasetContactName": _fv("Ada Lovelace")},
-                        ]},
-                        {"typeName": "dsDescription", "value": [
-                            {"dsDescriptionValue": _fv("Desc."), "dsDescriptionDate": _fv("2026-01-01")},
-                        ]},
+                        {
+                            "typeName": "author",
+                            "value": [
+                                {
+                                    "authorName": _fv("Ada Lovelace"),
+                                    "authorAffiliation": _fv("Analytical Engine Lab"),
+                                    "authorIdentifierScheme": _fv("ORCID"),
+                                    "authorIdentifier": _fv("0000-0002-1825-0097"),
+                                },
+                                {
+                                    "authorName": _fv("Grace Hopper"),
+                                    "authorAffiliation": _fv(""),
+                                },
+                            ],
+                        },
+                        {
+                            "typeName": "datasetContact",
+                            "value": [
+                                {"datasetContactName": _fv("Ada Lovelace")},
+                            ],
+                        },
+                        {
+                            "typeName": "dsDescription",
+                            "value": [
+                                {
+                                    "dsDescriptionValue": _fv("Desc."),
+                                    "dsDescriptionDate": _fv("2026-01-01"),
+                                },
+                            ],
+                        },
                         {"typeName": "subject", "value": ["Computer and Information Science"]},
                         {"typeName": "depositor", "value": "Ada Lovelace"},
                         {"typeName": "dateOfDeposit", "value": "2026-01-02"},
@@ -87,7 +99,7 @@ def main() -> int:
     app, cfg = boot()
     from PySide6.QtWidgets import QFrame, QScrollArea, QScrollBar, QToolButton
 
-    import ui.dataset_detail as dd
+    import ui.dataset as dd
 
     # The view fetches metadata on a timer; the probe only looks at rows.
     dd.DatasetDetailView._on_load_metadata = lambda self: None
@@ -144,13 +156,21 @@ def main() -> int:
         report.check(hidden_before, "the drawer starts closed")
 
     # Not-checked filter: ghost rows appear, tagged Not checked.
-    view._unchecked_results = [{
-        "rule_id": "field:citation.title", "kind": "field",
-        "field": "Title", "requirement": "off by ruleset",
-        "value": "-", "status": "skipped", "level": "unchecked",
-        "pending": False, "response_template": "",
-        "block": "citation", "name": "title",
-    }]
+    view._unchecked_results = [
+        {
+            "rule_id": "field:citation.title",
+            "kind": "field",
+            "field": "Title",
+            "requirement": "off by ruleset",
+            "value": "-",
+            "status": "skipped",
+            "level": "unchecked",
+            "pending": False,
+            "response_template": "",
+            "block": "citation",
+            "name": "title",
+        }
+    ]
     unchecked_idx = view._meta_filter.findData("unchecked")
     report.check(unchecked_idx >= 0, "the filter offers Not checked")
     if unchecked_idx >= 0:
@@ -159,8 +179,9 @@ def main() -> int:
             app.processEvents()
         ghost = _rows(view)
         labels = [str(w.property("meta_field")) for w in ghost]
-        report.check(labels == ["Title"], "the Not-checked filter renders the ghost row",
-                     f"rows={labels}")
+        report.check(
+            labels == ["Title"], "the Not-checked filter renders the ghost row", f"rows={labels}"
+        )
         view._meta_filter.setCurrentIndex(view._meta_filter.findData("all"))
         for _ in range(4):
             app.processEvents()
@@ -174,8 +195,11 @@ def main() -> int:
     inner_areas = card.findChildren(QScrollArea)
     visible_bars = [b for b in card.findChildren(QScrollBar) if b.isVisible()]
     report.check(not inner_areas, "the metadata card hosts no inner scroll area")
-    report.check(not visible_bars, "the metadata card hosts no visible inner scrollbar",
-                 f"visible={len(visible_bars)}")
+    report.check(
+        not visible_bars,
+        "the metadata card hosts no visible inner scrollbar",
+        f"visible={len(visible_bars)}",
+    )
 
     view.deleteLater()
     for _ in range(2):

@@ -42,8 +42,9 @@ def main() -> int:
         app.processEvents()
 
     table = pane.ext_table
-    report.check(table.rowCount() >= 3, "the Extensions table rendered its rows",
-                 f"rows={table.rowCount()}")
+    report.check(
+        table.rowCount() >= 3, "the Extensions table rendered its rows", f"rows={table.rowCount()}"
+    )
 
     for row in range(table.rowCount()):
         cell = table.cellWidget(row, 5)

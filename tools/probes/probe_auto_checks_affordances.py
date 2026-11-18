@@ -82,17 +82,13 @@ def _rows(view):
 
 
 def _shown_kinds(view):
-    return sorted(
-        str(r.property("auto_class") or "?")
-        for r in _rows(view)
-        if not r.isHidden()
-    )
+    return sorted(str(r.property("auto_class") or "?") for r in _rows(view) if not r.isHidden())
 
 
 def main() -> int:
     app, cfg = boot()
 
-    import ui.dataset_detail as dd
+    import ui.dataset as dd
 
     # The view fetches metadata on a timer; the probe only looks at rows.
     dd.DatasetDetailView._on_load_metadata = lambda self: None
@@ -123,33 +119,40 @@ def main() -> int:
     combo = view._auto_filter
     report.check(combo is not None, "the card carries a findings filter")
     if combo is not None:
-        report.check(combo.count() == 3, "the filter offers All / Errors / Warnings",
-                     f"items={combo.count()}")
+        report.check(
+            combo.count() == 3,
+            "the filter offers All / Errors / Warnings",
+            f"items={combo.count()}",
+        )
         report.check(bool(combo.toolTip()), "the filter explains itself")
 
     skipped = [r for r in _rows(view) if r.property("auto_class") == "skipped"]
-    report.check(len(skipped) == 1, "five identical skipped rows collapse into one",
-                 f"rows={len(skipped)}")
+    report.check(
+        len(skipped) == 1, "five identical skipped rows collapse into one", f"rows={len(skipped)}"
+    )
     errors = [r for r in _rows(view) if r.property("auto_class") == "failed-error"]
-    report.check(len(errors) == 1, "the failed check keeps its own row",
-                 f"rows={len(errors)}")
+    report.check(len(errors) == 1, "the failed check keeps its own row", f"rows={len(errors)}")
 
     before = len(_rows(view))
     if combo is not None:
         combo.setCurrentIndex(combo.findData("error"))
         for _ in range(4):
             app.processEvents()
-        report.check(_shown_kinds(view) == ["failed-error"],
-                     "the Errors filter narrows the card to the failed check",
-                     f"shown={_shown_kinds(view)}")
+        report.check(
+            _shown_kinds(view) == ["failed-error"],
+            "the Errors filter narrows the card to the failed check",
+            f"shown={_shown_kinds(view)}",
+        )
         report.check(len(_rows(view)) == before, "filtering hides rows, it never drops them")
 
         combo.setCurrentIndex(combo.findData("warning"))
         for _ in range(4):
             app.processEvents()
-        report.check(_shown_kinds(view) == ["skipped"],
-                     "the Warnings filter keeps the skipped row",
-                     f"shown={_shown_kinds(view)}")
+        report.check(
+            _shown_kinds(view) == ["skipped"],
+            "the Warnings filter keeps the skipped row",
+            f"shown={_shown_kinds(view)}",
+        )
 
         combo.setCurrentIndex(combo.findData("all"))
         for _ in range(4):

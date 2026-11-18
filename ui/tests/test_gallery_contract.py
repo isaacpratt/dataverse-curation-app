@@ -85,11 +85,7 @@ def test_one_app_level_rule_per_button_kind():
     rules = _blocks(global_qss())
     for object_name in set(BUTTON_OBJECTS.values()):
         expected = f"QPushButton#{object_name}"
-        count = sum(
-            1
-            for selector, _props in rules
-            if selector == expected and ":" not in selector
-        )
+        count = sum(1 for selector, _props in rules if selector == expected and ":" not in selector)
         assert count <= 1, f"{object_name}: found {count} app-level rules, want <= 1"
 
 
@@ -100,7 +96,8 @@ def test_disabled_primary_label_stays_readable():
     for selector, props in _blocks(disabled):
         if selector.endswith(":disabled"):
             face, text = props.get("background"), props.get("color")
-    assert face is not None and text is not None, "primary needs a disabled state"
+    assert face is not None, "primary needs a disabled state"
+    assert text is not None, "primary needs a disabled state"
     assert contrast_ratio(text, face) >= 3.0, f"disabled pair fails 3:1 ({text} on {face})"
     assert contrast_ratio(text, SURFACE_CARD) >= 3.0
     assert text == TEXT_PRIMARY, "disabled label wears the primary text role"
@@ -136,10 +133,6 @@ def test_gallery_builds_and_exhibits_every_kind(qapp):
         {b.objectName() for b in buttons if b.objectName() and b.objectName() not in names}
     )
     assert not unknown, f"every gallery button wears a kit object name (unknown: {unknown})"
-    assert SURFACE_PAGE in (window.styleSheet() or ""), (
-        "the gallery paints the theme's page role"
-    )
-    assert any(not b.isEnabled() for b in buttons), (
-        "the gallery shows a disabled button"
-    )
+    assert SURFACE_PAGE in (window.styleSheet() or ""), "the gallery paints the theme's page role"
+    assert any(not b.isEnabled() for b in buttons), "the gallery shows a disabled button"
     window.close()

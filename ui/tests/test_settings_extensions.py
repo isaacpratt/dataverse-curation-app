@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QTabWidget
 
 @pytest.fixture
 def pane(qapp, tmp_path, monkeypatch):
-    from config import Config
+    from curation.config import Config
     from ui.settings_dialog import SettingsPane
 
     monkeypatch.setattr(SettingsPane, "_start_size_worker", lambda self: None)
@@ -113,7 +113,7 @@ def test_tools_rows_show_x_and_dash_version(pane):
 
 
 def test_reordered_saved_layout_is_remapped_onto_new_shape(qapp, tmp_path, monkeypatch):
-    from config import Config
+    from curation.config import Config
     from ui.settings_dialog import SettingsPane
 
     # A layout saved before the Version column: five widths for
@@ -139,8 +139,17 @@ def test_reordered_saved_layout_is_remapped_onto_new_shape(qapp, tmp_path, monke
     def blocked_import(name, *args, **kwargs):
         # Only the extension import probes may fail; pytest itself imports freely.
         if name in {
-            "pyreadstat", "netCDF4", "h5py", "tifffile", "PIL", "pypdf",
-            "lxml", "openpyxl", "chardet", "piigex", "hush",
+            "pyreadstat",
+            "netCDF4",
+            "h5py",
+            "tifffile",
+            "PIL",
+            "pypdf",
+            "lxml",
+            "openpyxl",
+            "chardet",
+            "piigex",
+            "hush",
         }:
             raise ImportError(name)
         return real_import(name, *args, **kwargs)
@@ -165,7 +174,9 @@ def test_reordered_saved_layout_is_remapped_onto_new_shape(qapp, tmp_path, monke
 
 
 def test_extensions_header_has_version_column(pane):
-    headers = [pane.ext_table.horizontalHeaderItem(i).text() for i in range(pane.ext_table.columnCount())]
+    headers = [
+        pane.ext_table.horizontalHeaderItem(i).text() for i in range(pane.ext_table.columnCount())
+    ]
     assert headers == ["Package", "Installed", "Version", "Size", "Used for", "Action"]
 
 

@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from engine import __version__ as APP_VERSION  # noqa: E402
+from engine import __version__ as app_version  # noqa: E402
 from engine.version import parse  # noqa: E402
 
 #: Permanent. It names %LocalAppData%\{packId} (the install folder), the
@@ -106,7 +106,7 @@ def _text(root: ET.Element, tag: str) -> str:
     return (node.text or "").strip() if node is not None else ""
 
 
-def check_release(
+def check_release(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     directory: Path | str = RELEASES_DIR,
     *,
     version: str | None = None,
@@ -117,7 +117,7 @@ def check_release(
 ) -> list[str]:
     """Return every way `directory` fails to be a shippable release ([] = fine)."""
     if version is None:
-        version = APP_VERSION
+        version = app_version
     directory = Path(directory)
     if not directory.is_dir():
         return [f"{directory} does not exist - run `uv run poe pack` first"]
@@ -159,13 +159,9 @@ def check_release(
                 problems.append(f"{expected_nupkg} has no readable .nuspec")
             else:
                 if _text(spec, "id") != pack_id:
-                    problems.append(
-                        f"nuspec id {_text(spec, 'id')!r} is not {pack_id!r}"
-                    )
+                    problems.append(f"nuspec id {_text(spec, 'id')!r} is not {pack_id!r}")
                 if _text(spec, "version") != version:
-                    problems.append(
-                        f"nuspec version {_text(spec, 'version')!r} is not {version!r}"
-                    )
+                    problems.append(f"nuspec version {_text(spec, 'version')!r} is not {version!r}")
                 if _text(spec, "mainExe") != main_exe:
                     problems.append(
                         f"nuspec mainExe {_text(spec, 'mainExe')!r} is not {main_exe!r}"
@@ -176,9 +172,7 @@ def check_release(
                         "(vpk defaults to x86 when --runtime is omitted)"
                     )
                 if _text(spec, "channel") != channel:
-                    problems.append(
-                        f"nuspec channel {_text(spec, 'channel')!r} is not {channel!r}"
-                    )
+                    problems.append(f"nuspec channel {_text(spec, 'channel')!r} is not {channel!r}")
 
     # The feed the in-app updater reads. Its asset list must name this build,
     # otherwise a published release is invisible to every installed copy.
@@ -240,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.version is not None:
         parse(args.version)  # a non-semver expectation is a usage error, not a finding
-    version = args.version or APP_VERSION
+    version = args.version or app_version
 
     directory = Path(args.dir)
     if not directory.is_dir():

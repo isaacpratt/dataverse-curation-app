@@ -7,6 +7,7 @@ duplicate rows and a structured-PII scan on a sample (piigex + CA pack).
 
 import csv
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks._util import detect_encoding, find_pii, pii_result
 from engine.checks.base import Check, CheckResult
@@ -35,7 +36,7 @@ class CsvCheck(Check):
     """CSV/TSV check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.csv"
-    extensions = {".csv", ".tsv"}
+    extensions: ClassVar[set[str]] = {".csv", ".tsv"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
@@ -127,8 +128,7 @@ class CsvCheck(Check):
                 level="warning" if len(widths) > 1 else "info",
                 passed=len(widths) <= 1,
                 message=(
-                    f"{name}: ragged rows detected "
-                    f"(row widths: {sorted(widths)})"
+                    f"{name}: ragged rows detected (row widths: {sorted(widths)})"
                     if len(widths) > 1
                     else f"{name}: consistent {width} columns"
                 ),

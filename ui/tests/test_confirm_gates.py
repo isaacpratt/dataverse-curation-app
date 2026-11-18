@@ -30,12 +30,12 @@ def detail(win, qapp):
     return det
 
 
-@pytest.fixture()
+@pytest.fixture
 def quiet_commit(monkeypatch):
     """Silence the modal result dialogs a commit raises."""
-    monkeypatch.setattr("ui.dataset_detail.show_info", lambda *a, **k: None)
-    monkeypatch.setattr("ui.dataset_detail.show_warning", lambda *a, **k: None)
-    monkeypatch.setattr("ui.dataset_detail.show_critical", lambda *a, **k: None)
+    monkeypatch.setattr("ui.dialogs.show_info", lambda *a, **k: None)
+    monkeypatch.setattr("ui.dialogs.show_warning", lambda *a, **k: None)
+    monkeypatch.setattr("ui.dialogs.show_critical", lambda *a, **k: None)
 
 
 def _choose_instance_label(detail, label="Approved"):
@@ -69,11 +69,12 @@ def test_declining_writes_nothing_and_logs_nothing(detail, monkeypatch, quiet_co
     logged: list = []
     monkeypatch.setattr(detail, "_log_action", lambda *a, **k: logged.append(a))
     pushed: list = []
-    monkeypatch.setattr(
-        detail._client,
-        "set_curation_label",
-        lambda pid, label: pushed.append((pid, label)) or True,
-    )
+
+    def _fake_set_label(pid, label):
+        pushed.append((pid, label))
+        return True
+
+    monkeypatch.setattr(detail._client, "set_curation_label", _fake_set_label)
     detail._decision_committed = False
     try:
         detail._on_commit()
@@ -93,11 +94,12 @@ def test_confirming_writes_logs_and_closes_the_step(detail, monkeypatch, quiet_c
     logged: list = []
     monkeypatch.setattr(detail, "_log_action", lambda *a, **k: logged.append(a))
     pushed: list = []
-    monkeypatch.setattr(
-        detail._client,
-        "set_curation_label",
-        lambda pid, value: pushed.append((pid, value)) or True,
-    )
+
+    def _fake_set_label(pid, value):
+        pushed.append((pid, value))
+        return True
+
+    monkeypatch.setattr(detail._client, "set_curation_label", _fake_set_label)
     detail._decision_committed = False
     try:
         detail._on_commit()
@@ -116,9 +118,12 @@ def test_a_local_only_decision_asks_nothing(detail, monkeypatch, quiet_commit):
     combo.setCurrentIndex(1)
     assert combo.currentData()
     asked: list = []
-    monkeypatch.setattr(
-        detail, "_confirm_remote_write", lambda decision: asked.append(decision) or True
-    )
+
+    def _fake_confirm(decision):
+        asked.append(decision)
+        return True
+
+    monkeypatch.setattr(detail, "_confirm_remote_write", _fake_confirm)
     monkeypatch.setattr(detail, "_log_action", lambda *a, **k: None)
     monkeypatch.setattr(detail._client, "set_curation_label", lambda pid, label: True)
     detail._on_commit()
@@ -139,11 +144,11 @@ def test_confirm_dialog_defaults_to_no_and_is_themed(qapp, monkeypatch):
     assert confirm(None, t("detail.decision.title"), "Body") is False
     box = captured["dialog"].findChild(QDialogButtonBox)
     assert box is not None, "the dialog must carry a button box"
-    no_btn = box.button(QDialogButtonBox.No)
+    no_btn = box.button(QDialogButtonBox.StandardButton.No)
     assert no_btn is not None
     assert no_btn.isDefault(), "No must be the default answer"
     assert no_btn.objectName() == "SecondaryButton"
-    yes_btn = [b for b in box.buttons() if b is not no_btn][0]
+    yes_btn = next(b for b in box.buttons() if b is not no_btn)
     assert yes_btn.objectName() == "PrimaryButton", (
         "the affirmative button must wear the brand face"
     )
@@ -153,10 +158,12 @@ def test_uninstall_asks_before_removing_a_package(win, monkeypatch):
     """Uninstalling an extension asks first."""
     pane = win._ensure_settings()
     asked: list = []
-    monkeypatch.setattr(
-        "ui.settings_dialog.confirm",
-        lambda parent, title, text, **kwargs: asked.append(title) or False,
-    )
+
+    def _fake_confirm(parent, title, text, **kwargs):
+        asked.append(title)
+        return False
+
+    monkeypatch.setattr("ui.settings_dialog.confirm", _fake_confirm)
     ran: list = []
     monkeypatch.setattr(pane, "_run_shell", lambda fn, status: ran.append(status))
     pane._uninstall_package("Pillow")

@@ -24,10 +24,7 @@ def _pump(qapp, times=15):
 
 
 def _layout_holds(layout, widget) -> bool:
-    for index in range(layout.count()):
-        if layout.itemAt(index).widget() is widget:
-            return True
-    return False
+    return any(layout.itemAt(index).widget() is widget for index in range(layout.count()))
 
 
 def _title_row(card) -> QHBoxLayout:
@@ -171,9 +168,9 @@ def test_version_reset_lives_on_the_tools_row(detail):
 
 def test_auto_checks_title_row_keeps_the_summary(detail):
     title_row = _title_row(detail._auto_card)
-    assert _buttons_in(title_row) == [] or [
-        b.objectName() for b in _buttons_in(title_row)
-    ] == ["InfoTip"]
+    assert _buttons_in(title_row) == [] or [b.objectName() for b in _buttons_in(title_row)] == [
+        "InfoTip"
+    ]
     assert _layout_holds(title_row, detail._auto_summary)
 
 

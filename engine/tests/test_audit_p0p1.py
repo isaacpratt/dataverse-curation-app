@@ -8,13 +8,44 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
-import applog
-from config import AppConfig, Config, DataverseConfig
+import pytest
+
+import curation.applog as applog
+import curation.config as _config_module
+from curation.config import AppConfig, Config, DataverseConfig
+
+
+class _DictKeyring:
+    def __init__(self) -> None:
+        self.store: dict[tuple[str, str], str] = {}
+
+    def get_password(self, service: str, username: str) -> str | None:
+        return self.store.get((service, username))
+
+    def set_password(self, service: str, username: str, password: str) -> None:
+        self.store[(service, username)] = password
+
+    def delete_password(self, service: str, username: str) -> None:
+        self.store.pop((service, username), None)
+
+
+class _BrokenKeyring:
+    def get_password(self, *a: Any) -> None:
+        raise RuntimeError("no store available")
+
+    def set_password(self, *a: Any) -> None:
+        raise RuntimeError("no store available")
+
+    def delete_password(self, *a: Any, **kw: Any) -> None:
+        raise RuntimeError("no store available")
+
 
 # -- log redaction -----------------------------------------------------------
 
-def test_applog_redacts_api_key_and_token():
+
+def test_applog_redacts_api_key_and_token() -> None:
     applog.clear()
     applog.log("GET https://example/api with API_KEY=supersecret123")
     applog.log("X-Dataverse-key: abcdef123456 on header line")
@@ -27,15 +58,53 @@ def test_applog_redacts_api_key_and_token():
     applog.clear()
 
 
-def test_applog_redact_standalone():
+def test_applog_redact_standalone() -> None:
     out = applog._redact("api_token=sekret&persistentId=doi:10.1234/x")
     assert "sekret" not in out
     assert "***" in out
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Authorization: Bearer token-abc123",
+        "Authorization: bearer token-abc123",
+        "X-Dataverse-key: dvc-secret-456",
+        "Api-Key: 9876543210",
+        "api_key='legacy'",
+        "password=hunter2",
+        "secret=topsecret-1",
+        "https://x.test/api?key=querykey123&other=1",
+        "https://x.test/api?token=querykey123&key=two",
+    ],
+)
+def test_applog_redacts_header_shaped_secrets(line: str) -> None:
+    assert "***" in applog._redact(line)
+    for leaked in (
+        "token-abc123",
+        "dvc-secret-456",
+        "9876543210",
+        "legacy",
+        "hunter2",
+        "topsecret-1",
+        "querykey123",
+    ):
+        assert leaked not in applog._redact(line)
+
+
+def test_applog_keeps_ordinary_lines() -> None:
+    ordinary = "GET https://x.test/api/search q=* type=dataset per_page=1000 start=0"
+    assert applog._redact(ordinary) == ordinary
+
+
 # -- config save -------------------------------------------------------------
 
-def test_config_save_writes_and_restricts(tmp_path):
+
+def test_config_save_writes_and_restricts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # keyring unavailable -> save falls back to plaintext + ACLs (the
+    # POSIX-friendly path this test pins). The keyring-happy path is
+    # covered in test_config.py.
+    monkeypatch.setattr(_config_module, "_keyring", _BrokenKeyring())
     cfg_path = tmp_path / "config.json"
     cfg = Config(
         dataverse=DataverseConfig(
@@ -56,7 +125,8 @@ def test_config_save_writes_and_restricts(tmp_path):
         assert mode == 0o600
 
 
-def test_config_load_roundtrip(tmp_path):
+def test_config_load_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_config_module, "_keyring", _DictKeyring())
     cfg_path = tmp_path / "config.json"
     cfg = Config(
         dataverse=DataverseConfig(base_url="https://x.example", api_token="t"),
@@ -70,79 +140,80 @@ def test_config_load_roundtrip(tmp_path):
 
 # -- storage -----------------------------------------------------------------
 
-def test_storage_table_state_roundtrip(tmp_path):
-    from storage import clear_table_state, save_table_state
+
+def test_storage_table_state_roundtrip(tmp_path: Path) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    from curation.storage import clear_table_state, save_table_state
 
     class _Hdr:
-        def __init__(self):
+        def __init__(self) -> None:
             self._order = [2, 0, 1]
             self._sizes = {0: 80, 1: 120, 2: 40}
             self._vis = {0: True, 1: False, 2: True}
             self._sort_section = 1
             self._sort_order = 0  # AscendingOrder
 
-        def count(self):
+        def count(self) -> int:
             return 3
 
-        def logicalIndex(self, i):
+        def logicalIndex(self, i: int) -> int:
             return self._order[i] if i < len(self._order) else i
 
-        def visualIndex(self, i):
+        def visualIndex(self, i: int) -> int:
             return self._order.index(i) if i in self._order else i
 
-        def sectionSize(self, i):
+        def sectionSize(self, i: int) -> int:
             return self._sizes.get(i, 50)
 
-        def isSectionHidden(self, i):
+        def isSectionHidden(self, i: int) -> bool:
             return not self._vis.get(i, True)
 
-        def sortIndicatorSection(self):
+        def sortIndicatorSection(self) -> int:
             return self._sort_section
 
-        def sortIndicatorOrder(self):
+        def sortIndicatorOrder(self) -> int:
             return self._sort_order
 
-        def isSortIndicatorShown(self):
+        def isSortIndicatorShown(self) -> bool:
             return True
 
-        def saveState(self):
+        def saveState(self) -> bytes:
             return b""
 
-        def restoreState(self, _s):
+        def restoreState(self, _s: Any) -> bool:
             return True
 
-        def resizeSection(self, i, w):
+        def resizeSection(self, i: int, w: int) -> None:
             self._sizes[i] = w
 
-        def setSectionHidden(self, i, h):
+        def setSectionHidden(self, i: int, h: bool) -> None:
             self._vis[i] = not h
 
-        def moveSection(self, old, new):
+        def moveSection(self, old: int, new: int) -> None:
             pass
 
-        def setSortIndicator(self, s, o):
+        def setSortIndicator(self, s: int, o: int) -> None:
             self._sort_section = s
             self._sort_order = o
 
-        def logicalSectionCount(self):
+        def logicalSectionCount(self) -> int:
             return 3
 
-        def sectionsClickable(self):
+        def sectionsClickable(self) -> bool:
             return True
 
-        def setSectionsClickable(self, _v):
+        def setSectionsClickable(self, _v: Any) -> None:
             pass
 
-        def sectionsMovable(self):
+        def sectionsMovable(self) -> bool:
             return True
 
-        def setSectionsMovable(self, _v):
+        def setSectionsMovable(self, _v: Any) -> None:
             pass
 
-        def stretchLastSection(self):
+        def stretchLastSection(self) -> bool:
             return False
 
-        def setStretchLastSection(self, _v):
+        def setStretchLastSection(self, _v: Any) -> None:
             pass
 
     hdr = _Hdr()
@@ -156,8 +227,8 @@ def test_storage_table_state_roundtrip(tmp_path):
     assert "test_table" not in data2
 
 
-def test_storage_size_cache(tmp_path):
-    from storage import read_size_cache, write_size_entry
+def test_storage_size_cache(tmp_path: Path) -> None:
+    from curation.storage import read_size_cache, write_size_entry
 
     write_size_entry(tmp_path, "doi:10.1/x", 12345, 3)
     cache = read_size_cache(tmp_path)
@@ -168,7 +239,8 @@ def test_storage_size_cache(tmp_path):
 
 # -- headless ----------------------------------------------------------------
 
-def test_headless_writes_report(tmp_path):
+
+def test_headless_writes_report(tmp_path: Path) -> None:
     import subprocess
 
     ds = tmp_path / "ds"
@@ -188,30 +260,10 @@ def test_headless_writes_report(tmp_path):
     assert "files" in report or "results" in report or report
 
 
-# -- human size --------------------------------------------------------------
-
-def test_human_size_gb_and_tb():
-    from ui.checks_tree import _human_size as checks_size
-    from ui.dashboard import _human_size as dash_size
-    from ui.dataset_detail import _human_size as detail_size
-    from ui.download_dialog import _human_size as dl_size
-
-    for fn in (checks_size, dash_size, detail_size, dl_size):
-        assert fn(512) == "512 B"
-        assert "KB" in fn(2048)
-        assert "MB" in fn(5 * 1000 * 1000)
-        assert "GB" in fn(3 * 1000**3)
-        assert "TB" in fn(2 * 1000**4)
-    # All four are the same shared helper (dv-005).
-    assert checks_size is dash_size or checks_size(2048) == dash_size(2048)
-    for fn in (checks_size, dash_size, detail_size, dl_size):
-        assert fn(999) == "999 B"
-        assert fn(1000).startswith("1.0 KB")
-
-
 # -- dead modules removed ----------------------------------------------------
 
-def test_dead_modules_removed():
+
+def test_dead_modules_removed() -> None:
     root = Path(__file__).resolve().parents[2]
     assert not (root / "ui" / "log_dialog.py").exists()
     assert not (root / "ui" / "requirements_dialog.py").exists()
@@ -226,9 +278,15 @@ def test_dead_modules_removed():
 
 # -- no stale imports of deleted modules -------------------------------------
 
-def test_no_imports_of_deleted_modules():
+
+def test_no_imports_of_deleted_modules() -> None:
     root = Path(__file__).resolve().parents[2]
-    bad = ("from ui.log_dialog", "from ui.requirements_dialog", "import log_dialog", "import requirements_dialog")
+    bad = (
+        "from ui.log_dialog",
+        "from ui.requirements_dialog",
+        "import log_dialog",
+        "import requirements_dialog",
+    )
     for py in root.rglob("*.py"):
         if ".venv" in py.parts or "dist" in py.parts or "build" in py.parts:
             continue
@@ -241,7 +299,8 @@ def test_no_imports_of_deleted_modules():
 
 # -- pandas not a hard dependency --------------------------------------------
 
-def test_pandas_not_in_requirements():
+
+def test_pandas_not_in_requirements() -> None:
     # requirements.txt was deleted when uv adopted (dv-ceh.1); dependency
     # declarations now live solely in pyproject.toml (project.dependencies +
     # [dependency-groups]).

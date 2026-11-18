@@ -3,11 +3,11 @@
 import re
 from pathlib import Path
 
+from curation.response_draft import collect_filecheck_sections
 from engine.checks import guidance
 from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
 from engine.report_md import render_markdown
-from response_draft import collect_filecheck_sections
 
 CHECK_DIR = Path(__file__).resolve().parents[1] / "checks"
 _RUNNER = Path(__file__).resolve().parents[1] / "runner.py"
@@ -23,10 +23,7 @@ def _module_literals() -> dict[str, str]:
     so a conformance sweep of engine/checks alone would silently miss it.
     """
     ids: dict[str, str] = {}
-    paths = [
-        path for path in sorted(CHECK_DIR.glob("*.py"))
-        if path.name not in _SKIP_FILES
-    ]
+    paths = [path for path in sorted(CHECK_DIR.glob("*.py")) if path.name not in _SKIP_FILES]
     paths.append(_RUNNER)
     for path in paths:
         text = path.read_text(encoding="utf-8")
@@ -38,12 +35,10 @@ def _module_literals() -> dict[str, str]:
 class TestConformance:
     def test_every_emitted_check_id_has_guidance(self):
         missing = {
-            cid: mod for cid, mod in _module_literals().items()
-            if cid not in guidance.GUIDANCE
+            cid: mod for cid, mod in _module_literals().items() if cid not in guidance.GUIDANCE
         }
-        assert missing == {}, (
-            "check ids without rationale/remediation: "
-            + ", ".join(f"{cid} ({mod})" for cid, mod in sorted(missing.items()))
+        assert missing == {}, "check ids without rationale/remediation: " + ", ".join(
+            f"{cid} ({mod})" for cid, mod in sorted(missing.items())
         )
 
     def test_guidance_entries_are_non_empty(self):
@@ -61,12 +56,10 @@ class TestTitles:
 
     def test_every_emitted_check_id_has_a_title(self):
         missing = {
-            cid: mod for cid, mod in _module_literals().items()
-            if cid not in guidance.TITLES
+            cid: mod for cid, mod in _module_literals().items() if cid not in guidance.TITLES
         }
-        assert missing == {}, (
-            "check ids with no human title: "
-            + ", ".join(f"{cid} ({mod})" for cid, mod in sorted(missing.items()))
+        assert missing == {}, "check ids with no human title: " + ", ".join(
+            f"{cid} ({mod})" for cid, mod in sorted(missing.items())
         )
 
     def test_titles_have_no_stale_entries(self):
@@ -91,28 +84,34 @@ class TestTitles:
 
 class TestCheckResultFields:
     def test_old_payload_loads_unchanged(self):
-        result = CheckResult.from_dict({
-            "check_id": "format.csv.content", "level": "warning",
-            "passed": False, "message": "dupes",
-        })
+        result = CheckResult.from_dict(
+            {
+                "check_id": "format.csv.content",
+                "level": "warning",
+                "passed": False,
+                "message": "dupes",
+            }
+        )
         assert result.rationale == ""
         assert result.remediation == ""
 
     def test_fields_round_trip(self):
-        result = CheckResult("x", "warning", False, "m", {},
-                             rationale="why", remediation="fix")
+        result = CheckResult("x", "warning", False, "m", {}, rationale="why", remediation="fix")
         data = result.to_dict()
-        assert data["rationale"] == "why" and data["remediation"] == "fix"
+        assert data["rationale"] == "why"
+        assert data["remediation"] == "fix"
         again = CheckResult.from_dict(data)
         assert (again.rationale, again.remediation) == ("why", "fix")
 
     def test_plain_payload_omits_fields(self):
         data = CheckResult("x", "info", True, "m").to_dict()
-        assert "rationale" not in data and "remediation" not in data
+        assert "rationale" not in data
+        assert "remediation" not in data
 
     def test_for_result_prefers_bespoke(self):
-        result = CheckResult("format.csv.content", "warning", False, "m",
-                             rationale="bespoke why", remediation="")
+        result = CheckResult(
+            "format.csv.content", "warning", False, "m", rationale="bespoke why", remediation=""
+        )
         why, fix = guidance.for_result(result)
         assert why == "bespoke why"
         assert fix == guidance.GUIDANCE["format.csv.content"][1]
@@ -121,10 +120,17 @@ class TestCheckResultFields:
 class TestRenderPaths:
     def _report(self) -> DatasetReport:
         return DatasetReport(
-            persistent_id="p", label="l", engine_version="t",
-            files=[FileEntry(path="a.csv", size_bytes=1, mime_type="text/csv",
-                             checks=[CheckResult("format.csv.pii", "warning", False,
-                                                 "2 emails")])],
+            persistent_id="p",
+            label="l",
+            engine_version="t",
+            files=[
+                FileEntry(
+                    path="a.csv",
+                    size_bytes=1,
+                    mime_type="text/csv",
+                    checks=[CheckResult("format.csv.pii", "warning", False, "2 emails")],
+                )
+            ],
         )
 
     def test_markdown_includes_guidance_for_failures(self):
@@ -135,10 +141,17 @@ class TestRenderPaths:
 
     def test_markdown_omits_guidance_for_passes(self):
         report = DatasetReport(
-            persistent_id="p", label="l", engine_version="t",
-            files=[FileEntry(path="a.csv", size_bytes=1, mime_type="text/csv",
-                             checks=[CheckResult("format.csv.content", "info", True,
-                                                 "parsed")])],
+            persistent_id="p",
+            label="l",
+            engine_version="t",
+            files=[
+                FileEntry(
+                    path="a.csv",
+                    size_bytes=1,
+                    mime_type="text/csv",
+                    checks=[CheckResult("format.csv.content", "info", True, "parsed")],
+                )
+            ],
         )
         md = render_markdown(report)
         assert "Why this matters:" not in md

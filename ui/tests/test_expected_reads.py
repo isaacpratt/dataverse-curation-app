@@ -6,11 +6,14 @@ curation status, no label history and no version comparison, so those
 calls are not sent.
 """
 
+
 def _worker(draft_hint):
     from ui.workers import MetadataWorker
 
     return MetadataWorker(
-        "https://example.invalid", "token", "doi:10.5072/FK2/A",
+        "https://example.invalid",
+        "token",
+        "doi:10.5072/FK2/A",
         draft_hint=draft_hint,
     )
 
@@ -41,13 +44,15 @@ def test_curation_reads_are_made_when_nothing_is_known():
 
 def test_detail_view_takes_the_hint_from_the_queue_row(win):
     win._open_dataset(
-        "doi:10.5072/FK2/HINT1", "Hint (tests)",
+        "doi:10.5072/FK2/HINT1",
+        "Hint (tests)",
         {"state": "RELEASED", "has_draft": False},
     )
     assert win._detail._draft_hint() is False
 
     win._open_dataset(
-        "doi:10.5072/FK2/HINT2", "Hint 2 (tests)",
+        "doi:10.5072/FK2/HINT2",
+        "Hint 2 (tests)",
         {"state": "DRAFT", "has_draft": True},
     )
     assert win._detail._draft_hint() is True
@@ -59,7 +64,8 @@ def test_detail_view_takes_the_hint_from_the_queue_row(win):
 
 def test_detail_view_treats_an_unreadable_row_as_not_under_curation(win):
     win._open_dataset(
-        "doi:10.5072/FK2/HINT4", "Hint 4 (tests)",
+        "doi:10.5072/FK2/HINT4",
+        "Hint 4 (tests)",
         {
             "state": "DRAFT",
             "has_draft": True,

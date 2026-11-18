@@ -36,7 +36,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-__all__ = ["t", "tn", "has", "keys", "reload"]
+__all__ = ["has", "keys", "reload", "t", "tn"]
 
 _CATALOG_NAME = "strings.json"
 

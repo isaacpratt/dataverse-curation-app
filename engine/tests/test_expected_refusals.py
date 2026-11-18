@@ -13,8 +13,8 @@ import json
 import pytest
 import requests
 
-import applog
-from dataverse_client import (
+import curation.applog as applog
+from curation.client import (
     DataverseClient,
     expected_api_reason,
     probe_skip_reason,
@@ -65,7 +65,7 @@ class _Session:
 
 def _client(response) -> DataverseClient:
     client = DataverseClient("http://example.test", "token")
-    client._session = _Session(response)
+    client._session = _Session(response)  # type: ignore[assignment]
     return client
 
 

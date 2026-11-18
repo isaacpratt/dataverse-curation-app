@@ -6,6 +6,7 @@ follow-up handled separately).
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -16,7 +17,7 @@ class PdfCheck(Check):
     """PDF check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.pdf"
-    extensions = {".pdf"}
+    extensions: ClassVar[set[str]] = {".pdf"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
@@ -68,7 +69,7 @@ class PdfCheck(Check):
                 if sampled >= _MAX_PAGES_SAMPLED:
                     break
                 sampled += 1
-                if ((page.extract_text() or "").strip()):
+                if (page.extract_text() or "").strip():
                     text_pages += 1
         finally:
             try:
@@ -93,8 +94,7 @@ class PdfCheck(Check):
                     level="info",
                     passed=True,
                     message=(
-                        f"{name}: digital text present "
-                        f"({text_pages}/{sampled} sampled page(s))"
+                        f"{name}: digital text present ({text_pages}/{sampled} sampled page(s))"
                     ),
                 )
             )

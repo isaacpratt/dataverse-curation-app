@@ -36,9 +36,7 @@ def test_every_declared_pair_clears_its_floor():
         ratio = contrast_ratio(fg, bg)
         floor = max(minimum, _KIND_FLOORS.get(kind, 4.5))
         if ratio < floor:
-            failures.append(
-                f"{label}: {ratio:.2f}:1 ({fg} on {bg}), needs {floor}:1"
-            )
+            failures.append(f"{label}: {ratio:.2f}:1 ({fg} on {bg}), needs {floor}:1")
     assert not failures, "contrast failures:\n  " + "\n  ".join(failures)
 
 

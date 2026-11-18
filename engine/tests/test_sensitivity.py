@@ -1,8 +1,6 @@
 """Sensitivity & ethics review (dv-3c2): schema, completion, suggestions, storage round-trip, and the Approve gate semantics."""
 
-from engine.checks.base import CheckResult
-from engine.report import DatasetReport, FileEntry
-from sensitivity import (
+from curation.sensitivity import (
     ANSWER_TOKENS,
     NO,
     QUESTION_IDS,
@@ -13,17 +11,24 @@ from sensitivity import (
     ruleset_requires,
     suggested_answers,
 )
-from storage import AppState
+from curation.storage import AppState
+from engine.checks.base import CheckResult
+from engine.report import DatasetReport, FileEntry
 
 
 class TestSchema:
     def test_question_shape(self):
         for q in QUESTIONS:
-            assert q["id"] and q["prompt"] and q["help"]
+            assert q["id"]
+            assert q["prompt"]
+            assert q["help"]
             assert q["type"] == "yes-no"
         assert QUESTION_IDS == (
-            "human-subjects", "consent-irb", "identifiers",
-            "indigenous-care", "restricted-terms",
+            "human-subjects",
+            "consent-irb",
+            "identifiers",
+            "indigenous-care",
+            "restricted-terms",
         )
 
     def test_answer_tokens(self):
@@ -58,18 +63,34 @@ class TestSuggestions:
 
     def test_clean_report_suggests_no_pii(self):
         report = DatasetReport(
-            persistent_id="p", label="l", engine_version="t",
-            files=[FileEntry(path="a.csv", size_bytes=1, mime_type="text/csv",
-                             checks=[CheckResult("format.csv.content", "info", True, "ok")])],
+            persistent_id="p",
+            label="l",
+            engine_version="t",
+            files=[
+                FileEntry(
+                    path="a.csv",
+                    size_bytes=1,
+                    mime_type="text/csv",
+                    checks=[CheckResult("format.csv.content", "info", True, "ok")],
+                )
+            ],
         )
         s = suggested_answers(report, [])
         assert s["identifiers"] == NO
 
     def test_pii_finding_blocks_the_suggestion(self):
         report = DatasetReport(
-            persistent_id="p", label="l", engine_version="t",
-            files=[FileEntry(path="a.csv", size_bytes=1, mime_type="text/csv",
-                             checks=[CheckResult("format.csv.pii", "warning", False, "2 emails")])],
+            persistent_id="p",
+            label="l",
+            engine_version="t",
+            files=[
+                FileEntry(
+                    path="a.csv",
+                    size_bytes=1,
+                    mime_type="text/csv",
+                    checks=[CheckResult("format.csv.pii", "warning", False, "2 emails")],
+                )
+            ],
         )
         s = suggested_answers(report, [])
         assert s["identifiers"] is None
@@ -97,11 +118,13 @@ class TestStorage:
         answers["human-subjects"] = "yes"
         st.set_sensitivity_review("pid", answers, note="checked with PI")
         got = st.get_sensitivity_review("pid")
+        assert got is not None
         assert got["answers"]["human-subjects"] == "yes"
         assert got["note"] == "checked with PI"
         st.close()
         st2 = AppState(tmp_path / "state.db")
         got2 = st2.get_sensitivity_review("pid")
+        assert got2 is not None
         assert got2["answers"]["identifiers"] == "no"
         st2.close()
 
@@ -110,5 +133,6 @@ class TestStorage:
         st.set_sensitivity_review("pid", {"human-subjects": "yes"})
         st.set_sensitivity_review("pid", {"identifiers": NO})
         got = st.get_sensitivity_review("pid")
+        assert got is not None
         assert got["answers"] == {"identifiers": "no"}
         st.close()

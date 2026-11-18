@@ -8,6 +8,7 @@ date sourced from the workspace state.db + staged folders.
 """
 
 import math
+from datetime import UTC
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
@@ -23,8 +24,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config import Config
-from dataverse_client import size_unavailable
+from curation.client import size_unavailable
+from curation.config import Config
+from curation.dashboard_cache import (
+    dashboard_cache_key,
+    diff_dashboard_datasets,
+    load_dashboard_cache,
+    save_dashboard_cache,
+)
+from curation.dashboard_cache import (
+    merge_enriched_rows as _merge_enriched_rows,
+)
 from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
@@ -159,6 +169,52 @@ _ACCESS_TIP_KEYS = {
 }
 
 
+def _access_facts(ds: dict) -> tuple[str, str]:
+    """(reason code, server detail) for what this account could read.
+
+    Empty when everything about the dataset could be read - the Access
+    column only speaks when the server refused something.
+    """
+    try:
+        access = ds.get("access")
+        if isinstance(access, dict):
+            state = str(access.get("state") or "")
+            if state and state != "readable":
+                return (
+                    str(access.get("reason") or "not_readable"),
+                    str(access.get("detail") or ""),
+                )
+        curation = ds.get("curation_access")
+        if isinstance(curation, dict) and str(curation.get("state") or "") == "unreadable":
+            return (
+                str(curation.get("reason") or "not_under_curation"),
+                str(curation.get("detail") or ""),
+            )
+    except Exception:
+        pass
+    return "", ""
+
+
+def _access_text(ds: dict) -> str:
+    """Return the Access cell: a short label, empty when there is nothing to say."""
+    reason, _detail = _access_facts(ds)
+    if not reason:
+        return ""
+    key = _ACCESS_LABEL_KEYS.get(reason)
+    return t(key) if key else t("dashboard.access.not_readable")
+
+
+def _access_tooltip(ds: dict) -> str:
+    """Why the account could not read everything (empty when it could)."""
+    reason, detail = _access_facts(ds)
+    if not reason:
+        return ""
+    key = _ACCESS_TIP_KEYS.get(reason)
+    text = t(key) if key else t("dashboard.access.tip_not_readable")
+    if detail:
+        text = f"{text}\n{t('dashboard.access.server_said', detail=detail)}"
+    return text
+
 
 # Metric-card value: the real count (DisplayLG, 22px bold) versus a named
 # pre-crawl state (StateMD, 12px muted words, 2026-10-02 P2) - the number
@@ -166,7 +222,6 @@ _ACCESS_TIP_KEYS = {
 # check counted zero. Both are theme tokens, not inline styles.
 _METRIC_VALUE_TOKEN = "DisplayLG"
 _METRIC_STATE_TOKEN = "StateMD"
-
 
 
 def _apply_metric_token(label: QLabel) -> None:
@@ -220,21 +275,21 @@ def _parse_date_epoch(s: str) -> float:
     if not text:
         return 0.0
     try:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # ISO-8601 first (handles TZ suffixes the old loop ignored).
         try:
             iso = text.replace("Z", "+00:00") if text.endswith("Z") else text
             dt = datetime.fromisoformat(iso)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
             return dt.timestamp()
         except ValueError:
             pass
         for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
             try:
                 dt = datetime.strptime(text[: len(fmt)], fmt)
-                return dt.replace(tzinfo=timezone.utc).timestamp()
+                return dt.replace(tzinfo=UTC).timestamp()
             except ValueError:
                 continue
         # Year-only fallback preserves rough ordering.
@@ -262,8 +317,7 @@ def _local_downloaded_batch(workspace: Path, pids: list[str]) -> dict[str, str]:
             conn = sqlite3.connect(str(db), timeout=30.0)
             try:
                 cur = conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' "
-                    "AND name='curation_actions'"
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='curation_actions'"
                 )
                 if cur.fetchone():
                     rows = conn.execute(
@@ -311,7 +365,7 @@ def local_follow_ups(workspace: Path) -> dict[str, dict]:
     One sqlite connect for the whole queue; never raises.
     """
     try:
-        from storage import open_state
+        from curation.storage import open_state
 
         if not (Path(workspace) / "state.db").exists():
             return {}
@@ -339,9 +393,9 @@ def attach_follow_ups(datasets: list, follow_ups: dict[str, dict] | None) -> Non
                 continue
         return
     try:
-        import follow_ups as _fu
+        import curation.follow_ups as _fu
     except Exception:  # pragma: no cover - module is part of the app
-        _fu = None
+        _fu = None  # type: ignore[assignment]
     for ds in datasets or []:
         try:
             pid = str(ds.get("persistent_id") or "")
@@ -372,8 +426,7 @@ def _decided_ids(workspace: Path) -> set[str]:
         conn = sqlite3.connect(str(db), timeout=30.0)
         try:
             cur = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' "
-                "AND name='curation_actions'"
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='curation_actions'"
             )
             if not cur.fetchone():
                 return set()
@@ -389,9 +442,9 @@ def _decided_ids(workspace: Path) -> set[str]:
 
 
 class _SortItem(QTableWidgetItem):
-    def __lt__(self, other):  # type: ignore[override]
-        a = self.data(Qt.UserRole)
-        b = other.data(Qt.UserRole) if isinstance(other, QTableWidgetItem) else None
+    def __lt__(self, other):
+        a = self.data(Qt.ItemDataRole.UserRole)
+        b = other.data(Qt.ItemDataRole.UserRole) if isinstance(other, QTableWidgetItem) else None
         # Numeric/date sort when both sides carry a float epoch or number
         if isinstance(a, float) and isinstance(b, float):
             return a < b
@@ -413,268 +466,10 @@ def _display_state(state: str) -> str:
     return s.title()
 
 
-def _access_facts(ds: dict) -> tuple[str, str]:
-    """(reason code, server detail) for what this account could read.
-
-    Empty when everything about the dataset could be read — the Access
-    column only speaks when the server refused something.
-    """
-    try:
-        access = ds.get("access")
-        if isinstance(access, dict):
-            state = str(access.get("state") or "")
-            if state and state != "readable":
-                return (
-                    str(access.get("reason") or "not_readable"),
-                    str(access.get("detail") or ""),
-                )
-        curation = ds.get("curation_access")
-        if isinstance(curation, dict) and str(curation.get("state") or "") == "unreadable":
-            return (
-                str(curation.get("reason") or "not_under_curation"),
-                str(curation.get("detail") or ""),
-            )
-    except Exception:
-        pass
-    return "", ""
-
-
-def _access_text(ds: dict) -> str:
-    """Return the Access cell: a short label, empty when there is nothing to say."""
-    reason, _detail = _access_facts(ds)
-    if not reason:
-        return ""
-    key = _ACCESS_LABEL_KEYS.get(reason)
-    return t(key) if key else t("dashboard.access.not_readable")
-
-
-def _access_tooltip(ds: dict) -> str:
-    """Why the account could not read everything (empty when it could)."""
-    reason, detail = _access_facts(ds)
-    if not reason:
-        return ""
-    key = _ACCESS_TIP_KEYS.get(reason)
-    text = t(key) if key else t("dashboard.access.tip_not_readable")
-    if detail:
-        text = f"{text}\n{t('dashboard.access.server_said', detail=detail)}"
-    return text
-
-
-_DASHBOARD_CACHE_NAME = "dashboard_cache.json"
-
-# Cache-slot token for "no collection selected". Internal and deliberately
-# untranslated: it keys the on-disk cache, it is never shown to the user
-# (the interface wording is ``dashboard.status.whole_repository``).
-_CACHE_SLOT_ALL_COLLECTIONS = "whole repository"
-
-
-def dashboard_cache_key(base_url: str, collection: str) -> str:
-    """Cache slot per instance + collection (both normalized, never raises)."""
-    try:
-        base = (base_url or "").rstrip("/").lower()
-        coll = (collection or "").strip().lower() or _CACHE_SLOT_ALL_COLLECTIONS
-        return f"{base}|{coll}"
-    except Exception:
-        return "default"
-
-
-def _dataset_fingerprint(ds: dict) -> tuple:
-    """Server-meaningful identity of a row (local enrichment excluded).
-
-    downloaded_at / total_size_bytes / size_from_cache are filled in from
-    disk after the crawl, so they must NOT count as changes — otherwise
-    every refresh would report every row as updated.
-    """
-    try:
-        statuses = ds.get("publication_statuses") or []
-        statuses = tuple(str(s or "") for s in statuses)
-    except Exception:
-        statuses = ()
-    return (
-        str(ds.get("title") or ""),
-        str(ds.get("contact") or ""),
-        str(ds.get("depositor") or ""),
-        str(ds.get("date_created") or ""),
-        str(ds.get("date_published") or ""),
-        str(ds.get("collection") or ""),
-        str(ds.get("state") or ""),
-        bool(ds.get("has_draft")),
-        statuses,
-        str(ds.get("file_count") or ""),
-        str(ds.get("curation_label") or ""),
-        str(ds.get("curation_time") or ""),
-        str(ds.get("curation_assigner") or ""),
-    )
-
-
-def diff_dashboard_datasets(old: list[dict], new: list[dict]) -> dict:
-    """Diff two crawls by persistent_id → {added, removed, changed} pid lists.
-
-    Never raises; corrupt rows are compared by fingerprint best-effort.
-    """
-    try:
-        old_map = {str(d.get("persistent_id") or ""): d for d in (old or []) if isinstance(d, dict)}
-        new_map = {str(d.get("persistent_id") or ""): d for d in (new or []) if isinstance(d, dict)}
-        old_map.pop("", None)
-        new_map.pop("", None)
-        added = [pid for pid in new_map if pid not in old_map]
-        removed = [pid for pid in old_map if pid not in new_map]
-        changed = []
-        for pid in old_map:
-            if pid in new_map:
-                try:
-                    if _dataset_fingerprint(old_map[pid]) != _dataset_fingerprint(new_map[pid]):
-                        changed.append(pid)
-                except Exception:
-                    continue
-        return {"added": added, "removed": removed, "changed": changed}
-    except Exception:
-        return {"added": [], "removed": [], "changed": []}
-
-
-def _merge_enriched_rows(existing: list[dict], batch: list[dict]) -> int:
-    """Patch worker enrichment batches into painted rows, matched by pid.
-
-    Copies scalars only (the worker keeps its live dicts for the final
-    finished() payload). An "In Review" lock confirmation is never
-    clobbered by an enrichment state, and a live enriched size wins over a
-    stale disk-cache fill. Returns the merged count; never raises.
-    """
-    try:
-        by_pid: dict[str, dict] = {}
-        for d in existing or []:
-            if not isinstance(d, dict):
-                continue
-            try:
-                pid = str(d.get("persistent_id") or "")
-            except Exception:
-                continue
-            if pid:
-                by_pid[pid] = d
-        merged = 0
-        for src in batch or []:
-            if not isinstance(src, dict):
-                continue
-            try:
-                pid = str(src.get("persistent_id") or "")
-            except Exception:
-                continue
-            dst = by_pid.get(pid) if pid else None
-            if dst is None:
-                continue
-            try:
-                for key in (
-                    "total_size_bytes", "file_count", "depositor",
-                    "state", "has_draft", "size_enriched", "draft_updated_at",
-                    "access", "curation_access",
-                ):
-                    if key not in src:
-                        continue
-                    if key == "state" and "REVIEW" in str(dst.get("state") or "").upper():
-                        continue
-                    dst[key] = src[key]
-                if src.get("size_enriched"):
-                    try:
-                        dst.pop("size_from_cache", None)
-                    except Exception:
-                        pass
-                merged += 1
-            except Exception:
-                continue
-        return merged
-    except Exception:
-        return 0
-
-
-def load_dashboard_cache(workspace: Path, key: str) -> dict | None:
-    """Load cached {saved_at, datasets, labels} for one instance+collection slot.
-
-    Returns None when missing/corrupt — never raises.
-    """
-    try:
-        path = Path(workspace) / _DASHBOARD_CACHE_NAME
-        if not path.exists():
-            return None
-        import json as _json
-
-        raw = _json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            return None
-        entry = raw.get(key)
-        if not isinstance(entry, dict):
-            return None
-        datasets = entry.get("datasets")
-        labels = entry.get("labels", [])
-        if not isinstance(datasets, list) or not isinstance(labels, list):
-            return None
-        return {
-            "saved_at": str(entry.get("saved_at") or ""),
-            "datasets": [d for d in datasets if isinstance(d, dict)],
-            "labels": [str(lbl) for lbl in labels if str(lbl).strip()],
-        }
-    except Exception:
-        return None
-
-
-def save_dashboard_cache(workspace: Path, key: str, datasets: list[dict], labels: list) -> None:
-    """Persist one dashboard slot (best-effort, never raises).
-
-    Strips per-row `_sort_*` caches and caps stored slots to avoid unbounded
-    growth (up to 10 collections × their full row sets).
-    """
-    try:
-        import datetime as _dt
-        import json as _json
-        import os
-        import tempfile
-
-        path = Path(workspace) / _DASHBOARD_CACHE_NAME
-        try:
-            raw = _json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-        except Exception:
-            raw = {}
-        if not isinstance(raw, dict):
-            raw = {}
-        clean_rows = []
-        for d in (datasets or []):
-            if not isinstance(d, dict):
-                continue
-            clean_rows.append({k: v for k, v in d.items() if not k.startswith("_sort_")})
-        raw[key] = {
-            "saved_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
-            "datasets": clean_rows,
-            "labels": [str(lbl) for lbl in (labels or []) if str(lbl).strip()],
-        }
-        # Prune oldest slots beyond 10 to bound file size.
-        try:
-            if len(raw) > 10:
-                # Keep current key + 9 most recent by saved_at.
-                items = sorted(
-                    raw.items(), key=lambda kv: str((kv[1] or {}).get("saved_at") or ""), reverse=True
-                )
-                raw = dict(items[:10])
-                if key not in raw:
-                    raw[key] = {
-                        "saved_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
-                        "datasets": clean_rows,
-                        "labels": [str(lbl) for lbl in (labels or []) if str(lbl).strip()],
-                    }
-        except Exception:
-            pass
-        path.parent.mkdir(parents=True, exist_ok=True)
-        data = _json.dumps(raw, indent=2)
-        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                handle.write(data)
-            os.replace(tmp_name, path)
-        except Exception:
-            try:
-                os.unlink(tmp_name)
-            except OSError:
-                pass
-    except Exception:
-        pass
+# The dashboard cache helpers (slot keys, row fingerprints, diffing,
+# enrichment merge, load/save) live in the Qt-free root module
+# dashboard_cache.py: the engine tests exercise them without importing the
+# view layer (dv-hcg.26). They are imported at the top of this file.
 
 
 class DashboardView(QWidget):
@@ -691,6 +486,13 @@ class DashboardView(QWidget):
     # unusable. Filtering/sorting still cover the full set; only the
     # painted rows are capped, and the status line says how many are
     # hidden so the cap is never silent.
+    #
+    # Measured, not guessed (dv-fjr; tools/bench_paint_window.py, 25k
+    # synthetic rows, Windows offscreen, median of 5 runs): filtering all
+    # 25k rows costs ~13 ms, painting costs ~0.45 ms per row, so a full
+    # repaint is ~0.9 s at 2,000 painted rows, ~2.0 s at 5,000, ~4.0 s
+    # at 10,000 and ~7.6 s uncapped. 2,000 is the highest cap whose
+    # repaint stays inside a second, so the cap is confirmed, not raised.
     _MAX_PAINTED_ROWS = 2000
 
     def __init__(self, config: Config) -> None:
@@ -789,9 +591,7 @@ class DashboardView(QWidget):
         title_row = QHBoxLayout()
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(12)
-        hdr_title = make_elided_label(
-            t("dashboard.queue.title"), object_name="HeadlineMD"
-        )
+        hdr_title = make_elided_label(t("dashboard.queue.title"), object_name="HeadlineMD")
         title_row.addWidget(hdr_title, 1)
         hdr_layout.addLayout(title_row)
 
@@ -802,9 +602,7 @@ class DashboardView(QWidget):
         # No visible label: the field's placeholder and accessible name
         # carry the label (the visible one duplicated the placeholder and
         # pushed the tools row past the window).
-        self._filter_edit = make_search_field(
-            t("dashboard.queue.search"), min_width=140
-        )
+        self._filter_edit = make_search_field(t("dashboard.queue.search"), min_width=140)
         self._filter_edit.setAccessibleName(t("dashboard.queue.search"))
         self._filter_edit.textChanged.connect(lambda _t: self._filter_timer.start())
         filter_row.addWidget(self._filter_edit, 1)
@@ -842,9 +640,7 @@ class DashboardView(QWidget):
         self._collection_filter.currentTextChanged.connect(self._apply_filter)
         filter_row.addWidget(self._collection_filter)
 
-        self._columns_btn = make_action_button(
-            t("dashboard.queue.columns"), kind="chip"
-        )
+        self._columns_btn = make_action_button(t("dashboard.queue.columns"), kind="chip")
         self._columns_btn.clicked.connect(self._show_columns_menu)
         filter_row.addWidget(self._columns_btn)
 
@@ -877,7 +673,7 @@ class DashboardView(QWidget):
         )
         # No horizontal scrollbar on the dashboard: the queue reads at
         # window width (the filler column absorbs any slack).
-        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # Flush under the banner header (last child: square top meets the
         # banner, 8px bottom meets the card border — see flush_table_style).
         self._table.setStyleSheet(flush_table_style())
@@ -888,10 +684,8 @@ class DashboardView(QWidget):
         self._table.installEventFilter(self)
         # Right-click on the queue: "Run checks for visible rows" capped at
         # the painting window (dv-9m2).
-        self._table.setContextMenuPolicy(Qt.CustomContextMenu)
-        self._table.customContextMenuRequested.connect(
-            self._show_queue_context_menu
-        )
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._show_queue_context_menu)
         # The viewport is watched too: its width changes when the vertical
         # scrollbar appears (the columns must keep filling it).
         try:
@@ -900,7 +694,7 @@ class DashboardView(QWidget):
             pass
         # Native header: keyboard focus + sort on Space/Return
         native_hdr = self._table.horizontalHeader()
-        native_hdr.setFocusPolicy(Qt.StrongFocus)
+        native_hdr.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         native_hdr.setSectionsClickable(True)
         # Ensure the sort indicator is shown at startup
         native_hdr.setSortIndicatorShown(True)
@@ -945,11 +739,11 @@ class DashboardView(QWidget):
         self._status_lbl = _BarLabel("")
         self._status_lbl.setObjectName("ValueMD")
         pill_lay.addWidget(self._status_lbl)
-        pill_lay.setAlignment(self._status_lbl, Qt.AlignVCenter)
+        pill_lay.setAlignment(self._status_lbl, Qt.AlignmentFlag.AlignVCenter)
         self._status_sep = make_caption_label("·")
         self._status_sep.hide()
         pill_lay.addWidget(self._status_sep)
-        pill_lay.setAlignment(self._status_sep, Qt.AlignVCenter)
+        pill_lay.setAlignment(self._status_sep, Qt.AlignmentFlag.AlignVCenter)
         self._progress = _ElidedBarLabel("")
         self._progress.setObjectName("CaptionSM")
         # Circular progress ring, alongside the status text (the text
@@ -957,9 +751,9 @@ class DashboardView(QWidget):
         self._ring = RingProgress(diameter=28)
         self._ring.hide()
         pill_lay.addWidget(self._ring)
-        pill_lay.setAlignment(self._ring, Qt.AlignVCenter)
+        pill_lay.setAlignment(self._ring, Qt.AlignmentFlag.AlignVCenter)
         pill_lay.addWidget(self._progress, 1)
-        pill_lay.setAlignment(self._progress, Qt.AlignVCenter)
+        pill_lay.setAlignment(self._progress, Qt.AlignmentFlag.AlignVCenter)
 
         def _sync_sep() -> None:
             # The dot joins scope and message only when both sides exist;
@@ -989,14 +783,12 @@ class DashboardView(QWidget):
             _pix = _QPixmap(mark_icon_path())
             if not _pix.isNull():
                 # Native 16x16 — never upscale the pixel mark.
-                mark.setPixmap(
-                    _pix.scaledToHeight(16, Qt.SmoothTransformation)
-                )
+                mark.setPixmap(_pix.scaledToHeight(16, Qt.TransformationMode.SmoothTransformation))
                 mark.setToolTip(t("app.name"))
         except Exception:
             pass
         mark.setStyleSheet(transparent_surface_qss("DocentMark"))
-        foot.addWidget(mark, 0, Qt.AlignVCenter)
+        foot.addWidget(mark, 0, Qt.AlignmentFlag.AlignVCenter)
 
         outer.addLayout(foot)
         _sync_sep()
@@ -1099,7 +891,7 @@ class DashboardView(QWidget):
         from another collection must not linger); the crawl refills them.
         """
         try:
-            from dataverse_client import read_allowed_labels_cache
+            from curation.client import read_allowed_labels_cache
 
             ws = Path(getattr(getattr(self._config, "app", None), "workspace", Path.home()))
             labels = read_allowed_labels_cache(
@@ -1129,9 +921,12 @@ class DashboardView(QWidget):
         self._startup_started = True
         self._restoring = False
         try:
-            from startup_probe import mark
+            from tools.startup_probe import mark
         except Exception:  # pragma: no cover - probe is optional
-            mark = lambda _label: None  # noqa: E731
+
+            def mark(label: str) -> None:
+                """No-op fallback when the startup probe is unavailable."""
+
         mark("dashboard: background load start")
         # Labels seed from disk before the cached rows (it imports the
         # Dataverse client, so it must not sit on the window-construction
@@ -1143,8 +938,7 @@ class DashboardView(QWidget):
         if not has_token:
             if self._cache_loaded:
                 self._progress.setText(
-                    self._progress.text()
-                    + t("dashboard.progress.api_key_suffix")
+                    self._progress.text() + t("dashboard.progress.api_key_suffix")
                 )
             else:
                 self._progress.setText(t("dashboard.progress.api_key"))
@@ -1247,10 +1041,10 @@ class DashboardView(QWidget):
         try:
             self._collection_filter.blockSignals(True)
             self._collection_filter.clear()
-            self._collection_filter.addItem(
-                t("dashboard.filters.collection_all"), ""
-            )
-            for coll in sorted({str(ds.get("collection") or "") for ds in self._all_datasets} - {""}):
+            self._collection_filter.addItem(t("dashboard.filters.collection_all"), "")
+            for coll in sorted(
+                {str(ds.get("collection") or "") for ds in self._all_datasets} - {""}
+            ):
                 self._collection_filter.addItem(coll, coll)
             idx = self._collection_filter.findData(current)
             self._collection_filter.setCurrentIndex(idx if idx >= 0 else 0)
@@ -1274,9 +1068,7 @@ class DashboardView(QWidget):
             self._label_filter.addItem(t("dashboard.filters.label_all"), "")
             for label in self._curation_labels:
                 self._label_filter.addItem(label, label)
-            self._label_filter.addItem(
-                t("dashboard.filters.label_none"), _NO_LABEL_SENTINEL
-            )
+            self._label_filter.addItem(t("dashboard.filters.label_none"), _NO_LABEL_SENTINEL)
             idx = self._label_filter.findData(current)
             self._label_filter.setCurrentIndex(idx if idx >= 0 else 0)
         finally:
@@ -1305,7 +1097,7 @@ class DashboardView(QWidget):
         # slot holds pure probe results only (see _on_allowed_probed). The
         # union persists via the dashboard cache at crawl end.
         try:
-            from applog import get_app_log
+            from curation.applog import get_app_log
 
             get_app_log().info(
                 t(
@@ -1335,7 +1127,7 @@ class DashboardView(QWidget):
                 return
             labels = payload.get("labels") or []
             collection = payload.get("collection", self._current_collection())
-            from dataverse_client import write_allowed_labels_cache
+            from curation.client import write_allowed_labels_cache
 
             ws = Path(getattr(getattr(self._config, "app", None), "workspace", Path.home()))
             write_allowed_labels_cache(
@@ -1358,7 +1150,7 @@ class DashboardView(QWidget):
         from ui.icons import icon_label as _empty_icon
 
         wrap = QWidget()
-        wrap.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        wrap.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         lay = QVBoxLayout(wrap)
         lay.setContentsMargins(24, 32, 24, 32)
         lay.setSpacing(0)
@@ -1380,14 +1172,12 @@ class DashboardView(QWidget):
         icon = _empty_icon("database", size=28, color=ACCENT_PRIMARY)
         head_wrap = QHBoxLayout()
         head_wrap.setSpacing(10)
-        head_wrap.addWidget(icon, 0, Qt.AlignVCenter)
+        head_wrap.addWidget(icon, 0, Qt.AlignmentFlag.AlignVCenter)
         self._empty_head = make_card_title(t("dashboard.empty.none_loaded"))
-        head_wrap.addWidget(self._empty_head, 1, Qt.AlignVCenter)
+        head_wrap.addWidget(self._empty_head, 1, Qt.AlignmentFlag.AlignVCenter)
         inner.addLayout(head_wrap)
 
-        self._empty_body = make_small_body_label(
-            t("dashboard.empty.none_loaded_body")
-        )
+        self._empty_body = make_small_body_label(t("dashboard.empty.none_loaded_body"))
         inner.addWidget(self._empty_body)
 
         btn_row = QHBoxLayout()
@@ -1435,7 +1225,7 @@ class DashboardView(QWidget):
         except Exception:
             pass
 
-    def _make_metric_card(self, accent: str, label: str, sub: str) -> QFrame:
+    def _make_metric_card(self, accent: str, label: str, sub: str) -> tuple[QFrame, QLabel]:
         """Slim single-line metric: icon + label on the left, value on the right."""
         card = QFrame()
         card.setObjectName("MetricCard")
@@ -1457,11 +1247,16 @@ class DashboardView(QWidget):
         lay.setSpacing(8)
         from ui.icons import icon_label as _metric_icon
 
-        icon_map = {"tertiary": "clock", "primary": "eye", "progress": "pencil", "error": "octagon-alert"}
+        icon_map = {
+            "tertiary": "clock",
+            "primary": "eye",
+            "progress": "pencil",
+            "error": "octagon-alert",
+        }
         icon = _metric_icon(icon_map.get(accent, "circle"), size=18, color=border_color)
         # The whole chip must be the click target: mouse-transparent
         # children let press/enter/leave reach the card's eventFilter.
-        icon.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         lay.addWidget(icon, 0)
         # The caption is the widest thing in the card ("PENDING · Datasets
         # waiting for a decision"), so it elides instead of pushing the
@@ -1471,18 +1266,18 @@ class DashboardView(QWidget):
             t("dashboard.metrics.card_label", label=label.upper(), sub=sub),
             object_name="LabelMD",
         )
-        lbl.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         lay.addWidget(lbl, 1)
         v = QLabel("0")
         v.setProperty("metricToken", _METRIC_VALUE_TOKEN)
         _apply_metric_token(v)
-        v.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        v.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        v.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        v.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         lay.addWidget(v, 0)
         # Tappable filter (dv-896): click or Enter/Space applies the card's
         # filter via eventFilter. Cursor + focus make it discoverable.
-        card.setCursor(Qt.PointingHandCursor)
-        card.setFocusPolicy(Qt.StrongFocus)
+        card.setCursor(Qt.CursorShape.PointingHandCursor)
+        card.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         card.installEventFilter(self)
         return card, v
 
@@ -1532,7 +1327,7 @@ class DashboardView(QWidget):
         except Exception:
             pass
 
-    def _fit_queue_columns(self) -> None:
+    def _fit_queue_columns(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Make the visible queue columns fill the viewport exactly.
 
         The queue has no horizontal scrollbar, so the columns must add up
@@ -1593,14 +1388,10 @@ class DashboardView(QWidget):
                 if other_total > room > 0:
                     ratio = room / other_total
                     if not getattr(self, "_queue_unscaled", None):
-                        self._queue_unscaled = {
-                            i: hdr.sectionSize(i) for i in others
-                        }
+                        self._queue_unscaled = {i: hdr.sectionSize(i) for i in others}
                     for i in others:
-                        want[i] = max(floor, int(round(want[i] * ratio)))
-                    want[filler] = max(
-                        floor, width - sum(want[i] for i in others)
-                    )
+                        want[i] = max(floor, round(want[i] * ratio))
+                    want[filler] = max(floor, width - sum(want[i] for i in others))
                 else:
                     want[filler] = max(floor, target_filler)
             # Rounding the scaled widths can leave the columns a pixel or
@@ -1654,9 +1445,13 @@ class DashboardView(QWidget):
         """Sort the table by a column (toggle on repeat), like a header click."""
         table_hdr = self._table.horizontalHeader()
         if table_hdr.sortIndicatorSection() == logical and table_hdr.isSortIndicatorShown():
-            order = Qt.DescendingOrder if table_hdr.sortIndicatorOrder() == Qt.AscendingOrder else Qt.AscendingOrder
+            order = (
+                Qt.SortOrder.DescendingOrder
+                if table_hdr.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder
+                else Qt.SortOrder.AscendingOrder
+            )
         else:
-            order = Qt.AscendingOrder
+            order = Qt.SortOrder.AscendingOrder
         self._table.sortItems(logical, order)
         table_hdr.setSortIndicator(logical, order)
         table_hdr.setSortIndicatorShown(True)
@@ -1684,21 +1479,21 @@ class DashboardView(QWidget):
             self._columns_btn.mapToGlobal(self._columns_btn.rect().bottomLeft())
         )
 
-    def _show_columns_menu_at(self, pos) -> None:  # type: ignore[no-untyped-def]
+    def _show_columns_menu_at(self, pos) -> None:
         menu = QMenu(self)
         for idx, (_key, header, _v) in enumerate(COLUMNS):
             action = QAction(header, menu)
             action.setCheckable(True)
             action.setChecked(not self._table.isColumnHidden(idx))
-            action.toggled.connect(
-                lambda checked, i=idx: (
-                    self._set_column_visible(i, checked),
-                    # The user changed the column set: the fit starts over
-                    # from the widths as they are now.
-                    setattr(self, "_queue_unscaled", None),
-                    self._save_queue_layout(),
-                )
-            )
+
+            def _apply(checked: bool, i: int = idx) -> None:
+                self._set_column_visible(i, checked)
+                # The user changed the column set: the fit starts over
+                # from the widths as they are now.
+                self._queue_unscaled = None
+                self._save_queue_layout()
+
+            action.toggled.connect(_apply)
             menu.addAction(action)
         menu.addSeparator()
         try:
@@ -1738,15 +1533,13 @@ class DashboardView(QWidget):
             cancel.triggered.connect(self._on_cancel_bulk_checks)
             return menu
         count = len(self._visible_check_jobs())
-        action = menu.addAction(
-            t("dashboard.context.run_checks_visible", count=count)
-        )
+        action = menu.addAction(t("dashboard.context.run_checks_visible", count=count))
         action.setEnabled(count > 0)
         action.setToolTip(t("dashboard.context.run_checks_visible_tip"))
         action.triggered.connect(self._enqueue_visible_checks)
         return menu
 
-    def _show_queue_context_menu(self, pos) -> None:  # type: ignore[no-untyped-def]
+    def _show_queue_context_menu(self, pos) -> None:
         menu = self._build_queue_context_menu()
         menu.exec(self._table.viewport().mapToGlobal(pos))
 
@@ -1763,23 +1556,17 @@ class DashboardView(QWidget):
         count = len(jobs)
         self._bulk_enqueued = list(jobs)
         try:
-            from applog import get_app_log
+            from curation.applog import get_app_log
 
-            get_app_log().info(
-                t("dashboard.log.bulk_checks_enqueued", count=count)
-            )
+            get_app_log().info(t("dashboard.log.bulk_checks_enqueued", count=count))
         except Exception:
             pass
-        self._progress.setText(
-            t("dashboard.progress.bulk_checks_enqueued", count=count)
-        )
+        self._progress.setText(t("dashboard.progress.bulk_checks_enqueued", count=count))
         if not jobs:
             return
         if self._bulk_worker is not None:
             return
-        self._bulk_worker = BulkCheckWorker(
-            jobs, self._config.app.workspace, self
-        )
+        self._bulk_worker = BulkCheckWorker(jobs, self._config.app.workspace, self)
         self._bulk_worker.progress.connect(self._progress.setText)
         self._bulk_worker.progressFraction.connect(self._on_bulk_fraction)
         self._bulk_worker.finished.connect(self._on_bulk_checks_finished)
@@ -1808,13 +1595,13 @@ class DashboardView(QWidget):
         self._bulk_worker = None
         self._sync_status_bar()
 
-    def _on_bulk_checks_finished(self, summary) -> None:  # type: ignore[no-untyped-def]
+    def _on_bulk_checks_finished(self, summary) -> None:
         total = int(summary.get("total", 0)) if isinstance(summary, dict) else 0
         completed = int(summary.get("completed", 0)) if isinstance(summary, dict) else 0
         skipped = int(summary.get("skipped", 0)) if isinstance(summary, dict) else 0
         failed = int(summary.get("failed", 0)) if isinstance(summary, dict) else 0
         try:
-            from applog import get_app_log
+            from curation.applog import get_app_log
 
             get_app_log().info(
                 t(
@@ -1840,7 +1627,7 @@ class DashboardView(QWidget):
 
     def _on_bulk_checks_cancelled(self) -> None:
         try:
-            from applog import get_app_log
+            from curation.applog import get_app_log
 
             get_app_log().info(t("dashboard.log.bulk_checks_cancelled"))
         except Exception:
@@ -1994,7 +1781,7 @@ class DashboardView(QWidget):
         on disk and shown here instead of "—".
         """
         try:
-            from storage import read_size_cache
+            from curation.storage import read_size_cache
 
             ws = getattr(getattr(self._config, "app", None), "workspace", Path.home())
             cache = read_size_cache(Path(ws))
@@ -2077,7 +1864,7 @@ class DashboardView(QWidget):
         except Exception:
             pass
 
-    def _on_crawl_finished(self, datasets: list[dict]) -> None:
+    def _on_crawl_finished(self, datasets: list[dict]) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         try:
             self._worker = None
             # Crawl done: show the completed state briefly, then clear the
@@ -2121,7 +1908,9 @@ class DashboardView(QWidget):
             self._rebuild_collection_filter()
             # Persist this crawl so the next app open paints instantly.
             try:
-                save_dashboard_cache(ws, self._dashboard_cache_key(), datasets, self._curation_labels)
+                save_dashboard_cache(
+                    ws, self._dashboard_cache_key(), datasets, self._curation_labels
+                )
                 self._shown_cache_key = self._dashboard_cache_key()
             except Exception:
                 pass
@@ -2134,13 +1923,9 @@ class DashboardView(QWidget):
                 n_del = len(summary.get("removed", []))
                 total = len(datasets)
                 if not had_previous:
-                    self._progress.setText(
-                        t("dashboard.progress.first_result", total=total)
-                    )
+                    self._progress.setText(t("dashboard.progress.first_result", total=total))
                 elif not (n_new or n_chg or n_del):
-                    self._progress.setText(
-                        t("dashboard.progress.no_changes", total=total)
-                    )
+                    self._progress.setText(t("dashboard.progress.no_changes", total=total))
                 else:
                     parts = []
                     if n_new:
@@ -2160,9 +1945,11 @@ class DashboardView(QWidget):
                 pass
         except Exception as exc:
             import traceback
+
             self._refresh_btn.setEnabled(True)
             self._progress.setText(t("dashboard.progress.render_error"))
             from ui.dialogs import show_warning
+
             show_warning(
                 self,
                 t("dashboard.dialogs.render_title"),
@@ -2198,17 +1985,24 @@ class DashboardView(QWidget):
                     _apply_metric_token(v_lbl)
             self._update_empty_state()
             return
-        in_review = sum(
-            1 for d in self._all_datasets if "REVIEW" in (d.get("state") or "").upper()
-        )
-        pending = sum(
-            1 for d in self._all_datasets if (d.get("state") or "").upper() == "DRAFT"
-        )
-        labelled = sum(
-            1 for d in self._all_datasets
-            if str(d.get("curation_label") or "").strip()
-        )
-        vals = [pending, in_review, labelled]
+        in_review = sum(1 for d in self._all_datasets if "REVIEW" in (d.get("state") or "").upper())
+        pending = sum(1 for d in self._all_datasets if (d.get("state") or "").upper() == "DRAFT")
+        try:
+            ws = getattr(getattr(self._config, "app", None), "workspace", Path.home())
+            decided = self._decided_cache
+            if decided is None:
+                # No crawl yet (or cache cleared): one live query, then keep it.
+                decided = _decided_ids(Path(ws))
+                self._decided_cache = decided
+        except Exception:
+            decided = set()
+        needs_action = 0
+        if self._all_datasets:
+            for d in self._all_datasets:
+                st = (d.get("state") or "").upper()
+                if (st == "DRAFT" or "REVIEW" in st) and d.get("persistent_id") not in decided:
+                    needs_action += 1
+        vals = [pending, in_review, needs_action]
         for val, v_lbl in zip(vals, self._metric_value_labels, strict=False):
             if v_lbl:
                 v_lbl.setText(str(val))
@@ -2273,7 +2067,7 @@ class DashboardView(QWidget):
                 return -1.0
         return str(raw or "").lower()
 
-    def _apply_filter(self) -> None:
+    def _apply_filter(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         try:
             text = (self._filter_edit.text() or "").strip().lower()
             try:
@@ -2299,20 +2093,24 @@ class DashboardView(QWidget):
                         # Pending metric: plain drafts plus locked in-review.
                         if ds_state != "DRAFT" and "REVIEW" not in ds_state:
                             continue
-                    elif wanted == "PUBLISHED" and ds_state not in ("RELEASED", "PUBLISHED"):
+                    elif (
+                        (wanted == "PUBLISHED" and ds_state not in ("RELEASED", "PUBLISHED"))
+                        or (wanted == "DRAFT" and ds_state != "DRAFT")
+                        or (wanted == "IN REVIEW" and "REVIEW" not in ds_state)
+                        or (wanted == "DEACCESSIONED" and "DEACCESSIONED" not in ds_state)
+                        or (
+                            wanted
+                            not in ("PENDING", "PUBLISHED", "DRAFT", "IN REVIEW", "DEACCESSIONED")
+                            and wanted != ds_state
+                        )
+                    ):
                         continue
-                    elif wanted == "DRAFT" and ds_state != "DRAFT":
-                        continue
-                    elif wanted == "IN REVIEW" and "REVIEW" not in ds_state:
-                        continue
-                    elif wanted == "DEACCESSIONED" and "DEACCESSIONED" not in ds_state:
-                        continue
-                    elif wanted not in ("PENDING", "PUBLISHED", "DRAFT", "IN REVIEW", "DEACCESSIONED") and wanted != ds_state:
-                        continue
-                if getattr(self, "_labelled_only", False):
-                    # In Progress card: rows with any curation label, any state.
-                    if not str(ds.get("curation_label") or "").strip():
-                        continue
+                # In Progress card: rows with any curation label, any state.
+                if (
+                    getattr(self, "_labelled_only", False)
+                    and not str(ds.get("curation_label") or "").strip()
+                ):
+                    continue
                 if wanted_label == _NO_LABEL_SENTINEL:
                     if str(ds.get("curation_label") or "").strip():
                         continue
@@ -2320,14 +2118,19 @@ class DashboardView(QWidget):
                     ds_label = str(ds.get("curation_label") or "").strip().lower()
                     if ds_label != wanted_label.strip().lower():
                         continue
-                if wanted_collection:
-                    if str(ds.get("collection") or "") != wanted_collection:
-                        continue
+                if wanted_collection and str(ds.get("collection") or "") != wanted_collection:
+                    continue
                 if text:
                     haystack = " ".join(
-                        str(ds.get(k, "")) for k in (
-                            "title", "persistent_id", "contact", "depositor",
-                            "collection", "state", "curation_label",
+                        str(ds.get(k, ""))
+                        for k in (
+                            "title",
+                            "persistent_id",
+                            "contact",
+                            "depositor",
+                            "collection",
+                            "state",
+                            "curation_label",
                         )
                     ).lower()
                     if text not in haystack:
@@ -2393,17 +2196,12 @@ class DashboardView(QWidget):
                             else:
                                 item.setToolTip(t("dashboard.table.size_unknown"))
                         elif ds.get("size_enriched"):
-                            item.setToolTip(
-                                t("dashboard.table.size_enriched", value=text_val)
-                            )
+                            item.setToolTip(t("dashboard.table.size_enriched", value=text_val))
                         elif ds.get("size_from_cache"):
-                            item.setToolTip(
-                                t("dashboard.table.size_cached", value=text_val)
-                            )
+                            item.setToolTip(t("dashboard.table.size_cached", value=text_val))
                     sort_key = self._cell_sort_key(ds, key)
-                    item.setData(Qt.UserRole, sort_key)
-                    if key in ("date_created", "date_published", "downloaded_at",
-                               "persistent_id"):
+                    item.setData(Qt.ItemDataRole.UserRole, sort_key)
+                    if key in ("date_created", "date_published", "downloaded_at", "persistent_id"):
                         item.setFont(mono)
                     if key == "title":
                         f = item.font()
@@ -2417,9 +2215,11 @@ class DashboardView(QWidget):
             self._table.viewport().update()
         except Exception as exc:
             import traceback
+
             self._refresh_btn.setEnabled(True)
             self._progress.setText(t("dashboard.progress.render_error"))
             from ui.dialogs import show_warning
+
             show_warning(
                 self,
                 t("dashboard.dialogs.render_title"),
@@ -2429,6 +2229,7 @@ class DashboardView(QWidget):
 
     def _on_crawl_error(self, msg: str) -> None:
         from ui.dialogs import describe_error, show_warning
+
         self._worker = None
         self._refresh_btn.setEnabled(True)
         self._progress.setText(t("dashboard.progress.load_error"))
@@ -2448,7 +2249,7 @@ class DashboardView(QWidget):
         )
         self._update_empty_state()
 
-    def eventFilter(self, obj, event):
+    def eventFilter(self, obj, event):  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Keyboard parity for the queue table (P0).
 
         Enter/Return opens the focused row (double-click alone locks out
@@ -2468,11 +2269,16 @@ class DashboardView(QWidget):
                 pass
         # Metric cards are tappable filters (dv-896).
         if isinstance(obj, QFrame) and obj.objectName() == "MetricCard":
-            if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.LeftButton:
+            if (
+                event.type() == QEvent.Type.MouseButtonPress
+                and event.button() == Qt.MouseButton.LeftButton
+            ):
                 self._on_metric_clicked(str(obj.property("accent") or ""))
                 return True
             if event.type() == QEvent.Type.KeyPress and event.key() in (
-                Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space,
+                Qt.Key.Key_Return,
+                Qt.Key.Key_Enter,
+                Qt.Key.Key_Space,
             ):
                 self._on_metric_clicked(str(obj.property("accent") or ""))
                 return True
@@ -2486,10 +2292,9 @@ class DashboardView(QWidget):
             if key == Qt.Key.Key_F5:
                 self.reload()
                 return True
-            if key == Qt.Key.Key_Escape:
-                if self._filter_edit.text():
-                    self._filter_edit.clear()
-                    return True
+            if key == Qt.Key.Key_Escape and self._filter_edit.text():
+                self._filter_edit.clear()
+                return True
         # Header keyboard sort: Space/Return toggles sort on focused section
         hdr = tbl.horizontalHeader() if tbl is not None else None
         if hdr is not None and obj is hdr and event.type() == QEvent.Type.KeyPress:
@@ -2515,9 +2320,7 @@ class DashboardView(QWidget):
             row_data: dict = {}
             if not pid:
                 # Fallback: match by title (titles are unique enough here)
-                match = next(
-                    (d for d in self._datasets if d.get("title") == title), None
-                )
+                match = next((d for d in self._datasets if d.get("title") == title), None)
                 if match:
                     pid = match.get("persistent_id", "")
                     title = match.get("title", title)

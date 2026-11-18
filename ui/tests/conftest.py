@@ -25,12 +25,12 @@ def qapp():
         apply_theme(app)
     except Exception:
         pass
-    yield app
+    return app
 
 
 @pytest.fixture(scope="session")
 def win(qapp):
-    from config import Config
+    from curation.config import Config
     from ui.main_window import MainWindow
 
     try:
@@ -45,9 +45,9 @@ def win(qapp):
         # from the test process and can take it down with an access
         # violation mid-suite (seen as "Windows fatal exception" on the
         # CI runner). Keep the suite off the network.
-        from ui.dataset_detail import DatasetDetailView as _DetailView
+        from ui.dataset import DatasetDetailView as _DetailView
 
-        _DetailView._on_load_metadata = lambda self: None
+        _DetailView._on_load_metadata = lambda self: None  # type: ignore[method-assign]
     except Exception:
         pass
     # Shown so layouts activate (geometry assertions in the status-bar

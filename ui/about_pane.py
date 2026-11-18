@@ -1,5 +1,7 @@
 """About pane: non-modal stack page describing the app (replaces the popup)."""
 
+from typing import Any, ClassVar
+
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
@@ -57,6 +59,44 @@ def _platform_text() -> str:
         return t("common.unknown")
 
 
+def _build_provenance() -> tuple[str, str]:
+    """(git sha, uv.lock hash) for a support request; 'dev'/'unknown' in dev."""
+    import hashlib as _hashlib
+    import json as _json
+    import subprocess as _subprocess
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    repo_root = _Path(__file__).resolve().parent.parent
+    if getattr(_sys, "frozen", False):
+        for candidate in (
+            _Path(_sys.executable).parent / "build_info.json",
+            _Path(_sys.executable).parent.parent / "build_info.json",
+        ):
+            try:
+                info = _json.loads(candidate.read_text(encoding="utf-8"))
+                return str(info.get("git_sha", "unknown")), str(info.get("lock_hash", "unknown"))
+            except Exception:
+                continue
+        return "unknown", "unknown"
+    sha = "dev"
+    try:
+        out = _subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(repo_root),
+            stderr=_subprocess.DEVNULL,
+        )
+        sha = out.decode().strip() or "dev"
+    except Exception:
+        pass
+    lock_hash = "unknown"
+    try:
+        lock_hash = _hashlib.sha256((repo_root / "uv.lock").read_bytes()).hexdigest()[:12]
+    except Exception:
+        pass
+    return sha, lock_hash
+
+
 def _diag_text() -> str:
     """Environment facts for a support request — never the API token."""
     import sys as _sys
@@ -73,8 +113,11 @@ def _diag_text() -> str:
         t("about.diag.platform", value=_platform_text()),
         t("about.diag.install", value=install),
     ]
+    sha, lock_hash = _build_provenance()
+    lines.append(t("about.diag.commit", value=sha))
+    lines.append(t("about.diag.lock_hash", value=lock_hash))
     try:
-        from config import Config
+        from curation.config import Config
 
         cfg = Config.load(None)
         lines.append(t("about.diag.workspace", value=cfg.app.workspace))
@@ -104,11 +147,13 @@ class AboutPane(QWidget):
         self.setStyleSheet(page_background_qss("AboutPane"))
 
         # Updates section state (the feed logic lives in ui/updater.py).
-        self._update_state = "idle"  # idle|checking|unavailable|up_to_date|available|downloading|ready|failed
+        self._update_state = (
+            "idle"  # idle|checking|unavailable|up_to_date|available|downloading|ready|failed
+        )
         self._update_version: str | None = None
         self._update_pending_info = None  # velopack UpdateInfo after a successful download
-        self._check_worker = None
-        self._download_worker = None
+        self._check_worker: Any = None
+        self._download_worker: Any = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 24, 24, 24)
@@ -121,9 +166,7 @@ class AboutPane(QWidget):
 
         card = QFrame()
         card.setObjectName("Card")
-        card.setStyleSheet(
-            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card")
-        )
+        card.setStyleSheet(surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card"))
         body = QVBoxLayout(card)
         body.setContentsMargins(20, 20, 20, 20)
         body.setSpacing(10)
@@ -135,7 +178,7 @@ class AboutPane(QWidget):
                 muted=TEXT_SUBTLE,
             )
         )
-        title.setTextFormat(Qt.RichText)
+        title.setTextFormat(Qt.TextFormat.RichText)
         # The product title wears the theme's HeadlineMD token (16px
         # semibold) - the app's card-title look, with no inline style.
         title.setObjectName("HeadlineMD")
@@ -152,12 +195,12 @@ class AboutPane(QWidget):
 
             pix = QPixmap(app_icon_path())
             if not pix.isNull():
-                mark.setPixmap(pix.scaledToHeight(64, Qt.SmoothTransformation))
+                mark.setPixmap(pix.scaledToHeight(64, Qt.TransformationMode.SmoothTransformation))
         except Exception:
             pass
         mark.setStyleSheet(transparent_surface_qss("DocentMark"))
         mark.setFixedWidth(64)
-        head_row.addWidget(mark, 0, Qt.AlignTop)
+        head_row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
         head_row.addWidget(title, 1)
         body.addLayout(head_row)
 
@@ -171,7 +214,7 @@ class AboutPane(QWidget):
         blurb = make_body_label(t("about.blurb"))
         left.addWidget(blurb)
         bullets = make_body_label(t("about.bullets"))
-        bullets.setTextFormat(Qt.RichText)
+        bullets.setTextFormat(Qt.TextFormat.RichText)
         left.addWidget(bullets)
         cols.addLayout(left, 3)
 
@@ -181,7 +224,7 @@ class AboutPane(QWidget):
         diag_head.setObjectName("LabelMD")
         right.addWidget(diag_head)
         diag = QLabel(_diag_text())
-        diag.setTextFormat(Qt.PlainText)
+        diag.setTextFormat(Qt.TextFormat.PlainText)
         diag.setWordWrap(True)
         diag.setObjectName("MonoSM")
         right.addWidget(diag)
@@ -289,9 +332,10 @@ class AboutPane(QWidget):
             QTimer.singleShot(1600, _restore)
         except Exception:
             pass
+
     # -- Updates section -----------------------------------------------
 
-    _REASON_KEYS = {
+    _REASON_KEYS: ClassVar[dict[str, str]] = {
         "network": "about.updates.reason_network",
         "timeout": "about.updates.reason_timeout",
         "rate_limited": "about.updates.reason_rate_limited",
@@ -317,7 +361,15 @@ class AboutPane(QWidget):
         shown = _time.strftime("%Y-%m-%d %H:%M", _time.localtime(stamp))
         return t("about.updates.last_checked", when=shown)
 
-    def _set_update_controls(self, *, status: str, button: str | None, button_enabled: bool = True, show_progress: bool = False, progress: int | None = None) -> None:
+    def _set_update_controls(
+        self,
+        *,
+        status: str,
+        button: str | None,
+        button_enabled: bool = True,
+        show_progress: bool = False,
+        progress: int | None = None,
+    ) -> None:
         self._update_status.setText(status)
         self._update_last_checked.setText(self._format_checked())
         if progress is not None:
@@ -408,7 +460,9 @@ class AboutPane(QWidget):
             elif status == "failed":
                 self._update_state = "failed"
                 self._set_update_controls(
-                    status=t("about.updates.failed", reason=self._reason_text(outcome.get("reason"))),
+                    status=t(
+                        "about.updates.failed", reason=self._reason_text(outcome.get("reason"))
+                    ),
                     button=t("about.updates.check_now"),
                 )
             else:  # up_to_date | cached
@@ -440,7 +494,9 @@ class AboutPane(QWidget):
     def _on_download_progress(self, percent: int) -> None:
         version = self._update_version or ""
         self._update_progress.setValue(percent)
-        self._update_status.setText(t("about.updates.downloading", version=version, percent=percent))
+        self._update_status.setText(
+            t("about.updates.downloading", version=version, percent=percent)
+        )
 
     def _on_download_finished(self, ok: bool) -> None:
         import ui.updater as _updater

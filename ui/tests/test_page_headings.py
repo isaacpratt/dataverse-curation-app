@@ -34,9 +34,7 @@ def _pages(win):
 def test_every_page_has_one_heading(win, qapp):
     for name, page in _pages(win):
         qapp.processEvents()
-        headings = [
-            lbl for lbl in page.findChildren(QLabel) if lbl.objectName() == "HeadlineLG"
-        ]
+        headings = [lbl for lbl in page.findChildren(QLabel) if lbl.objectName() == "HeadlineLG"]
         assert len(headings) == 1, f"{name}: {len(headings)} HeadlineLG labels"
 
 
@@ -69,9 +67,7 @@ def test_no_inline_page_heading_size_outside_the_theme():
     for path in sorted(_UI_DIR.glob("*.py")):
         if path.name == "theme.py":
             continue
-        for number, line in enumerate(
-            path.read_text(encoding="utf-8").splitlines(), start=1
-        ):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if _INLINE_HEADING_PX.search(line):
                 hits.append(f"{path.name}:{number}")
     assert hits == [], f"inline 22px styles outside the theme: {hits}"

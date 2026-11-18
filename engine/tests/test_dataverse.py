@@ -6,11 +6,13 @@ are exercised with synthetic payloads - no network access required.
 
 import hashlib
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from dataverse_client import (
+from curation.client import (
     DataverseClient,
     extract_file_restrictions,
     get_cached_allowed_labels,
@@ -29,10 +31,10 @@ from dataverse_client import (
     top_level_collection,
     write_allowed_labels_cache,
 )
-from download_manager import DownloadManager
+from curation.download_manager import DownloadManager
 
 
-def _file_entry(path: str, size: int, sha1: str) -> dict:
+def _file_entry(path: str, size: int, sha1: str) -> dict[str, Any]:
     directory, _, filename = path.rpartition("/")
     entry = {
         "filename": filename,
@@ -43,7 +45,7 @@ def _file_entry(path: str, size: int, sha1: str) -> dict:
     return entry
 
 
-def test_normalize_files_checksum_variants():
+def test_normalize_files_checksum_variants() -> None:
     dict_style = normalize_files(
         {
             "files": [
@@ -68,14 +70,14 @@ def test_normalize_files_checksum_variants():
     assert legacy_style[0]["checksum_type"] == "md5"
 
 
-def test_locks_indicate_review():
+def test_locks_indicate_review() -> None:
     assert locks_indicate_review([{"lockType": "InReview"}])
     assert locks_indicate_review([{"lockType": "WORKFLOW"}, {"lockType": "inReview"}])
     assert not locks_indicate_review([])
     assert not locks_indicate_review([{"lockType": "WORKFLOW"}])
 
 
-def test_parse_allowed_labels():
+def test_parse_allowed_labels() -> None:
     assert parse_allowed_labels("Author contacted, Needs review,Ready for publish ") == [
         "Author contacted",
         "Needs review",
@@ -93,10 +95,14 @@ def test_parse_allowed_labels():
     assert parse_allowed_labels("A, B, A") == ["A", "B"]
 
 
-def test_parse_curation_status_object():
+def test_parse_curation_status_object() -> None:
     payload = {
         "status": "OK",
-        "data": {"label": "Author contacted", "createTime": "2026-09-01T10:00:00Z", "assigner": "curator1"},
+        "data": {
+            "label": "Author contacted",
+            "createTime": "2026-09-01T10:00:00Z",
+            "assigner": "curator1",
+        },
     }
     assert parse_curation_status(payload) == {
         "label": "Author contacted",
@@ -105,7 +111,7 @@ def test_parse_curation_status_object():
     }
 
 
-def test_parse_curation_status_history_newest_wins():
+def test_parse_curation_status_history_newest_wins() -> None:
     payload = {
         "status": "OK",
         "data": [
@@ -119,7 +125,7 @@ def test_parse_curation_status_history_newest_wins():
     assert parsed["assigner"] == "b"
 
 
-def test_parse_curation_status_empty():
+def test_parse_curation_status_empty() -> None:
     assert parse_curation_status({"status": "OK", "data": None}) is None
     assert parse_curation_status({"status": "OK", "data": []}) is None
     assert parse_curation_status({"status": "OK", "data": {"label": "  "}}) is None
@@ -139,7 +145,7 @@ def _curation_csv() -> str:
     )
 
 
-def test_parse_curation_states_csv():
+def test_parse_curation_states_csv() -> None:
     rows = parse_curation_states_csv(_curation_csv())
     assert len(rows) == 3
     by_pid = {r["persistent_id"]: r for r in rows}
@@ -155,12 +161,12 @@ def test_parse_curation_states_csv():
     assert by_pid["doi:10.5072/FK2/CCC"]["label"] == ""
 
 
-def test_parse_curation_states_csv_empty():
+def test_parse_curation_states_csv_empty() -> None:
     assert parse_curation_states_csv("") == []
     assert parse_curation_states_csv("Dataset,Creation Date\n") == []
 
 
-def _compare_payload() -> dict:
+def _compare_payload() -> dict[str, Any]:
     return {
         "status": "OK",
         "data": {
@@ -181,7 +187,10 @@ def _compare_payload() -> dict:
             "filesAdded": [{"fileName": "new.csv", "filePath": "data", "fileId": 11}],
             "filesRemoved": [{"fileName": "old.sav", "fileId": 9}],
             "filesReplaced": [
-                {"oldFile": {"fileName": "r.pdf", "fileId": 5}, "newFile": {"fileName": "r_v2.pdf", "fileId": 12}}
+                {
+                    "oldFile": {"fileName": "r.pdf", "fileId": 5},
+                    "newFile": {"fileName": "r_v2.pdf", "fileId": 12},
+                }
             ],
             "fileChanges": [
                 {
@@ -194,7 +203,7 @@ def _compare_payload() -> dict:
     }
 
 
-def test_parse_version_compare():
+def test_parse_version_compare() -> None:
     diff = parse_version_compare(_compare_payload())
     assert diff is not None
     assert diff["old"]["number"] == "1.0"
@@ -212,7 +221,7 @@ def test_parse_version_compare():
     assert diff["total_changes"] == 2 + 1 + 1 + 1 + 1 + 1
 
 
-def test_parse_version_compare_empty():
+def test_parse_version_compare_empty() -> None:
     assert parse_version_compare({}) is None
     assert parse_version_compare({"status": "OK"}) is None
     diff = parse_version_compare(
@@ -224,13 +233,18 @@ def test_parse_version_compare_empty():
     assert diff["files_added"] == []
 
 
-def test_search_item_state_plain_cases():
-    assert search_item_state({"versionState": "DRAFT", "publicationStatuses": ["Draft"]}) == ("DRAFT", True)
-    assert search_item_state({"versionState": "RELEASED", "publicationStatuses": ["Published"]}) == ("RELEASED", False)
+def test_search_item_state_plain_cases() -> None:
+    assert search_item_state({"versionState": "DRAFT", "publicationStatuses": ["Draft"]}) == (
+        "DRAFT",
+        True,
+    )
+    assert search_item_state(
+        {"versionState": "RELEASED", "publicationStatuses": ["Published"]}
+    ) == ("RELEASED", False)
     assert search_item_state({}) == ("", False)
 
 
-def test_search_item_state_published_doc_with_draft():
+def test_search_item_state_published_doc_with_draft() -> None:
     # Published doc shadows a new draft version: draft markers win.
     state, has_draft = search_item_state(
         {"versionState": "RELEASED", "publicationStatuses": ["Published", "Draft"]}
@@ -239,7 +253,7 @@ def test_search_item_state_published_doc_with_draft():
     assert has_draft is True
 
 
-def test_search_item_state_in_review_status():
+def test_search_item_state_in_review_status() -> None:
     state, has_draft = search_item_state(
         {"versionState": "DRAFT", "publicationStatuses": ["Draft", "In Review"]}
     )
@@ -247,12 +261,22 @@ def test_search_item_state_in_review_status():
     assert has_draft is True
 
 
-def test_parse_dataset_versions():
+def test_parse_dataset_versions() -> None:
     data = [
-        {"versionNumber": 1, "versionMinorNumber": 0, "versionState": "RELEASED",
-         "createTime": "2024-01-01T10:00:00Z", "releaseTime": "2024-02-01T10:00:00Z"},
-        {"versionNumber": 2, "versionMinorNumber": 0, "versionState": "DRAFT",
-         "createTime": "2026-09-01T10:00:00Z", "lastUpdateTime": "2026-09-08T10:00:00Z"},
+        {
+            "versionNumber": 1,
+            "versionMinorNumber": 0,
+            "versionState": "RELEASED",
+            "createTime": "2024-01-01T10:00:00Z",
+            "releaseTime": "2024-02-01T10:00:00Z",
+        },
+        {
+            "versionNumber": 2,
+            "versionMinorNumber": 0,
+            "versionState": "DRAFT",
+            "createTime": "2026-09-01T10:00:00Z",
+            "lastUpdateTime": "2026-09-08T10:00:00Z",
+        },
         {"versionState": "DEACCESSIONED", "createTime": "2023-01-01", "releaseTime": "2023-06-01"},
     ]
     versions = parse_dataset_versions(data)
@@ -266,7 +290,7 @@ def test_parse_dataset_versions():
     assert parse_dataset_versions("nope") == []
 
 
-def test_parse_timestamps():
+def test_parse_timestamps() -> None:
     parsed = parse_timestamps(
         {
             "status": "OK",
@@ -286,7 +310,7 @@ def test_parse_timestamps():
     assert parse_timestamps({"status": "OK"}) == {}
 
 
-def test_extract_file_restrictions():
+def test_extract_file_restrictions() -> None:
     assert extract_file_restrictions({}, {}) == {"embargo_date": "", "retention": ""}
     nested = extract_file_restrictions(
         {"filename": "a.csv"},
@@ -295,9 +319,7 @@ def test_extract_file_restrictions():
     assert nested == {"embargo_date": "2027-06-01", "retention": ""}
     flat = extract_file_restrictions({"dateAvailable": "2028-01-15"}, {})
     assert flat["embargo_date"] == "2028-01-15"
-    retention = extract_file_restrictions(
-        {}, {"retention": {"retentionPeriod": "2029-03-01"}}
-    )
+    retention = extract_file_restrictions({}, {"retention": {"retentionPeriod": "2029-03-01"}})
     assert retention["retention"] == "2029-03-01"
     # unrelated dates are never mislabeled as embargo/retention
     plain = extract_file_restrictions(
@@ -306,7 +328,7 @@ def test_extract_file_restrictions():
     assert plain == {"embargo_date": "", "retention": ""}
 
 
-def test_note_review_submission():
+def test_note_review_submission() -> None:
     pid = "doi:10.80240/FK2/9MI1DN"
     note = {
         "type": "SUBMITTEDDS",
@@ -345,15 +367,15 @@ def test_note_review_submission():
 
 
 class FakeClient:
-    def __init__(self, inventory):
+    def __init__(self, inventory: list[Any]) -> None:
         self._inventory = inventory
 
-    def get_file_inventory(self, persistent_id, version="draft"):
+    def get_file_inventory(self, persistent_id: str, version: Any = "draft") -> list[Any]:
         return self._inventory
 
 
-def test_size_cache_roundtrip(tmp_path):
-    from storage import read_size_cache, write_size_entry
+def test_size_cache_roundtrip(tmp_path: Path) -> None:
+    from curation.storage import read_size_cache, write_size_entry
 
     assert read_size_cache(tmp_path) == {}
     write_size_entry(tmp_path, "doi:10.5072/FK2/A", 12345, 3)
@@ -366,7 +388,7 @@ def test_size_cache_roundtrip(tmp_path):
     assert read_size_cache(tmp_path) == {}
 
 
-def test_quote_and_verify_with_fake_client(tmp_path):
+def test_quote_and_verify_with_fake_client(tmp_path: Path) -> None:
     content = b"col_a,col_b\n1,2\n"
     staged = tmp_path / "ws" / "downloads" / "pid" / "files"
     staged.mkdir(parents=True)
@@ -397,17 +419,15 @@ def test_quote_and_verify_with_fake_client(tmp_path):
     assert any("checksum mismatch" in p for p in problems)
 
 
-def test_verify_detects_missing_file(tmp_path):
-    inventory = [
-        {"path": "gone.csv", "size_bytes": 10, "checksum_type": "", "checksum_value": ""}
-    ]
+def test_verify_detects_missing_file(tmp_path: Path) -> None:
+    inventory = [{"path": "gone.csv", "size_bytes": 10, "checksum_type": "", "checksum_value": ""}]
     manager = DownloadManager(FakeClient(inventory), tmp_path / "ws")
-    ok, problems, warnings = manager.verify("any")
+    ok, problems, _warnings = manager.verify("any")
     assert not ok
     assert any(p.startswith("missing") for p in problems)
 
 
-def test_safe_extract_blocks_zip_slip(tmp_path):
+def test_safe_extract_blocks_zip_slip(tmp_path: Path) -> None:
     malicious = tmp_path / "evil.zip"
     with zipfile.ZipFile(malicious, "w") as archive:
         archive.writestr("../escape.txt", "nope")
@@ -418,7 +438,7 @@ def test_safe_extract_blocks_zip_slip(tmp_path):
     assert not (tmp_path / "escape.txt").exists()
 
 
-def test_safe_extract_ok(tmp_path):
+def test_safe_extract_ok(tmp_path: Path) -> None:
     bundle = tmp_path / "ok.zip"
     with zipfile.ZipFile(bundle, "w") as archive:
         archive.writestr("sub/inner.txt", "fine")
@@ -428,7 +448,7 @@ def test_safe_extract_ok(tmp_path):
     assert (dest / "sub" / "inner.txt").read_text() == "fine"
 
 
-def test_normalize_files_tabular_unf():
+def test_normalize_files_tabular_unf() -> None:
     records = normalize_files(
         {
             "files": [
@@ -460,13 +480,11 @@ def test_normalize_files_tabular_unf():
     assert plain["tabular"] is False
     assert plain["unf"] == ""
     # lowercase unf fallback
-    lower = normalize_files(
-        {"files": [{"filename": "x.tab", "dataFile": {"unf": "UNF:6:z=="}}]}
-    )
+    lower = normalize_files({"files": [{"filename": "x.tab", "dataFile": {"unf": "UNF:6:z=="}}]})
     assert lower[0]["unf"] == "UNF:6:z=="
 
 
-def test_verify_mismatch_reports_hashes_and_tabular_note(tmp_path):
+def test_verify_mismatch_reports_hashes_and_tabular_note(tmp_path: Path) -> None:
     content = b"col_a\n1\n"
     staged = tmp_path / "ws" / "downloads" / "pid" / "files"
     staged.mkdir(parents=True)
@@ -497,13 +515,14 @@ def test_verify_mismatch_reports_hashes_and_tabular_note(tmp_path):
     assert len(warnings) == 1
     line = warnings[0]
     assert "checksum mismatch: eco.tab" in line
-    assert "md5 expected " in line and " got " in line
+    assert "md5 expected " in line
+    assert " got " in line
     assert "UNF:6:abc==" in line
     assert "server-regenerated" in line
     assert "application/x-spss-sav" in line
 
 
-def test_missing_files_and_fully_staged(tmp_path):
+def test_missing_files_and_fully_staged(tmp_path: Path) -> None:
     content = b"0123456789"
     staged = tmp_path / "ws" / "downloads" / "pid" / "files"
     staged.mkdir(parents=True)
@@ -523,29 +542,50 @@ def test_missing_files_and_fully_staged(tmp_path):
     assert manager.is_fully_staged("pid", inventory)
 
 
-def test_download_originals_skips_staged_and_nontabular(tmp_path):
+def test_download_originals_skips_staged_and_nontabular(tmp_path: Path) -> None:
     staged = tmp_path / "ws" / "downloads" / "pid" / "files"
     staged.mkdir(parents=True)
     (staged / "eco.sav").write_bytes(b"already here")
     (staged / "new.tab").write_bytes(b"server-tab")
 
     class OrigClient(FakeClient):
-        def __init__(self, inventory):
+        def __init__(self, inventory: list[Any]) -> None:
             super().__init__(inventory)
-            self.fetched = []
+            self.fetched: list[str] = []
 
-        def download_datafile_original(self, file_id, dest, progress=None, is_cancelled=None):
+        def download_datafile_original(
+            self,
+            file_id: str,
+            dest: Path,
+            progress: Callable[[int], None] | None = None,
+            is_cancelled: Callable[[], bool] | None = None,
+        ) -> Path:
             self.fetched.append(file_id)
             Path(dest).write_bytes(b"orig-bytes")
             return dest
 
     inventory = [
-        {"path": "eco.tab", "id": "9", "tabular": True,
-         "original_name": "eco.sav", "original_size": 12},
-        {"path": "plain.csv", "id": "10", "tabular": False,
-         "original_name": "", "original_size": 0},
-        {"path": "new.tab", "id": "11", "tabular": True,
-         "original_name": "new.sav", "original_size": 10},
+        {
+            "path": "eco.tab",
+            "id": "9",
+            "tabular": True,
+            "original_name": "eco.sav",
+            "original_size": 12,
+        },
+        {
+            "path": "plain.csv",
+            "id": "10",
+            "tabular": False,
+            "original_name": "",
+            "original_size": 0,
+        },
+        {
+            "path": "new.tab",
+            "id": "11",
+            "tabular": True,
+            "original_name": "new.sav",
+            "original_size": 10,
+        },
     ]
     client = OrigClient(inventory)
     manager = DownloadManager(client, tmp_path / "ws")
@@ -559,33 +599,43 @@ def test_download_originals_skips_staged_and_nontabular(tmp_path):
     assert not (staged / "new.tab").exists()
 
 
-def test_quote_prefers_original_size_for_tabular():
-    from download_manager import DownloadManager as DM
+def test_quote_prefers_original_size_for_tabular() -> None:
+    from curation.download_manager import DownloadManager
 
     inv = [
-        {"path": "a.tab", "tabular": True, "original_name": "a.sav",
-         "original_size": 100, "size_bytes": 999},
+        {
+            "path": "a.tab",
+            "tabular": True,
+            "original_name": "a.sav",
+            "original_size": 100,
+            "size_bytes": 999,
+        },
         {"path": "b.csv", "tabular": False, "size_bytes": 50},
     ]
-    q = DM.quote_from(inv, "pid")
+    q = DownloadManager.quote_from(inv, "pid")
     assert q.file_count == 2
     assert q.total_size_bytes == 150
 
 
-def test_missing_files_uses_original_path_for_tabular(tmp_path):
+def test_missing_files_uses_original_path_for_tabular(tmp_path: Path) -> None:
     staged = tmp_path / "ws" / "downloads" / "pid" / "files"
     staged.mkdir(parents=True)
     (staged / "eco.sav").write_bytes(b"x" * 12)
     inventory = [
-        {"path": "eco.tab", "tabular": True, "original_name": "eco.sav",
-         "original_size": 12, "size_bytes": 99},
+        {
+            "path": "eco.tab",
+            "tabular": True,
+            "original_name": "eco.sav",
+            "original_size": 12,
+            "size_bytes": 99,
+        },
     ]
     manager = DownloadManager(FakeClient(inventory), tmp_path / "ws")
     assert manager.missing_files("pid", inventory) == []
     assert manager.is_fully_staged("pid", inventory)
 
 
-def test_normalize_files_captures_restricted_and_ingest():
+def test_normalize_files_captures_restricted_and_ingest() -> None:
     records = normalize_files(
         {
             "files": [
@@ -608,7 +658,7 @@ def test_normalize_files_captures_restricted_and_ingest():
     assert records[0]["ingest_error"] == ""
 
 
-def test_top_level_collection():
+def test_top_level_collection() -> None:
     assert top_level_collection("mcmaster") == "mcmaster"
     assert top_level_collection("mcmaster/sub") == "mcmaster"
     assert top_level_collection("mcmaster/sub/deep") == "mcmaster"
@@ -618,8 +668,8 @@ def test_top_level_collection():
     assert top_level_collection(None) == ""
 
 
-def test_allowed_labels_shared_cache_isolation(monkeypatch):
-    import dataverse_client as _dc
+def test_allowed_labels_shared_cache_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
     set_cached_allowed_labels("https://demo.test", "mcmaster", ["A", "B"])
@@ -635,17 +685,18 @@ def test_allowed_labels_shared_cache_isolation(monkeypatch):
     assert get_cached_allowed_labels("https://demo.test", "empty-coll") == []
     # callers get a copy, not the live list
     hit = get_cached_allowed_labels("https://demo.test", "mcmaster")
+    assert hit is not None
     hit.append("MUT")
     assert get_cached_allowed_labels("https://demo.test", "mcmaster") == ["A", "B"]
 
 
-def test_fetch_allowed_labels_shared_single_call(monkeypatch):
-    import dataverse_client as _dc
+def test_fetch_allowed_labels_shared_single_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
     calls: list[str] = []
 
-    def fake_allowed(self, identifier):
+    def fake_allowed(self: Any, identifier: str) -> list[str]:
         calls.append(identifier)
         return ["X", "Y"] if identifier == "pid-2" else []
 
@@ -659,14 +710,20 @@ def test_fetch_allowed_labels_shared_single_call(monkeypatch):
     assert calls == ["pid-1", "pid-2"]
 
 
-def test_fetch_allowed_labels_shared_bounds_attempts(monkeypatch):
-    import dataverse_client as _dc
+def test_fetch_allowed_labels_shared_bounds_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
     calls: list[str] = []
+
+    def fake_allowed_labels(self: Any, pid: str) -> list[str]:
+        calls.append(pid)
+        return []
+
     monkeypatch.setattr(
-        DataverseClient, "get_allowed_curation_labels",
-        lambda self, pid: calls.append(pid) or [],
+        DataverseClient,
+        "get_allowed_curation_labels",
+        fake_allowed_labels,
     )
     client = DataverseClient("https://demo.test", "tok")
     assert client.fetch_allowed_labels_shared("c", ["a", "b", "c", "d", "e"], max_attempts=3) == []
@@ -676,8 +733,8 @@ def test_fetch_allowed_labels_shared_bounds_attempts(monkeypatch):
     assert calls == ["a", "b", "c"]
 
 
-def test_allowed_labels_disk_cache_roundtrip(tmp_path):
-    import dataverse_client as _dc
+def test_allowed_labels_disk_cache_roundtrip(tmp_path: Path) -> None:
+    from curation.client import caches as _dc
 
     _dc._ALLOWED_LABELS_CACHE.pop(("https://demo.test", "mcmaster"), None)
     write_allowed_labels_cache(tmp_path, "https://demo.test", "mcmaster", ["A", "B"])
@@ -695,7 +752,16 @@ def test_allowed_labels_disk_cache_roundtrip(tmp_path):
     assert slot.get("v") == 2
     # legacy bare-instance key is adopted when stamped at v2 …
     (tmp_path / "curation_labels.json").write_text(
-        _json.dumps({"https://legacy.test": {"labels": ["L"], "collection": "mcmaster", "probed": True, "v": 2}})
+        _json.dumps(
+            {
+                "https://legacy.test": {
+                    "labels": ["L"],
+                    "collection": "mcmaster",
+                    "probed": True,
+                    "v": 2,
+                }
+            }
+        )
     )
     _dc._ALLOWED_LABELS_CACHE.pop(("https://legacy.test", "mcmaster"), None)
     assert read_allowed_labels_cache(tmp_path, "https://legacy.test", "mcmaster") == ["L"]
@@ -709,19 +775,21 @@ def test_allowed_labels_disk_cache_roundtrip(tmp_path):
     # … and so does a v1 stamp written from the filter union rather than
     # a probe (probed without v2 carries no discovery guarantee)
     (tmp_path / "curation_labels.json").write_text(
-        _json.dumps({"https://legacy.test": {"labels": ["L"], "collection": "mcmaster", "probed": True}})
+        _json.dumps(
+            {"https://legacy.test": {"labels": ["L"], "collection": "mcmaster", "probed": True}}
+        )
     )
     _dc._ALLOWED_LABELS_CACHE.pop(("https://legacy.test", "mcmaster"), None)
     assert read_allowed_labels_cache(tmp_path, "https://legacy.test", "mcmaster") is None
 
 
-def test_allowed_probe_answered_tracks_server_answers(monkeypatch):
+def test_allowed_probe_answered_tracks_server_answers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Only HTTP-200 rounds count as answered (stamp-worthy)."""
-    import dataverse_client as _dc
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ALLOWED_LABELS_CACHE", {})
 
-    def fake_200(self, path, params=None):
+    def fake_200(self: Any, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         # Real 6.8 envelope shape: data.message carries the CSV list.
         return {"status": "OK", "data": {"message": "A,B"}}
 
@@ -730,7 +798,7 @@ def test_allowed_probe_answered_tracks_server_answers(monkeypatch):
     assert client.fetch_allowed_labels_shared("c", ["p1", "p2"]) == ["A", "B"]
     assert client.last_allowed_probe_answered() is True
 
-    def fake_403(self, path, params=None):
+    def fake_403(self: Any, path: str, params: dict[str, Any] | None = None) -> None:
         import requests
 
         resp = requests.Response()
@@ -743,7 +811,7 @@ def test_allowed_probe_answered_tracks_server_answers(monkeypatch):
     assert client2.fetch_allowed_labels_shared("c", ["p1", "p2"]) == []
     assert client2.last_allowed_probe_answered() is False
 
-    def fake_boom(self, path, params=None):
+    def fake_boom(self: Any, path: str, params: dict[str, Any] | None = None) -> None:
         import requests
 
         raise requests.exceptions.ConnectionError("down")
@@ -755,8 +823,8 @@ def test_allowed_probe_answered_tracks_server_answers(monkeypatch):
     assert client3.last_allowed_probe_answered() is False
 
 
-def test_parse_allowed_labels_shapes():
-    from dataverse_client import parse_allowed_labels
+def test_parse_allowed_labels_shapes() -> None:
+    from curation.client import parse_allowed_labels
 
     assert parse_allowed_labels("A, B,A,, ") == ["A", "B"]
     assert parse_allowed_labels(["A", "B", "A"]) == ["A", "B"]
@@ -768,18 +836,18 @@ def test_parse_allowed_labels_shapes():
     assert parse_allowed_labels(None) == []
 
 
-def test_snapshot_apply_clear_table_view(tmp_path):
+def test_snapshot_apply_clear_table_view(tmp_path: Path) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Reset reproduces construction state; clear drops the persisted entry."""
     import json as _json
 
-    from storage import (
+    from curation.storage import (
         apply_table_view,
         clear_table_state,
         snapshot_table_view,
     )
 
     class FakeViewHeader:
-        def __init__(self):
+        def __init__(self) -> None:
             self._widths = [100, 200, 300]
             self._hidden = [False, False, False]
             self._slots = [0, 1, 2]
@@ -787,47 +855,47 @@ def test_snapshot_apply_clear_table_view(tmp_path):
             self._sort_section = 0
             self._sort_order = 0
 
-        def count(self):
+        def count(self) -> int:
             return 3
 
-        def blockSignals(self, b):
+        def blockSignals(self, b: bool) -> bool:
             return False
 
-        def sectionSize(self, i):
+        def sectionSize(self, i: int) -> int:
             return self._widths[i]
 
-        def resizeSection(self, i, w):
+        def resizeSection(self, i: int, w: int) -> None:
             self._widths[i] = w
 
-        def isSectionHidden(self, i):
+        def isSectionHidden(self, i: int) -> bool:
             return self._hidden[i]
 
-        def setSectionHidden(self, i, flag):
+        def setSectionHidden(self, i: int, flag: bool) -> None:
             self._hidden[i] = bool(flag)
 
-        def visualIndex(self, i):
+        def visualIndex(self, i: int) -> int:
             return self._slots.index(i)
 
-        def moveSection(self, frm, to):
+        def moveSection(self, frm: int, to: int) -> None:
             self._slots.insert(to, self._slots.pop(frm))
 
-        def isSortIndicatorShown(self):
+        def isSortIndicatorShown(self) -> bool:
             return self._sort_shown
 
-        def sortIndicatorSection(self):
+        def sortIndicatorSection(self) -> int:
             return self._sort_section
 
-        def sortIndicatorOrder(self):
+        def sortIndicatorOrder(self) -> int:
             return self._sort_order
 
-        def setSortIndicator(self, section, order):
+        def setSortIndicator(self, section: int, order: int) -> None:
             self._sort_section = int(section)
             try:
                 self._sort_order = int(order)
             except TypeError:
                 self._sort_order = int(getattr(order, "value", 0))
 
-        def setSortIndicatorShown(self, flag):
+        def setSortIndicatorShown(self, flag: bool) -> None:
             self._sort_shown = bool(flag)
 
     header = FakeViewHeader()
@@ -843,7 +911,7 @@ def test_snapshot_apply_clear_table_view(tmp_path):
     header.setSortIndicatorShown(True)
     assert header.sectionSize(0) == 55
 
-    from storage import save_table_state
+    from curation.storage import save_table_state
 
     save_table_state(tmp_path, "reset_me", header)
     raw = _json.loads((tmp_path / "table_layout.json").read_text(encoding="utf-8"))
@@ -862,8 +930,8 @@ def test_snapshot_apply_clear_table_view(tmp_path):
     assert header._sort_shown is False
 
 
-def test_is_draft_dataset():
-    from dataverse_client import is_draft_dataset
+def test_is_draft_dataset() -> None:
+    from curation.client import is_draft_dataset
 
     assert is_draft_dataset({"state": "DRAFT"}) is True
     assert is_draft_dataset({"state": "draft"}) is True
@@ -876,8 +944,8 @@ def test_is_draft_dataset():
     assert is_draft_dataset("DRAFT") is False
 
 
-def test_get_me_returns_profile_and_caches(monkeypatch):
-    import dataverse_client as _dc
+def test_get_me_returns_profile_and_caches(monkeypatch: pytest.MonkeyPatch) -> None:
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
     calls: list[str] = []
@@ -886,7 +954,7 @@ def test_get_me_returns_profile_and_caches(monkeypatch):
         "data": {"identifier": "@u", "displayName": "U", "superuser": True},
     }
 
-    def fake_get_json(self, path, params=None):
+    def fake_get_json(self: Any, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         calls.append(path)
         return dict(payload)
 
@@ -904,14 +972,14 @@ def test_get_me_returns_profile_and_caches(monkeypatch):
     assert calls == ["/api/users/:me", "/api/users/:me"]
 
 
-def test_get_me_denied_is_none_without_caching(monkeypatch):
+def test_get_me_denied_is_none_without_caching(monkeypatch: pytest.MonkeyPatch) -> None:
     import requests
 
-    import dataverse_client as _dc
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
 
-    def fake_denied(self, path, params=None):
+    def fake_denied(self: Any, path: str, params: dict[str, Any] | None = None) -> None:
         resp = requests.Response()
         resp.status_code = 401
         raise requests.HTTPError("denied", response=resp)
@@ -923,23 +991,26 @@ def test_get_me_denied_is_none_without_caching(monkeypatch):
     assert _dc._ME_CACHE == {}
 
 
-def test_get_collection_roles_matches_me_identifier(monkeypatch):
-    import dataverse_client as _dc
+def test_get_collection_roles_matches_me_identifier(monkeypatch: pytest.MonkeyPatch) -> None:
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
     monkeypatch.setattr(_dc, "_ROLE_CACHE", {})
     calls: list[str] = []
 
-    def fake_get_json(self, path, params=None):
+    def fake_get_json(self: Any, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         calls.append(path)
         if path == "/api/users/:me":
             return {"status": "OK", "data": {"identifier": "@u", "superuser": False}}
         assert path == "/api/dataverses/mcmaster/assignments"
-        return {"status": "OK", "data": [
-            {"assignee": "@other", "roleName": "Admin", "_roleAlias": "admin"},
-            {"assignee": "@u", "roleName": "Curator", "_roleAlias": "curator"},
-            {"assignee": "@u", "roleName": "Curator", "_roleAlias": "curator"},
-        ]}
+        return {
+            "status": "OK",
+            "data": [
+                {"assignee": "@other", "roleName": "Admin", "_roleAlias": "admin"},
+                {"assignee": "@u", "roleName": "Curator", "_roleAlias": "curator"},
+                {"assignee": "@u", "roleName": "Curator", "_roleAlias": "curator"},
+            ],
+        }
 
     monkeypatch.setattr(DataverseClient, "_get_json", fake_get_json)
     client = DataverseClient("https://demo.test", "tok")
@@ -952,15 +1023,15 @@ def test_get_collection_roles_matches_me_identifier(monkeypatch):
     assert calls == ["/api/users/:me", "/api/dataverses/mcmaster/assignments"]
 
 
-def test_get_collection_roles_denied_or_empty(monkeypatch):
+def test_get_collection_roles_denied_or_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     import requests
 
-    import dataverse_client as _dc
+    from curation.client import caches as _dc
 
     monkeypatch.setattr(_dc, "_ME_CACHE", {})
     monkeypatch.setattr(_dc, "_ROLE_CACHE", {})
 
-    def fake_ok_me(self, path, params=None):
+    def fake_ok_me(self: Any, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         if path == "/api/users/:me":
             return {"status": "OK", "data": {"identifier": "@u"}}
         resp = requests.Response()
@@ -972,36 +1043,39 @@ def test_get_collection_roles_denied_or_empty(monkeypatch):
     assert client.get_collection_roles("mcmaster") is None
     assert _dc._ROLE_CACHE == {}
 
-    def fake_no_match(self, path, params=None):
+    def fake_no_match(self: Any, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         if path == "/api/users/:me":
             return {"status": "OK", "data": {"identifier": "@nobody"}}
-        return {"status": "OK", "data": [
-            {"assignee": "@someone", "roleName": "Admin"},
-        ]}
+        return {
+            "status": "OK",
+            "data": [
+                {"assignee": "@someone", "roleName": "Admin"},
+            ],
+        }
 
     monkeypatch.setattr(DataverseClient, "_get_json", fake_no_match)
     client2 = DataverseClient("https://demo.test", "tok2")
     assert client2.get_collection_roles("mcmaster") == []
 
 
-def test_table_layout_roundtrip(tmp_path):
-    from storage import restore_table_state, save_table_state
+def test_table_layout_roundtrip(tmp_path: Path) -> None:
+    from curation.storage import restore_table_state, save_table_state
 
     class FakeHeader:
-        def __init__(self, widths):
+        def __init__(self, widths: list[int]) -> None:
             self._widths = list(widths)
             self.blocked = False
 
-        def count(self):
+        def count(self) -> int:
             return len(self._widths)
 
-        def sectionSize(self, i):
+        def sectionSize(self, i: int) -> int:
             return self._widths[i]
 
-        def resizeSection(self, i, w):
+        def resizeSection(self, i: int, w: int) -> None:
             self._widths[i] = w
 
-        def blockSignals(self, b):
+        def blockSignals(self, b: bool) -> bool:
             self.blocked = b
             return False
 
@@ -1017,12 +1091,12 @@ def test_table_layout_roundtrip(tmp_path):
     assert restore_table_state(tmp_path, "dataset_files", FakeHeader([1])) is False
 
 
-def test_table_view_state_roundtrip(tmp_path):
+def test_table_view_state_roundtrip(tmp_path: Path) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Widths + sort + hidden columns + visual order all persist."""
-    from storage import restore_table_state, save_table_state
+    from curation.storage import restore_table_state, save_table_state
 
     class FakeViewHeader:
-        def __init__(self, widths):
+        def __init__(self, widths: list[int]) -> None:
             self._widths = list(widths)
             self._hidden = [False] * len(widths)
             self._slots = list(range(len(widths)))  # slots[visual] = logical
@@ -1030,40 +1104,40 @@ def test_table_view_state_roundtrip(tmp_path):
             self._sort_section = -1
             self._sort_order = 0
 
-        def count(self):
+        def count(self) -> int:
             return len(self._widths)
 
-        def blockSignals(self, b):
+        def blockSignals(self, b: bool) -> bool:
             return False
 
-        def sectionSize(self, i):
+        def sectionSize(self, i: int) -> int:
             return self._widths[i]
 
-        def resizeSection(self, i, w):
+        def resizeSection(self, i: int, w: int) -> None:
             self._widths[i] = w
 
-        def isSortIndicatorShown(self):
+        def isSortIndicatorShown(self) -> bool:
             return self._sort_shown
 
-        def sortIndicatorSection(self):
+        def sortIndicatorSection(self) -> int:
             return self._sort_section
 
-        def sortIndicatorOrder(self):
+        def sortIndicatorOrder(self) -> int:
             return self._sort_order
 
-        def isSectionHidden(self, i):
+        def isSectionHidden(self, i: int) -> bool:
             return self._hidden[i]
 
-        def setSectionHidden(self, i, flag):
+        def setSectionHidden(self, i: int, flag: bool) -> None:
             self._hidden[i] = bool(flag)
 
-        def visualIndex(self, i):
+        def visualIndex(self, i: int) -> int:
             return self._slots.index(i)
 
-        def moveSection(self, from_visual, to_visual):
+        def moveSection(self, from_visual: int, to_visual: int) -> None:
             self._slots.insert(to_visual, self._slots.pop(from_visual))
 
-        def setSortIndicator(self, section, order):
+        def setSortIndicator(self, section: int, order: int) -> None:
             self._sort_shown = True
             self._sort_section = int(section)
             self._sort_order = int(order)

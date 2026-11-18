@@ -111,9 +111,35 @@ class CrawlWorker(QThread):
 
     # Dashboard enrichment bounds (approved scope): drafts first, capped,
     # sums-only, flushed to the table in batches.
+    #
+    # The cap is measured, not guessed (dv-gj9; tools/bench_enrichment_cap.py,
+    # 5,000-row synthetic collection, simulated 100 ms GET latency, 5
+    # workers, exact fetch count): 200 rows costs ~4 s of background
+    # enrichment (50 rows ~1 s, 400 ~8 s, 1,000 ~20 s, 5,000 ~100 s).
+    # Drafts go first, so a capped run spends its whole call budget on
+    # the rows most likely to need action; the cap does not gate when the
+    # first enriched rows reach the table (progressive paints flush
+    # every 25 completions), so halving it buys nothing the user sees.
+    # 200 stays; the Log records the value and the fetch count of every
+    # refresh.
     _ENRICH_MAX_ROWS = 200
     _ENRICH_WORKERS = 5
     _ENRICH_FLUSH_EVERY = 25
+
+    @classmethod
+    def _enrichment_log_line(cls, attempted: int) -> str:
+        """Build the one Log line a refresh writes about enrichment (dv-gj9).
+
+        The cap and the fetch count together explain a refresh's cost, so
+        a slow crawl can be attributed to the enrichment fan-out instead
+        of guessed at.
+        """
+        return t(
+            "workers.enrichment_log",
+            cap=cls._ENRICH_MAX_ROWS,
+            workers=cls._ENRICH_WORKERS,
+            attempted=attempted,
+        )
 
     def __init__(self, base_url: str, api_token: str, subtree: str, parent=None):
         super().__init__(parent)
@@ -145,12 +171,12 @@ class CrawlWorker(QThread):
         except Exception:
             pass
 
-    def run(self) -> None:
+    def run(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         import traceback
 
         try:
-            from applog import get_app_log
-            from dataverse_client import STATE_IN_REVIEW, DataverseClient
+            from curation.applog import get_app_log
+            from curation.client import STATE_IN_REVIEW, DataverseClient
 
             self.progress.emit(t("workers.connecting", base_url=self._base_url))
             client = DataverseClient(self._base_url, self._api_token)
@@ -171,16 +197,10 @@ class CrawlWorker(QThread):
                                 found=collected,
                             )
                         )
-                        self._emit_fraction(
-                            phase_fraction(PHASE_DISCOVERY, page, pages_total)
-                        )
+                        self._emit_fraction(phase_fraction(PHASE_DISCOVERY, page, pages_total))
                     else:
-                        self.progress.emit(
-                            t("workers.fetching_found", found=collected)
-                        )
-                        self._emit_fraction(
-                            phase_fraction(PHASE_DISCOVERY, collected, 0)
-                        )
+                        self.progress.emit(t("workers.fetching_found", found=collected))
+                        self._emit_fraction(phase_fraction(PHASE_DISCOVERY, collected, 0))
                 except Exception:
                     pass
 
@@ -198,20 +218,14 @@ class CrawlWorker(QThread):
             try:
                 total_rows = len(datasets)
                 if total_rows:
-                    self.progress.emit(
-                        t("workers.enriching", count=total_rows)
-                    )
+                    self.progress.emit(t("workers.enriching", count=total_rows))
                 emitted: set = set()
                 pending_batch: list = []
 
                 def _on_enrich_progress(done: int, total: int) -> None:
                     try:
-                        self.progress.emit(
-                            t("workers.enriching_progress", done=done, total=total)
-                        )
-                        self._emit_fraction(
-                            phase_fraction(PHASE_ENRICHMENT, done, total)
-                        )
+                        self.progress.emit(t("workers.enriching_progress", done=done, total=total))
+                        self._emit_fraction(phase_fraction(PHASE_ENRICHMENT, done, total))
                     except Exception:
                         pass
                     # Progressive paint: hand newly enriched rows to the
@@ -228,8 +242,7 @@ class CrawlWorker(QThread):
                                 pending_batch.append(d)
                                 emitted.add(pid)
                         if pending_batch and (
-                            len(pending_batch) >= CrawlWorker._ENRICH_FLUSH_EVERY
-                            or done >= total
+                            len(pending_batch) >= CrawlWorker._ENRICH_FLUSH_EVERY or done >= total
                         ):
                             self.enriched.emit([dict(d) for d in pending_batch])
                             pending_batch.clear()
@@ -246,8 +259,18 @@ class CrawlWorker(QThread):
                 if self.isInterruptionRequested():
                     return
                 try:
+                    n_attempted = int((enrich_stats or {}).get("attempted", 0))
+                    # The cap is a measured value (dv-gj9; see
+                    # tools/bench_enrichment_cap.py): log it and the fetch
+                    # count every refresh so a slow refresh can be
+                    # attributed to the enrichment fan-out.
+                    get_app_log().info(CrawlWorker._enrichment_log_line(n_attempted))
+                except Exception:
+                    pass
+                try:
                     rest = [
-                        dict(d) for d in datasets
+                        dict(d)
+                        for d in datasets
                         if d.get("size_enriched")
                         and str(d.get("persistent_id") or "") not in emitted
                     ]
@@ -261,10 +284,7 @@ class CrawlWorker(QThread):
                 except Exception:
                     n_enriched, n_pending = 0, 0
                 if n_enriched:
-                    tail = (
-                        t("workers.beyond_cap", count=n_pending)
-                        if n_pending else ""
-                    )
+                    tail = t("workers.beyond_cap", count=n_pending) if n_pending else ""
                     self.progress.emit(
                         t(
                             "workers.enriched",
@@ -293,14 +313,12 @@ class CrawlWorker(QThread):
                 futures = [pool.submit(_check_lock, ds) for ds in datasets]
                 # as_completed avoids head-of-line blocking: one stalled
                 # locks call no longer stalls all later results.
-                done_n = 0
-                for fut in as_completed(futures):
+                for done_n, fut in enumerate(as_completed(futures), start=1):
                     if self.isInterruptionRequested():
                         for f in futures:
                             f.cancel()
                         return
                     ds, flag = fut.result()
-                    done_n += 1
                     if flag:
                         ds["state"] = STATE_IN_REVIEW
                         in_review_n += 1
@@ -313,9 +331,7 @@ class CrawlWorker(QThread):
                                 in_review=in_review_n,
                             )
                         )
-                        self._emit_fraction(
-                            phase_fraction(PHASE_LOCKS, done_n, total)
-                        )
+                        self._emit_fraction(phase_fraction(PHASE_LOCKS, done_n, total))
             # Curation labels are set at the Dataverse level. Superusers
             # pull them in bulk via the CSV report (one call for all
             # drafts). Non-superuser tokens 403 there, so for them the
@@ -323,7 +339,7 @@ class CrawlWorker(QThread):
             # doomed report call and read per-draft curationStatus only —
             # labels/status exist solely for datasets under curation, so
             # published/deaccessioned rows are never attempted.
-            from dataverse_client import is_draft_dataset
+            from curation.client import is_draft_dataset
 
             labels: list = []
             report = None
@@ -336,25 +352,15 @@ class CrawlWorker(QThread):
                 superuser = None
             try:
                 me = client.get_me() or {}
-                who = (
-                    str(me.get("displayName") or me.get("identifier") or "").strip()
-                )
+                who = str(me.get("displayName") or me.get("identifier") or "").strip()
                 if superuser is True:
                     who_display = who or t("workers.user_fallback")
-                    self.progress.emit(
-                        t("workers.connected_superuser", who=who_display)
-                    )
-                    get_app_log().info(
-                        t("workers.identity_superuser", who=who_display)
-                    )
+                    self.progress.emit(t("workers.connected_superuser", who=who_display))
+                    get_app_log().info(t("workers.identity_superuser", who=who_display))
                 elif superuser is False:
                     who_display = who or t("workers.user_fallback")
-                    self.progress.emit(
-                        t("workers.connected_user", who=who_display)
-                    )
-                    get_app_log().info(
-                        t("workers.identity_user", who=who_display)
-                    )
+                    self.progress.emit(t("workers.connected_user", who=who_display))
+                    get_app_log().info(t("workers.identity_user", who=who_display))
             except Exception:
                 pass
             if superuser is True:
@@ -374,7 +380,9 @@ class CrawlWorker(QThread):
                 by_pid = {r["persistent_id"]: r for r in report if r.get("persistent_id")}
                 by_title = {r["title"]: r for r in report if r.get("title")}
                 for ds in datasets:
-                    row = by_pid.get(ds.get("persistent_id", "")) or by_title.get(ds.get("title", ""))
+                    row = by_pid.get(ds.get("persistent_id", "")) or by_title.get(
+                        ds.get("title", "")
+                    )
                     if row:
                         ds["curation_label"] = row.get("label", "")
                         ds["curation_time"] = row.get("label_time", "")
@@ -399,14 +407,15 @@ class CrawlWorker(QThread):
                         t(
                             "workers.curation_report_log",
                             labels=", ".join(
-                                t("workers.labels_in_use", labels=lbl)
-                                for lbl in labels
-                            ) or t("common.none_in_parentheses"),
+                                t("workers.labels_in_use", labels=lbl) for lbl in labels
+                            )
+                            or t("common.none_in_parentheses"),
                         )
                     )
                 except Exception:
                     pass
             else:
+
                 def _read_status(ds: dict) -> tuple:
                     # The refusal (if any) is kept: a curation status this
                     # account may not read is an expected answer, and the
@@ -434,8 +443,7 @@ class CrawlWorker(QThread):
                     self.progress.emit(t("workers.no_drafts"))
                 with ThreadPoolExecutor(max_workers=_POOL_SIZE) as pool:
                     futures = [pool.submit(_read_status, ds) for ds in drafts]
-                    done_n = 0
-                    for fut in as_completed(futures):
+                    for done_n, fut in enumerate(as_completed(futures), start=1):
                         if self.isInterruptionRequested():
                             for f in futures:
                                 f.cancel()
@@ -459,9 +467,7 @@ class CrawlWorker(QThread):
                             self.progress.emit(
                                 t("workers.reading_labels", done=done_n, total=total)
                             )
-                            self._emit_fraction(
-                                phase_fraction(PHASE_LABELS, done_n, total)
-                            )
+                            self._emit_fraction(phase_fraction(PHASE_LABELS, done_n, total))
             # Union with the allowed set (labels can exist that no draft
             # currently carries, and vice versa for legacy values). The set
             # is shared across a first-level collection: a stamped disk
@@ -482,21 +488,16 @@ class CrawlWorker(QThread):
                     for d in datasets
                     if d.get("persistent_id") and d.get("persistent_id") not in ordered
                 ]
-                from dataverse_client import get_cached_allowed_labels
+                from curation.client import get_cached_allowed_labels
 
-                was_cached = (
-                    get_cached_allowed_labels(self._base_url, self._subtree)
-                    is not None
-                )
+                was_cached = get_cached_allowed_labels(self._base_url, self._subtree) is not None
                 if was_cached:
                     self.progress.emit(t("workers.using_cached_labels"))
                 else:
                     self.progress.emit(t("workers.fetching_allowed_labels"))
                 if self.isInterruptionRequested():
                     return
-                fetched = client.fetch_allowed_labels_shared(
-                    self._subtree, ordered, max_attempts=3
-                )
+                fetched = client.fetch_allowed_labels_shared(self._subtree, ordered, max_attempts=3)
                 for label in fetched:
                     if label not in labels:
                         labels.append(label)
@@ -533,10 +534,8 @@ class CrawlWorker(QThread):
                 get_app_log().info(
                     t(
                         "workers.curation_labels_log",
-                        labels=", ".join(
-                            t("workers.labels_in_use", labels=lbl)
-                            for lbl in labels
-                        ) or t("common.none_in_parentheses"),
+                        labels=", ".join(t("workers.labels_in_use", labels=lbl) for lbl in labels)
+                        or t("common.none_in_parentheses"),
                     )
                 )
             except Exception:
@@ -545,9 +544,7 @@ class CrawlWorker(QThread):
                 self.labelsDiscovered.emit(labels)
             except Exception:
                 pass
-            self.progress.emit(
-                t("workers.received", total=total, in_review=in_review_n)
-            )
+            self.progress.emit(t("workers.received", total=total, in_review=in_review_n))
             self.finished.emit(datasets)
         except Exception as exc:
             self.error.emit(f"{exc}\n\n{traceback.format_exc()}")
@@ -596,7 +593,8 @@ class DownloadWorker(QThread):
     def run(self) -> None:
         import traceback
 
-        from download_manager import DownloadCancelled, DownloadManager
+        from curation.client import DownloadCancelled
+        from curation.download_manager import DownloadManager
 
         try:
             mgr = DownloadManager(self._client, self._workspace)
@@ -655,9 +653,17 @@ class CheckWorker(QThread):
     # Overall check fraction (0..1) for a progress ring.
     progressFraction = Signal(float)
 
-    def __init__(self, dataset_dir: Path, persistent_id: str, label: str,
-                 inventory: list | None = None, metadata: dict | None = None,
-                 client=None, ruleset: dict | None = None, parent=None):
+    def __init__(
+        self,
+        dataset_dir: Path,
+        persistent_id: str,
+        label: str,
+        inventory: list | None = None,
+        metadata: dict | None = None,
+        client=None,
+        ruleset: dict | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         register_worker(self)
         self._dataset_dir = dataset_dir
@@ -685,7 +691,7 @@ class CheckWorker(QThread):
     def _stop_requested(self) -> bool:
         return self._cancel_requested or self.isInterruptionRequested()
 
-    def run(self) -> None:
+    def run(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         import os
         import traceback
 
@@ -698,9 +704,7 @@ class CheckWorker(QThread):
             def _frac(done: int, total: int) -> None:
                 try:
                     if total > 0:
-                        self.progressFraction.emit(
-                            max(0.0, min(1.0, done / total))
-                        )
+                        self.progressFraction.emit(max(0.0, min(1.0, done / total)))
                 except Exception:
                     pass
 
@@ -711,7 +715,8 @@ class CheckWorker(QThread):
             if self._client is not None and isinstance(self._inventory, list):
                 variable_metadata = {}
                 tabular = [
-                    e for e in self._inventory
+                    e
+                    for e in self._inventory
                     if isinstance(e, dict) and e.get("tabular") and e.get("id")
                 ][:50]
                 for entry in tabular:
@@ -722,9 +727,7 @@ class CheckWorker(QThread):
                     except Exception:
                         meta = None
                     if meta:
-                        variable_metadata[
-                            str(entry.get("path") or entry.get("label") or "")
-                        ] = meta
+                        variable_metadata[str(entry.get("path") or entry.get("label") or "")] = meta
             report = run_report(
                 self._dataset_dir,
                 persistent_id=self._pid,
@@ -792,7 +795,7 @@ class BulkCheckWorker(QThread):
         import traceback
 
         try:
-            from download_manager import DownloadManager
+            from curation.download_manager import DownloadManager
             from engine.runner import run_report
 
             dl = DownloadManager(None, self._workspace)
@@ -865,7 +868,7 @@ class MetadataBlocksWorker(QThread):
         import traceback
 
         try:
-            from dataverse_client import (
+            from curation.client import (
                 DataverseClient,
                 read_metadata_fields_cache,
                 write_metadata_fields_cache,
@@ -897,8 +900,15 @@ class MetadataWorker(QThread):
     finished = Signal(dict, list, dict, dict, dict)
     error = Signal(str)
 
-    def __init__(self, base_url: str, api_token: str, persistent_id: str, parent=None,
-                 collection: str = "", draft_hint: bool | None = None):
+    def __init__(
+        self,
+        base_url: str,
+        api_token: str,
+        persistent_id: str,
+        parent=None,
+        collection: str = "",
+        draft_hint: bool | None = None,
+    ):
         super().__init__(parent)
         register_worker(self)
         self._base_url = base_url
@@ -920,26 +930,33 @@ class MetadataWorker(QThread):
         sent to be refused.
         """
         names = [
-            "metadata", "inventory", "curation", "version_diff",
-            "versions", "history", "allowed", "in_review",
+            "metadata",
+            "inventory",
+            "curation",
+            "version_diff",
+            "versions",
+            "history",
+            "allowed",
+            "in_review",
         ]
         if self._draft_hint is False:
             return [n for n in names if n not in ("curation", "version_diff", "history")]
         return names
 
-    def run(self) -> None:
+    def run(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         import time as _time
         import traceback
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         try:
-            from dataverse_client import DataverseClient
+            from curation.client import DataverseClient
 
             client = DataverseClient(self._base_url, self._api_token)
+
             # Parallel independent fetches (was serial sum of 8x RTT).
             refusals: dict = {}
 
-            def _fetch(name: str):
+            def _fetch(name: str):  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
                 try:
                     if name == "metadata":
                         return ("metadata", client.get_dataset_metadata(self._pid))

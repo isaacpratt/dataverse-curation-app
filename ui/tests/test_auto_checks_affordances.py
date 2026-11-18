@@ -45,12 +45,21 @@ def _report():
             ),
         ],
         files=[
-            FileEntry(path=f"data/{n}.sav", size_bytes=10,
-                      mime_type="application/x-spss-sav", checks=[skip(f"data/{n}.sav")])
+            FileEntry(
+                path=f"data/{n}.sav",
+                size_bytes=10,
+                mime_type="application/x-spss-sav",
+                checks=[skip(f"data/{n}.sav")],
+            )
             for n in range(5)
-        ] + [
-            FileEntry(path="data/bad.xml", size_bytes=10,
-                      mime_type="application/xml", checks=[err("data/bad.xml")]),
+        ]
+        + [
+            FileEntry(
+                path="data/bad.xml",
+                size_bytes=10,
+                mime_type="application/xml",
+                checks=[err("data/bad.xml")],
+            ),
         ],
     )
 
@@ -58,8 +67,8 @@ def _report():
 def _view(qapp, tmp_path):
     from pathlib import Path
 
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     cfg = Config()
     cfg.app.workspace = tmp_path
@@ -95,11 +104,7 @@ def _rows(view):
 
 def _shown_kinds(view):
     """Return the severity classes of the rows the filter leaves on show."""
-    return sorted(
-        str(r.property("auto_class") or "?")
-        for r in _rows(view)
-        if not r.isHidden()
-    )
+    return sorted(str(r.property("auto_class") or "?") for r in _rows(view) if not r.isHidden())
 
 
 def test_skipped_rows_collapse_into_one_affordances(qapp, tmp_path):
@@ -108,19 +113,14 @@ def test_skipped_rows_collapse_into_one_affordances(qapp, tmp_path):
     for _ in range(5):
         qapp.processEvents()
     view._refresh_curation_preview()
-    rows = [
-        r for r in _rows(view)
-        if r.property("auto_class") == "skipped"
-    ]
+    rows = [r for r in _rows(view) if r.property("auto_class") == "skipped"]
     assert len(rows) == 1, "five identical skipped rows must collapse into one"
     text = " ".join(label.text() for label in rows[0].findChildren(QLabel))
     assert "5" in text, "collapsed row carries the count"
     tip = rows[0].toolTip()
-    assert "data/0.sav" in tip and "data/4.sav" in tip, "the files stay in the tooltip"
-    err_rows = [
-        r for r in _rows(view)
-        if r.property("auto_class") == "failed-error"
-    ]
+    assert "data/0.sav" in tip
+    assert "data/4.sav" in tip, "the files stay in the tooltip"
+    err_rows = [r for r in _rows(view) if r.property("auto_class") == "failed-error"]
     assert len(err_rows) == 1
     view.deleteLater()
 
@@ -166,8 +166,8 @@ def test_planned_rows_are_hidden_by_a_severity_filter(qapp, tmp_path):
     A severity filter narrows the card to findings, so the planned rows
     fold away.
     """
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     cfg = Config()
     cfg.app.workspace = tmp_path

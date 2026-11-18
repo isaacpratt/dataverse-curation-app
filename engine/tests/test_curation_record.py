@@ -3,10 +3,10 @@
 import hashlib
 import json
 
-from curation_record import export_record
+from curation.curation_record import export_record
+from curation.storage import AppState
 from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
-from storage import AppState
 
 
 def _report():
@@ -15,8 +15,12 @@ def _report():
         label="Example",
         engine_version="test",
         files=[
-            FileEntry(path="a.csv", size_bytes=3, mime_type="text/csv",
-                      checks=[CheckResult("format.csv.content", "info", True, "parsed")]),
+            FileEntry(
+                path="a.csv",
+                size_bytes=3,
+                mime_type="text/csv",
+                checks=[CheckResult("format.csv.content", "info", True, "parsed")],
+            ),
         ],
     )
 
@@ -49,9 +53,15 @@ class TestExportRecord:
         )
         names = {p.name for p in record.iterdir()}
         assert {
-            "index.json", "checks_report.json", "checks_report.md",
-            "depositor_response.md", "curation_log.md", "dispositions.json",
-            "sensitivity.json", "decision.json", "sha256sums.txt",
+            "index.json",
+            "checks_report.json",
+            "checks_report.md",
+            "depositor_response.md",
+            "curation_log.md",
+            "dispositions.json",
+            "sensitivity.json",
+            "decision.json",
+            "sha256sums.txt",
         } <= names
         index = json.loads((record / "index.json").read_text(encoding="utf-8"))
         assert index["persistent_id"] == "doi:10.5072/FK2/EXAMPLE"
@@ -64,7 +74,8 @@ class TestExportRecord:
             assert digest == _sha(record / artifact), artifact
         # The staged manifest covers both files, sorted.
         manifest = (record / "sha256sums.txt").read_text(encoding="utf-8")
-        assert "a.csv" in manifest and "doc.md" in manifest
+        assert "a.csv" in manifest
+        assert "doc.md" in manifest
         assert manifest.index("a.csv") < manifest.index("doc.md")
         # Dispositions + sensitivity round-trip through the JSON artifacts.
         disp = json.loads((record / "dispositions.json").read_text(encoding="utf-8"))
@@ -93,9 +104,7 @@ class TestExportRecord:
     def test_log_markdown_renders_actions(self, tmp_path):
         st = AppState(tmp_path / "state.db")
         st.log_action("pid", "downloaded", notes="12 files")
-        record = export_record(
-            tmp_path / "dataset", actions=st.list_actions("pid", limit=100)
-        )
+        record = export_record(tmp_path / "dataset", actions=st.list_actions("pid", limit=100))
         log = (record / "curation_log.md").read_text(encoding="utf-8")
         assert "[curator] downloaded — 12 files" in log
         st.close()

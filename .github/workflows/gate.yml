@@ -20,33 +20,102 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
-      # checkout v5 and setup-python v6 run on Node 24; the v4/v5 pair
+      # checkout v5, setup-python v6 and setup-uv are pinned to commit SHAs
+      # (with the tag they moved to recorded) - tags are mutable, SHAs are
+      # not. Note: the bare `v10` tag no longer exists on astral-sh/setup-uv;
+      # v10.3.3 is the current v10 release.
+      # checkout v5 and setup-python v6 run on Node 24; earlier pairs
       # targeted Node 20, which GitHub now forces onto a newer runtime and
       # reports as a deprecation warning on every run.
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - name: Lockfile check
         run: uv lock --check
       - name: Install
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
+      - name: Workflow lint (actionlint)
+        run: uv run --group dev actionlint
+      - name: Dependency vulnerability scan (uv.lock via OSV)
+        run: uv run --group dev python tools/audit_deps.py
+      - name: Docs link check (advisory)
+        run: uv run --group dev poe docs-links
+        continue-on-error: true
+      - name: Complexity report (advisory)
+        run: uv run --group dev poe complexity
+        continue-on-error: true
+      - name: Upload complexity report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: complexity-report
+          path: reports/complexity.md
+          if-no-files-found: ignore
       - name: Commit hygiene (pre-commit)
         run: uv run --group dev pre-commit run --all-files
+      - name: Format check
+        run: uv run --group dev poe format-check
       - name: Lint
         run: uv run --group dev python -m ruff check .
+      - name: Architecture contracts (import-linter)
+        run: uv run --group dev lint-imports
       - name: Type check
         run: uv run --group dev mypy
       - name: Tests
-        run: uv run --group dev python -m pytest -q --cov=engine --cov-report=term-missing
+        run: uv run --group dev python -m pytest -q -n auto --cov=engine --cov-report=term-missing --cov-fail-under=75
       - name: Compile check
-        run: uv run --group dev python -m compileall -q engine dataverse_client.py download_manager.py storage.py config.py main.py
+        run: uv run --group dev python -m compileall -q engine curation ui main.py
       - name: Headless smoke
         run: uv run --group dev python main.py --headless --help
+
+  engine-linux:
+    # Advisory first: the engine is platform-agnostic Python, and a
+    # Windows-only CI misses newline and path bugs that a file-scanning
+    # engine can hit. The job is non-blocking (continue-on-error) until it
+    # has been green for ~14 days; promoting it to required is a
+    # branch-protection change (see dv-hcg.40).
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Lockfile check
+        run: uv lock --check
+      - name: Install
+        run: uv sync --locked --group dev
+      - name: Engine tests
+        # The engine suite is Qt-free by design (dv-hcg.26), so pytest-qt
+        # (installed in the dev group, auto-loaded) must not initialize
+        # here: QtGui itself cannot be imported on a headless linux
+        # runner (libEGL is absent). Disable just that plugin.
+        run: uv run --group dev python -m pytest engine/tests -q -p no:pytest-qt
+      - name: Headless smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          printf 't,v\n2016-01-01 00:00,-5.1\n2016-01-01 01:00,jane@example.com\n' > "$tmp/probe.csv"
+          uv run --group dev python main.py --headless "$tmp" --out "$tmp/report.json"
+          uv run --group dev python -c "
+          import json, pathlib
+          report = json.loads(pathlib.Path('$tmp/report.json').read_text(encoding='utf-8'))
+          assert report.get('files'), 'no files in the headless report'
+          print('headless report ok:', len(report['files']), 'file(s) checked')
+          "
 
   probes:
     # The checks pytest cannot see: a pixel at a card's corner, a column
@@ -58,18 +127,18 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
-      # Same action versions as the test job (Node 24).
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      # Same pinned actions as the test job (Node 24).
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - name: Lockfile check
         run: uv lock --check
       - name: Install
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
       - name: UI probes
         run: uv run --group dev python tools/probes/run_all.py

@@ -9,7 +9,7 @@ whose chips use the highlighter's exact fills (WYSIWYG).
 import pytest
 from PySide6.QtWidgets import QLabel
 
-from dataverse_client import DownloadCancelled
+from curation.client import DownloadCancelled
 from ui.workers import DownloadWorker
 
 
@@ -54,7 +54,7 @@ def test_cancel_click_signals_worker_and_disables(det):
 
 
 def test_cancelled_handler_resets_action_row(det, monkeypatch):
-    logged = {}
+    logged: dict = {}
 
     def _record(action, notes="", details=None):
         logged.update(action=action, notes=notes, details=details or {})
@@ -81,8 +81,15 @@ def test_cancelled_handler_resets_action_row(det, monkeypatch):
 
 def test_worker_cancel_from_client_stream_emits_cancelled(qapp, tmp_path):
     class _CancelClient:
-        def download_dataset_zip(self, identifier, dest, version="draft", progress=None,
-                                 is_cancelled=None, guestbook_response=None):
+        def download_dataset_zip(
+            self,
+            identifier,
+            dest,
+            version="draft",
+            progress=None,
+            is_cancelled=None,
+            guestbook_response=None,
+        ):
             raise DownloadCancelled("bundle")
 
         def inventory(self, persistent_id):
@@ -121,12 +128,15 @@ def test_log_legend_is_selectable_and_coloured(win, qapp):
             qapp.processEvents()
         page = win._log_page
         labels = {lbl.text(): lbl for lbl in page.findChildren(QLabel)}
-        assert "Error" in labels and "Warning" in labels, "severity legend missing"
+        assert "Error" in labels
+        assert "Warning" in labels, "severity legend missing"
 
         # Verify selectability
         for text in ["Error", "Warning", "Info · Debug"]:
             lbl = labels[text]
-            assert lbl.textInteractionFlags() & Qt.TextSelectableByMouse, f"Label {text} should be selectable"
+            assert lbl.textInteractionFlags() & Qt.TextInteractionFlag.TextSelectableByMouse, (
+                f"Label {text} should be selectable"
+            )
 
         # Verify colors (as per dv-2e7 requirements)
         err, warn, info = labels["Error"], labels["Warning"], labels["Info · Debug"]
@@ -134,6 +144,39 @@ def test_log_legend_is_selectable_and_coloured(win, qapp):
         assert STATE_WARNING_GRAPHIC in warn.styleSheet()
         assert TEXT_MUTED in info.styleSheet()
 
+    finally:
+        win._on_log_toggled(False)
+        for _ in range(10):
+            qapp.processEvents()
+
+
+def test_log_legend_is_plain_text_in_highlighter_colours(win, qapp):
+    from ui.theme import STATE_ERROR_GRAPHIC, STATE_WARNING_GRAPHIC
+
+    win._on_log_toggled(True)
+    try:
+        for _ in range(20):
+            qapp.processEvents()
+        page = win._log_page
+        labels = {lbl.text(): lbl for lbl in page.findChildren(QLabel)}
+        # Ordinary text, not badge chrome (dv-wp1): sentence case, no
+        # uppercase transform, tracking, heavy weight or pill face.
+        assert "Error" in labels, "severity legend missing"
+        assert "Warning" in labels, "severity legend missing"
+        err, warn = labels["Error"], labels["Warning"]
+        for lbl in (err, warn, labels["Info · Debug"]):
+            assert lbl.objectName() == "BodySM", "legend must use the body text token"
+            css = lbl.styleSheet()
+            assert "background" not in css, "no pill/badge background"
+            assert "text-transform" not in css
+            assert "letter-spacing" not in css
+            assert "font-weight" not in css, "normal text, not a badge"
+        # lnav-style: severity is the text colour.
+        assert STATE_ERROR_GRAPHIC in err.styleSheet() or "error" in err.styleSheet().lower()
+        assert STATE_WARNING_GRAPHIC in warn.styleSheet()
+        assert labels["Info · Debug"].toolTip(), "plain key needs a tooltip"
+        # Inline in the header: the key sits left of the search box.
+        assert err.x() < page._search.x()
     finally:
         win._on_log_toggled(False)
         for _ in range(10):

@@ -9,9 +9,7 @@ def _mval(card):
     # The value label carries its theme token as its object name
     # (DisplayLG / StateMD), so it is found by type, not by a fixed name.
     labels = [
-        lbl
-        for lbl in card.findChildren(QLabel)
-        if lbl.objectName() in ("DisplayLG", "StateMD")
+        lbl for lbl in card.findChildren(QLabel) if lbl.objectName() in ("DisplayLG", "StateMD")
     ]
     return labels[0].text() if labels else None
 
@@ -27,7 +25,7 @@ def test_metric_card_children_are_mouse_transparent(win):
     dash = win._dashboard
     for card in dash._metric_cards:
         for child in card.findChildren(QLabel):
-            assert child.testAttribute(Qt.WA_TransparentForMouseEvents), (
+            assert child.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents), (
                 f"{child.text()!r} would swallow the click"
             )
 
@@ -49,7 +47,9 @@ def test_in_progress_card_counts_and_filters_any_label(win, monkeypatch):
     assert [_mval(c) for c in dash._metric_cards][2] == "2"
     try:
         dash._on_metric_clicked("progress")
-        assert dash._state_filter.currentIndex() == 0, "In Progress leaves the combo on All Datasets"
+        assert dash._state_filter.currentIndex() == 0, (
+            "In Progress leaves the combo on All Datasets"
+        )
         assert dash._labelled_only is True
         assert {d["persistent_id"] for d in dash._datasets} == {"p1", "p3"}
     finally:
@@ -95,9 +95,9 @@ def test_press_on_the_card_applies_its_filter(win, monkeypatch):
         QEvent.Type.MouseButtonPress,
         QPointF(5, 5),
         QPointF(5, 5),
-        Qt.LeftButton,
-        Qt.LeftButton,
-        Qt.NoModifier,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
     )
     handled = dash.eventFilter(card, press)
     assert handled is True
@@ -110,7 +110,8 @@ def test_theme_paints_a_metric_card_hover_state():
     qss = global_qss()
     assert "#MetricCard:hover" in qss, "hover must signal the filter (dv-1k4)"
     hover = qss.split("#MetricCard:hover", 1)[1].split("}", 1)[0]
-    assert "background" in hover and "border" in hover
+    assert "background" in hover
+    assert "border" in hover
 
 
 def test_caption_label_is_elided_not_truncated(win):

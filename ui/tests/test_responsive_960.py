@@ -31,7 +31,7 @@ def _pump(qapp, times=15):
         qapp.processEvents()
 
 
-@pytest.fixture()
+@pytest.fixture
 def small_window(win, qapp):
     """Put the shared window at 960x640, restored afterwards."""
     before = win.size()
@@ -62,10 +62,7 @@ def _right_edge_in(parent, widget) -> int:
 
 def _layout_holds(layout, widget) -> bool:
     """Tell whether the widget is one of the layout's items."""
-    for index in range(layout.count()):
-        if layout.itemAt(index).widget() is widget:
-            return True
-    return False
+    return any(layout.itemAt(index).widget() is widget for index in range(layout.count()))
 
 
 def test_queue_header_fits_the_window(small_window, qapp):
@@ -206,14 +203,14 @@ def test_queue_column_titles_elide_instead_of_clipping(small_window, qapp):
     small_window._show_dashboard()
     _pump(qapp)
     header = dash._table.horizontalHeader()
-    assert header.textElideMode() == Qt.ElideRight, (
+    assert header.textElideMode() == Qt.TextElideMode.ElideRight, (
         "a narrow column must elide its title, not clip it"
     )
     model = header.model()
     for index in range(header.count()):
         if header.isSectionHidden(index):
             continue
-        title = str(model.headerData(index, Qt.Horizontal, Qt.DisplayRole))
+        title = str(model.headerData(index, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole))
         assert title, "every column must keep its title"
         available = header.sectionSize(index) - 26  # the section's padding
         if available < 24:
@@ -228,15 +225,12 @@ def test_queue_column_titles_elide_instead_of_clipping(small_window, qapp):
         # is the honest result and there is nothing left to clip.
         if fm.horizontalAdvance(title[0] + "…") > available:
             continue
-        painted = fm.elidedText(title, Qt.ElideRight, available)
+        painted = fm.elidedText(title, Qt.TextElideMode.ElideRight, available)
         if painted == "…":
             # Qt chose ellipsis-only: nothing was clipped mid-word.
             continue
-        assert painted.startswith(title[0]), (
-            f"the {title} title lost its first letter"
-        )
+        assert painted.startswith(title[0]), f"the {title} title lost its first letter"
         if metrics > available:
             assert painted.endswith("…"), (
-                f"the {title} title must elide, not clip, in a "
-                f"{header.sectionSize(index)}px column"
+                f"the {title} title must elide, not clip, in a {header.sectionSize(index)}px column"
             )

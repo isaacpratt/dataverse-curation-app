@@ -33,12 +33,12 @@ def test_dwm_signatures_use_full_width_hwnd():
         ]
 
     dwmapi = ctypes.windll.dwmapi
-    old_extend = (dwmapi.DwmExtendFrameIntoClientArea.argtypes,
-                  dwmapi.DwmExtendFrameIntoClientArea.restype)
-    old_attr = (dwmapi.DwmSetWindowAttribute.argtypes,
-                dwmapi.DwmSetWindowAttribute.restype)
-    old_get = (dwmapi.DwmGetWindowAttribute.argtypes,
-               dwmapi.DwmGetWindowAttribute.restype)
+    old_extend = (
+        dwmapi.DwmExtendFrameIntoClientArea.argtypes,
+        dwmapi.DwmExtendFrameIntoClientArea.restype,
+    )
+    old_attr = (dwmapi.DwmSetWindowAttribute.argtypes, dwmapi.DwmSetWindowAttribute.restype)
+    old_get = (dwmapi.DwmGetWindowAttribute.argtypes, dwmapi.DwmGetWindowAttribute.restype)
     try:
         _declare_dwm_signatures(dwmapi, _MARGINS)
         assert dwmapi.DwmExtendFrameIntoClientArea.argtypes[0] is wintypes.HWND
@@ -47,12 +47,12 @@ def test_dwm_signatures_use_full_width_hwnd():
         assert dwmapi.DwmSetWindowAttribute.restype == ctypes.HRESULT
         assert dwmapi.DwmGetWindowAttribute.argtypes[0] is wintypes.HWND
     finally:
-        dwmapi.DwmExtendFrameIntoClientArea.argtypes, \
-            dwmapi.DwmExtendFrameIntoClientArea.restype = old_extend
-        dwmapi.DwmSetWindowAttribute.argtypes, \
-            dwmapi.DwmSetWindowAttribute.restype = old_attr
-        dwmapi.DwmGetWindowAttribute.argtypes, \
-            dwmapi.DwmGetWindowAttribute.restype = old_get
+        (
+            dwmapi.DwmExtendFrameIntoClientArea.argtypes,
+            dwmapi.DwmExtendFrameIntoClientArea.restype,
+        ) = old_extend
+        dwmapi.DwmSetWindowAttribute.argtypes, dwmapi.DwmSetWindowAttribute.restype = old_attr
+        dwmapi.DwmGetWindowAttribute.argtypes, dwmapi.DwmGetWindowAttribute.restype = old_get
 
 
 @win32_only
@@ -73,7 +73,7 @@ def test_dwm_failure_is_logged_with_full_hwnd(monkeypatch):
     value (the original truncation bug) and that a failing HRESULT lands in
     the app log instead of vanishing.
     """
-    import applog
+    import curation.applog as applog
     from ui.main_window import MainWindow
 
     seen = {}
@@ -92,6 +92,8 @@ def test_dwm_failure_is_logged_with_full_hwnd(monkeypatch):
     monkeypatch.setattr("ctypes.windll", FakeWindll())
 
     class FakeSelf:
+        _hwnd = 0
+
         def winId(self):
             return 0x0000023A4F51C8D1
 
@@ -110,12 +112,22 @@ def test_apply_dwm_frame_never_raises_without_window():
     from ui.main_window import MainWindow
 
     class NoHandle:
+        _hwnd = 0
+
         def winId(self):
             return 0
 
+        def isMaximized(self):
+            return False
+
     class BadHandle:
+        _hwnd = 0
+
         def winId(self):
             raise RuntimeError("no native window")
+
+        def isMaximized(self):
+            return False
 
     MainWindow._apply_dwm_frame(NoHandle())
     MainWindow._apply_dwm_frame(BadHandle())
@@ -147,6 +159,9 @@ def test_cloak_window_sets_dwm_cloak_attribute(monkeypatch):
         def winId(self):
             return self._hwnd
 
+        def isMaximized(self):
+            return False
+
     assert MainWindow._cloak_window(FakeSelf(), True) is True
     assert seen == {
         "hwnd": 0x0000023A4F51C8D1,
@@ -169,9 +184,17 @@ def test_cloak_window_never_raises_without_window():
         def winId(self):
             return 0
 
+        def isMaximized(self):
+            return False
+
     class BadHandle:
+        _hwnd = 0
+
         def winId(self):
             raise RuntimeError("no native window")
+
+        def isMaximized(self):
+            return False
 
     assert MainWindow._cloak_window(NoHandle(), True) is False
     assert MainWindow._cloak_window(BadHandle(), True) is False
@@ -190,7 +213,8 @@ def test_work_area_for_hwnd_returns_plausible_rect():
     rect = _work_area_for_hwnd(int(user32.GetDesktopWindow()))
     assert rect is not None
     left, top, right, bottom = rect
-    assert right - left > 100 and bottom - top > 100
+    assert right - left > 100
+    assert bottom - top > 100
 
 
 @win32_only

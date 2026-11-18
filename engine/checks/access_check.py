@@ -13,7 +13,7 @@ silent pass.
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -45,7 +45,7 @@ def terms_of_access(metadata: dict[str, Any] | None) -> str:
 
 
 def collect_restrictions(
-    inventory: list[dict[str, Any]] | None,
+    inventory: list[Any] | None,
 ) -> tuple[list[str], list[dict[str, str]]]:
     """Return (restricted paths, [{path, date}] for embargoed files)."""
     restricted: list[str] = []
@@ -111,7 +111,7 @@ class AccessCheck(Check):
     """Access restrictions — restricted and embargoed files (dataset-level)."""
 
     check_id = "inventory.access"
-    extensions = set()
+    extensions: ClassVar[set[str]] = set()
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         return self.run_dataset(files, None)
@@ -124,10 +124,7 @@ class AccessCheck(Check):
         metadata = context.get("metadata")
 
         if inventory is None:
-            message = (
-                "access metadata skipped — no Dataverse inventory "
-                "(staged-only run)"
-            )
+            message = "access metadata skipped — no Dataverse inventory (staged-only run)"
             skipped = {"skipped": True, "reason": "inventory not loaded"}
             return [
                 CheckResult(
@@ -175,19 +172,14 @@ class AccessCheck(Check):
             )
 
         if embargoed:
-            shown = ", ".join(
-                f"{e['path']} (until {e['date']})" for e in embargoed[:_MAX_LISTED]
-            )
+            shown = ", ".join(f"{e['path']} (until {e['date']})" for e in embargoed[:_MAX_LISTED])
             if len(embargoed) > _MAX_LISTED:
                 shown += f" (+{len(embargoed) - _MAX_LISTED} more)"
             embargoed_result = CheckResult(
                 check_id="inventory.embargoed_files",
                 level="warning",
                 passed=False,
-                message=(
-                    f"{len(embargoed)} embargoed file(s): "
-                    f"{shown}{_terms_suffix(terms)}"
-                ),
+                message=(f"{len(embargoed)} embargoed file(s): {shown}{_terms_suffix(terms)}"),
                 details={
                     "count": len(embargoed),
                     "files": [e["path"] for e in embargoed[:_MAX_LISTED]],

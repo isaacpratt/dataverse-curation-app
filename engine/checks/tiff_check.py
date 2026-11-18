@@ -5,6 +5,7 @@ page/series structure, dimensions, data type and compression.
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -13,7 +14,7 @@ class TiffCheck(Check):
     """TIFF check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.tiff"
-    extensions = {".tif", ".tiff"}
+    extensions: ClassVar[set[str]] = {".tif", ".tiff"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
@@ -47,10 +48,7 @@ class TiffCheck(Check):
             compression = first.compression or "none"
             is_ome = tif.is_ome
 
-        message = (
-            f"{name}: {pages} page(s), {shape}, {dtype}, "
-            f"compression={compression}"
-        )
+        message = f"{name}: {pages} page(s), {shape}, {dtype}, compression={compression}"
         if series_count > 1:
             message += f", {series_count} series"
         if is_ome:

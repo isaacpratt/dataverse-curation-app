@@ -3,7 +3,13 @@
 Palette is Material 3-like: primary #004ccd, tertiary #4142cf, error #ba1a1a,
 surface #faf8ff, backgrounds #f2f3ff/#eaedff, outline-variant #c3c6d8.
 Typography is Inter (body) + JetBrains Mono (monospace).
+
+The colour layer is split in two: the palette says what a colour IS,
+the role layer says what it is FOR, and the role layer is a table per
+theme - so switching theme is a table swap, not a re-skin.
 """
+
+from collections.abc import Mapping
 
 # --- Colors ---
 PRIMARY = "#004ccd"
@@ -38,7 +44,7 @@ OUTLINE_VARIANT = "#c3c6d8"
 OUTLINE = "#737687"
 # Interactive control edge: heavier than a decorative card edge so an
 # input or button boundary clears the 3:1 WCAG 1.4.11 floor on white.
-CONTROL_OUTLINE = "#8b90a3"        # 3.2:1 on a card
+CONTROL_OUTLINE = "#8b90a3"  # 3.2:1 on a card
 
 ON_SURFACE = "#131b2e"
 ON_SURFACE_VARIANT = "#424656"
@@ -49,19 +55,19 @@ SECONDARY = "#515f74"
 
 # --- State / accent additions (token pass: every ui colour lives here) ---
 SUCCESS = "#16a34a"
-SUCCESS_DARK = "#15803d"          # green-700 — "string" tone in the log
-WARNING = "#d97706"               # amber-600
-WARNING_DARK = "#b45309"          # amber-700 — large-download caution
-AMBER_700 = "#a16207"             # log java tokens, identifier palette
-PRIMARY_DEEP = "#00174c"          # deepest brand blue — live badge text
+SUCCESS_DARK = "#15803d"  # green-700 — "string" tone in the log
+WARNING = "#d97706"  # amber-600
+WARNING_DARK = "#b45309"  # amber-700 — large-download caution
+AMBER_700 = "#a16207"  # log java tokens, identifier palette
+PRIMARY_DEEP = "#00174c"  # deepest brand blue — live badge text
 PRIMARY_PRESSED = "#002a78"
 PRIMARY_DISABLED = "#8aa9e8"
-ERROR_OUTLINE = "#ffb4ab"         # light-red borders (pill / fail rows)
-ERROR_SURFACE = "#fff0ef"         # fail-row face
-MUTED_BG = "#f4f5f7"              # disabled cell-button face
-MUTED_TEXT = "#7d8598"       # disabled text: 3.7:1 on a card (was 2.5)
+ERROR_OUTLINE = "#ffb4ab"  # light-red borders (pill / fail rows)
+ERROR_SURFACE = "#fff0ef"  # fail-row face
+MUTED_BG = "#f4f5f7"  # disabled cell-button face
+MUTED_TEXT = "#7d8598"  # disabled text: 3.7:1 on a card (was 2.5)
 MUTED_BORDER = "#dfe3ea"
-PILL_BLUE_TEXT = "#1a2e4a"        # in-review pill text
+PILL_BLUE_TEXT = "#1a2e4a"  # in-review pill text
 PILL_BLUE_BORDER = "#b9c7df"
 
 # Deterministic identifier-colour palette for the syntax-highlighting log
@@ -97,67 +103,67 @@ LOG_IDENTIFIER_PALETTE = (
 # would resolve to a different one in a second theme.
 
 # --- Text roles ---
-TEXT_PRIMARY = ON_SURFACE              # body copy, headings, values
-TEXT_MUTED = ON_SURFACE_VARIANT        # captions, hints, timestamps, metadata
-TEXT_SUBTLE = ON_SECONDARY_CONTAINER   # de-emphasised hints, field help
+TEXT_PRIMARY = ON_SURFACE  # body copy, headings, values
+TEXT_MUTED = ON_SURFACE_VARIANT  # captions, hints, timestamps, metadata
+TEXT_SUBTLE = ON_SECONDARY_CONTAINER  # de-emphasised hints, field help
 # A field's placeholder is the example text ("Search datasets..."). It
 # has to read as text (WCAG 1.4.3) without pretending to be the value
 # the curator typed: 5.9:1 on a white field, a step below the muted
 # body colour.
 TEXT_PLACEHOLDER = ON_SECONDARY_CONTAINER
-TEXT_ON_ACCENT = ON_PRIMARY            # text on the brand fill
+TEXT_ON_ACCENT = ON_PRIMARY  # text on the brand fill
 TEXT_ON_TINT = ON_SECONDARY_CONTAINER  # text on a tinted surface
-TEXT_ON_SECONDARY = ON_SECONDARY_FIXED # text on the secondary fill (nav)
-TEXT_ON_ERROR = ON_ERROR               # text on the error fill
-TEXT_DANGER = ERROR                    # error copy
-TEXT_SUCCESS = SUCCESS_DARK            # success copy (5.0:1 on a card)
-TEXT_WARNING = WARNING_DARK            # warning copy (5.0:1 on a card)
-TEXT_AMBER = AMBER_700                 # amber copy (log tokens, caution notes)
-TEXT_DISABLED = MUTED_TEXT             # disabled control text (3.7:1 on a card)
+TEXT_ON_SECONDARY = ON_SECONDARY_FIXED  # text on the secondary fill (nav)
+TEXT_ON_ERROR = ON_ERROR  # text on the error fill
+TEXT_DANGER = ERROR  # error copy
+TEXT_SUCCESS = SUCCESS_DARK  # success copy (5.0:1 on a card)
+TEXT_WARNING = WARNING_DARK  # warning copy (5.0:1 on a card)
+TEXT_AMBER = AMBER_700  # amber copy (log tokens, caution notes)
+TEXT_DISABLED = MUTED_TEXT  # disabled control text (3.7:1 on a card)
 # A workflow step that cannot run yet is still a step the user reads and
 # clicks: it carries body-legible text (8.9:1 on a card), never the
 # disabled grey. The lock mark says "blocked"; the text says what.
 TEXT_BLOCKED = ON_SURFACE_VARIANT
 
 # --- Surface roles ---
-SURFACE_PAGE = BACKGROUND              # the page behind everything
+SURFACE_PAGE = BACKGROUND  # the page behind everything
 SURFACE_CARD = SURFACE_CONTAINER_LOWEST  # cards, tables, sheets
-SURFACE_TINT = SURFACE_CONTAINER       # a tinted panel (header band, hover)
+SURFACE_TINT = SURFACE_CONTAINER  # a tinted panel (header band, hover)
 SURFACE_SUBTLE = SURFACE_CONTAINER_LOW  # quiet rows, inset panels
-SURFACE_ROW = SURFACE_CONTAINER_LOW    # alternating / separated rows
-SURFACE_HEADER = SURFACE_CONTAINER     # table and tree header bands
+SURFACE_ROW = SURFACE_CONTAINER_LOW  # alternating / separated rows
+SURFACE_HEADER = SURFACE_CONTAINER  # table and tree header bands
 SURFACE_RAISED = SURFACE_CONTAINER_HIGH  # a raised panel (hover, metric card)
-SURFACE_ALT = SURFACE_VARIANT          # an alternate surface (divider band)
-SURFACE_DISABLED = MUTED_BG            # a disabled control's face
+SURFACE_ALT = SURFACE_VARIANT  # an alternate surface (divider band)
+SURFACE_DISABLED = MUTED_BG  # a disabled control's face
 
 # --- Border roles ---
-BORDER_SUBTLE = OUTLINE_VARIANT        # card and section edges
-BORDER_STRONG = OUTLINE                # dividers that carry meaning
-BORDER_CONTROL = CONTROL_OUTLINE       # input / button edges (>= 3:1)
-BORDER_DISABLED = MUTED_BORDER         # a disabled control's edge
+BORDER_SUBTLE = OUTLINE_VARIANT  # card and section edges
+BORDER_STRONG = OUTLINE  # dividers that carry meaning
+BORDER_CONTROL = CONTROL_OUTLINE  # input / button edges (>= 3:1)
+BORDER_DISABLED = MUTED_BORDER  # a disabled control's edge
 
 # --- Accent roles ---
 ACCENT_PRIMARY = PRIMARY
 ACCENT_PRIMARY_HOVER = ON_PRIMARY_FIXED_VARIANT
 ACCENT_PRIMARY_PRESSED = PRIMARY_PRESSED
 ACCENT_PRIMARY_DISABLED = PRIMARY_DISABLED
-ACCENT_TINT = PRIMARY_FIXED            # selected row / pressed fill
+ACCENT_TINT = PRIMARY_FIXED  # selected row / pressed fill
 ACCENT_FOCUS_TINT = PRIMARY_FIXED_DIM  # the focus tint's fill
-ACCENT_FOCUS_RING = PRIMARY            # the focus ring's stroke (7.2:1 on a card)
-ACCENT_PRIMARY_DEEP = PRIMARY_DEEP     # the deepest brand blue (a live badge)
-ACCENT_SECONDARY = SECONDARY_CONTAINER # the secondary fill (nav, selection)
-ACCENT_TERTIARY = TERTIARY             # the tertiary accent
+ACCENT_FOCUS_RING = PRIMARY  # the focus ring's stroke (7.2:1 on a card)
+ACCENT_PRIMARY_DEEP = PRIMARY_DEEP  # the deepest brand blue (a live badge)
+ACCENT_SECONDARY = SECONDARY_CONTAINER  # the secondary fill (nav, selection)
+ACCENT_TERTIARY = TERTIARY  # the tertiary accent
 
 # --- State roles ---
 STATE_ERROR_BG = ERROR_CONTAINER
 STATE_ERROR_SURFACE = ERROR_SURFACE
 STATE_ERROR_BORDER = ERROR_OUTLINE
 STATE_ERROR_TEXT = ON_ERROR_CONTAINER
-STATE_ERROR_GRAPHIC = ERROR            # an error icon or mark (6.5:1 on a card)
+STATE_ERROR_GRAPHIC = ERROR  # an error icon or mark (6.5:1 on a card)
 STATE_SUCCESS_TEXT = SUCCESS_DARK
-STATE_SUCCESS_GRAPHIC = SUCCESS        # a success icon or mark (3.3:1 on a card)
+STATE_SUCCESS_GRAPHIC = SUCCESS  # a success icon or mark (3.3:1 on a card)
 STATE_WARNING_TEXT = WARNING_DARK
-STATE_WARNING_GRAPHIC = WARNING        # a warning icon or mark (3.2:1 on a card)
+STATE_WARNING_GRAPHIC = WARNING  # a warning icon or mark (3.2:1 on a card)
 
 # --- Badge roles (a status label's fill, text and border) ---
 BADGE_NEUTRAL_BG = "#e4e7f2"
@@ -166,7 +172,7 @@ BADGE_NEUTRAL_BORDER = "#c3c6d8"
 BADGE_BLUE_BG = "#d5e3fc"
 BADGE_BLUE_TEXT = "#1a2e4a"
 BADGE_BLUE_BORDER = "#b9c7df"
-BADGE_GREEN_BG = "#15803d"      # SUCCESS_DARK: white on it clears 5:1
+BADGE_GREEN_BG = "#15803d"  # SUCCESS_DARK: white on it clears 5:1
 BADGE_GREEN_TEXT = "#ffffff"
 BADGE_GREEN_BORDER = "#15803d"
 BADGE_RED_BG = "#ba1a1a"
@@ -209,6 +215,273 @@ BADGE_SAND_BG = "#f5efe6"
 BADGE_SAND_TEXT = "#713f12"
 BADGE_SAND_BORDER = "#e7d5b7"
 
+# --- Role tables: one mapping per theme ---------------------------------
+# The role layer is data. A role name maps to the colour that role
+# wears *in a theme*, so switching theme is a table swap: the palette
+# stays, the components stay, the views stay - only the mapping moves.
+#
+# `light` is the table the app paints today (the aliases above).
+# `dark` is the second table. Dark mode is planned in five steps and
+# this is step one: the mapping exists first, so the per-theme
+# stylesheet, the per-theme contrast contract, the painted assets and
+# the both-themes gallery have something to select.
+#
+# The role *names* never change between themes - only what a name
+# resolves to.
+
+# Every role the app paints. The light table is derived from these
+# names (the aliases above stay the one source of truth for what
+# light looks like); the dark table declares the same names, so a
+# table swap can never miss a role.
+_ROLE_NAMES: tuple[str, ...] = (
+    "TEXT_PRIMARY",
+    "TEXT_MUTED",
+    "TEXT_SUBTLE",
+    "TEXT_PLACEHOLDER",
+    "TEXT_ON_ACCENT",
+    "TEXT_ON_TINT",
+    "TEXT_ON_SECONDARY",
+    "TEXT_ON_ERROR",
+    "TEXT_DANGER",
+    "TEXT_SUCCESS",
+    "TEXT_WARNING",
+    "TEXT_AMBER",
+    "TEXT_DISABLED",
+    "TEXT_BLOCKED",
+    "SURFACE_PAGE",
+    "SURFACE_CARD",
+    "SURFACE_TINT",
+    "SURFACE_SUBTLE",
+    "SURFACE_ROW",
+    "SURFACE_HEADER",
+    "SURFACE_RAISED",
+    "SURFACE_ALT",
+    "SURFACE_DISABLED",
+    "BORDER_SUBTLE",
+    "BORDER_STRONG",
+    "BORDER_CONTROL",
+    "BORDER_DISABLED",
+    "ACCENT_PRIMARY",
+    "ACCENT_PRIMARY_HOVER",
+    "ACCENT_PRIMARY_PRESSED",
+    "ACCENT_PRIMARY_DISABLED",
+    "ACCENT_TINT",
+    "ACCENT_FOCUS_TINT",
+    "ACCENT_FOCUS_RING",
+    "ACCENT_PRIMARY_DEEP",
+    "ACCENT_SECONDARY",
+    "ACCENT_TERTIARY",
+    "STATE_ERROR_BG",
+    "STATE_ERROR_SURFACE",
+    "STATE_ERROR_BORDER",
+    "STATE_ERROR_TEXT",
+    "STATE_ERROR_GRAPHIC",
+    "STATE_SUCCESS_TEXT",
+    "STATE_SUCCESS_GRAPHIC",
+    "STATE_WARNING_TEXT",
+    "STATE_WARNING_GRAPHIC",
+    "BADGE_NEUTRAL_BG",
+    "BADGE_NEUTRAL_TEXT",
+    "BADGE_NEUTRAL_BORDER",
+    "BADGE_BLUE_BG",
+    "BADGE_BLUE_TEXT",
+    "BADGE_BLUE_BORDER",
+    "BADGE_GREEN_BG",
+    "BADGE_GREEN_TEXT",
+    "BADGE_GREEN_BORDER",
+    "BADGE_RED_BG",
+    "BADGE_RED_TEXT",
+    "BADGE_RED_BORDER",
+    "BADGE_RED_SOFT_BG",
+    "BADGE_RED_SOFT_TEXT",
+    "BADGE_RED_SOFT_BORDER",
+    "BADGE_GREY_BG",
+    "BADGE_GREY_TEXT",
+    "BADGE_GREY_BORDER",
+    "BADGE_GREEN_SOFT_BG",
+    "BADGE_GREEN_SOFT_TEXT",
+    "BADGE_GREEN_SOFT_BORDER",
+    "BADGE_INDIGO_BG",
+    "BADGE_INDIGO_TEXT",
+    "BADGE_INDIGO_BORDER",
+    "BADGE_ORANGE_BG",
+    "BADGE_ORANGE_TEXT",
+    "BADGE_ORANGE_BORDER",
+    "BADGE_VIOLET_BG",
+    "BADGE_VIOLET_TEXT",
+    "BADGE_VIOLET_BORDER",
+    "BADGE_AMBER_BG",
+    "BADGE_AMBER_TEXT",
+    "BADGE_AMBER_BORDER",
+    "BADGE_TEAL_BG",
+    "BADGE_TEAL_TEXT",
+    "BADGE_TEAL_BORDER",
+    "BADGE_PINK_BG",
+    "BADGE_PINK_TEXT",
+    "BADGE_PINK_BORDER",
+    "BADGE_LIME_BG",
+    "BADGE_LIME_TEXT",
+    "BADGE_LIME_BORDER",
+    "BADGE_SKY_BG",
+    "BADGE_SKY_TEXT",
+    "BADGE_SKY_BORDER",
+    "BADGE_SAND_BG",
+    "BADGE_SAND_TEXT",
+    "BADGE_SAND_BORDER",
+)
+
+# The light table: today's colours, read from the aliases above so
+# there is exactly one source of truth for what light looks like.
+LIGHT_ROLE_TABLE: dict[str, str] = {name: globals()[name] for name in _ROLE_NAMES}
+
+# The dark table: the same roles, painted on a dark surface. The brand
+# stays blue (the palette does not move), but the ink flips: on a dark
+# surface the body ink is light, and text on the brand fill turns dark
+# so it still clears 4.5:1.
+DARK_ROLE_TABLE: dict[str, str] = {
+    "TEXT_PRIMARY": "#e8eaf2",
+    "TEXT_MUTED": "#b7bccb",
+    "TEXT_SUBTLE": "#9aa0b3",
+    "TEXT_PLACEHOLDER": "#9aa0b3",
+    "TEXT_ON_ACCENT": "#0b1220",
+    "TEXT_ON_TINT": "#c8cddb",
+    "TEXT_ON_SECONDARY": "#e8eaf2",
+    "TEXT_ON_ERROR": "#ffffff",
+    "TEXT_DANGER": "#ffb4ab",
+    "TEXT_SUCCESS": "#7ee2a8",
+    "TEXT_WARNING": "#ffcf7a",
+    "TEXT_AMBER": "#f0c36a",
+    "TEXT_DISABLED": "#8b91a3",
+    "TEXT_BLOCKED": "#b7bccb",
+    "SURFACE_PAGE": "#11131a",
+    "SURFACE_CARD": "#191c25",
+    "SURFACE_TINT": "#232735",
+    "SURFACE_SUBTLE": "#1f2330",
+    "SURFACE_ROW": "#1f2330",
+    "SURFACE_HEADER": "#242938",
+    "SURFACE_RAISED": "#2a3040",
+    "SURFACE_ALT": "#20242f",
+    "SURFACE_DISABLED": "#252936",
+    "BORDER_SUBTLE": "#343a4b",
+    "BORDER_STRONG": "#4a5165",
+    "BORDER_CONTROL": "#6b7488",
+    "BORDER_DISABLED": "#333849",
+    "ACCENT_PRIMARY": "#6ea8ff",
+    "ACCENT_PRIMARY_HOVER": "#8bbaff",
+    "ACCENT_PRIMARY_PRESSED": "#4d8bff",
+    "ACCENT_PRIMARY_DISABLED": "#3d5a8f",
+    "ACCENT_TINT": "#1c3357",
+    "ACCENT_FOCUS_TINT": "#24406b",
+    "ACCENT_FOCUS_RING": "#8bbaff",
+    "ACCENT_PRIMARY_DEEP": "#b4c5ff",
+    "ACCENT_SECONDARY": "#2b3348",
+    "ACCENT_TERTIARY": "#a9a7ff",
+    "STATE_ERROR_BG": "#4a1c1c",
+    "STATE_ERROR_SURFACE": "#33191c",
+    "STATE_ERROR_BORDER": "#ffb4ab",
+    "STATE_ERROR_TEXT": "#ffdad6",
+    "STATE_ERROR_GRAPHIC": "#d92d20",
+    "STATE_SUCCESS_TEXT": "#7ee2a8",
+    "STATE_SUCCESS_GRAPHIC": "#4ade80",
+    "STATE_WARNING_TEXT": "#ffcf7a",
+    "STATE_WARNING_GRAPHIC": "#fbbf24",
+    "BADGE_NEUTRAL_BG": "#2b3040",
+    "BADGE_NEUTRAL_TEXT": "#d6dae6",
+    "BADGE_NEUTRAL_BORDER": "#454c60",
+    "BADGE_BLUE_BG": "#16345e",
+    "BADGE_BLUE_TEXT": "#cfe1ff",
+    "BADGE_BLUE_BORDER": "#2f5b96",
+    "BADGE_GREEN_BG": "#123c2a",
+    "BADGE_GREEN_TEXT": "#bbf7d0",
+    "BADGE_GREEN_BORDER": "#166534",
+    "BADGE_RED_BG": "#4d1717",
+    "BADGE_RED_TEXT": "#fecaca",
+    "BADGE_RED_BORDER": "#7f1d1d",
+    "BADGE_RED_SOFT_BG": "#3a1a1a",
+    "BADGE_RED_SOFT_TEXT": "#fecaca",
+    "BADGE_RED_SOFT_BORDER": "#7f1d1d",
+    "BADGE_GREY_BG": "#3b4252",
+    "BADGE_GREY_TEXT": "#e2e8f0",
+    "BADGE_GREY_BORDER": "#4b5563",
+    "BADGE_GREEN_SOFT_BG": "#123524",
+    "BADGE_GREEN_SOFT_TEXT": "#bbf7d0",
+    "BADGE_GREEN_SOFT_BORDER": "#166534",
+    "BADGE_INDIGO_BG": "#232a5e",
+    "BADGE_INDIGO_TEXT": "#c7d2fe",
+    "BADGE_INDIGO_BORDER": "#3730a3",
+    "BADGE_ORANGE_BG": "#4a2c10",
+    "BADGE_ORANGE_TEXT": "#fed7aa",
+    "BADGE_ORANGE_BORDER": "#9a3412",
+    "BADGE_VIOLET_BG": "#2e2359",
+    "BADGE_VIOLET_TEXT": "#ddd6fe",
+    "BADGE_VIOLET_BORDER": "#4c1d95",
+    "BADGE_AMBER_BG": "#453012",
+    "BADGE_AMBER_TEXT": "#fde68a",
+    "BADGE_AMBER_BORDER": "#92400e",
+    "BADGE_TEAL_BG": "#103b38",
+    "BADGE_TEAL_TEXT": "#99f6e4",
+    "BADGE_TEAL_BORDER": "#0f766e",
+    "BADGE_PINK_BG": "#4a1636",
+    "BADGE_PINK_TEXT": "#fbcfe8",
+    "BADGE_PINK_BORDER": "#9d174d",
+    "BADGE_LIME_BG": "#2b3d12",
+    "BADGE_LIME_TEXT": "#d9f99d",
+    "BADGE_LIME_BORDER": "#3f6212",
+    "BADGE_SKY_BG": "#0c3040",
+    "BADGE_SKY_TEXT": "#bae6fd",
+    "BADGE_SKY_BORDER": "#075985",
+    "BADGE_SAND_BG": "#3d2f1c",
+    "BADGE_SAND_TEXT": "#e7d5b7",
+    "BADGE_SAND_BORDER": "#713f12",
+}
+
+# Every theme the app can select.
+ROLE_TABLES: dict[str, dict[str, str]] = {
+    "light": LIGHT_ROLE_TABLE,
+    "dark": DARK_ROLE_TABLE,
+}
+
+# The theme the app paints.
+ACTIVE_THEME = "light"
+
+
+def role_table(theme: str | None = None) -> Mapping[str, str]:
+    """Return the role mapping for a theme (the active one by default)."""
+    name = theme or ACTIVE_THEME
+    table = ROLE_TABLES.get(name)
+    if table is None:
+        raise KeyError(f"unknown theme {name!r}; known themes: {sorted(ROLE_TABLES)}")
+    return table
+
+
+def role(name: str, theme: str | None = None) -> str:
+    """Resolve one role name to the colour it wears in a theme."""
+    table = role_table(theme)
+    try:
+        return table[name]
+    except KeyError:
+        raise KeyError(f"unknown role {name!r} in theme {theme or ACTIVE_THEME!r}") from None
+
+
+def set_active_theme(name: str) -> None:
+    """Select the active role table.
+
+    The role names stay the same; only the table they resolve through
+    changes. The theme's own rules read the module's role values when
+    they build a rule, so a repaint after the swap follows the new
+    table.
+
+    The kit and the views import role values by name, so they keep the
+    table they imported until the per-theme stylesheet step repaints
+    them - until then the app runs on light. The contrast contract is
+    still the light one, for the same reason.
+    """
+    global ACTIVE_THEME
+    table = role_table(name)
+    ACTIVE_THEME = name
+    globals().update(table)
+
+
 # --- Typography (Qt QSS uses px) ---
 FONT_FAMILY = "Inter, 'Segoe UI', sans-serif"
 MONO_FAMILY = "'JetBrains Mono', Consolas, monospace"
@@ -232,12 +505,12 @@ SP_XL = 20
 SP_XXL = 24
 
 # --- Standard margins ---
-MARGIN_PAGE = 24      # outer view padding
-MARGIN_CARD_H = 16    # card header/body horizontal padding
-MARGIN_CARD_V = 12    # card header/body vertical padding
+MARGIN_PAGE = 24  # outer view padding
+MARGIN_CARD_H = 16  # card header/body horizontal padding
+MARGIN_CARD_V = 12  # card header/body vertical padding
 
 # --- Type scale (px) ---
-FONT_MICRO = 11      # log level badges (the smallest text in the app; dv-vw0)
+FONT_MICRO = 11  # log level badges (the smallest text in the app; dv-vw0)
 FONT_HEADLINE = 22
 FONT_TITLE = 16
 FONT_SECTION = 15
@@ -749,10 +1022,7 @@ def workflow_step_qss(state: str = "todo") -> str:
     state, so the state shows in the colour and the weight, never in
     whether the step can be pressed.
     """
-    hover = (
-        "QPushButton#WorkflowStep:hover { background: "
-        f"{SURFACE_TINT}; border-radius: 8px; }}"
-    )
+    hover = f"QPushButton#WorkflowStep:hover {{ background: {SURFACE_TINT}; border-radius: 8px; }}"
     if state == "done":
         return (
             f"QPushButton#WorkflowStep {{ color: {TEXT_SUCCESS}; font-size: 12px; "
@@ -831,6 +1101,7 @@ def badge_qss(
 
 
 def global_qss() -> str:
+    """Return the app's global Qt style sheet, derived from the active palette."""
     return f"""
 /* ===== Base ===== */
 QWidget {{
@@ -1370,9 +1641,11 @@ QSplitter::handle:horizontal {{ width: 1px; }}
 QSplitter::handle:vertical {{ height: 1px; }}
 """
 
+
 def apply_theme(app) -> None:
     """Apply global QSS and default font."""
     from PySide6.QtGui import QFont
+
     # Prefer Inter if installed; fall back to Segoe UI
     font = QFont("Inter")
     if font.family() != "Inter":
@@ -1383,6 +1656,22 @@ def apply_theme(app) -> None:
     app.setFont(font)
     app.setStyleSheet(global_qss())
     _install_interaction_tracking(app)
+    _log_active_role_table()
+
+
+def _log_active_role_table() -> None:
+    """Record the role table the app is painting (the Log page shows it).
+
+    A theme is a table of role values; naming the live table in the log
+    says which one the pixels came from, without opening a debugger.
+    """
+    try:
+        from curation.applog import log as _log
+
+        table = role_table()
+        _log(f"theme-role-table-{ACTIVE_THEME}-roles-{len(table)}")
+    except Exception:
+        pass
 
 
 def action_button_style(primary: bool = False) -> str:
@@ -1397,10 +1686,7 @@ def action_button_style(primary: bool = False) -> str:
     Views do not call this: they build the button with the kit's
     ``make_action_button()``.
     """
-    return button_qss(
-        "primary" if primary else "secondary", selector="QPushButton"
-    )
-
+    return button_qss("primary" if primary else "secondary", selector="QPushButton")
 
 
 # The badge roles: (background, text, border) per role. Every distinct
@@ -1471,9 +1757,7 @@ def label_badge_colors(label: str) -> tuple[str, str, str]:
         import hashlib
 
         digest = hashlib.md5(lowered.encode("utf-8")).digest()
-        role = _LABEL_BADGE_FALLBACK_ROLES[
-            digest[0] % len(_LABEL_BADGE_FALLBACK_ROLES)
-        ]
+        role = _LABEL_BADGE_FALLBACK_ROLES[digest[0] % len(_LABEL_BADGE_FALLBACK_ROLES)]
         return _BADGE_ROLES[role]
     except Exception:
         return _BADGE_ROLES["teal"]
@@ -1494,7 +1778,7 @@ def label_badge_style(label: str) -> str:
     )
 
 
-def _install_interaction_tracking(app) -> None:
+def _install_interaction_tracking(app) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Pointing-hand cursors + keyboard-only focus tint, in one app filter.
 
     Two behaviours share one QApplication event filter: QSS cannot set
@@ -1516,9 +1800,16 @@ def _install_interaction_tracking(app) -> None:
 
         state = {"kbd": False}
         nav_keys = {
-            Qt.Key_Tab, Qt.Key_Backtab, Qt.Key_Left, Qt.Key_Right,
-            Qt.Key_Up, Qt.Key_Down, Qt.Key_Home, Qt.Key_End,
-            Qt.Key_PageUp, Qt.Key_PageDown,
+            Qt.Key.Key_Tab,
+            Qt.Key.Key_Backtab,
+            Qt.Key.Key_Left,
+            Qt.Key.Key_Right,
+            Qt.Key.Key_Up,
+            Qt.Key.Key_Down,
+            Qt.Key.Key_Home,
+            Qt.Key.Key_End,
+            Qt.Key.Key_PageUp,
+            Qt.Key.Key_PageDown,
         }
 
         def _paint(w, on: bool) -> None:
@@ -1539,16 +1830,16 @@ def _install_interaction_tracking(app) -> None:
             def eventFilter(self, obj, event):
                 try:
                     t = event.type()
-                    if t == QEvent.Enter:
+                    if t == QEvent.Type.Enter:
                         if isinstance(obj, QAbstractButton):
                             if obj.isEnabled():
-                                obj.setCursor(Qt.PointingHandCursor)
+                                obj.setCursor(Qt.CursorShape.PointingHandCursor)
                             else:
                                 obj.unsetCursor()
-                    elif t == QEvent.KeyPress:
+                    elif t == QEvent.Type.KeyPress:
                         if event.key() in nav_keys:
                             state["kbd"] = True
-                    elif t == QEvent.MouseButtonPress:
+                    elif t == QEvent.Type.MouseButtonPress:
                         state["kbd"] = False
                         _paint(app.focusWidget(), False)
                 except Exception:
@@ -1593,13 +1884,15 @@ def selectable_labels(root) -> None:
             try:
                 flags = lbl.textInteractionFlags()
                 lbl.setTextInteractionFlags(
-                    flags | Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+                    flags
+                    | Qt.TextInteractionFlag.TextSelectableByMouse
+                    | Qt.TextInteractionFlag.TextSelectableByKeyboard
                 )
                 pal = lbl.palette()
-                pal.setColor(QPalette.Base, Qt.transparent)
-                pal.setColor(QPalette.Window, Qt.transparent)
-                pal.setColor(QPalette.Highlight, QColor(PRIMARY_FIXED))
-                pal.setColor(QPalette.HighlightedText, QColor(ON_SURFACE))
+                pal.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.transparent)
+                pal.setColor(QPalette.ColorRole.Window, Qt.GlobalColor.transparent)
+                pal.setColor(QPalette.ColorRole.Highlight, QColor(PRIMARY_FIXED))
+                pal.setColor(QPalette.ColorRole.HighlightedText, QColor(ON_SURFACE))
                 lbl.setPalette(pal)
             except Exception:
                 continue
@@ -1613,15 +1906,15 @@ def enable_table_copy(table) -> None:
         from PySide6.QtCore import QEvent, QObject, Qt
         from PySide6.QtWidgets import QApplication, QTableWidget
 
-        table.setSelectionMode(QTableWidget.ExtendedSelection)
+        table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
 
         class _CopyFilter(QObject):
             def eventFilter(self, _obj, event):
                 try:
-                    if event.type() == QEvent.KeyPress and event.matches(Qt.Key_Copy):
+                    if event.type() == QEvent.Type.KeyPress and event.matches(Qt.Key.Key_Copy):
                         ranges = table.selectedRanges()
                         if ranges:
-                            rows = set()
+                            rows: set[int] = set()
                             for rng in ranges:
                                 rows.update(range(rng.topRow(), rng.bottomRow() + 1))
                             lines = []
@@ -1660,12 +1953,10 @@ def enable_list_copy(list_widget) -> None:
         class _ListCopyFilter(QObject):
             def eventFilter(self, _obj, event):
                 try:
-                    if event.type() == QEvent.KeyPress and event.matches(Qt.Key_Copy):
+                    if event.type() == QEvent.Type.KeyPress and event.matches(Qt.Key.Key_Copy):
                         items = list_widget.selectedItems()
                         if items:
-                            QApplication.clipboard().setText(
-                                "\n".join(i.text() for i in items)
-                            )
+                            QApplication.clipboard().setText("\n".join(i.text() for i in items))
                             return True
                 except Exception:
                     pass

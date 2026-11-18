@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-import config as config_mod
-import metadata_check
+import curation.config as config_mod
+import curation.metadata_check as metadata_check
 
 
 def _freeze(monkeypatch: pytest.MonkeyPatch, exe: Path) -> None:
@@ -177,9 +177,7 @@ def test_portable_build_keeps_the_beside_the_exe_search(
     dist = tmp_path / "dist"
     exe = dist / "DataverseDocent" / "DataverseDocent.exe"
     exe.parent.mkdir(parents=True)
-    (dist / "config.json").write_text(
-        '{"dataverse": {"api_token": "tok-123"}}', encoding="utf-8"
-    )
+    (dist / "config.json").write_text('{"dataverse": {"api_token": "tok-123"}}', encoding="utf-8")
     monkeypatch.chdir(exe.parent)
     _freeze(monkeypatch, exe)
     _no_velopack(monkeypatch)
@@ -259,7 +257,7 @@ def test_user_data_dir_prefers_appdata_on_windows(
 def test_rulesets_path_follows_the_profiles_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, appdata: Path
 ) -> None:
-    import review_rules
+    import curation.review_rules as review_rules
 
     _installed(monkeypatch, tmp_path)
     _no_velopack(monkeypatch)

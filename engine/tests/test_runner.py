@@ -6,9 +6,7 @@ import pytest
 
 from engine.runner import run_report, run_report_to_file
 
-CUR_DATA = (
-    Path(__file__).resolve().parents[3] / "CUR_Res_CurationTools" / "data"
-)
+CUR_DATA = Path(__file__).resolve().parents[3] / "CUR_Res_CurationTools" / "data"
 
 
 def _make_staged(tmp_path: Path) -> Path:
@@ -21,7 +19,7 @@ def _make_staged(tmp_path: Path) -> Path:
     return staged
 
 
-def test_run_report_on_synthetic(tmp_path):
+def test_run_report_on_synthetic(tmp_path: Path) -> None:
     staged = _make_staged(tmp_path)
 
     report = run_report(staged, persistent_id="doi:10.5072/FK2/TEST")
@@ -45,13 +43,11 @@ def test_run_report_on_synthetic(tmp_path):
     assert bin_entry.checks == []
     assert bin_entry.mime_type
 
-    inventory = next(
-        c for c in report.dataset_checks if c.check_id == "inventory.extensions"
-    )
+    inventory = next(c for c in report.dataset_checks if c.check_id == "inventory.extensions")
     assert inventory.passed
 
 
-def test_report_roundtrip_via_file(tmp_path):
+def test_report_roundtrip_via_file(tmp_path: Path) -> None:
     staged = _make_staged(tmp_path)
     out = tmp_path / "report.json"
 
@@ -61,7 +57,7 @@ def test_report_roundtrip_via_file(tmp_path):
 
 
 @pytest.mark.skipif(not CUR_DATA.exists(), reason="sample data not found")
-def test_run_report_on_cur_gpkg_samples():
+def test_run_report_on_cur_gpkg_samples() -> None:
     report = run_report(CUR_DATA / "Inspect_gpkg")
 
     gpkg_entries = [f for f in report.files if f.path.endswith(".gpkg")]

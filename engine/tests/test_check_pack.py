@@ -138,11 +138,15 @@ def test_the_package_must_carry_the_main_executable(tmp_path: Path) -> None:
 def test_the_feed_must_list_this_version(tmp_path: Path) -> None:
     release = make_release(tmp_path / "releases", feed_version="0.1.0")
     problems = check_pack.check_release(release, version=VERSION)
-    assert any(check_pack.feed_name() in p and "no DataverseDocent 0.2.0 asset" in p for p in problems)
+    assert any(
+        check_pack.feed_name() in p and "no DataverseDocent 0.2.0 asset" in p for p in problems
+    )
 
 
 def test_the_legacy_index_must_mention_the_package(tmp_path: Path) -> None:
-    release = make_release(tmp_path / "releases", releases_entry="AB DataverseDocent-0.1.0-full.nupkg 1\n")
+    release = make_release(
+        tmp_path / "releases", releases_entry="AB DataverseDocent-0.1.0-full.nupkg 1\n"
+    )
     problems = check_pack.check_release(release, version=VERSION)
     assert any("RELEASES does not mention" in p for p in problems)
 
@@ -221,5 +225,7 @@ def test_a_prerelease_channel_pack_verifies_against_that_channel(tmp_path: Path)
 
 def test_a_wrong_main_exe_is_reported_not_raised(tmp_path: Path) -> None:
     release = make_release(tmp_path / "releases", channel="win-beta")
-    problems = check_pack.check_release(release, version=VERSION, channel="win-beta", main_exe="Other.exe")
+    problems = check_pack.check_release(
+        release, version=VERSION, channel="win-beta", main_exe="Other.exe"
+    )
     assert any("nuspec mainExe" in p for p in problems)

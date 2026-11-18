@@ -4,6 +4,8 @@ See docs/html/engine-port.html for port status and docs/html/report-contract.htm
 check_id namespaces.
 """
 
+from typing import Any
+
 from engine.checks import (
     access_check,
     code_check,
@@ -59,7 +61,7 @@ _MODULES = (
     readme_check,
 )
 
-registry: dict = {}
+registry: dict[str, Any] = {}
 for _module in _MODULES:
     for _name in dir(_module):
         _obj = getattr(_module, _name)

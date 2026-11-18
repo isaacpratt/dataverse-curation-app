@@ -5,13 +5,15 @@ Lists in details are capped at 10 items with "+n more", matching the engine
 messages. Skipped results (details.skipped) render as Skipped, never Pass.
 """
 
+from typing import Any
+
 from engine.report import DatasetReport
 from engine.status import classify, summarize
 
 _MAX_LISTED = 10
 
 
-def _badge(result) -> str:
+def _badge(result: Any) -> str:
     kind = classify(result)
     if kind == "passed":
         return "PASS"
@@ -22,7 +24,7 @@ def _badge(result) -> str:
     return "SKIPPED"
 
 
-def _fmt_value(value, depth: int = 0):
+def _fmt_value(value: Any, depth: int = 0) -> str:
     if isinstance(value, dict):
         if not value:
             return "{}"
@@ -44,7 +46,7 @@ def _fmt_value(value, depth: int = 0):
     return repr(value) if not isinstance(value, str) else value
 
 
-def _details_lines(details: dict) -> list[str]:
+def _details_lines(details: dict[str, Any]) -> list[str]:
     lines = []
     for key in sorted(details):
         if key in ("skipped",):
@@ -53,7 +55,7 @@ def _details_lines(details: dict) -> list[str]:
     return lines
 
 
-def _guidance_lines(result) -> list[str]:
+def _guidance_lines(result: Any) -> list[str]:
     """Why-this-matters / how-to-fix block for a failed result (dv-lfn)."""
     if classify(result) not in ("failed-error", "failed-warning"):
         return []
@@ -68,7 +70,7 @@ def _guidance_lines(result) -> list[str]:
     return lines
 
 
-def render_markdown(report: DatasetReport) -> str:
+def render_markdown(report: DatasetReport) -> str:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     lines: list[str] = []
     lines.append(f"# Curation report — {report.label}")
     lines.append("")
@@ -77,9 +79,7 @@ def render_markdown(report: DatasetReport) -> str:
     lines.append(f"- Files: {len(report.files)}")
     lines.append("")
 
-    all_results = list(report.dataset_checks) + [
-        c for f in report.files for c in f.checks
-    ]
+    all_results = list(report.dataset_checks) + [c for f in report.files for c in f.checks]
     summary = summarize(all_results)
     lines.append("## Summary")
     lines.append("")
@@ -119,7 +119,7 @@ def render_markdown(report: DatasetReport) -> str:
     if not report.files:
         lines.append("No files staged.")
         lines.append("")
-    by_dir: dict[str, list] = {}
+    by_dir: dict[str, list[Any]] = {}
     for entry in report.files:
         parent = entry.path.rpartition("/")[0] if "/" in entry.path else "."
         by_dir.setdefault(parent, []).append(entry)

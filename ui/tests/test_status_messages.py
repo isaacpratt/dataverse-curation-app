@@ -13,8 +13,8 @@ import pytest
 
 @pytest.fixture
 def view(qapp, tmp_path):
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     def _fv(value):
         return {"typeName": "text", "multiple": False, "typeClass": "primitive", "value": value}
@@ -34,8 +34,9 @@ def view(qapp, tmp_path):
     }
     cfg = Config()
     cfg.app.workspace = Path(tmp_path)
-    v = DatasetDetailView(cfg, "doi:10.5072/FK2/STATUS", "Status test",
-                          cached_metadata=metadata, cached_inventory=[])
+    v = DatasetDetailView(
+        cfg, "doi:10.5072/FK2/STATUS", "Status test", cached_metadata=metadata, cached_inventory=[]
+    )
     v.show()
     for _ in range(5):
         qapp.processEvents()
@@ -72,7 +73,8 @@ def test_error_strip_is_distinct_from_success(view):
     view._set_status("Done", tone="success")
     ok_sheet = view._status.styleSheet()
     assert err_sheet != ok_sheet, "error and success must not share a face"
-    assert "font-weight: 600" in err_sheet and "font-weight: 600" in ok_sheet
+    assert "font-weight: 600" in err_sheet
+    assert "font-weight: 600" in ok_sheet
     assert not view._status_icon.isHidden()
 
 
@@ -84,7 +86,7 @@ def test_info_strip_stays_quiet(view):
 
 @pytest.fixture
 def pane(qapp, tmp_path, monkeypatch):
-    from config import Config
+    from curation.config import Config
     from ui.settings_dialog import SettingsPane
 
     monkeypatch.setattr(SettingsPane, "_start_size_worker", lambda self: None)

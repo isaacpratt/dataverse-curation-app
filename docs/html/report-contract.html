@@ -100,7 +100,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <ul>
 <li><code>DatasetReport.to_dict()/from_dict()</code>, <code>FileEntry</code> likewise; <code>save(path)/load(path)</code> pretty-printed JSON (atomic temp-file + replace).</li>
 <li><code>to_markdown()/save_markdown(path)</code> via <code>engine/report_md.py</code> — header, Summary, Dataset-checks table, Files grouped by directory, Skipped (missing libraries) section.</li>
-<li>GUI export (<code>ui/dataset_detail.py:_on_export</code>) → save dialog defaulting to <code>workspace/downloads/&lt;id&gt;/reports/</code> → JSON + Markdown side-by-side (JSON canonical, Markdown derived). Export is logged to <code>curation_actions</code>; the manifest tree (<code>ui/checks_tree.py</code>: folder › file › check) renders from <code>report.files[].checks</code>.</li>
+<li>GUI export (<code>ui/dataset/actions_section.py:_on_export</code>) → save dialog defaulting to <code>workspace/downloads/&lt;id&gt;/reports/</code> → JSON + Markdown side-by-side (JSON canonical, Markdown derived). Export is logged to <code>curation_actions</code>; the manifest tree (<code>ui/checks_tree.py</code>: folder › file › check) renders from <code>report.files[].checks</code>.</li>
 <li>Headless mirrors it: <code>engine/runner.py:run_report_to_file(dir, out, pid, fmt)</code> with <code>--format json|md|both</code> (default <code>json</code>).</li>
 </ul>
 

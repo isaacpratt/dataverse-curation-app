@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-import applog
+import curation.applog as applog
 from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,
@@ -148,7 +148,8 @@ class LogPage(QWidget):
         try:
             self._live_btn.setIcon(
                 _live_icon("circle-dot", color=ACCENT_PRIMARY_DEEP)
-                if live else _live_icon("circle", color=TEXT_SUBTLE)
+                if live
+                else _live_icon("circle", color=TEXT_SUBTLE)
             )
         except Exception:
             pass
@@ -158,7 +159,7 @@ class LogPage(QWidget):
         if checked:
             self._live_btn.setToolTip(t("log.live_tip"))
             self._last_len = -1  # force a catch-up refresh
-            self._last_display = None
+            self._last_display: str | None = None
             if not self._timer.isActive():
                 self._timer.start(800)
         else:
@@ -196,9 +197,7 @@ class LogPage(QWidget):
                         )
                     )
                 else:
-                    self._live_btn.setToolTip(
-                        t("log.buffered_tip", total=total)
-                    )
+                    self._live_btn.setToolTip(t("log.buffered_tip", total=total))
             except Exception:
                 pass
 
@@ -235,7 +234,7 @@ class LogHighlighter(QSyntaxHighlighter):
             fmt = QTextCharFormat()
             fmt.setForeground(QColor(color))
             if bold:
-                fmt.setFontWeight(QFont.Bold)
+                fmt.setFontWeight(QFont.Weight.Bold)
             return fmt
 
         # Line severity: plain coloured text for the body, bold for the
@@ -266,31 +265,21 @@ class LogHighlighter(QSyntaxHighlighter):
         import re
 
         self._regex = re
-        self._re_time = re.compile(
-            r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?"
-        )
-        self._re_level = re.compile(
-            r"\b(CRITICAL|ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE|EXPECTED)\b"
-        )
+        self._re_time = re.compile(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?")
+        self._re_level = re.compile(r"\b(CRITICAL|ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE|EXPECTED)\b")
         # The severity word the app wrote for this line, right after the
         # timestamp. A server body carries its own words (Dataverse says
         # "status":"ERROR" in every error response) — those must not
         # decide the line's colour.
-        self._re_marker = re.compile(
-            r"^(CRITICAL|ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE|EXPECTED)\b"
-        )
+        self._re_marker = re.compile(r"^(CRITICAL|ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE|EXPECTED)\b")
         # The marker that tags an expected refusal, wherever it sits in
         # the line (the app writes it at the start, and appends it to the
         # raw call line as the context).
         self._re_expected = re.compile(r"EXPECTED:")
-        self._re_method = re.compile(
-            r"\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b(?=\s+\S)"
-        )
+        self._re_method = re.compile(r"\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b(?=\s+\S)")
         self._re_url_base = re.compile(r"\bhttps?://[^\s/\"'<>]+")
         self._re_status = re.compile(self._STATUS_RE)
-        self._re_doi = re.compile(
-            r"\bdoi:\s*10\.\d{4,9}/[^\s\"'<>,;)\]}]+", re.IGNORECASE
-        )
+        self._re_doi = re.compile(r"\bdoi:\s*10\.\d{4,9}/[^\s\"'<>,;)\]}]+", re.IGNORECASE)
         self._re_string = re.compile(r'"(?:[^"\\]|\\.)*"')
 
     def _severity(self, text: str) -> str | None:
@@ -331,7 +320,7 @@ class LogHighlighter(QSyntaxHighlighter):
         if length > 0:
             self.setFormat(match.start(), length, fmt)
 
-    def highlightBlock(self, text: str) -> None:  # type: ignore[override]
+    def highlightBlock(self, text: str) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         severity = self._severity(text)
         if severity == "error":
             self.setFormat(0, len(text), self.line_error_format)
@@ -396,7 +385,7 @@ class LogHighlighter(QSyntaxHighlighter):
             if any(s <= m.start() < e for s, e in url_spans):
                 continue
             # A string followed by a colon is a JSON key, not a value.
-            if text[m.end():m.end() + 2].lstrip().startswith(":"):
+            if text[m.end() : m.end() + 2].lstrip().startswith(":"):
                 self._apply(m, self.key_format)
             elif severity == "error":
                 self._apply(m, self.line_error_format)

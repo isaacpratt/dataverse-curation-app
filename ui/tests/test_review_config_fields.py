@@ -35,7 +35,8 @@ def test_author_child_rows_nest_under_author_group(win):
     author = _find_child(top, "Author")
     assert author is not None, "Author must appear as a nested group row"
     labels = [author.child(i).text(0) for i in range(author.childCount())]
-    assert "Name" in labels and "Affiliation" in labels
+    assert "Name" in labels
+    assert "Affiliation" in labels
     assert "Identifier Type" in labels
     # McMaster's ORCID rule lives on the identifier subfield.
     assert "ORCiD for authors" in labels
@@ -52,7 +53,7 @@ def test_orcid_rule_targets_the_identifier_subfield(win):
 
 
 def test_parse_metadatablock_fields_fixture_roundtrip():
-    from dataverse_client import parse_metadatablock_fields
+    from curation.client import parse_metadatablock_fields
 
     repo = Path(__file__).resolve().parents[2]
     payload = json.loads(

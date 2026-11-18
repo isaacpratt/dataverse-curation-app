@@ -5,6 +5,7 @@ detection, mixed line endings and non-printable control characters.
 """
 
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks._util import detect_encoding, find_pii, pii_result
 from engine.checks.base import Check, CheckResult
@@ -20,7 +21,7 @@ class TextCheck(Check):
     """Text check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.text"
-    extensions = {".txt", ".md", ".rst", ".log"}
+    extensions: ClassVar[set[str]] = {".txt", ".md", ".rst", ".log"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
@@ -65,8 +66,7 @@ class TextCheck(Check):
         mixed = (crlf > 0) + (lone_lf > 0) + (lone_cr > 0) > 1
 
         control_chars = sum(
-            1 for byte in raw
-            if (byte < 32 and byte not in _ALLOWED_CONTROLS) or byte == 127
+            1 for byte in raw if (byte < 32 and byte not in _ALLOWED_CONTROLS) or byte == 127
         )
 
         pii_findings = find_pii(text)
@@ -87,8 +87,7 @@ class TextCheck(Check):
                     level="warning",
                     passed=False,
                     message=(
-                        f"{name}: mixed line endings "
-                        f"(CRLF={crlf}, LF={lone_lf}, CR={lone_cr})"
+                        f"{name}: mixed line endings (CRLF={crlf}, LF={lone_lf}, CR={lone_cr})"
                     ),
                     details={"CRLF": crlf, "LF": lone_lf, "CR": lone_cr},
                 )
@@ -129,9 +128,7 @@ class TextCheck(Check):
                 "format.text.pii",
                 name,
                 pii_findings,
-                scope=(
-                    "(sampled first 1 MiB)" if sampled else "(full file)"
-                ),
+                scope=("(sampled first 1 MiB)" if sampled else "(full file)"),
                 extra_details={"sampled": sampled},
             )
         )

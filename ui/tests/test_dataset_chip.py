@@ -47,5 +47,6 @@ def test_chip_close_half_is_a_32px_square(qapp):
     from ui.widgets import make_split_chip
 
     chip = make_split_chip("A dataset", on_open=lambda: None, on_close=lambda: None)
-    close = [b for b in chip.findChildren(QPushButton) if b.text() == ""][0]
-    assert close.width() == 32 and close.height() == 32
+    close = next(b for b in chip.findChildren(QPushButton) if b.text() == "")
+    assert close.width() == 32
+    assert close.height() == 32

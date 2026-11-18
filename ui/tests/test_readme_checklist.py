@@ -2,7 +2,7 @@
 
 
 def _view():
-    from ui.dataset_detail import DatasetDetailView
+    from ui.dataset import DatasetDetailView
 
     v = DatasetDetailView.__new__(DatasetDetailView)
     return v

@@ -51,8 +51,22 @@ def _placeholders(value: str) -> set[str]:
     return out
 
 
+def _package_files() -> list[Path]:
+    """Every module in a ``ui/`` sub-package (the view tree, not the tests).
+
+    The dataset detail page lives in ``ui/dataset/`` (dv-hcg.22), so the
+    scans below must walk the sub-packages too — a module the scan does
+    not see is a module whose copy the catalogue cannot police.
+    """
+    files: list[Path] = []
+    for sub in sorted(p for p in _UI_DIR.iterdir() if p.is_dir() and p.name != "tests"):
+        files += sorted(sub.rglob("*.py"))
+    return files
+
+
 def _python_files() -> list[Path]:
     files = sorted(_UI_DIR.glob("*.py"))
+    files += _package_files()
     files += sorted((_UI_DIR / "tests").glob("*.py"))
     entry = _UI_DIR.parent / "main.py"
     if entry.is_file():
@@ -63,6 +77,7 @@ def _python_files() -> list[Path]:
 def _app_files() -> list[Path]:
     """Application code only — tests never count as a catalogue reference."""
     files = sorted(_UI_DIR.glob("*.py"))
+    files += _package_files()
     entry = _UI_DIR.parent / "main.py"
     if entry.is_file():
         files.append(entry)
@@ -100,7 +115,7 @@ def _catalog_data() -> dict:
         return json.load(fh)
 
 
-def _lookup_calls() -> list[tuple[Path, int, str, set[str]]]:
+def _lookup_calls() -> list[tuple[Path, int, str, set[str]]]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Every ``t("key", ...)`` / ``tn("key", count, ...)`` call in ui/.
 
     Returns ``(path, line, key, placeholders_supplied)`` tuples.
@@ -259,8 +274,16 @@ _SQL = re.compile(
 _URLISH = re.compile(r"://|^[/\\]|\.(?:json|csv|md|xlsx?|sav|jsonld)$")
 _DATE_FORMAT = re.compile(r"^%[YmdHMSjyBbA-Za-z%\-:. ]+$")
 _REGEX_CALLS = {
-    "compile", "match", "fullmatch", "search", "sub", "subn",
-    "findall", "finditer", "split", "escape",
+    "compile",
+    "match",
+    "fullmatch",
+    "search",
+    "sub",
+    "subn",
+    "findall",
+    "finditer",
+    "split",
+    "escape",
 }
 _KEYSEQ_CALLS = {"QKeySequence", "QKeySequence.StandardKey"}
 
@@ -278,9 +301,11 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         "dashboard: crawl started": "startup-probe label (opt-in temp file)",
         "JetBrains Mono": "font family name for the mono face",
     },
-    "ui/dataset_detail.py": {
+    "ui/dataset/header_section.py": {
         "<a href='": "rich-text link markup",
         "; text-decoration:none;'>": "rich-text link markup",
+    },
+    "ui/dataset/checks_section.py": {
         "not executed": "needle matched against an engine check description",
     },
     "ui/help_index.py": {
@@ -319,59 +344,63 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         "Inter, 'Segoe UI', sans-serif": "font stack for the UI face",
         "'JetBrains Mono', Consolas, monospace": "font stack for the mono face",
         "Segoe UI": "font family name",
+        "unknown theme ": "developer-facing error message (unknown theme name)",
+        "; known themes: ": "developer-facing error message (unknown theme name)",
+        "unknown role ": "developer-facing error message (unknown role name)",
+        " in theme ": "developer-facing error message (unknown role name)",
         "needs review": "needle matched against a Dataverse curation label",
         "author contacted": "needle matched against a Dataverse curation label",
         "contact author": "needle matched against a Dataverse curation label",
-        'body text on a card': "the contrast contract names the pair it checks",
-        'body text on the page': "the contrast contract names the pair it checks",
-        'muted text on a card': "the contrast contract names the pair it checks",
-        'muted text on the page': "the contrast contract names the pair it checks",
-        'muted text on a tinted panel': "the contrast contract names the pair it checks",
-        'subtle hint text on a card': "the contrast contract names the pair it checks",
-        'text on the brand fill': "the contrast contract names the pair it checks",
-        'text on a tint': "the contrast contract names the pair it checks",
-        'error text on a card': "the contrast contract names the pair it checks",
-        'error text on the error surface': "the contrast contract names the pair it checks",
-        'success text on a card': "the contrast contract names the pair it checks",
-        'warning text on a card': "the contrast contract names the pair it checks",
-        'brand text on a card': "the contrast contract names the pair it checks",
-        'brand text on the page': "the contrast contract names the pair it checks",
-        'muted text on a raised panel': "the contrast contract names the pair it checks",
-        'subtle hint text on the page': "the contrast contract names the pair it checks",
-        'subtle hint text on a raised panel': "the contrast contract names the pair it checks",
-        'text on the secondary fill': "the contrast contract names the pair it checks",
-        'text on the error fill': "the contrast contract names the pair it checks",
-        'amber text on a card': "the contrast contract names the pair it checks",
-        'disabled text on a card': "the contrast contract names the pair it checks",
-        'disabled text on the page': "the contrast contract names the pair it checks",
-        'disabled primary label': "the contrast contract names the pair it checks",
-        'success icon on a card': "the contrast contract names the pair it checks",
-        'warning icon on a card': "the contrast contract names the pair it checks",
-        'error icon on a card': "the contrast contract names the pair it checks",
-        'brand icon on a card': "the contrast contract names the pair it checks",
-        'tertiary icon on a card': "the contrast contract names the pair it checks",
-        'control edge on a card': "the contrast contract names the pair it checks",
-        'control edge on the page': "the contrast contract names the pair it checks",
-        'focus ring on a card': "the contrast contract names the pair it checks",
-        'blocked step text on a card': "the contrast contract names the pair it checks",
-        'blocked step text on the page': "the contrast contract names the pair it checks",
-        'placeholder text on a field': "the contrast contract names the pair it checks",
-        'neutral badge': "the contrast contract names the pair it checks",
-        'blue badge': "the contrast contract names the pair it checks",
-        'green badge': "the contrast contract names the pair it checks",
-        'red badge': "the contrast contract names the pair it checks",
-        'soft red badge': "the contrast contract names the pair it checks",
-        'grey badge': "the contrast contract names the pair it checks",
-        'soft green badge': "the contrast contract names the pair it checks",
-        'indigo badge': "the contrast contract names the pair it checks",
-        'orange badge': "the contrast contract names the pair it checks",
-        'violet badge': "the contrast contract names the pair it checks",
-        'amber badge': "the contrast contract names the pair it checks",
-        'teal badge': "the contrast contract names the pair it checks",
-        'pink badge': "the contrast contract names the pair it checks",
-        'lime badge': "the contrast contract names the pair it checks",
-        'sky badge': "the contrast contract names the pair it checks",
-        'sand badge': "the contrast contract names the pair it checks",
+        "body text on a card": "the contrast contract names the pair it checks",
+        "body text on the page": "the contrast contract names the pair it checks",
+        "muted text on a card": "the contrast contract names the pair it checks",
+        "muted text on the page": "the contrast contract names the pair it checks",
+        "muted text on a tinted panel": "the contrast contract names the pair it checks",
+        "subtle hint text on a card": "the contrast contract names the pair it checks",
+        "text on the brand fill": "the contrast contract names the pair it checks",
+        "text on a tint": "the contrast contract names the pair it checks",
+        "error text on a card": "the contrast contract names the pair it checks",
+        "error text on the error surface": "the contrast contract names the pair it checks",
+        "success text on a card": "the contrast contract names the pair it checks",
+        "warning text on a card": "the contrast contract names the pair it checks",
+        "brand text on a card": "the contrast contract names the pair it checks",
+        "brand text on the page": "the contrast contract names the pair it checks",
+        "muted text on a raised panel": "the contrast contract names the pair it checks",
+        "subtle hint text on the page": "the contrast contract names the pair it checks",
+        "subtle hint text on a raised panel": "the contrast contract names the pair it checks",
+        "text on the secondary fill": "the contrast contract names the pair it checks",
+        "text on the error fill": "the contrast contract names the pair it checks",
+        "amber text on a card": "the contrast contract names the pair it checks",
+        "disabled text on a card": "the contrast contract names the pair it checks",
+        "disabled text on the page": "the contrast contract names the pair it checks",
+        "disabled primary label": "the contrast contract names the pair it checks",
+        "success icon on a card": "the contrast contract names the pair it checks",
+        "warning icon on a card": "the contrast contract names the pair it checks",
+        "error icon on a card": "the contrast contract names the pair it checks",
+        "brand icon on a card": "the contrast contract names the pair it checks",
+        "tertiary icon on a card": "the contrast contract names the pair it checks",
+        "control edge on a card": "the contrast contract names the pair it checks",
+        "control edge on the page": "the contrast contract names the pair it checks",
+        "focus ring on a card": "the contrast contract names the pair it checks",
+        "blocked step text on a card": "the contrast contract names the pair it checks",
+        "blocked step text on the page": "the contrast contract names the pair it checks",
+        "placeholder text on a field": "the contrast contract names the pair it checks",
+        "neutral badge": "the contrast contract names the pair it checks",
+        "blue badge": "the contrast contract names the pair it checks",
+        "green badge": "the contrast contract names the pair it checks",
+        "red badge": "the contrast contract names the pair it checks",
+        "soft red badge": "the contrast contract names the pair it checks",
+        "grey badge": "the contrast contract names the pair it checks",
+        "soft green badge": "the contrast contract names the pair it checks",
+        "indigo badge": "the contrast contract names the pair it checks",
+        "orange badge": "the contrast contract names the pair it checks",
+        "violet badge": "the contrast contract names the pair it checks",
+        "amber badge": "the contrast contract names the pair it checks",
+        "teal badge": "the contrast contract names the pair it checks",
+        "pink badge": "the contrast contract names the pair it checks",
+        "lime badge": "the contrast contract names the pair it checks",
+        "sky badge": "the contrast contract names the pair it checks",
+        "sand badge": "the contrast contract names the pair it checks",
     },
     "main.py": {
         "main.py imported": "startup-probe label (opt-in temp file)",
@@ -383,7 +412,7 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         "MainWindow constructed": "startup-probe label (opt-in temp file)",
         "window shown": "startup-probe label (opt-in temp file)",
         "first paint": "startup-probe label (opt-in temp file)",
-        'gallery shown': "startup-probe label (opt-in temp file)",
+        "gallery shown": "startup-probe label (opt-in temp file)",
     },
 }
 
@@ -482,9 +511,7 @@ def test_lookup_placeholders_match_catalog():
             continue
         missing = _placeholders(value) - supplied
         if missing:
-            problems.append(
-                f"{path.name}:{line} -> {key} missing {sorted(missing)}"
-            )
+            problems.append(f"{path.name}:{line} -> {key} missing {sorted(missing)}")
     assert problems == [], "placeholder mismatches:\n" + "\n".join(problems)
 
 
@@ -669,6 +696,7 @@ def test_cli_help_text_is_catalogue_backed():
         return
     tree = ast.parse(entry.read_text(encoding="utf-8"))
     hits = []
+    wanted: tuple[str, ...] = ()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
@@ -689,9 +717,7 @@ def test_cli_help_text_is_catalogue_backed():
             continue
         for kw in node.keywords:
             if kw.arg in wanted and isinstance(kw.value, ast.Constant):
-                hits.append(
-                    f"main.py:{node.lineno} {name}({kw.arg}={kw.value.value!r})"
-                )
+                hits.append(f"main.py:{node.lineno} {name}({kw.arg}={kw.value.value!r})")
     assert hits == [], "inline CLI copy found:\n" + "\n".join(hits)
 
 

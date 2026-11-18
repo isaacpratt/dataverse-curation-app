@@ -6,9 +6,13 @@ endpoint carrying ``{"guestbookResponse": ...}``; the reply holds a signed
 URL that streams the ZIP. These tests pin the wire format and the error path.
 """
 
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any, ClassVar, Literal
+
 import requests
 
-from dataverse_client import DataverseClient
+from curation.client import DataverseClient
 
 PID = "doi:10.80240/FK2/RZXIKC"
 
@@ -16,92 +20,92 @@ PID = "doi:10.80240/FK2/RZXIKC"
 class _SignedUrlResponse:
     status_code = 200
 
-    def __init__(self, payload):
+    def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload
 
-    def json(self):
+    def json(self) -> dict[str, Any]:
         return self._payload
 
-    def raise_for_status(self):
+    def raise_for_status(self) -> None:
         return None
 
-    def close(self):
+    def close(self) -> None:
         return None
 
 
 class _ErrorResponse:
-    def __init__(self, status, message):
+    def __init__(self, status: int, message: str) -> None:
         self.status_code = status
         self._message = message
 
-    def json(self):
+    def json(self) -> dict[str, str]:
         return {"status": "ERROR", "message": self._message}
 
     @property
-    def text(self):
+    def text(self) -> str:
         import json
 
         return json.dumps({"status": "ERROR", "message": self._message})
 
-    def raise_for_status(self):
+    def raise_for_status(self) -> None:
         raise requests.HTTPError(response=self)
 
-    def close(self):
+    def close(self) -> None:
         return None
 
 
 class _ZipResponse:
     status_code = 200
     url = "http://example.test/signed"
-    headers: dict = {}
+    headers: ClassVar[dict[str, str]] = {}
 
-    def __init__(self, payload=b"zipbytes"):
+    def __init__(self, payload: bytes = b"zipbytes") -> None:
         self._payload = payload
 
-    def __enter__(self):
+    def __enter__(self) -> "_ZipResponse":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: Any) -> Literal[False]:
         return False
 
-    def raise_for_status(self):
+    def raise_for_status(self) -> None:
         return None
 
-    def iter_content(self, chunk_size):
+    def iter_content(self, chunk_size: int) -> Iterator[bytes]:
         yield self._payload
 
 
 class _FakeSession:
-    def __init__(self, post_response, zip_response):
+    def __init__(self, post_response: Any, zip_response: Any) -> None:
         self._post_response = post_response
         self._zip_response = zip_response
-        self.posts: list[tuple[str, dict]] = []
-        self.gets: list[tuple[str, dict]] = []
+        self.posts: list[tuple[str, dict[str, Any]]] = []
+        self.gets: list[tuple[str, dict[str, Any]]] = []
 
-    def post(self, url, **kwargs):
+    def post(self, url: str, **kwargs: Any) -> Any:
         self.posts.append((url, kwargs))
         return self._post_response
 
-    def get(self, url, **kwargs):
+    def get(self, url: str, **kwargs: Any) -> Any:
         self.gets.append((url, kwargs))
         return self._zip_response
 
 
-def _client_with(session, token="token"):
+def _client_with(session: Any, token: str = "token") -> DataverseClient:
     client = DataverseClient.__new__(DataverseClient)
     client._session = session
     client._api_token = token
     client._timeout = 5
     client._last_download_error = ""
 
-    def _api(path):
+    def _api(path: str) -> str:
         return "http://example.test" + path
 
-    client._api = _api
+    client._api = _api  # type: ignore[method-assign]
     return client
 
 
-def test_guestbook_response_is_posted_then_signed_url_streamed(tmp_path):
+def test_guestbook_response_is_posted_then_signed_url_streamed(tmp_path: Path) -> None:
     signed = "http://example.test/api/access/dataset/11657?gbrecs=true&gbrids=99"
     session = _FakeSession(
         _SignedUrlResponse({"status": "OK", "data": {"signedUrl": signed}}),
@@ -128,10 +132,8 @@ def test_guestbook_response_is_posted_then_signed_url_streamed(tmp_path):
     assert session.gets[0][0] == signed, "the signed URL, not the API path"
 
 
-def test_rejected_guestbook_reports_the_server_reason(tmp_path):
-    session = _FakeSession(
-        _ErrorResponse(400, "Missing required fields: Position"), _ZipResponse()
-    )
+def test_rejected_guestbook_reports_the_server_reason(tmp_path: Path) -> None:
+    session = _FakeSession(_ErrorResponse(400, "Missing required fields: Position"), _ZipResponse())
     client = _client_with(session)
 
     try:
@@ -148,7 +150,7 @@ def test_rejected_guestbook_reports_the_server_reason(tmp_path):
     assert not session.gets, "nothing streams when the guestbook is rejected"
 
 
-def test_guestbook_response_needs_an_api_token(tmp_path):
+def test_guestbook_response_needs_an_api_token(tmp_path: Path) -> None:
     session = _FakeSession(
         _SignedUrlResponse({"data": {"signedUrl": "http://example.test/x"}}),
         _ZipResponse(),

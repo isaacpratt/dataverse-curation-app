@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from download_manager import DownloadQuote
+from curation.download_manager import DownloadQuote
 from ui.i18n import t
 from ui.theme import TEXT_WARNING
 from ui.widgets import (
@@ -143,7 +143,7 @@ class DownloadApprovalDialog(QDialog):
             self._add_question(form, question)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidget(host)
         scroll.setMinimumHeight(150)
         scroll.setMaximumHeight(340)
@@ -157,9 +157,7 @@ class DownloadApprovalDialog(QDialog):
         required: bool,
         prefill: str = "",
     ) -> None:
-        caption = QLabel(
-            f"{label}{t('download.required_marker') if required else ''}"
-        )
+        caption = QLabel(f"{label}{t('download.required_marker') if required else ''}")
         form.addWidget(caption)
         edit = make_line_edit(t("download.account_placeholder"))
         if prefill:
@@ -219,9 +217,7 @@ class DownloadApprovalDialog(QDialog):
                 if q.get("required") and not self._value(widget)
             ]
             if missing:
-                self._error.setText(
-                    t("download.missing_fields", fields=", ".join(missing))
-                )
+                self._error.setText(t("download.missing_fields", fields=", ".join(missing)))
                 self._error.setVisible(True)
                 return
         super().accept()
@@ -241,7 +237,7 @@ class DownloadApprovalDialog(QDialog):
             if not value:
                 continue
             try:
-                answers.append({"id": int(question.get("id")), "value": value})
+                answers.append({"id": int(question.get("id") or 0), "value": value})
             except (TypeError, ValueError):
                 continue
         if answers:

@@ -61,7 +61,7 @@ def strip_filename_prefix(message: str, path: str = "") -> str:
     text = str(message or "").strip()
     base = _base_name(path)
     if base and text.startswith(base + ": "):
-        return text[len(base) + 2:].strip()
+        return text[len(base) + 2 :].strip()
     head, sep, tail = text.partition(": ")
     if sep and " " not in head:
         return tail.strip()

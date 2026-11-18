@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from engine import __version__ as APP_VERSION  # noqa: E402
+from engine import __version__ as app_version  # noqa: E402
 from engine.version import parse  # noqa: E402
 from tools import check_pack  # noqa: E402
 
@@ -38,9 +38,10 @@ from tools import check_pack  # noqa: E402
 def find_vpk() -> Path:
     """Return the vpk executable, or explain how to install it."""
     override = os.environ.get("VPK")
+    which = shutil.which("vpk")
     candidates = [
         Path(override) if override else None,
-        Path(shutil.which("vpk")) if shutil.which("vpk") else None,
+        Path(which) if which else None,
         Path.home() / ".dotnet" / "tools" / ("vpk.exe" if os.name == "nt" else "vpk"),
     ]
     for candidate in candidates:
@@ -128,8 +129,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--version",
-        default=APP_VERSION,
-        help=f"package version (default: engine.__version__ = {APP_VERSION})",
+        default=app_version,
+        help=f"package version (default: engine.__version__ = {app_version})",
     )
     parser.add_argument(
         "--channel",

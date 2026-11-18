@@ -37,7 +37,8 @@ def test_global_qss_renders_tokens():
 
     qss = global_qss()
     assert "#004ccd" in qss  # PRIMARY actually landed in the stylesheet
-    assert "{{" not in qss and "}}" not in qss  # f-string braces collapsed
+    assert "{{" not in qss
+    assert "}}" not in qss
     assert not _UNRENDERED.search(qss)  # no leftover {TOKEN}
 
 
@@ -46,5 +47,6 @@ def test_action_button_style_renders_tokens():
 
     qss = action_button_style()
     assert "#004ccd" in qss
-    assert "{{" not in qss and "}}" not in qss
+    assert "{{" not in qss
+    assert "}}" not in qss
     assert not _UNRENDERED.search(qss)

@@ -14,16 +14,22 @@ dataverse-curation-app/
 │   ├── runner.py         # run_report / list_planned_checks
 │   └── tests/            # pytest suite (engine + UI; run --collect-only -q for the current count)
 ├── ui/                   # PySide6 views (main window, dashboard, detail, settings/about panes, log page, workers, dialogs, theme, widgets incl. AppTable content-fit, progress ring)
+│   ├── dataset/          # the dataset detail page: page.py facade + one module per section, over the shared contract state.py (DetailState)
 │   ├── theme.py          # palette -> semantic roles -> contrast contract -> one button system
 │   ├── widgets.py        # the component kit (every view builds its controls through it)
 │   ├── gallery.py        # the component gallery: every kit component on one page
 │   └── table_layout.py   # one layout controller per table header (persists user gestures only)
-├── tools/probes/         # offscreen UI probes (queue columns, manifest columns, page headings, card corner, buttons, gallery)
-├── dataverse_client.py   # Native/Search API client (total-driven paginated search + pooled inventory enrichment, versions/compare/timestamps/notifications/curation labels)
-├── download_manager.py   # approval-gated downloads, originals, skip-if-staged, verify (ok/problems/warnings)
-├── metadata_check.py     # citation-block completeness (McMaster / Minimal profiles)
-├── applog.py             # in-memory request log (Log page)
-├── storage.py            # SQLite local state + JSON caches (sizes, labels, table layout)
+├── tools/                  # operational helpers (audit/SBOM/licenses, build, pack, smoke, doc links, complexity, benchmarks) + probes/
+│   └── probes/             # offscreen UI probes (queue columns, manifest columns, page headings, card corner, buttons, gallery)
+├── curation/             # the app core: no Qt, no view imports (import-linter enforces both)
+│   ├── client/           # Native/Search API client (constants/errors/http/parsers/caches/downloads/errors/refusals/access/DataverseClient; total-driven paginated search + pooled inventory enrichment, versions/compare/timestamps/notifications/curation labels)
+│   ├── download_manager.py # approval-gated downloads, originals, skip-if-staged, verify (ok/problems/warnings)
+│   ├── dashboard_cache.py  # Qt-free dashboard cache helpers (slot keys, fingerprints, diffing, load/save)
+│   ├── metadata_check.py   # citation-block completeness (McMaster / Minimal profiles)
+│   ├── response_draft.py   # depositor response assembler
+│   ├── review_rules.py     # rule-driven completeness evaluation
+│   ├── applog.py           # in-memory request log (Log page)
+│   └── storage.py          # SQLite local state + JSON caches (sizes, labels, table layout)
 ├── main.py               # entry point (GUI + --headless)
 └── config.example.json   # configuration template (copy to config.json)
 ```
@@ -33,7 +39,7 @@ dataverse-curation-app/
 ```bash
 uv sync                   # create .venv and install everything incl. dev group (from uv.lock; no pip needed)
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
-uv run pytest             # 848 tests (400 engine + 448 UI; run uv run pytest --collect-only -q for current count)
+uv run pytest             # 956 tests; run uv run pytest --collect-only -q for current count
 pre-commit run --all-files # optional local gate (CI runs it too); needs uv on PATH. core.hooksPath is beads-managed, so hooks are not auto-installed — run it manually or rely on CI
 uv run python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
 uv run python main.py --gallery      # the component gallery: every kit component on one page
@@ -41,7 +47,7 @@ uv run python main.py --gallery      # the component gallery: every kit componen
 uv run python main.py --headless <staged_dir> --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE
 ```
 
-Requirements: Python 3.10+ (Windows recommended); builds pin Python 3.11 via `.python-version` and `uv.lock`. Earlier `pip install -r requirements.txt` workflow is gone — dependencies live only in `pyproject.toml` + `uv.lock` (pip escape hatch: `uv export --format requirements-txt`). Headless exit codes: 0 clean, 1 error-level findings, 2 usage/IO failure. R is only needed for parity verification against the original scripts during the port phase, not at runtime.
+Requirements: Python 3.11+ (Windows recommended); builds pin Python 3.11 via `.python-version` and `uv.lock`. Earlier `pip install -r requirements.txt` workflow is gone — dependencies live only in `pyproject.toml` + `uv.lock` (pip escape hatch: `uv export --format requirements-txt`). Headless exit codes: 0 clean, 1 error-level findings, 2 usage/IO failure. R is only needed for parity verification against the original scripts during the port phase, not at runtime.
 
 ## Packaging (portable)
 
@@ -97,7 +103,8 @@ bd dolt push          # Push beads data to remote
 Gate before handoff; run from the repository root when code (not docs-only) changed:
 
 - `uv run pytest -q` — must exit 0
-- `uv run poe typecheck` — must report `Success: no issues found`; scope is the engine contract (`[tool.mypy] files`), so run bare `uv run mypy`
+- `uv run poe typecheck` — must report `Success: no issues found`; the scope is `[tool.mypy] files` (`engine/`, `curation/`, `ui/`, `main.py`), so run bare `uv run mypy`. The engine contract and `main.py` are checked under mypy `--strict`; the UI layer is checked under the documented relaxation in `[[tool.mypy.overrides]] module = ["ui.*"]` (the "annotate everything" rules off, `check_untyped_defs` and every shape check on)
+- `uv run poe contracts` — import-linter contracts must stay green: `engine/` and `curation/` may not import `ui/` or `PySide6`, and the operational helpers in `tools/` may not import `ui/` (the UI probes are the documented exception)
 - `python tools/probes/run_all.py` — must end with `all N probes passed`; mandatory for UI/theme changes, and cheap enough to always run
 - headless box? set `QT_QPA_PLATFORM=offscreen` first, or the probes fail for the wrong reason
 - probes run against a throwaway temp workspace (see `tools/probes/README.md`) — never against the configured instance or the real `workspace/table_layout.json`

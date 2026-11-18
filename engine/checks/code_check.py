@@ -6,6 +6,7 @@ line-ending sanity and TODO/FIXME markers.
 
 import re
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks._util import detect_encoding
 from engine.checks.base import Check, CheckResult
@@ -19,10 +20,29 @@ class CodeCheck(Check):
     """Code check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.code"
-    extensions = {
-        ".r", ".py", ".qmd", ".rmd", ".jl", ".m", ".f90", ".f",
-        ".cpp", ".cxx", ".cc", ".c", ".h", ".sh", ".bat", ".sql",
-        ".cs", ".java", ".tex", ".do", ".sas", ".ps1",
+    extensions: ClassVar[set[str]] = {
+        ".r",
+        ".py",
+        ".qmd",
+        ".rmd",
+        ".jl",
+        ".m",
+        ".f90",
+        ".f",
+        ".cpp",
+        ".cxx",
+        ".cc",
+        ".c",
+        ".h",
+        ".sh",
+        ".bat",
+        ".sql",
+        ".cs",
+        ".java",
+        ".tex",
+        ".do",
+        ".sas",
+        ".ps1",
     }
 
     def run(self, files: list[Path]) -> list[CheckResult]:

@@ -1,4 +1,4 @@
-﻿"""NetCDF inspection.
+"""NetCDF inspection.
 
 Port of CUR_Res_CurationTools Scripts/Inspect_nc_Script.R Phase A
 (usability scan): safe load, dimension summary, variable count, spatial
@@ -8,7 +8,7 @@ health sample of the first variable.
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -42,9 +42,7 @@ def _data_health(ds: Any) -> tuple[str, bool]:
         import numpy as np
 
         per_dim = max(1, int(np.ceil(_SAMPLE_VALUES ** (1 / len(first.dimensions)))))
-        index = tuple(
-            slice(0, min(per_dim, ds.dimensions[d].size)) for d in first.dimensions
-        )
+        index = tuple(slice(0, min(per_dim, ds.dimensions[d].size)) for d in first.dimensions)
         values = np.ma.compressed(first[index])
         if values.size == 0 or np.all(np.isnan(values.astype("float64"))):
             return ("all NaNs (empty)", False)
@@ -57,7 +55,7 @@ class NcCheck(Check):
     """NetCDF check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.netcdf"
-    extensions = {".nc", ".cdf"}
+    extensions: ClassVar[set[str]] = {".nc", ".cdf"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         # Per-file isolation: a fault in one file becomes a finding, never a

@@ -4,6 +4,7 @@ Run against CUR_Res_CurationTools sample data (skipped when absent).
 """
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -25,9 +26,7 @@ from engine.checks.tiff_check import TiffCheck
 from engine.checks.xlsx_check import XlsxCheck
 from engine.checks.xml_check import XmlCheck
 
-CUR_DATA = (
-    Path(__file__).resolve().parents[3] / "CUR_Res_CurationTools" / "data"
-)
+CUR_DATA = Path(__file__).resolve().parents[3] / "CUR_Res_CurationTools" / "data"
 
 requires_samples = pytest.mark.skipif(
     not CUR_DATA.exists(), reason="CUR_Res_CurationTools sample data not found"
@@ -51,7 +50,7 @@ CASES = [
 ]
 
 
-def _sample_files(check, subdirectory):
+def _sample_files(check: Any, subdirectory: str) -> list[Path]:
     directory = CUR_DATA / subdirectory
     return sorted(
         path
@@ -61,8 +60,8 @@ def _sample_files(check, subdirectory):
 
 
 @requires_samples
-@pytest.mark.parametrize("label,check,subdirectory", CASES, ids=[c[0] for c in CASES])
-def test_format_check_on_samples(label, check, subdirectory):
+@pytest.mark.parametrize(("label", "check", "subdirectory"), CASES, ids=[c[0] for c in CASES])
+def test_format_check_on_samples(label: str, check: Any, subdirectory: str) -> None:
     files = _sample_files(check, subdirectory)
     assert files, f"no {label} samples found in {subdirectory}"
 
@@ -74,24 +73,19 @@ def test_format_check_on_samples(label, check, subdirectory):
         assert result.message
 
     assert any(r.passed for r in results), (
-        f"{label}: expected at least one passing finding; got "
-        f"{[r.message for r in results]}"
+        f"{label}: expected at least one passing finding; got {[r.message for r in results]}"
     )
 
 
 @requires_samples
-def test_extensions_inventory_flags():
-    files = sorted(
-        path
-        for path in (CUR_DATA / "Inspect_Extensions").rglob("*")
-        if path.is_file()
-    )
+def test_extensions_inventory_flags() -> None:
+    files = sorted(path for path in (CUR_DATA / "Inspect_Extensions").rglob("*") if path.is_file())
     results = ExtensionsCheck().run(files)
     distribution = next(r for r in results if r.check_id == "inventory.extensions")
     assert distribution.passed
 
 
-def test_images_synthetic(tmp_path):
+def test_images_synthetic(tmp_path: Path) -> None:
     from PIL import Image
 
     path = tmp_path / "sample.png"
@@ -104,7 +98,7 @@ def test_images_synthetic(tmp_path):
     assert valid.details["height"] == 16
 
 
-def test_fastq_synthetic(tmp_path):
+def test_fastq_synthetic(tmp_path: Path) -> None:
     records = ""
     for index in range(4):
         records += f"@read{index}\nACGTACGT\n+\nIIIIIIII\n"
@@ -118,7 +112,7 @@ def test_fastq_synthetic(tmp_path):
     assert by_id["format.fastq.metadata"].details["gc_content"] == 0.5
 
 
-def test_fastq_gzip(tmp_path):
+def test_fastq_gzip(tmp_path: Path) -> None:
     import gzip
 
     path = tmp_path / "sample.fq.gz"

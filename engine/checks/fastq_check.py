@@ -7,6 +7,7 @@ content on a sample. Transparently handles gzip-compressed files.
 
 import gzip
 from pathlib import Path
+from typing import ClassVar, TextIO
 
 from engine.checks.base import Check, CheckResult
 
@@ -20,7 +21,7 @@ except Exception:  # pragma: no cover
     _MAX_LINE_CHARS = 1_000_000
 
 
-def _open_text(path: Path):
+def _open_text(path: Path) -> TextIO:
     with open(path, "rb") as probe:
         magic = probe.read(2)
     if magic == b"\x1f\x8b":
@@ -32,7 +33,7 @@ class FastqCheck(Check):
     """FASTQ check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.fastq"
-    extensions = {".fastq", ".fq"}
+    extensions: ClassVar[set[str]] = {".fastq", ".fq"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
@@ -119,10 +120,7 @@ class FastqCheck(Check):
                 check_id="format.fastq.metadata",
                 level="info",
                 passed=True,
-                message=(
-                    f"{name}: avg read length {avg_length:.1f}, "
-                    f"GC {gc_content:.2%}"
-                ),
+                message=(f"{name}: avg read length {avg_length:.1f}, GC {gc_content:.2%}"),
                 details={
                     "reads_sampled": reads,
                     "avg_length": round(avg_length, 1),

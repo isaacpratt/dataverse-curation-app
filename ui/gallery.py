@@ -318,9 +318,7 @@ def _input_section() -> QWidget:
         )
     )
     lay.addWidget(make_field_label(t("gallery.inputs.multi_line_label")))
-    lay.addWidget(
-        make_multiline_input(t("gallery.inputs.multi_line_placeholder"), height=96)
-    )
+    lay.addWidget(make_multiline_input(t("gallery.inputs.multi_line_placeholder"), height=96))
     lay.addWidget(make_field_label(t("gallery.inputs.read_only_label")))
     lay.addWidget(make_plain_text_view(t("gallery.inputs.read_only_content")))
     lay.addWidget(make_field_label(t("gallery.inputs.check_box_label")))
@@ -445,7 +443,7 @@ class GalleryWindow(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         content = QWidget()
         content.setObjectName("GalleryContent")
         content.setStyleSheet(page_background_qss("GalleryContent"))
@@ -469,7 +467,7 @@ class GalleryWindow(QWidget):
         footer = QLabel(t("gallery.footer"))
         footer.setObjectName("CaptionSM")
         footer.setWordWrap(True)
-        footer.setTextFormat(Qt.PlainText)
+        footer.setTextFormat(Qt.TextFormat.PlainText)
         outer.addWidget(footer)
         footer.setToolTip(t("gallery.footer_tip", colour=TEXT_MUTED))
 

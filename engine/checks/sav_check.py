@@ -6,6 +6,7 @@ a non-ASCII encoding scan.
 """
 
 from pathlib import Path
+from typing import Any, ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -14,7 +15,7 @@ _MAX_UNLABELED_LISTED = 20
 _MAX_VARIABLES_LISTED = 200
 
 
-def _has_non_ascii(frame) -> bool:
+def _has_non_ascii(frame: Any) -> bool:
     for column in frame.columns:
         for value in frame[column].dropna().head(_ROW_LIMIT):
             if isinstance(value, str) and any(ord(ch) > 127 for ch in value):
@@ -26,7 +27,7 @@ class SavCheck(Check):
     """SPSS check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.spss"
-    extensions = {".sav"}
+    extensions: ClassVar[set[str]] = {".sav"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
@@ -113,8 +114,7 @@ class SavCheck(Check):
             level="info",
             passed=True,
             message=(
-                f"{name}: {len(frame.columns)} variables "
-                f"({len(value_labels)} with value labels)"
+                f"{name}: {len(frame.columns)} variables ({len(value_labels)} with value labels)"
             ),
             details={"variables": variables[:_MAX_VARIABLES_LISTED]},
         )

@@ -35,8 +35,8 @@ def test_kit_combo_variants_share_the_contract(qapp):
 
 @pytest.fixture
 def view(qapp, tmp_path):
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     def _fv(value):
         return {"typeName": "text", "multiple": False, "typeClass": "primitive", "value": value}
@@ -56,8 +56,13 @@ def view(qapp, tmp_path):
     }
     cfg = Config()
     cfg.app.workspace = Path(tmp_path)
-    v = DatasetDetailView(cfg, "doi:10.5072/FK2/COMBOTEST", "Combo test",
-                          cached_metadata=metadata, cached_inventory=[])
+    v = DatasetDetailView(
+        cfg,
+        "doi:10.5072/FK2/COMBOTEST",
+        "Combo test",
+        cached_metadata=metadata,
+        cached_inventory=[],
+    )
     v.show()
     for _ in range(5):
         qapp.processEvents()

@@ -11,6 +11,7 @@ images still validate instead of reporting "Missing".
 
 import struct
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -78,13 +79,24 @@ def _parse_bmp(data: bytes) -> tuple[int, int, str] | None:
         return None
 
 
-def _parse_jpeg(data: bytes) -> tuple[int, int, str] | None:
+def _parse_jpeg(data: bytes) -> tuple[int, int, str] | None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     # SOI + scan markers for SOFn (frame header holds dimensions).
     if len(data) < 4 or data[:2] != b"\xff\xd8":
         return None
     sof_markers = {
-        0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
-        0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF,
+        0xC0,
+        0xC1,
+        0xC2,
+        0xC3,
+        0xC5,
+        0xC6,
+        0xC7,
+        0xC9,
+        0xCA,
+        0xCB,
+        0xCD,
+        0xCE,
+        0xCF,
     }
     try:
         pos = 2
@@ -145,13 +157,12 @@ def _parse_webp(data: bytes) -> tuple[int, int, str] | None:
                     h = struct.unpack("<H", payload[8:10])[0] & 0x3FFF
                     if 0 < w <= 100000 and 0 < h <= 100000:
                         return w, h, "RGB"
-            elif fourcc == b"VP8L" and len(payload) >= 5:
-                if payload[0] == 0x2F:
-                    b1, b2, b3, b4 = payload[1], payload[2], payload[3], payload[4]
-                    w = 1 + (((b2 & 0x3F) << 8) | b1)
-                    h = 1 + (((b4 & 0x0F) << 10) | (b3 << 2) | ((b2 & 0xC0) >> 6))
-                    if 0 < w <= 100000 and 0 < h <= 100000:
-                        return w, h, "RGBA"
+            elif fourcc == b"VP8L" and len(payload) >= 5 and payload[0] == 0x2F:
+                b1, b2, b3, b4 = payload[1], payload[2], payload[3], payload[4]
+                w = 1 + (((b2 & 0x3F) << 8) | b1)
+                h = 1 + (((b4 & 0x0F) << 10) | (b3 << 2) | ((b2 & 0xC0) >> 6))
+                if 0 < w <= 100000 and 0 < h <= 100000:
+                    return w, h, "RGBA"
             pos += 8 + size + (size & 1)  # chunks are even-padded
             if pos > _STDLIB_HEADER_BYTES:
                 break
@@ -161,7 +172,7 @@ def _parse_webp(data: bytes) -> tuple[int, int, str] | None:
         return None
 
 
-def _stdlib_image_result(path: Path) -> list[CheckResult]:
+def _stdlib_image_result(path: Path) -> list[CheckResult]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Validate common rasters without Pillow (header-only, no decode)."""
     name = path.name
     suffix = path.suffix.lower()
@@ -271,7 +282,7 @@ class ImagesCheck(Check):
     """Images check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.images"
-    extensions = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}
+    extensions: ClassVar[set[str]] = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
@@ -280,11 +291,11 @@ class ImagesCheck(Check):
 
     def _run_one(self, path: Path) -> list[CheckResult]:
         try:
-            from PIL import Image  # type: ignore
+            from PIL import Image
 
             _have_pil = True
         except ImportError:
-            Image = None  # type: ignore
+            Image = None  # type: ignore  # noqa: N806 - PIL class parity
             _have_pil = False
 
         name = path.name

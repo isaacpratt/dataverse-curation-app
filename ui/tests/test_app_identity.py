@@ -34,7 +34,8 @@ def test_docent_png_loads_as_pixmap():
 
     pix = QPixmap(app_icon_path())
     assert not pix.isNull()
-    assert pix.width() > 0 and pix.height() > 0
+    assert pix.width() > 0
+    assert pix.height() > 0
 
 
 def test_mark_icon_path_resolves_16x16_png():

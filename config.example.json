@@ -1,10 +1,10 @@
 {
+  "version": 1,
   "dataverse": {
     "base_url": "https://demo.borealisdata.ca",
     "api_token": "",
-    "collection": "",
-    "collection_alias": "",
-    "subtree": ""
+    "api_token_source": "keyring",
+    "collection": ""
   },
   "app": {
     "workspace": "C:/Users/<you>/Documents/curation-workspace"
@@ -15,5 +15,5 @@
       "exiftool": ""
     }
   },
-  "_comment": "base_url can be changed in the app via Settings → Dataverse. Presets include the Borealis demo (demo.borealisdata.ca) and any custom instance. Copy this file to config.json and fill in api_token."
+  "_comment": "base_url can be changed in the app via Settings → Dataverse. Presets include the Borealis demo (demo.borealisdata.ca) and any custom instance. Copy this file to config.json; after your first save with a token, the token lives in the OS credential store (Windows Credential Manager via keyring) and this file keeps api_token_source='keyring' with a blank api_token — only the fallback plaintext path keeps it in this file (owner-only ACLs)."
 }

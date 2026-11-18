@@ -1,4 +1,4 @@
-﻿"""GeoPackage inspection via SQLite (a GeoPackage is an SQLite container).
+"""GeoPackage inspection via SQLite (a GeoPackage is an SQLite container).
 
 Port of CUR_Res_CurationTools Scripts/Inspect_gpkg_Script.R: layer listing
 with geometry types, CRS and feature counts; empty-file and read-failure
@@ -8,6 +8,7 @@ geospatial stack is required.
 
 import sqlite3
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -30,7 +31,7 @@ class GpkgCheck(Check):
     """GeoPackage check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.gpkg"
-    extensions = {".gpkg"}
+    extensions: ClassVar[set[str]] = {".gpkg"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         # Per-file isolation like every other check: one bad file must not
@@ -74,10 +75,7 @@ class GpkgCheck(Check):
                         check_id="format.gpkg.valid",
                         level="error",
                         passed=False,
-                        message=(
-                            f"{name}: not a GeoPackage "
-                            f"(application_id {application_id:#x})"
-                        ),
+                        message=(f"{name}: not a GeoPackage (application_id {application_id:#x})"),
                     ),
                     _skipped(
                         "format.gpkg.layers",
@@ -96,8 +94,7 @@ class GpkgCheck(Check):
                 geometry = {
                     table_name: (geom_type, srs_id)
                     for table_name, geom_type, srs_id in conn.execute(
-                        "SELECT table_name, geometry_type_name, srs_id "
-                        "FROM gpkg_geometry_columns"
+                        "SELECT table_name, geometry_type_name, srs_id FROM gpkg_geometry_columns"
                     )
                 }
                 defined_srs = {
@@ -132,9 +129,7 @@ class GpkgCheck(Check):
                 features = None
                 if data_type == "features":
                     try:
-                        features = _scalar(
-                            conn, f"SELECT COUNT(*) FROM {quoted_ident(table_name)}"
-                        )
+                        features = _scalar(conn, f"SELECT COUNT(*) FROM {quoted_ident(table_name)}")
                     except sqlite3.Error:
                         features = None
                 layers.append(
@@ -190,8 +185,7 @@ class GpkgCheck(Check):
                 level="warning" if undefined else "info",
                 passed=not undefined,
                 message=(
-                    f"{name}: layers without a defined CRS: "
-                    + ", ".join(undefined)
+                    f"{name}: layers without a defined CRS: " + ", ".join(undefined)
                     if undefined
                     else f"{name}: all layers have a defined CRS"
                 ),

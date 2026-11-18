@@ -5,7 +5,7 @@ Help page renders them grouped and filters as you type. Tests open the
 detail view once so its tips exist, then search the index.
 """
 
-import applog
+import curation.applog as applog
 
 
 def _open_detail_defaults(win):
@@ -43,9 +43,9 @@ def test_each_registered_tip_is_findable_by_search(win):
         win._ensure_help()
         for _g, name, text in help_entries():
             hits = [
-                (g, n, tx) for g, n, tx in help_entries()
-                if text.lower() in f"{n} {tx}".lower()
-                or name.lower() in f"{n} {tx}".lower()
+                (g, n, tx)
+                for g, n, tx in help_entries()
+                if text.lower() in f"{n} {tx}".lower() or name.lower() in f"{n} {tx}".lower()
             ]
             assert hits, f"tip {name!r} is not findable"
     finally:

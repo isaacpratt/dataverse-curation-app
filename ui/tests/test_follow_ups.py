@@ -1,5 +1,7 @@
 """Depositor follow-up UI surface (dv-5eg): queue cell + detail banner."""
 
+from typing import Any
+
 import pytest
 
 
@@ -42,7 +44,7 @@ class TestAttachFollowUps:
     def test_stamps_state_and_recomputes_from_draft(self):
         from ui.dashboard import attach_follow_ups
 
-        datasets = [
+        datasets: list[dict[str, Any]] = [
             {"persistent_id": "doi:1"},
             {"persistent_id": "doi:2", "draft_updated_at": "2026-10-20T09:00:00Z"},
             {"persistent_id": "doi:3"},
@@ -79,11 +81,11 @@ class TestAttachFollowUps:
         assert "follow_up" not in datasets[0]
 
 
-@pytest.fixture()
+@pytest.fixture
 def view(qapp, tmp_path):
     """Create a bare detail view with a real workspace for the follow-up banner."""
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     try:
         cfg = Config.load(None)
@@ -101,14 +103,14 @@ def view(qapp, tmp_path):
         def dataset_dir(self, pid):
             return tmp_path / "dataset"
 
-    v._dl_mgr = _StubDl()
-    v._set_status = lambda msg, **_kw: None
-    v._state = lambda: __import__("storage").open_state(cfg.app.workspace)
+    v._dl_mgr = _StubDl()  # type: ignore[assignment]
+    v._set_status = lambda msg, **_kw: None  # type: ignore[method-assign]
+    v._state = lambda: __import__("curation.storage", fromlist=["x"]).open_state(cfg.app.workspace)  # type: ignore[method-assign]
 
     def _log(action, notes="", details=None):
         v._logged.append((action, notes, details))
 
-    v._log_action = _log
+    v._log_action = _log  # type: ignore[method-assign]
 
     # The banner is built through the real builder so the widget tree is the
     # one the app ships.

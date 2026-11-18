@@ -56,7 +56,7 @@ footer .wrap{padding:16px 24px}
 <header class="hero"><div class="wrap">
 <h1>Dataverse Docent — Documentation</h1>
 <p>Desktop curation assistant for Alliance Dataverse instances: pulls datasets submitted for review, runs automated format checks, checks metadata completeness, and presents findings with an exportable curation report. These HTML pages are the documentation source of truth.</p>
-<div class="badges"><span class="badge ok">22 check modules</span><span class="badge ok">513 tests</span><span class="badge info">PySide6 desktop</span><span class="badge">Engine v0.1.0</span><span class="badge warn">Verified vs code 2026-11-12</span></div>
+<div class="badges"><span class="badge ok">22 check modules</span><span class="badge ok">550 tests</span><span class="badge info">PySide6 desktop</span><span class="badge">Engine v0.2.0</span><span class="badge warn">Verified vs code 2026-11-16</span></div>
 </div></header>
 <nav class="top"><div class="wrap">
 <a href="index.html" aria-current="page">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="entry-correctness.html">Entry correctness</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html">Development</a><a href="proposals.html">Proposals</a>
@@ -74,13 +74,14 @@ footer .wrap{padding:16px 24px}
 <div class="card"><h3>🧭 User guide</h3><p>Dashboard, dataset detail, workflow steps, log, troubleshooting, headless.</p><a href="user-guide.html">Read →</a></div>
 <div class="card"><h3>🛠 Development</h3><p>Setup, layout, adding a check, UI conventions, the component gallery, Qt pitfalls, probes, the planned dark-mode step, packaging.</p><a href="development.html">Read →</a></div>
 <div class="card"><h3>📌 Proposals</h3><p>The remaining plan by bucket — queued UX, verification, deferred checks, packaging, open decisions — plus the shipped record.</p><a href="proposals.html">Read →</a></div>
+<div class="card"><h3>⚖️ Decision records</h3><p>The repository-level decisions — toolchain, layout, packaging, token storage — as short, dated ADRs in <code>docs/adr/</code>.</p><a href="../adr/README.md">Read →</a></div>
 </div>
 
 <h2>Project status</h2>
 <div class="callout ok"><b>Snapshot 2026-11-12 - all six phases complete.</b> The app is feature-complete for its documented scope: 22 check modules, 513 tests (218 engine + 295 UI), 21 UI modules. Discovery is total-driven Search at <code>per_page=1000</code> plus pooled in-process inventory enrichment (no crawler dependency); the dashboard, dataset detail, downloads, auto-checks and export paths work end-to-end; one <b>onedir</b> build is packaged as a Velopack installer; startup paints and reveals the shell before cache/network work (~1 s warm, measured via <code>DOCENT_STARTUP_LOG</code>), so no blank frame or title-bar flash precedes it. The remaining plan is queued, not blocking — see below.</div>
 <div class="flow">
 <div class="step"><b><span class="n">0</span>Scaffold</b>Repo, GUI shell, storage <span class="pill p-ok">done</span></div><div class="arrow">→</div>
-<div class="step"><b><span class="n">1</span>Engine port</b>22 checks, 513 tests <span class="pill p-ok">done</span></div><div class="arrow">→</div>
+<div class="step"><b><span class="n">1</span>Engine port</b>22 checks, 550 tests <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">2</span>Report runner</b><code>run_report</code> end-to-end <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">3</span>Client + downloads</b>Search + enrichment, approval gate <span class="pill p-ok">done</span></div><div class="arrow">→</div>
 <div class="step"><b><span class="n">4</span>PySide6 GUI</b>Dashboard, detail, settings, log <span class="pill p-ok">done</span></div><div class="arrow">→</div>
@@ -94,7 +95,7 @@ footer .wrap{padding:16px 24px}
 <tr><th>Bucket</th><th>Open items</th><th>Priority</th><th>Detail</th></tr>
 <tr><td><b>Verification</b></td><td>Live authenticated pass — deferred until later, not a release blocker. Guest verification is done against the demo Borealis instance (a real Dataverse, not production); drafts and curation labels await a token</td><td><span class="pill p-mut">later</span></td><td><a href="proposals.html">Proposals →</a></td></tr>
 <tr><td><b>UX</b></td><td>Remaining P2s · step-4 quick wins · busy-indicator naming</td><td><span class="pill p-warn">P2</span>–<span class="pill p-mut">P3</span></td><td><a href="proposals.html">Proposals →</a></td></tr>
-<tr><td><b>Performance</b></td><td>Measure and tune the two constants: painting window (2,000 rows) and enrichment cap (200 rows)</td><td><span class="pill p-warn">P2</span></td><td><a href="proposals.html">Proposals →</a></td></tr>
+<tr><td><b>Performance</b></td><td>Both constants measured: painting window <b>2,000 rows</b> confirmed (25k rows — ~0.9 s per repaint, ~7.6 s uncapped), enrichment cap <b>200 rows</b> confirmed (5k collection, 100 ms GET — ~4 s per refresh, ~100 s uncapped)</td><td><span class="pill p-mut">done</span></td><td><a href="proposals.html">Proposals →</a></td></tr>
 <tr><td><b>Engine checks</b></td><td>MATLAB <code>.mat</code> and OCR parity (deferred); <code>frdr</code>/schema skipped by design</td><td><span class="pill p-mut">deferred</span></td><td><a href="proposals.html">Proposals →</a></td></tr>
 <tr><td><b>Packaging</b></td><td>Code signing (SignPath) &mdash; 0.2.0 ships unsigned with a documented SmartScreen click-through</td><td><span class="pill p-mut">milestone</span></td><td><a href="proposals.html">Proposals &rarr;</a></td></tr>
 <tr><td><b>Decisions</b></td><td>auth-fallback UX for refused datasets</td><td><span class="pill p-mut">call</span></td><td><a href="proposals.html">Proposals →</a></td></tr>
@@ -119,7 +120,7 @@ uv run python main.py --headless &lt;staged_dir&gt; --out report.json --format j
 <tr><td><code>test_audit_fixes.py</code> “31 tests”</td><td>development</td><td>Collects <b>32</b></td></tr>
 <tr><td>"200 engine tests", "79 UI tests", "18 engine + 10 UI suites", <code>test_dataverse</code> 45, <code>test_enrichment</code> 9</td><td>README layout, index layout, development</td><td>Recount 2026-11-12: <b>218</b> engine + <b>295</b> UI tests (513 total); <b>21</b> engine + <b>42</b> UI suites; <code>test_dataverse</code> <b>44</b>, <code>test_enrichment</code> <b>14</b></td></tr>
 <tr><td><code>--format json|md|both</code> missing</td><td>development layout, user-guide headless</td><td>Documented; <code>run_report_to_file(..., fmt=…)</code> verified in <code>engine/runner.py</code></td></tr>
-<tr><td>“Set/delete label not yet wired to UI”</td><td>dataverse-integration</td><td><b>Wired</b> - Assessment Action pushes via <code>set_curation_label</code> (<code>ui/dataset_detail.py:2938</code>)</td></tr>
+<tr><td>“Set/delete label not yet wired to UI”</td><td>dataverse-integration</td><td><b>Wired</b> - Assessment Action pushes via <code>set_curation_label</code> (<code>ui/dataset/actions_section.py:_on_commit</code>)</td></tr>
 <tr><td>“Log strip under the nav”</td><td>architecture, user-guide</td><td><code>LogPage</code> is a <b>stack page</b> (<code>ui/main_window.py:618</code>), opened from the nav Log button / <code>Ctrl+L</code>; timer gated to page visibility</td></tr>
 <tr><td>Storage caches omit <code>dashboard_cache.json</code></td><td>development layout</td><td>Added (helpers live in <code>ui/dashboard.py</code>)</td></tr>
 </table>
@@ -137,13 +138,16 @@ uv run python main.py --headless &lt;staged_dir&gt; --out report.json --format j
 │   ├── runner.py         # run_report / run_report_to_file / list_planned_checks
 │   └── tests/            # pytest suite (212 tests)
 ├── ui/                   # PySide6 views (21 modules, 242 tests)
-├── dataverse_client.py   # Native/Search API client
-├── download_manager.py   # approval-gated downloads + verify
-├── metadata_check.py     # citation-block completeness (McMaster / Minimal)
-├── review_rules.py       # versioned review rulesets (v2)
-├── response_draft.py     # depositor-response draft builder
-├── applog.py             # in-memory request log
-├── storage.py            # SQLite local state + JSON caches
+├── curation/             # the app core — no Qt, no view imports (import-linter enforces both)
+│   ├── client/           # client package: constants, errors, http, parsers, caches, downloads, DataverseClient
+│   ├── download_manager.py # approval-gated downloads + verify
+│   ├── metadata_check.py # citation-block completeness (McMaster / Minimal)
+│   ├── review_rules.py   # versioned review rulesets (v2)
+│   ├── response_draft.py # depositor-response draft builder
+│   ├── dashboard_cache.py # Qt-free dashboard cache helpers
+│   ├── applog.py         # in-memory request log
+│   ├── config.py         # configuration load/save, presets, env overrides
+│   └── storage.py        # SQLite local state + JSON caches
 ├── main.py               # entry point (GUI + --headless)
 └── config.example.json   # configuration template</code></pre>
 

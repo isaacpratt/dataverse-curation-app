@@ -11,10 +11,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 _ALLOWED = {
-    "ui/widgets.py",   # the kit's make_progress_bar factory
-    "ui/ring.py",      # the ring's implementation (re-exported)
-    "ui/theme.py",     # the app-level progress-bar QSS fallback
-    "ui/gallery.py",   # the component gallery
+    "ui/widgets.py",  # the kit's make_progress_bar factory
+    "ui/ring.py",  # the ring's implementation (re-exported)
+    "ui/theme.py",  # the app-level progress-bar QSS fallback
+    "ui/gallery.py",  # the component gallery
 }
 
 

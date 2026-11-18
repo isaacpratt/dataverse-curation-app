@@ -1,4 +1,4 @@
-﻿"""SAS dataset inspection (.sas7bdat and .xpt transport files).
+"""SAS dataset inspection (.sas7bdat and .xpt transport files).
 
 Port of CUR_Res_CurationTools Scripts/Inspect_sas7bdat_Script.R: header-based
 format detection, data dictionary extraction (variable names, labels, types,
@@ -6,6 +6,7 @@ value labels) and a non-ASCII encoding scan over character columns.
 """
 
 from pathlib import Path
+from typing import Any, ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -26,7 +27,7 @@ def _detect_format(path: Path) -> str:
     return "unknown"
 
 
-def _read(path: Path, fmt: str):
+def _read(path: Path, fmt: str) -> tuple[dict[str, Any], Any]:
     import pyreadstat
 
     # output_format="dict" keeps the check free of a pandas/polars runtime
@@ -36,7 +37,7 @@ def _read(path: Path, fmt: str):
     return pyreadstat.read_sas7bdat(str(path), row_limit=_ROW_LIMIT, output_format="dict")
 
 
-def _has_non_ascii(frame) -> bool:
+def _has_non_ascii(frame: Any) -> bool:
     for _column, values in frame.items():
         for value in values[:_ROW_LIMIT]:
             if isinstance(value, str):
@@ -54,7 +55,7 @@ class Sas7bdatCheck(Check):
     """SAS check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.sas"
-    extensions = {".sas7bdat", ".xpt"}
+    extensions: ClassVar[set[str]] = {".sas7bdat", ".xpt"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         # Per-file isolation like every other check (_detect_format opens the
@@ -158,10 +159,7 @@ class Sas7bdatCheck(Check):
             check_id="format.sas.dictionary",
             level="info",
             passed=True,
-            message=(
-                f"{name}: {len(columns)} variables "
-                f"({len(value_labels)} with value labels)"
-            ),
+            message=(f"{name}: {len(columns)} variables ({len(value_labels)} with value labels)"),
             details={"variables": variables[:_MAX_VARIABLES_LISTED]},
         )
         labels_check = CheckResult(

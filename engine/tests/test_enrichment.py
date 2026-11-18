@@ -8,12 +8,14 @@ enriched fields; size-only changes stay out of the diff fingerprint).
 
 import requests
 
-from dataverse_client import DataverseClient
-from ui.dashboard import (
-    _merge_enriched_rows,
+from curation.client import DataverseClient
+from curation.dashboard_cache import (
     diff_dashboard_datasets,
     load_dashboard_cache,
     save_dashboard_cache,
+)
+from curation.dashboard_cache import (
+    merge_enriched_rows as _merge_enriched_rows,
 )
 
 
@@ -66,8 +68,7 @@ class _StubClient(DataverseClient):
         super().__init__("https://example.invalid", "token")
         self._docs = docs
 
-    def _fetch_version_data(self, identifier, version="draft", fall_back_on_auth=False,
-                            order=None):
+    def _fetch_version_data(self, identifier, version="draft", fall_back_on_auth=False, order=None):
         doc = self._docs.get(identifier)
         if isinstance(doc, BaseException):
             raise doc
@@ -84,17 +85,16 @@ def _http_error(status):
 
 def test_enrich_sums_and_patches():
     pid = "doi:10.5072/FK2/A"
-    docs = {
-        pid: _version_doc(
-            [_entry("a.csv", 100), _entry("b.csv", 50)], depositor="Carol C."
-        )
-    }
+    docs = {pid: _version_doc([_entry("a.csv", 100), _entry("b.csv", 50)], depositor="Carol C.")}
     client = _StubClient(docs)
     rows = [_thin(pid)]
     stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
     assert stats == {
-        "attempted": 1, "enriched": 1, "pending": 0,
-        "auth_failed": 0, "restricted": 0,
+        "attempted": 1,
+        "enriched": 1,
+        "pending": 0,
+        "auth_failed": 0,
+        "restricted": 0,
     }
     row = rows[0]
     assert row["total_size_bytes"] == 150
@@ -150,9 +150,7 @@ def test_restricted_row_is_marked_and_the_batch_continues():
     the other rows are still enriched.
     """
     denied, ok = "doi:10.5072/FK2/DENIED", "doi:10.5072/FK2/OK"
-    client = _StubClient(
-        {denied: _http_error(401), ok: _version_doc([_entry("a.csv", 5)])}
-    )
+    client = _StubClient({denied: _http_error(401), ok: _version_doc([_entry("a.csv", 5)])})
     rows = [_thin(denied), _thin(ok)]
     stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
     assert stats["restricted"] == 1
@@ -173,7 +171,7 @@ def test_refused_row_is_logged_for_the_log_page():
     outside the account's curation scope, so the line is EXPECTED (muted
     in the Log page), not an error.
     """
-    import applog
+    import curation.applog as applog
 
     denied = "doi:10.5072/FK2/DENIED-LOG"
     client = _StubClient({denied: _http_error(403)})
@@ -341,7 +339,7 @@ def test_published_row_is_read_once_without_a_version_probe():
             }
         }
 
-    client._get_json = _get_json
+    client._get_json = _get_json  # type: ignore[method-assign]
     rows = [_thin(pid, draft=False)]
     stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
     assert stats["enriched"] == 1
@@ -367,7 +365,7 @@ def test_deaccessioned_row_never_asks_for_a_published_version():
         # record) — only its versions are gone.
         return {"data": {"versionState": "DEACCESSIONED"}}
 
-    client._get_json = _get_json
+    client._get_json = _get_json  # type: ignore[method-assign]
     rows = [_thin(pid, draft=False)]
     rows[0]["state"] = "DEACCESSIONED"
     client.enrich_datasets_with_inventory(rows, max_workers=1)
@@ -397,7 +395,7 @@ def test_draft_row_probes_draft_first_and_falls_back():
             }
         }
 
-    client._get_json = _get_json
+    client._get_json = _get_json  # type: ignore[method-assign]
     rows = [_thin(pid, draft=True)]
     stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
     assert stats["enriched"] == 1
@@ -424,7 +422,7 @@ def test_draft_row_readable_at_draft_is_marked_as_a_draft():
             }
         }
 
-    client._get_json = _get_json
+    client._get_json = _get_json  # type: ignore[method-assign]
     rows = [_thin(pid, draft=True)]
     stats = client.enrich_datasets_with_inventory(rows, max_workers=1)
     assert stats["enriched"] == 1

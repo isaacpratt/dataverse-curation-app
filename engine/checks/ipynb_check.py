@@ -6,6 +6,7 @@ schema, cell counts, output presence and unexecuted-code detection.
 
 import json
 from pathlib import Path
+from typing import ClassVar
 
 from engine.checks.base import Check, CheckResult
 
@@ -17,7 +18,7 @@ class IpynbCheck(Check):
     """Jupyter notebook check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.ipynb"
-    extensions = {".ipynb"}
+    extensions: ClassVar[set[str]] = {".ipynb"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         from engine.checks._util import run_per_file
@@ -135,18 +136,14 @@ class IpynbCheck(Check):
             ),
         ]
 
-        unexecuted = [
-            c for c in code_cells if c.get("execution_count") is None
-        ]
+        unexecuted = [c for c in code_cells if c.get("execution_count") is None]
         if unexecuted:
             results.append(
                 CheckResult(
                     check_id="format.ipynb.executed",
                     level="warning",
                     passed=False,
-                    message=(
-                        f"{name}: {len(unexecuted)} code cell(s) never executed"
-                    ),
+                    message=(f"{name}: {len(unexecuted)} code cell(s) never executed"),
                     details={"unexecuted": len(unexecuted), "code_cells": len(code_cells)},
                 )
             )

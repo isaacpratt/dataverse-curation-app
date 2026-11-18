@@ -1,0 +1,1919 @@
+"""Versioned review rulesets: programmatic metadata completeness + response templates.
+
+Schema (requirements_profiles.json v2):
+{
+  "version": 2,
+  "rulesets": {
+    "<key>": {
+      "label": str, "description": str,
+      "dataverses": ["*"] or [base_url, ...],
+      "field_rules": [
+        {"block": "citation", "field": "title", "label": "Title",
+         "level": "required|optional|unchecked",
+         "requirement": "human text", "handler": "nonempty|...",
+         "response_template": "..."}
+      ],
+      "content_rules": [
+        {"id": "readme-present", "label": "README file",
+         "level": "required|optional",
+         "requirement": "human text",
+         "scope": ["filenames", "metadata", "file-content"],
+         "match": "filename-glob|substring|regex",
+         "pattern": "readme*",
+         "case_sensitive": false,
+         "response_template": "..."}
+      ],
+      "section_rules": [
+        {"id": "overview", "label": "Dataset & file overview",
+         "level": "required|optional", "probes": ["overview", "about"]}
+      ],
+      "filecheck_templates": {"<check_id>": "...", "*": "..."},
+      "response_header": "...", "response_footer": "...",
+      "requires_sensitivity": true
+    }
+  }
+}
+
+Optional per-ruleset ``"requires_sensitivity": true`` (dv-3c2) marks the
+ruleset's collections as requiring the sensitivity & ethics review
+(sensitivity.py) before an Approve decision can commit.
+
+Optional per-ruleset ``"section_rules"`` (dv-81q) overrides the README
+section list the depth check scores (see ``DEFAULT_README_SECTIONS``);
+when absent, the built-in five sections apply.
+
+Field rule handlers accept an optional ``"params"`` object (dv-5id). The
+general-purpose ``"looks_correct"`` handler checks that a value is not just
+present but plausibly correct. Supported params (all optional, all tolerant
+of sloppy JSON: numbers as strings, lists as comma/newline-separated text):
+
+  min_length            int   — plain fields: concatenated text shorter than
+                                this fails; dotted compound paths: every
+                                entry fails its own minimum
+  regex                 str   — value (or text leaf) must match; search mode
+                                unless ``"regex_mode": "full"`` (fullmatch)
+  regex_mode            str   — "search" (default) or "full"
+  blocklist             list  — case-insensitive substring phrases to reject
+  not_common_placeholders bool — built-in list of obvious placeholders
+                                (lorem ipsum, todo, tbd, no description, …)
+  not_all_caps          bool  — rejects values written entirely in caps
+  controlled_vocabulary list  — every nonempty text leaf must equal a token
+                                (case-insensitive); a vacuous payload with no
+                                checkable value fails closed
+  date                  bool  — every text leaf must be a parseable date
+                                (ISO: YYYY, YYYY-MM, YYYY-MM-DD, or ISO
+                                datetimes)
+  date_order            bool  — compound field: per item, the ``start``- and
+                                ``end``-named children must parse to dates in
+                                order (start <= end). Nothing to compare
+                                fails closed.
+  url                   bool  — http(s) scheme and a dotted hostname
+
+Every looks_correct failure carries a bracketed reason in the displayed
+value (e.g. ``"… [too short: 12 of 50 characters]"``) so a result is never a
+silent pass, and an empty value reports incomplete. An invalid ``regex``
+pattern fails the rule closed with ``[rule error: …]`` instead of raising;
+a looks_correct rule with no effective checks also fails closed.
+
+Built-ins (mcmaster-default, minimal) reproduce the legacy hard-coded
+McMaster/Minimal checks exactly (same labels + requirement strings), so a
+fresh install behaves identically until the curator edits rules.
+"""
+
+from __future__ import annotations
+
+import fnmatch
+import json as _json
+import re
+from datetime import date as _date
+from datetime import datetime as _datetime
+from pathlib import Path
+from typing import Any
+
+RULESETS_VERSION = 2
+
+
+_RULESETS_MEMO: dict[str, Any] = {}
+
+
+FIELD_LEVELS = ("required", "optional", "unchecked")
+
+
+CONTENT_SCOPES = ("filenames", "metadata", "file-content")
+
+
+CONTENT_MATCHES = ("filename-glob", "substring", "regex")
+
+
+DEFAULT_README_SECTIONS: list[dict[str, Any]] = [
+    {
+        "id": "overview",
+        "label": "Dataset & file overview",
+        "level": "required",
+        "probes": ["overview", "description", "about", "summary", "purpose", "what is"],
+    },
+    {
+        "id": "files",
+        "label": "File inventory & naming",
+        "level": "required",
+        "probes": ["file", "inventory", "folder", "directory", "contents", "naming", "structure"],
+    },
+    {
+        "id": "methods",
+        "label": "Methodology",
+        "level": "required",
+        "probes": [
+            "method",
+            "procedure",
+            "protocol",
+            "instrument",
+            "sampling",
+            "data collection",
+            "processing",
+            "experiment",
+        ],
+    },
+    {
+        "id": "missing",
+        "label": "Missing-data codes",
+        "level": "optional",
+        "probes": ["missing", "sentinel", "n/a", "not applicable", "blank", "null"],
+    },
+    {
+        "id": "access",
+        "label": "Sharing, access & licensing",
+        "level": "required",
+        "probes": [
+            "access",
+            "licen",
+            "sharing",
+            "reuse",
+            "terms",
+            "restriction",
+            "citation",
+            "contact",
+            "rights",
+        ],
+    },
+]
+
+
+def readme_sections(ruleset: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Section rules for the README depth check, defaults when unset."""
+    raw = (ruleset or {}).get("section_rules") if isinstance(ruleset, dict) else None
+    if not isinstance(raw, list) or not raw:
+        raw = DEFAULT_README_SECTIONS
+    out: list[dict[str, Any]] = []
+    for rule in raw:
+        if not isinstance(rule, dict) or not rule.get("id"):
+            continue
+        probes = rule.get("probes")
+        if not isinstance(probes, list):
+            probes = [str(rule.get("label") or rule["id"])]
+        out.append(
+            {
+                "id": str(rule["id"]),
+                "label": str(rule.get("label") or rule["id"]),
+                "level": rule.get("level")
+                if rule.get("level") in ("required", "optional")
+                else "required",
+                "probes": [str(p).lower() for p in probes if str(p).strip()],
+            }
+        )
+    return out or [dict(rule) for rule in DEFAULT_README_SECTIONS]
+
+
+def _rule_scopes(rule: dict[str, Any]) -> list[str]:
+    """Content-rule scopes as a list, defaulting to ["filenames"].
+
+    ``scope`` is user-editable JSON, so it can be absent, a string, or a list
+    holding non-strings; anything unusable degrades to the filename scope.
+    """
+    raw = rule.get("scope")
+    if isinstance(raw, list):
+        scopes = [str(s) for s in raw if str(s) in CONTENT_SCOPES]
+        if scopes:
+            return scopes
+    return ["filenames"]
+
+
+DEFAULT_RULESET_KEY = "mcmaster-default"
+
+
+FIELD_CATALOG: list[dict[str, str]] = [
+    {"block": "citation", "field": "title", "label": "Title"},
+    {"block": "citation", "field": "author", "label": "Author"},
+    {
+        "block": "citation",
+        "field": "author.authorName",
+        "label": "Name",
+        "parent": "author",
+        "parent_label": "Author",
+    },
+    {
+        "block": "citation",
+        "field": "author.authorAffiliation",
+        "label": "Affiliation",
+        "parent": "author",
+        "parent_label": "Author",
+    },
+    {
+        "block": "citation",
+        "field": "author.authorIdentifierScheme",
+        "label": "Identifier Type",
+        "parent": "author",
+        "parent_label": "Author",
+    },
+    {
+        "block": "citation",
+        "field": "author.authorIdentifier",
+        "label": "Identifier",
+        "parent": "author",
+        "parent_label": "Author",
+    },
+    {"block": "citation", "field": "datasetContact", "label": "Dataset Contact"},
+    {"block": "citation", "field": "dsDescription", "label": "Description"},
+    {"block": "citation", "field": "subject", "label": "Subject"},
+    {"block": "citation", "field": "depositor", "label": "Depositor"},
+    {"block": "citation", "field": "dateOfDeposit", "label": "Deposit Date"},
+    {"block": "citation", "field": "publication", "label": "Related Publication"},
+    {"block": "citation", "field": "timePeriodCovered", "label": "Time Period Covered"},
+    {"block": "citation", "field": "dateOfCollection", "label": "Date of Collection"},
+    {"block": "citation", "field": "geographicCoverage", "label": "Geographic Coverage (citation)"},
+    {"block": "citation", "field": "keyword", "label": "Keyword"},
+    {"block": "citation", "field": "topicClassification", "label": "Topic Classification"},
+    {"block": "citation", "field": "language", "label": "Language"},
+    {"block": "citation", "field": "producer", "label": "Producer"},
+    {"block": "citation", "field": "productionDate", "label": "Production Date"},
+    {"block": "citation", "field": "productionPlace", "label": "Production Place"},
+    {"block": "citation", "field": "contributor", "label": "Contributor"},
+    {"block": "citation", "field": "grantNumber", "label": "Grant Number"},
+    {"block": "citation", "field": "distributor", "label": "Distributor"},
+    {"block": "citation", "field": "notesText", "label": "Notes"},
+    {"block": "dataset", "field": "license", "label": "License"},
+    {"block": "license", "field": "license", "label": "License"},
+    {"block": "license", "field": "termsOfUse", "label": "Terms of Use"},
+    {"block": "license", "field": "termsOfAccess", "label": "Terms of Access"},
+    {"block": "geospatial", "field": "geographicCoverage", "label": "Geographic Coverage"},
+    {"block": "geospatial", "field": "geographicBoundingBox", "label": "Geographic Bounding Box"},
+    {"block": "socialscience", "field": "unitOfAnalysis", "label": "Unit of Analysis"},
+    {"block": "socialscience", "field": "universe", "label": "Universe"},
+    {"block": "socialscience", "field": "dataCollector", "label": "Data Collector"},
+]
+
+
+def _file_name() -> str:
+    return "requirements_profiles.json"
+
+
+def rulesets_path() -> Path:
+    """Return the same location as the legacy profiles file (exe dir when frozen)."""
+    try:
+        from curation.metadata_check import profiles_path as _legacy
+
+        return _legacy()
+    except Exception:
+        import sys
+
+        if getattr(sys, "frozen", False):
+            try:
+                return Path(sys.executable).parent / _file_name()
+            except Exception:
+                pass
+        return Path(_file_name())
+
+
+def _mc_req(text: str) -> str:
+    return text
+
+
+def _builtin_mcmaster() -> dict[str, Any]:
+    def fr(
+        block: str,
+        field: str,
+        label: str,
+        level: str,
+        req: str,
+        handler: str = "nonempty",
+        template: str = "",
+    ) -> dict[str, Any]:
+        return {
+            "block": block,
+            "field": field,
+            "label": label,
+            "level": level,
+            "requirement": req,
+            "handler": handler,
+            "response_template": template,
+        }
+
+    field_rules = [
+        fr(
+            "citation",
+            "title",
+            "Title",
+            "required",
+            _mc_req(
+                "McMaster — Required (Depositor Checklist: Basic Metadata; Curation Log: Full Citation)"
+            ),
+            "nonempty",
+            "The dataset is missing a Title. Please provide a clear, descriptive title.",
+        ),
+        fr(
+            "citation",
+            "dsDescription",
+            "Description",
+            "required",
+            _mc_req("McMaster — Required (Curation Log: Full Citation; Checklist: Basic Metadata)"),
+            "nonempty",
+            "The dataset is missing a Description. Please add a brief summary of the data, methods, and contents.",
+        ),
+        fr(
+            "citation",
+            "author",
+            "Author Name & Affiliation",
+            "required",
+            _mc_req("McMaster — Required (Curation Log: Full Citation)"),
+            "author_affiliation",
+            "Author information is incomplete ({value}). Please ensure every author has a name and affiliation.",
+        ),
+        fr(
+            "citation",
+            "datasetContact",
+            "Dataset Contact",
+            "required",
+            _mc_req("McMaster — Required (Curation Log + Checklist)"),
+            "nonempty",
+            "The dataset is missing a Dataset Contact. Please add a contact name and email.",
+        ),
+        fr(
+            "citation",
+            "subject",
+            "Subject",
+            "required",
+            _mc_req("McMaster — Required (Checklist: Basic Metadata)"),
+            "nonempty",
+            "The dataset is missing a Subject classification. Please select at least one subject area.",
+        ),
+        fr(
+            "dataset",
+            "license",
+            "License",
+            "required",
+            _mc_req("McMaster — Required (Checklist: Data License)"),
+            "license",
+            "No data license is set. Please choose an appropriate license for the dataset.",
+        ),
+        fr(
+            "citation",
+            "depositor",
+            "Depositor",
+            "required",
+            _mc_req("McMaster — Required (Checklist: During Deposit)"),
+            "nonempty",
+            "The Depositor field is empty. Please confirm who deposited the dataset.",
+        ),
+        fr(
+            "citation",
+            "dateOfDeposit",
+            "Deposit Date",
+            "required",
+            _mc_req("McMaster — Required (Checklist: During Deposit)"),
+            "nonempty",
+            "The Deposit Date is missing. Please provide the date of deposit.",
+        ),
+        fr(
+            "citation",
+            "publication",
+            "Related Publication (title + journal)",
+            "required",
+            _mc_req("McMaster — Required (Curation Log + Checklist: *Publication)"),
+            "related_pub",
+            "Related publication details are incomplete ({value}). Please add the publication title and journal.",
+        ),
+        fr(
+            "citation",
+            "publication",
+            "Related Publication ID",
+            "required",
+            _mc_req("McMaster — Required (Curation Log: Pub ID)"),
+            "related_pub_id",
+            "The related publication ID (e.g. DOI) is missing. Please add it so the dataset links to the article.",
+        ),
+        fr(
+            "citation",
+            "author.authorIdentifier",
+            "ORCiD for authors",
+            "optional",
+            _mc_req("McMaster — Recommended (Checklist: Researcher ID; Curation Log: optional)"),
+            "orcid",
+            "Consider adding ORCiDs for the authors to improve attribution ({value}).",
+        ),
+        fr(
+            "citation",
+            "author",
+            "Author count",
+            "optional",
+            _mc_req("McMaster — Recommended (check the number of authors)"),
+            "author_count",
+            "The dataset has {value} authors — confirm this is the expected list.",
+        ),
+        fr(
+            "license",
+            "license",
+            "License and Terms of Use",
+            "optional",
+            _mc_req("McMaster — Recommended (Checklist: Data License)"),
+            "license_terms",
+            "No data license is set. Please choose an appropriate license for the dataset.",
+        ),
+        fr(
+            "license",
+            "termsOfAccess",
+            "Access, Embargo & Terms of Access",
+            "optional",
+            _mc_req("McMaster — Recommended (Checklist: Data License / Access)"),
+            "access_conditions",
+            "Please confirm the access conditions for this dataset, including any embargo date and terms of access.",
+        ),
+        fr(
+            "citation",
+            "timePeriodCovered",
+            "Time Period / Date of Collection",
+            "optional",
+            _mc_req("McMaster — Recommended (Checklist: More Metadata — Time)"),
+            "time_anyof",
+            "Consider adding the time period covered or the date of collection.",
+        ),
+        fr(
+            "geospatial",
+            "geographicCoverage",
+            "Geographic Coverage",
+            "optional",
+            _mc_req("McMaster — Recommended (Checklist: More Metadata — Place)"),
+            "geo",
+            "Consider adding geographic coverage information for the dataset.",
+        ),
+    ]
+    content_rules = [
+        {
+            "id": "readme-present",
+            "label": "README file",
+            "level": "required",
+            "requirement": "McMaster — Required (Curation Log: Documentation; Checklist: Before Deposit)",
+            "scope": ["filenames"],
+            "match": "filename-glob",
+            "pattern": "readme*",
+            "case_sensitive": False,
+            "response_template": "No README file was found in the dataset. Please add a README describing the files, formats, and how to reuse the data.",
+        }
+    ]
+    return {
+        "label": "McMaster — Curation Log + Depositor Checklist",
+        "description": "Rules from the McMaster Curation Log and Depositor Checklist (McMaster Dataverse)",
+        "dataverses": ["*"],
+        "field_rules": field_rules,
+        "content_rules": content_rules,
+        "section_rules": [dict(r) for r in DEFAULT_README_SECTIONS],
+        "filecheck_templates": {
+            "*": "{check_id}: {message}",
+            "inventory.zero_byte": "The file '{path}' is empty (0 bytes). Please remove it or upload the complete file.",
+            "inventory.unchecked_types": "Some files need manual review: {message}",
+            "inventory.restricted_files": "The dataset has {message}. Please confirm the access conditions for these files.",
+            "inventory.embargoed_files": "The dataset has {message}. Please confirm the embargo date and terms of access.",
+            "metadata.readme_sections": "The README is missing these standard sections: {readme_sections}. Please add them so the data can be reused without contacting you.",
+        },
+        "response_header": (
+            "Hello,\n\nThank you for depositing your dataset ({dataset_title}, {persistent_id}). "
+            "During curation we found a few items that need your attention:"
+        ),
+        "response_footer": (
+            "Please update the deposit in Dataverse and let us know if you have questions.\n\nThank you."
+        ),
+    }
+
+
+def _builtin_minimal() -> dict[str, Any]:
+    # Legacy Minimal rows use raw typeNames + short requirement suffixes —
+    # preserved exactly for back-compat.
+    specs = [
+        ("citation", "title", "title", "Minimal — Required: Title"),
+        ("citation", "author", "author", "Minimal — Required: Author"),
+        ("citation", "datasetContact", "datasetContact", "Minimal — Required: Contact"),
+        ("citation", "dsDescription", "dsDescription", "Minimal — Required: Description"),
+        ("citation", "subject", "subject", "Minimal — Required: Subject"),
+    ]
+    field_rules = [
+        {
+            "block": b,
+            "field": f,
+            "label": lbl,
+            "level": "required",
+            "requirement": req,
+            "handler": "nonempty",
+            "response_template": f"The dataset is missing {lbl}. Please provide it.",
+        }
+        for b, f, lbl, req in specs
+    ]
+
+    return {
+        "label": "Minimal — Dataverse core",
+        "description": "Only Dataverse core mandatory fields (Title, Author, Contact, Description, Subject)",
+        "dataverses": ["*"],
+        "field_rules": field_rules,
+        "content_rules": [],
+        "filecheck_templates": {"*": "{check_id}: {message}"},
+        "response_header": "Hello,\n\nYour dataset ({dataset_title}) needs the following before approval:",
+        "response_footer": "Thank you.",
+    }
+
+
+def builtin_rulesets() -> dict[str, dict[str, Any]]:
+    """Default review rulesets shipped with the app."""
+    return {"mcmaster-default": _builtin_mcmaster(), "minimal": _builtin_minimal()}
+
+
+def _normalize_ruleset(key: str, raw: Any) -> dict[str, Any] | None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    if not isinstance(raw, dict):
+        return None
+    builtin = builtin_rulesets().get(key, {})
+    out: dict[str, Any] = {
+        "label": str(raw.get("label") or builtin.get("label") or key),
+        "description": str(raw.get("description") or builtin.get("description") or ""),
+        "dataverses": raw.get("dataverses", builtin.get("dataverses", ["*"])),
+        "field_rules": raw.get("field_rules", builtin.get("field_rules", [])),
+        "content_rules": raw.get("content_rules", builtin.get("content_rules", [])),
+        "section_rules": raw.get(
+            "section_rules", builtin.get("section_rules", DEFAULT_README_SECTIONS)
+        ),
+        "filecheck_templates": raw.get(
+            "filecheck_templates", builtin.get("filecheck_templates", {})
+        ),
+        "response_header": str(raw.get("response_header") or builtin.get("response_header") or ""),
+        "response_footer": str(raw.get("response_footer") or builtin.get("response_footer") or ""),
+    }
+    if not isinstance(out["dataverses"], list) or not out["dataverses"]:
+        out["dataverses"] = ["*"]
+    if not isinstance(out["field_rules"], list):
+        out["field_rules"] = []
+    if not isinstance(out["content_rules"], list):
+        out["content_rules"] = []
+    if not isinstance(out["section_rules"], list):
+        out["section_rules"] = [dict(r) for r in DEFAULT_README_SECTIONS]
+    if not isinstance(out["filecheck_templates"], dict):
+        out["filecheck_templates"] = {}
+    # Copy rule dicts: normalization fills defaults in place and must never
+    # mutate the caller's structures (or the built-in singletons).
+    out["field_rules"] = [
+        dict(r) for r in out["field_rules"] if isinstance(r, dict) and r.get("field")
+    ]
+    out["content_rules"] = [
+        dict(r) for r in out["content_rules"] if isinstance(r, dict) and r.get("id")
+    ]
+    out["section_rules"] = [
+        dict(r) for r in out["section_rules"] if isinstance(r, dict) and r.get("id")
+    ]
+    if not out["section_rules"]:
+        out["section_rules"] = [dict(r) for r in DEFAULT_README_SECTIONS]
+    out["filecheck_templates"] = dict(out["filecheck_templates"])
+    out["dataverses"] = list(out["dataverses"])
+    for r in out["field_rules"]:
+        if r.get("level") not in FIELD_LEVELS:
+            r["level"] = "required"
+        r.setdefault("block", "citation")
+        # ORCID migrated from the composite (handler="orcid" on citation.author)
+        # to the identifier subfield as of 2026-11-12 (dv-bhv).
+        if str(r.get("handler") or "") == "orcid" and str(r.get("field") or "").lower() == "author":
+            r["field"] = "author.authorIdentifier"
+        r.setdefault("label", str(r.get("field") or ""))
+        r.setdefault("handler", "nonempty")
+        r.setdefault("response_template", "")
+    for r in out["content_rules"]:
+        if r.get("level") not in ("required", "optional"):
+            r["level"] = "required"
+        scope = r.get("scope") if isinstance(r.get("scope"), list) else ["filenames"]
+        r["scope"] = [s for s in scope if s in CONTENT_SCOPES] or ["filenames"]
+        if r.get("match") not in CONTENT_MATCHES:
+            r["match"] = "filename-glob" if "filenames" in r["scope"] else "substring"
+        r.setdefault("pattern", "")
+        r.setdefault("case_sensitive", False)
+        r.setdefault("response_template", "")
+    for r in out["section_rules"]:
+        if r.get("level") not in ("required", "optional"):
+            r["level"] = "required"
+        r.setdefault("label", str(r.get("id") or ""))
+        probes = r.get("probes")
+        if not isinstance(probes, list):
+            probes = [str(r.get("label") or r.get("id") or "")]
+        r["probes"] = [str(p) for p in probes if str(p).strip()]
+    return out
+
+
+def load_rulesets() -> dict[str, dict[str, Any]]:
+    """Built-ins overlaid with the v2 file when present. Never raises.
+
+    Memoized by file identity (path + mtime + size): completeness evaluates
+    on every metadata load/profile switch, so this must not hit disk each
+    time. Saving rewrites the file (new mtime) which invalidates the memo.
+    Callers must treat the result as read-only (the Review-config page works
+    on its own deep copy).
+    """
+    base = builtin_rulesets()
+    sig: tuple[str, int | None, int | None]
+    try:
+        path = rulesets_path()
+        try:
+            st = path.stat()
+            sig = (str(path), st.st_mtime_ns, st.st_size)
+        except OSError:
+            sig = (str(path), None, None)
+        if _RULESETS_MEMO.get("sig") == sig and isinstance(_RULESETS_MEMO.get("pool"), dict):
+            memo_pool: dict[str, dict[str, Any]] = _RULESETS_MEMO["pool"]
+            return memo_pool
+        if sig[1] is None:
+            _RULESETS_MEMO["sig"] = sig
+            _RULESETS_MEMO["pool"] = base
+            return base
+        raw = _json.loads(path.read_text(encoding="utf-8"))
+        if (
+            isinstance(raw, dict)
+            and isinstance(raw.get("rulesets"), dict)
+            and raw.get("version") == 2
+        ):
+            for key, val in raw["rulesets"].items():
+                norm = _normalize_ruleset(str(key), val)
+                if norm is not None:
+                    base[str(key)] = norm
+            _RULESETS_MEMO["sig"] = sig
+            _RULESETS_MEMO["pool"] = base
+            return base
+        # Legacy file shape (flat profiles written by the old dialog):
+        # keep built-ins; the Review-config page migrates on save.
+        return base
+    except Exception:
+        return base
+
+
+def save_rulesets(rulesets: dict[str, dict[str, Any]]) -> Path:
+    """Persist rulesets to disk; returns the ruleset path."""
+    import os
+    import tempfile
+
+    path = rulesets_path()
+    clean: dict[str, Any] = {}
+    for key, val in (rulesets or {}).items():
+        norm = _normalize_ruleset(str(key), val)
+        if norm is not None:
+            clean[str(key)] = norm
+    payload = {"version": RULESETS_VERSION, "rulesets": clean}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = _json.dumps(payload, indent=2, ensure_ascii=False)
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(data)
+        os.replace(tmp_name, path)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+    return path
+
+
+def get_ruleset(key: str, rulesets: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+    """One ruleset by key (defaults to the builtins if none passed)."""
+    pool = rulesets if isinstance(rulesets, dict) else load_rulesets()
+    if key in pool:
+        return pool[key]
+    # Legacy profile names map onto the built-ins.
+    if key == "McMaster":
+        return pool.get("mcmaster-default", builtin_rulesets()["mcmaster-default"])
+    if key == "Minimal":
+        return pool.get("minimal", builtin_rulesets()["minimal"])
+    return pool.get(DEFAULT_RULESET_KEY, builtin_rulesets()["mcmaster-default"])
+
+
+def _norm_base(url: str) -> str:
+    try:
+        return (url or "").rstrip("/").lower()
+    except Exception:
+        return ""
+
+
+def rulesets_for_dataverse(
+    base_url: str, rulesets: dict[str, dict[str, Any]] | None = None
+) -> list[tuple[str, dict[str, Any]]]:
+    """(key, ruleset) usable for an instance: '*' matches all. Never raises."""
+    try:
+        pool = rulesets if isinstance(rulesets, dict) else load_rulesets()
+        want = _norm_base(base_url)
+        out: list[tuple[str, dict[str, Any]]] = []
+        for key, rs in pool.items():
+            dvs = rs.get("dataverses") or ["*"]
+            norms = {_norm_base(d) for d in dvs if isinstance(d, str)}
+            if "*" in norms or (want and want in norms):
+                out.append((key, rs))
+        return out or [(DEFAULT_RULESET_KEY, get_ruleset(DEFAULT_RULESET_KEY, pool))]
+    except Exception:
+        b = builtin_rulesets()
+        return [(DEFAULT_RULESET_KEY, b[DEFAULT_RULESET_KEY])]
+
+
+def _mc() -> Any:
+    from curation import metadata_check as _m
+
+    return _m
+
+
+def _blocks(metadata: dict[str, Any]) -> dict[str, Any]:
+    try:
+        latest = metadata.get("latestVersion") or {}
+        return latest.get("metadataBlocks") or metadata.get("metadataBlocks") or {}
+    except Exception:
+        return {}
+
+
+_WRAPPER_KEYS = ("typeName", "value", "multiple", "typeClass")
+
+
+def _is_wrapper(v: Any) -> bool:
+    """Return True for a leaf wrapper like {"value": "Ada", "typeName": "text", …}."""
+    return isinstance(v, dict) and "value" in v and set(v) <= set(_WRAPPER_KEYS)
+
+
+def _unwrap(v: Any) -> Any:
+    node = v
+    while isinstance(node, dict) and _is_wrapper(node):
+        node = node["value"]
+    return node
+
+
+def _leaf_text(node: Any) -> str:
+    node = _unwrap(node)
+    if node is None:
+        return ""
+    if isinstance(node, (list, dict)):
+        # Never leak a dict repr into a verdict; a composite leaf is no text.
+        return ""
+    if isinstance(node, bool):
+        return "true" if node else "false"
+    return str(node).strip()
+
+
+def _walk_path(node: Any, parts: list[str]) -> Any:
+    """Resolve a dotted path below *node*; returns a list of leaves or None."""
+    if not parts:
+        return node
+    part = parts[0]
+    if _is_wrapper(node):
+        return _walk_path(node["value"], parts)
+    if isinstance(node, list):
+        out: list[Any] = []
+        for item in node:
+            got = _walk_path(item, parts)
+            if isinstance(got, list):
+                if got:
+                    out.extend(got)
+                else:
+                    # The entry itself resolved to nothing (missing child).
+                    out.append(None)
+            elif got is None:
+                # Missing child in this item: keep a placeholder so per-entry
+                # rules still fail rather than silently passing.
+                out.append(None)
+            elif _is_wrapper(got):
+                lv = got["value"]
+                out.extend(lv if isinstance(lv, list) else [lv])
+            else:
+                out.append(got)
+        return out
+    if isinstance(node, dict):
+        if part not in node:
+            return None
+        return _walk_path(node[part], parts[1:])
+    return None
+
+
+def _field_path(blocks: dict[str, Any], block: str, field: str) -> list[Any] | None:
+    r"""Resolve a dotted field path ("author.authorIdentifier") to its leaves.
+
+    The first segment is the actual metadatablock field; the rest walk down
+    compound children. Never raises; returns [] when the path cannot resolve.
+    """
+    parts = [p for p in str(field or "").split(".") if p]
+    if len(parts) < 2:
+        return None
+    try:
+        raw = _mc()._field(blocks, block, parts[0])
+    except Exception:
+        return []
+    out = _walk_path(raw, parts[1:])
+    if out is None:
+        return []
+    return out if isinstance(out, list) else [out]
+
+
+def _leaf_list(v: Any) -> list[Any]:
+    if v is None:
+        return []
+    return v if isinstance(v, list) else [v]
+
+
+def _leaves_value(leaves: list[Any], max_len: int = 200) -> str:
+    parts = [_leaf_text(x) for x in leaves[:3]]
+    s = "; ".join(p for p in parts if p)
+    if len(leaves) > 3:
+        s += f" (+{len(leaves) - 3} more)"
+    return s[:max_len] or "—"
+
+
+def _orcid_dotted(m: Any, blocks: dict[str, Any], block: str, field: str) -> tuple[bool, str]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    """ORCID rule on a dotted identifier path ("author.authorIdentifier").
+
+    Mirrors the composite ``orcid`` handler: every author needs a scheme of
+    ORCID and a value matching the ORCID pattern. A non-author dotted parent
+    treats bare identifiers with the regex instead.
+    """
+    parts = [p for p in str(field or "").split(".") if p]
+    if not parts:
+        return False, "—"
+    if parts[0] != "author":
+        leaves = _field_path(blocks, block, field) or []
+        if not leaves:
+            return False, "—"
+        matches = []
+        for x in leaves:
+            text = _leaf_text(x)
+            if text and m.ORCID_RE.match(text):
+                matches.append(text)
+        ok = bool(leaves) and len(matches) == len(leaves)
+        shown = "; ".join(matches[:3]) or "—"
+        if len(matches) > 3:
+            shown += f" (+{len(matches) - 3} more)"
+        return ok, shown
+    raw = m._field(blocks, block, "author") or []
+    authors = [a for a in raw if isinstance(a, dict)] if isinstance(raw, list) else []
+    if not authors:
+        return False, "—"
+    id_key = parts[-1]
+    found: list[str] = []
+    missing: list[str] = []
+    for i, author in enumerate(authors):
+        name = _leaf_text(_walk_path(author, ["authorName"])) or f"author {i + 1}"
+        scheme = _leaf_text(_walk_path(author, ["authorIdentifierScheme"]))
+        id_text = _leaf_text(_walk_path(author, [id_key]))
+        if "orcid" in scheme.lower() and id_text and m.ORCID_RE.match(id_text):
+            found.append(f"{name}: {id_text}")
+        else:
+            missing.append(name)
+    shown = "; ".join(found[:3]) or "—"
+    if len(found) > 3:
+        shown += f" (+{len(found) - 3} more)"
+    if missing and found:
+        shown += f" [missing: {', '.join(missing[:3])}]"
+    elif missing and not found:
+        shown = "—"
+    return (not missing), shown
+
+
+_LC_PLACEHOLDERS = (
+    "lorem ipsum",
+    "lorem",
+    "todo",
+    "tbd",
+    "no description",
+    "no description yet",
+    "placeholder",
+    "sample text",
+    "sample data",
+    "asdf",
+    "xxx",
+    "test test",
+    "enter description",
+    "your description",
+    "fill me in",
+    "n/a (no",
+)
+
+
+def _lc_strlist(value: Any) -> list[str]:
+    """Normalise a token list param: list, or comma/semicolon/newline text."""
+    if isinstance(value, list):
+        parts = [str(x) for x in value]
+    elif isinstance(value, str):
+        parts = re.split(r"[\n,;]+", value)
+    else:
+        parts = []
+    return [p.strip() for p in parts if p and str(p).strip()]
+
+
+def _lc_params(rule: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """Tolerant params for a looks_correct rule.
+
+    Returns (params, error). Tolerance is for sloppy JSON (numbers as
+    strings, lists as comma/newline-separated text), never for values
+    that would silently disable a configured check: anything unusable
+    fails the rule closed with a bracketed rule error instead.
+    """
+    p = rule.get("params") if isinstance(rule, dict) else None
+    p = p if isinstance(p, dict) else {}
+    error = ""
+    raw_min = p.get("min_length")
+    min_length = 0
+    if raw_min not in (None, "", 0):
+        try:
+            min_length = int(raw_min)
+            if min_length < 0:
+                error = f"min_length must be >= 0, got {raw_min!r}"
+        except (TypeError, ValueError):
+            error = f"invalid min_length {raw_min!r}"
+    regex = str(p.get("regex") or "").strip()
+    mode = str(p.get("regex_mode") or "search").strip().lower()
+    if "regex_mode" in p and mode not in ("search", "full"):
+        error = error or f"invalid regex_mode {p.get('regex_mode')!r}"
+    return {
+        "min_length": max(0, min_length),
+        "regex": regex,
+        "regex_mode": "full" if mode == "full" else "search",
+        "blocklist": [b.lower() for b in _lc_strlist(p.get("blocklist"))],
+        "controlled_vocabulary": _lc_strlist(p.get("controlled_vocabulary")),
+        "not_common_placeholders": bool(p.get("not_common_placeholders")),
+        "not_all_caps": bool(p.get("not_all_caps")),
+        "date": bool(p.get("date")),
+        "date_order": bool(p.get("date_order")),
+        "url": bool(p.get("url")),
+    }, error
+
+
+def _lc_clip(text: Any, limit: int = 60) -> str:
+    s = re.sub(r"\s+", " ", str(text if text is not None else "")).strip()
+    return s if len(s) <= limit else s[: limit - 1] + "…"
+
+
+def _lc_partial_date(text: str) -> _date | None:
+    """Parse ISO-ish dates: YYYY, YYYY-MM, YYYY-MM-DD, or ISO datetimes."""
+    s = " ".join(str(text or "").split()).strip()
+    if not s:
+        return None
+    head = s.split("T", 1)[0].split(" ", 1)[0].strip()
+    m = re.match(r"^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$", head)
+    try:
+        if m:
+            year = int(m.group(1))
+            month = int(m.group(2) or 1)
+            day = int(m.group(3) or 1)
+            return _date(year, month, day)
+        dt = _datetime.fromisoformat(s.replace("Z", "+00:00").replace("z", "+00:00"))
+        return dt.date()
+    except ValueError:
+        return None
+
+
+def _lc_url_ok(text: str) -> bool:
+    from urllib.parse import urlsplit
+
+    try:
+        u = urlsplit(str(text or "").strip())
+    except Exception:
+        return False
+    if u.scheme.lower() not in ("http", "https"):
+        return False
+    host = u.hostname or ""
+    return "." in host and not host.startswith(".") and not host.endswith(".")
+
+
+def _lc_texts_of(node: Any) -> list[str]:
+    """Every nonempty text leaf below a value, wrappers unwrapped."""
+    out: list[str] = []
+
+    def walk(v: Any) -> None:
+        v = _unwrap(v)
+        if v is None or isinstance(v, (bool, int, float)):
+            return
+        if isinstance(v, str):
+            s = v.strip()
+            if s:
+                out.append(s)
+            return
+        if isinstance(v, dict):
+            for vv in v.values():
+                walk(vv)
+            return
+        if isinstance(v, list):
+            for item in v:
+                walk(item)
+
+    walk(node)
+    return out
+
+
+def _lc_key_side(key: Any) -> str | None:
+    """'start'/'end' when a key carries a whole-word side token.
+
+    Word-token match: ``restarts`` doesn't count as start, and camelCase
+    boundaries split ``timePeriodCoveredStart``/``startDateTime`` cleanly.
+    """
+    words = re.split(
+        r"[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])",
+        str(key or ""),
+    )
+    low = {w.lower() for w in words if w}
+    if "start" in low:
+        return "start"
+    if "end" in low:
+        return "end"
+    return None
+
+
+def _lc_text_checks(texts: list[str], p: dict[str, Any], per_leaf: bool = False) -> str:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    """Per-leaf checks; returns the first bracketed reason or "".
+
+    ``per_leaf`` applies to dotted compound paths ("author.affiliation"):
+    every entry is its own unit (an affiliation of "W" fails its own
+    minimum). Plain multi-value fields measure the concatenated content,
+    which is what a description's "at least 50 characters" means.
+    """
+    if p["min_length"]:
+        if per_leaf:
+            for text in texts:
+                if len(text) < p["min_length"]:
+                    return f"too short: {len(text)} of {p['min_length']} characters"
+        else:
+            total = len(" ".join(texts).strip())
+            if total < p["min_length"]:
+                return f"too short: {total} of {p['min_length']} characters"
+    rx = p["regex"]
+    if rx:
+        try:
+            compiled = re.compile(rx)
+        except re.error:
+            return f"rule error: invalid regex {rx!r}"
+        for text in texts:
+            matched = (
+                compiled.fullmatch(text) if p["regex_mode"] == "full" else compiled.search(text)
+            )
+            if not matched:
+                return f"does not match {rx!r}"
+    for text in texts:
+        low = text.lower()
+        if p["not_common_placeholders"]:
+            for phrase in _LC_PLACEHOLDERS:
+                if phrase in low:
+                    return f"placeholder text: {phrase!r}"
+        if p["not_all_caps"]:
+            cased = [c for c in text if c.isalpha()]
+            if cased and all(c.isupper() for c in cased) and len(cased) >= 2:
+                return "all caps"
+        if p["blocklist"]:
+            for phrase in p["blocklist"]:
+                if phrase in low:
+                    return f"blocked phrase: {phrase!r}"
+        if p["controlled_vocabulary"]:
+            vocab = {v.strip().lower() for v in p["controlled_vocabulary"]}
+            if low not in vocab:
+                return f"not in vocabulary: {_lc_clip(text)}"
+        if p["date"] and _lc_partial_date(text) is None:
+            return f"date not parseable: {_lc_clip(text)}"
+        if p["url"] and not _lc_url_ok(text):
+            return f"not a plausible URL: {_lc_clip(text)}"
+    return ""
+
+
+def _looks_correct(
+    m: Any, blocks: dict[str, Any], block: str, field: str, rule: dict[str, Any]
+) -> tuple[bool, str]:
+    """Entry-correctness verdict for a field rule; never raises.
+
+    Empty value -> incomplete ("—"). Every failure carries a bracketed
+    reason so a finding is never a silent pass. A rule with no effective
+    check configured also fails closed with ``[no entry checks configured]``.
+    """
+    p, params_error = _lc_params(rule)
+    dotted = "." in str(field or "")
+    if params_error:
+        return False, f"[rule error: {params_error}]"
+    if dotted:
+        # date_order is meaningless per-leaf (it needs the compound parent);
+        # drop it so a dotted rule configured with only date_order fails
+        # closed below instead of passing untested.
+        p = dict(p, date_order=False)
+        # Dotted paths ("author.authorIdentifier") address compound children;
+        # a missing/empty leaf fails the rule like the nonempty path does.
+        leaves = _field_path(blocks, block, field) or []
+        texts = [_leaf_text(x) for x in leaves]
+        if not texts or any(not t for t in texts):
+            return False, "—"
+        shown = _leaves_value(leaves)
+        raw = None
+    else:
+        raw = m._field(blocks, block, field)
+        texts = _lc_texts_of(raw)
+        if not texts:
+            return False, "—"
+        shown = m._display_value(raw)
+
+    if not any(_lc_effective(p)):
+        return False, f"{shown} [no entry checks configured]"
+
+    residual = p
+    if p["date_order"] and not dotted:
+        shown_pairs, reason = _lc_date_order(raw, p)
+        if reason:
+            return False, f"{shown_pairs or shown} [{reason}]"
+        shown = shown_pairs or shown
+        # The range check ran; do not charge the same dates twice.
+        residual = dict(p, date_order=False)
+
+    if any(_lc_effective(residual)):
+        reason = _lc_text_checks(
+            texts,
+            residual,
+            per_leaf=dotted,
+        )
+        if reason:
+            return False, f"{shown} [{reason}]"
+    return True, shown
+
+
+def _lc_effective(p: dict[str, Any]) -> list[bool]:
+    return [
+        bool(p["min_length"]),
+        bool(p["regex"]),
+        bool(p["blocklist"]),
+        bool(p["controlled_vocabulary"]),
+        bool(p["not_common_placeholders"]),
+        bool(p["not_all_caps"]),
+        bool(p["date"]),
+        bool(p["url"]),
+        bool(p["date_order"]),
+    ]
+
+
+def _lc_date_order(raw: Any, p: dict[str, Any]) -> tuple[str, str]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    """Per item in a compound field: start-named <= end-named children.
+
+    An item carrying a start without an end (or vice versa) is a partial
+    pair: it never silently passes. When no complete pair exists at all,
+    the rule fails closed and says how many entries were one-sided.
+    """
+    items = raw if isinstance(raw, list) else [raw]
+    pairs: list[tuple[str, str]] = []
+    partial = 0
+    for item in items:
+        if not isinstance(item, dict):
+            item = _unwrap(item)
+        if not isinstance(item, dict):
+            continue
+        sides = {side: key for key in item for side in (_lc_key_side(key),) if side}
+        start_key, end_key = sides.get("start"), sides.get("end")
+        if start_key is None or end_key is None:
+            if start_key is not None or end_key is not None:
+                partial += 1
+            continue
+        st = _leaf_text(item.get(start_key))
+        en = _leaf_text(item.get(end_key))
+        if st and en:
+            pairs.append((st, en))
+        else:
+            partial += 1
+    if not pairs:
+        if partial:
+            return (
+                "",
+                f"no complete date range ({partial} one-sided {'entry' if partial == 1 else 'entries'})",
+            )
+        return "", "no checkable value for date range"
+    shown = "; ".join(f"{st} → {en}" for st, en in pairs[:3])
+    if len(pairs) > 3:
+        shown += f" (+{len(pairs) - 3} more)"
+    for st, en in pairs:
+        d1, d2 = _lc_partial_date(st), _lc_partial_date(en)
+        if d1 is None:
+            return shown, f"date not parseable: {_lc_clip(st)}"
+        if d2 is None:
+            return shown, f"date not parseable: {_lc_clip(en)}"
+        if d1 > d2:
+            return shown, f"date range reversed: {_lc_clip(st)} is after {_lc_clip(en)}"
+    return shown, ""
+
+
+def _eval_handler(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    handler: str,
+    metadata: dict[str, Any],
+    blocks: dict[str, Any],
+    block: str,
+    field: str,
+    rule: dict[str, Any] | None = None,
+    inventory: list[dict[str, Any]] | None = None,
+) -> tuple[bool, str]:
+    m = _mc()
+    rule = rule if isinstance(rule, dict) else {}
+    # Dotted paths ("author.authorIdentifier") address compound children;
+    # if the path cannot be resolved, report the rule as incomplete rather
+    # than silently passing.
+    if "." in str(field or ""):
+        if handler == "orcid":
+            return _orcid_dotted(m, blocks, block, field)
+        if handler == "looks_correct":
+            return _looks_correct(m, blocks, block, field, rule)
+        leaves = _field_path(blocks, block, field) or []
+        ok = bool(leaves) and all(m._nonempty(_unwrap(x)) for x in leaves)
+        return ok, _leaves_value(leaves)
+    if handler == "looks_correct":
+        return _looks_correct(m, blocks, block, field, rule)
+    if handler == "nonempty":
+        raw = m._field(blocks, block, field)
+        return m._nonempty(raw), m._display_value(raw)
+    if handler == "license":
+        latest = metadata.get("latestVersion") or {}
+        lic = latest.get("license") or metadata.get("license")
+        ok = isinstance(lic, dict) and bool(lic.get("name"))
+        val = lic.get("name", "") if isinstance(lic, dict) else m._display_value(lic)
+        return ok, val or "—"
+    if handler == "author_affiliation":
+        raw = m._field(blocks, "citation", "author") or []
+        authors = [a for a in raw if isinstance(a, dict)] if isinstance(raw, list) else []
+        ok_names = (
+            m._nonempty(m._field(blocks, "citation", "author"))
+            and bool(authors)
+            and all(m._nonempty((a or {}).get("authorName", {})) for a in authors)
+        )
+        missing = [
+            str(
+                (a.get("authorName", {}) or {}).get("value", "")
+                if isinstance(a.get("authorName", {}), dict)
+                else a.get("authorName", "") or f"author {i + 1}"
+            )
+            for i, a in enumerate(authors)
+            if not m._nonempty((a or {}).get("authorAffiliation", {}))
+        ]
+        affil_ok = bool(authors) and not missing
+        val = m._display_value(m._field(blocks, "citation", "author"))
+        if missing:
+            suffix = f" [missing affiliation: {', '.join(missing[:3])}]"[:200]
+            val = (val + suffix) if val != "—" else f"missing affiliation: {', '.join(missing[:3])}"
+        return bool(ok_names and affil_ok), val
+    if handler == "related_pub":
+        rel = m._field(blocks, "citation", "publication") or []
+        rel_list = rel if isinstance(rel, list) else ([rel] if rel else [])
+        rel_list = [r for r in rel_list if isinstance(r, dict)]
+        if not rel_list:
+            return False, "—"
+        complete = False
+        displays: list[str] = []
+        for entry in rel_list:
+            cit = (
+                entry.get("publicationCitation", {}).get("value", "")
+                if isinstance(entry.get("publicationCitation"), dict)
+                else str(entry.get("publicationCitation") or "")
+            )
+            jour = (
+                entry.get("journal", {}).get("value", "")
+                if isinstance(entry.get("journal"), dict)
+                else ""
+            )
+            idv = (
+                entry.get("publicationIDNumber", {}).get("value", "")
+                if isinstance(entry.get("publicationIDNumber"), dict)
+                else str(entry.get("publicationIDNumber") or "")
+            )
+            if cit or jour:
+                displays.append(f"{cit} — {jour}".strip(" —") if cit and jour else (cit or jour))
+            elif idv:
+                displays.append(idv)
+            else:
+                displays.append(m._display_value(entry))
+            if (
+                m._nonempty(entry.get("publicationCitation", {}))
+                or m._nonempty(entry.get("title", {}))
+            ) and m._nonempty(entry.get("journal", {})):
+                complete = True
+        val = displays[0] if displays else "—"
+        if len(displays) > 1:
+            val += f" (+{len(displays) - 1} more)"
+        return complete, val
+    if handler == "related_pub_id":
+        rel = m._field(blocks, "citation", "publication") or []
+        rel_list = rel if isinstance(rel, list) else ([rel] if rel else [])
+        for entry in [r for r in rel_list if isinstance(r, dict)]:
+            idv = (
+                entry.get("publicationIDNumber", {}).get("value", "")
+                if isinstance(entry.get("publicationIDNumber"), dict)
+                else str(entry.get("publicationIDNumber") or "")
+            )
+            if idv and str(idv).strip():
+                return True, str(idv)
+        return False, "—"
+    if handler == "orcid":
+        # Per-author ORCID: every author must carry a valid ORCID when the
+        # rule is enabled (empty author list → incomplete, value "—").
+        raw = m._field(blocks, "citation", "author") or []
+        authors = [a for a in raw if isinstance(a, dict)] if isinstance(raw, list) else []
+        if not authors:
+            return False, "—"
+        missing_orcid: list[str] = []
+        found: list[str] = []
+        for i, author in enumerate(authors):
+            name = (
+                str(
+                    (author.get("authorName") or {}).get("value", "")
+                    if isinstance(author.get("authorName"), dict)
+                    else author.get("authorName") or ""
+                ).strip()
+                or f"author {i + 1}"
+            )
+            id_val = author.get("authorIdentifier", {})
+            scheme = author.get("authorIdentifierScheme", {})
+            id_str = id_val.get("value", "") if isinstance(id_val, dict) else str(id_val or "")
+            scheme_str = scheme.get("value", "") if isinstance(scheme, dict) else str(scheme or "")
+            if (
+                "orcid" in str(scheme_str).lower()
+                and id_str.strip()
+                and m.ORCID_RE.match(id_str.strip())
+            ):
+                found.append(f"{name}: {id_str.strip()}")
+            else:
+                missing_orcid.append(name)
+        val = "; ".join(found[:3]) if found else "—"
+        if len(found) > 3:
+            val += f" (+{len(found) - 3} more)"
+        if missing_orcid and found:
+            val += f" [missing: {', '.join(missing_orcid[:3])}]"
+        elif missing_orcid and not found:
+            # Preserve the legacy single-value display ("—") for parity when
+            # no author has an ORCID yet; the ok flag still tracks per-author.
+            val = "—"
+        return (not missing_orcid), val
+    if handler == "author_count":
+        raw = m._field(blocks, "citation", "author") or []
+        authors = [a for a in raw if isinstance(a, dict)] if isinstance(raw, list) else []
+        n = len(authors)
+        names: list[str] = []
+        for a in authors[:3]:
+            nm = a.get("authorName", {})
+            names.append(str(nm.get("value", "") if isinstance(nm, dict) else nm or "").strip())
+        names = [x for x in names if x]
+        if n <= 3:
+            val = f"{n} author(s)" + (f": {'; '.join(names)}" if names else "")
+        else:
+            val = f"{n} authors: {'; '.join(names)} (+{n - len(names)} more)"
+        # Optional bounds via rule config (min/max keys on the field rule).
+        min_authors = rule.get("min")
+        max_authors = rule.get("max")
+        ok = n > 0
+        if min_authors is not None:
+            try:
+                if n < int(min_authors):
+                    ok = False
+            except (TypeError, ValueError):
+                pass
+        if max_authors is not None:
+            try:
+                if n > int(max_authors):
+                    ok = False
+            except (TypeError, ValueError):
+                pass
+        return ok, val or "—"
+    if handler == "license_terms":
+        # License + Terms of Use / Access from latestVersion (API surface).
+        latest = metadata.get("latestVersion") or {}
+        lic = latest.get("license") or metadata.get("license")
+        lic_name = lic.get("name", "") if isinstance(lic, dict) else m._display_value(lic)
+        tou = latest.get("termsOfUse") or metadata.get("termsOfUse") or ""
+        toa = latest.get("termsOfAccess") or metadata.get("termsOfAccess") or ""
+        tou_s = tou.get("value", "") if isinstance(tou, dict) else str(tou or "")
+        toa_s = toa.get("value", "") if isinstance(toa, dict) else str(toa or "")
+        parts = [p for p in (lic_name, tou_s, toa_s) if p]
+        val = " · ".join(parts) if parts else "—"
+        ok = bool(lic_name)  # license required; terms are optional context
+        return ok, val
+    if handler == "terms_of_use":
+        latest = metadata.get("latestVersion") or {}
+        tou = latest.get("termsOfUse") or metadata.get("termsOfUse") or ""
+        val = tou.get("value", "") if isinstance(tou, dict) else str(tou or "")
+        return bool(val.strip()), val or "—"
+    if handler == "terms_of_access":
+        latest = metadata.get("latestVersion") or {}
+        toa = latest.get("termsOfAccess") or metadata.get("termsOfAccess") or ""
+        val = toa.get("value", "") if isinstance(toa, dict) else str(toa or "")
+        return bool(val.strip()), val or "—"
+    if handler == "access_conditions":
+        # Restricted/embargoed files live in the inventory; the embargo date
+        # and terms of access are shown together so the review presents the
+        # complete access condition.
+        from engine.checks.access_check import access_conditions
+
+        return access_conditions(metadata, inventory)
+    if handler == "time_anyof":
+        has = m._nonempty(m._field(blocks, "citation", "timePeriodCovered")) or m._nonempty(
+            m._field(blocks, "citation", "dateOfCollection")
+        )
+        val = (
+            f"{m._display_value(m._field(blocks, 'citation', 'timePeriodCovered'))} / "
+            f"{m._display_value(m._field(blocks, 'citation', 'dateOfCollection'))}".strip(" /")
+            or "—"
+        )
+        return has, val
+    if handler == "geo":
+        geo = m._field(blocks, "geospatial", "geographicCoverage") or m._field(
+            blocks, "citation", "geographicCoverage"
+        )
+        return m._nonempty(geo), m._display_value(geo)
+    # Unknown handler: plain nonempty on the configured block/field.
+    raw = m._field(blocks, block, field)
+    return m._nonempty(raw), m._display_value(raw)
+
+
+def _iter_metadata_strings(metadata: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+
+    def _walk(v: Any) -> None:
+        if isinstance(v, str):
+            if v.strip():
+                out.append(v)
+        elif isinstance(v, dict):
+            for vv in v.values():
+                _walk(vv)
+        elif isinstance(v, list):
+            for vv in v:
+                _walk(vv)
+
+    try:
+        _walk(_blocks(metadata))
+    except Exception:
+        pass
+    return out
+
+
+def _match_filenames(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    rule: dict[str, Any], inventory: list[Any] | None
+) -> tuple[bool | None, str]:
+    """(found | None=pending, evidence). None when the file list is not loaded."""
+    if inventory is None:
+        return None, "— (load file list to check)"
+    if len(inventory) == 0:
+        # No files at all: a README-style rule is not applicable; any other
+        # filename rule simply finds nothing.
+        pat = str(rule.get("pattern") or "")
+        if str(rule.get("id") or "") == "readme-present" or "readme" in pat.lower():
+            return True, "No files in dataset — README not applicable"
+        return False, "No files in dataset"
+    pattern = str(rule.get("pattern") or "")
+    match = rule.get("match") or "filename-glob"
+    case = bool(rule.get("case_sensitive"))
+    for f in inventory:
+        if not isinstance(f, dict):
+            continue
+        raw_path = str(f.get("path") or f.get("label") or "")
+        base = Path(raw_path).name
+        target = raw_path if match != "filename-glob" else base
+        if match == "filename-glob":
+            # A glob containing "/" matches the full inventory path,
+            # otherwise the basename (so "readme*" is not defeated by folders).
+            if "/" in pattern:
+                hay, pat = (raw_path, pattern) if case else (raw_path.lower(), pattern.lower())
+            else:
+                hay, pat = (base, pattern) if case else (base.lower(), pattern.lower())
+            # NOTE: fnmatch.fnmatch applies os.path.normcase (lowercasing on
+            # Windows), so case-sensitive matching must use fnmatchcase.
+            matched = fnmatch.fnmatchcase(hay, pat) if case else fnmatch.fnmatch(hay, pat)
+            if matched:
+                return True, f.get("path") or f.get("label") or "found"
+            # Legacy README behavior: readme, readme.*, readme_* all count
+            # (case-insensitive by nature, like the original check).
+            if (
+                not case
+                and "readme" in pat
+                and (hay == "readme" or hay.startswith(("readme.", "readme_", "readme-")))
+            ):
+                return True, f.get("path") or f.get("label") or "found"
+        elif match == "regex":
+            try:
+                flags = 0 if case else re.IGNORECASE
+                if re.search(pattern, target, flags):
+                    return True, f.get("path") or f.get("label") or "found"
+            except re.error:
+                continue
+        else:  # substring over the full path
+            hay, ndl = (target, pattern) if case else (target.lower(), pattern.lower())
+            if ndl and ndl in hay:
+                return True, f.get("path") or f.get("label") or "found"
+    return False, "No matching file found"
+
+
+def _match_metadata(
+    rule: dict[str, Any], metadata: dict[str, Any], _strings: list[str] | None = None
+) -> tuple[bool, str]:
+    pattern = str(rule.get("pattern") or "")
+    if not pattern:
+        return False, "—"
+    match = rule.get("match") or "substring"
+    case = bool(rule.get("case_sensitive"))
+    strings = _strings if _strings is not None else _iter_metadata_strings(metadata)
+    for text in strings:
+        if match == "regex":
+            try:
+                if re.search(pattern, text, 0 if case else re.IGNORECASE):
+                    return True, text[:120]
+            except re.error:
+                return False, "— (invalid pattern)"
+        else:
+            hay, ndl = (text, pattern) if case else (text.lower(), pattern.lower())
+            if ndl in hay:
+                return True, text[:120]
+    return False, "No matching text in metadata"
+
+
+def _match_file_content(rule: dict[str, Any], staged_dir: Any) -> tuple[bool | None, str]:
+    """(found | None=pending, evidence). Pending when nothing is staged.
+
+    Runs synchronously (called from the completeness evaluation on the UI
+    thread), so it is deliberately bounded: skips known-binary formats,
+    caps files/bytes, and memoizes by directory signature + pattern.
+    """
+    pattern = str(rule.get("pattern") or "")
+    if not pattern:
+        return False, "—"
+    try:
+        root = Path(str(staged_dir)) if staged_dir else None
+    except Exception:
+        root = None
+    if root is None or not root.exists():
+        return None, "— (download dataset to check file contents)"
+    match = rule.get("match") or "substring"
+    case = bool(rule.get("case_sensitive"))
+    try:
+        sig = _staged_signature(root)
+    except Exception:
+        return None, "— (download dataset to check file contents)"
+    if sig is None:
+        return None, "— (download dataset to check file contents)"
+    memo_key = (str(root), sig, pattern, match, case)
+    hit = _CONTENT_MEMO.get(memo_key)
+    if hit is not None:
+        return hit
+    result = _scan_staged_files(root, pattern, match, case)
+    try:
+        if len(_CONTENT_MEMO) >= 64:
+            _CONTENT_MEMO.clear()
+        _CONTENT_MEMO[memo_key] = result
+    except Exception:
+        pass
+    return result
+
+
+_BINARY_SUFFIXES = frozenset(
+    {
+        ".sav",
+        ".dta",
+        ".sas7bdat",
+        ".por",
+        ".nc",
+        ".h5",
+        ".hdf5",
+        ".h5ad",
+        ".xlsx",
+        ".xls",
+        ".xlsm",
+        ".pdf",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".tif",
+        ".tiff",
+        ".gif",
+        ".bmp",
+        ".webp",
+        ".zip",
+        ".tar",
+        ".gz",
+        ".bz2",
+        ".xz",
+        ".7z",
+        ".rar",
+        ".exe",
+        ".dll",
+        ".so",
+        ".bin",
+        ".o",
+        ".class",
+        ".mp3",
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".wav",
+        ".ogg",
+        ".rds",
+        ".rdata",
+        ".pyc",
+        ".sqlite",
+        ".db",
+        ".gpkg",
+        ".shp",
+    }
+)
+
+
+_MAX_CONTENT_FILES = 100
+
+
+_MAX_CONTENT_BYTES = 1 << 20
+
+
+_MAX_CONTENT_FILE_SIZE = 5 * 1024 * 1024
+
+
+_CONTENT_MEMO: dict[Any, tuple[bool | None, str]] = {}
+
+
+def _staged_signature(root: Any) -> tuple[int, int, int] | None:
+    """Cheap (count, bytes, max-mtime) fingerprint of a staged tree."""
+    try:
+        n = total = newest = 0
+        for p in root.rglob("*"):
+            try:
+                if p.is_file():
+                    st = p.stat()
+                    n += 1
+                    total += st.st_size
+                    mt = st.st_mtime_ns
+                    if mt > newest:
+                        newest = mt
+            except OSError:
+                continue
+        if n == 0:
+            return None
+        return (n, total, newest)
+    except OSError:
+        return None
+
+
+def _scan_staged_files(root: Any, pattern: str, match: str, case: bool) -> tuple[bool | None, str]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+
+    candidates = []
+    try:
+        for p in sorted(root.rglob("*")):
+            try:
+                if not p.is_file():
+                    continue
+                if p.suffix.lower() in _BINARY_SUFFIXES:
+                    continue
+                candidates.append(p)
+            except OSError:
+                continue
+    except OSError:
+        return None, "— (download dataset to check file contents)"
+    if not candidates:
+        return None, "— (no searchable text files staged)"
+    checked = 0
+    for path in candidates[:_MAX_CONTENT_FILES]:
+        try:
+            size = path.stat().st_size
+            if size == 0 or size > _MAX_CONTENT_FILE_SIZE:
+                continue
+            raw = path.read_bytes()[:_MAX_CONTENT_BYTES]
+        except OSError:
+            continue
+        try:
+            text = raw.decode("utf-8", errors="ignore")
+        except Exception:
+            continue
+        checked += 1
+        if match == "regex":
+            try:
+                if re.search(pattern, text, 0 if case else re.IGNORECASE):
+                    return True, f"{path.name}: match"
+            except re.error:
+                return False, "— (invalid pattern)"
+        else:
+            hay, ndl = (text, pattern) if case else (text.lower(), pattern.lower())
+            if ndl in hay:
+                return True, f"{path.name}: match"
+    if checked == 0:
+        return None, "— (no searchable text files staged)"
+    return False, f"No matching text in {checked} staged file(s)"
+
+
+def evaluate_content_rule(
+    rule: dict[str, Any],
+    metadata: dict[str, Any],
+    inventory: list[dict[str, Any]] | None,
+    staged_dir: Any = None,
+    _metadata_strings: list[str] | None = None,
+) -> dict[str, Any]:
+    """Evaluate one content rule across its chosen scopes (OR semantics)."""
+    scope = _rule_scopes(rule)
+    label = str(rule.get("label") or rule.get("id") or "Content check")
+    req = str(rule.get("requirement") or "Custom content rule")
+    level = rule.get("level") if rule.get("level") in ("required", "optional") else "required"
+    strings = _metadata_strings
+    if strings is None and "metadata" in scope:
+        strings = _iter_metadata_strings(metadata or {})
+    pending_bits: list[str] = []
+    evidences: list[str] = []
+    for s in scope:
+        try:
+            if s == "filenames":
+                found, ev = _match_filenames(rule, inventory)
+            elif s == "metadata":
+                found, ev = _match_metadata(rule, metadata or {}, strings)
+            else:
+                found, ev = _match_file_content(rule, staged_dir)
+        except Exception:
+            found, ev = False, "—"
+        if found is True:
+            return {
+                "rule_id": str(rule.get("id") or label),
+                "kind": "content",
+                "field": label,
+                "requirement": req,
+                "value": ev or "found",
+                "status": "complete",
+                "level": level,
+                "pending": False,
+                "response_template": str(rule.get("response_template") or ""),
+            }
+        if found is None:
+            pending_bits.append(ev)
+        elif ev and ev not in ("No matching file found", "No matching text in metadata"):
+            evidences.append(ev)
+    if pending_bits and not evidences:
+        # Nothing searchable yet (e.g. file list not loaded): surface the
+        # pending note like the legacy README row did. The Response assembler
+        # skips pending findings so no draft text is generated for them.
+        return {
+            "rule_id": str(rule.get("id") or label),
+            "kind": "content",
+            "field": label,
+            "requirement": req,
+            "value": pending_bits[0],
+            "status": "incomplete",
+            "level": level,
+            "pending": True,
+            "response_template": str(rule.get("response_template") or ""),
+        }
+    # Special-case the legacy no-files README row: not applicable, not a failure.
+    for ev in evidences:
+        if "not applicable" in ev.lower():
+            return {
+                "rule_id": str(rule.get("id") or label),
+                "kind": "content",
+                "field": label,
+                "requirement": req,
+                "value": ev,
+                "status": "complete",
+                "level": level,
+                "pending": False,
+                "response_template": str(rule.get("response_template") or ""),
+            }
+    return {
+        "rule_id": str(rule.get("id") or label),
+        "kind": "content",
+        "field": label,
+        "requirement": req,
+        "value": evidences[0] if evidences else "No match found",
+        "status": "incomplete",
+        "level": level,
+        "pending": False,
+        "response_template": str(rule.get("response_template") or ""),
+    }
+
+
+def evaluate_ruleset(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    metadata: dict[str, Any],
+    ruleset: dict[str, Any],
+    inventory: list[dict[str, Any]] | None = None,
+    staged_dir: Any = None,
+    include_unchecked: bool = False,
+) -> list[dict[str, Any]]:
+    """Run every enabled rule. Never raises.
+
+    ``'unchecked'`` field rules are skipped by default — no rule runs on a
+    field the curator said not to check. With ``include_unchecked=True`` a
+    display-only ``status="skipped"`` row is synthesized for each unchecked
+    rule (level ``unchecked``, value ``—``) so the UI can offer a "not
+    checked" view; they carry no verdict and no disposition key.
+    """
+    results: list[dict[str, Any]] = []
+    # Pre-scan: ids of the checked field rules, so a synthesized unchecked
+    # row never duplicates a rule the curator actually enabled (the checked
+    # row wins ties). Also dedupes the synthesized rows themselves.
+    field_rules_raw = [
+        fr for fr in (ruleset or {}).get("field_rules") or [] if isinstance(fr, dict)
+    ]
+    checked_ids: set[str] = set()
+    for fr in field_rules_raw:
+        if (fr.get("level") or "required") == "unchecked":
+            continue
+        block = str(fr.get("block") or "citation")
+        field = str(fr.get("field") or "")
+        handler = str(fr.get("handler") or "nonempty")
+        rid = f"field:{block}.{field}"
+        if handler != "nonempty":
+            rid += f":{handler}"
+        checked_ids.add(rid)
+    checked_seen: set[str] = set(checked_ids)  # checked ids + synthesized ids
+    try:
+        blocks = _blocks(metadata or {})
+    except Exception:
+        blocks = {}
+    # One metadata-string walk shared by every content rule with that scope.
+    try:
+        content_rules = [
+            cr for cr in ((ruleset or {}).get("content_rules") or []) if isinstance(cr, dict)
+        ]
+        metadata_strings = (
+            _iter_metadata_strings(metadata or {})
+            if any("metadata" in _rule_scopes(cr) for cr in content_rules)
+            else []
+        )
+    except Exception:
+        metadata_strings = []
+    for fr in (ruleset or {}).get("field_rules") or []:
+        try:
+            if not isinstance(fr, dict):
+                continue
+            block = str(fr.get("block") or "citation")
+            field = str(fr.get("field") or "")
+            label = str(fr.get("label") or field)
+            req = str(fr.get("requirement") or "")
+            level = fr.get("level") if fr.get("level") in ("required", "optional") else "required"
+            handler = str(fr.get("handler") or "nonempty")
+            # rule_id carries the handler: several rules may share one field
+            # (author names vs ORCiDs both live on citation.author) and the
+            # Response findings list keys off rule_id.
+            rule_id = f"field:{block}.{field}"
+            if handler != "nonempty":
+                rule_id += f":{handler}"
+            if (fr.get("level") or "required") == "unchecked":
+                if include_unchecked and rule_id not in checked_seen:
+                    checked_seen.add(rule_id)
+                    results.append(
+                        {
+                            "rule_id": rule_id,
+                            "kind": "field",
+                            "field": label,
+                            "requirement": req,
+                            "value": "—",
+                            "status": "skipped",
+                            "level": "unchecked",
+                            "pending": False,
+                            "response_template": str(fr.get("response_template") or ""),
+                            "block": block,
+                            "name": field,
+                        }
+                    )
+                continue
+            ok, val = _eval_handler(
+                handler, metadata or {}, blocks, block, field, fr, inventory=inventory
+            )
+            results.append(
+                {
+                    "rule_id": rule_id,
+                    "kind": "field",
+                    "field": label,
+                    "requirement": req,
+                    "value": val or "—",
+                    "status": "complete" if ok else "incomplete",
+                    "level": level,
+                    "pending": False,
+                    "response_template": str(fr.get("response_template") or ""),
+                    "block": block,
+                    "name": field,
+                }
+            )
+        except Exception as exc:
+            # A crashing rule must surface as a finding, never vanish —
+            # a missing required row is a silent pass.
+            try:
+                results.append(
+                    {
+                        "rule_id": rule_id,
+                        "kind": "field",
+                        "field": label,
+                        "requirement": req,
+                        "value": f"[rule error: {_lc_clip(exc)}]",
+                        "status": "incomplete",
+                        "level": level,
+                        "pending": False,
+                        "response_template": str(fr.get("response_template") or ""),
+                        "block": block,
+                        "name": field,
+                    }
+                )
+            except Exception:
+                continue
+    for cr in (ruleset or {}).get("content_rules") or []:
+        try:
+            if not isinstance(cr, dict):
+                continue
+            results.append(
+                evaluate_content_rule(
+                    cr, metadata or {}, inventory, staged_dir, _metadata_strings=metadata_strings
+                )
+            )
+        except Exception:
+            continue
+    return results

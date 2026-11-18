@@ -180,22 +180,22 @@ class RingProgress(QWidget):
             return False
         return (self._now_ms() - self._last_update_ms) >= _STALL_MS
 
-    def paintEvent(self, event) -> None:  # noqa: N802 (Qt naming)
+    def paintEvent(self, event) -> None:
         try:
             painter = QPainter(self)
-            painter.setRenderHint(QPainter.Antialiasing, True)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             inset = 3.0
             side = self._diameter - inset * 2
             rect = QRectF(inset, inset, side, side)
             width = max(2.0, self._diameter * 0.10)
             pen = QPen(QColor(BORDER_SUBTLE), width)
-            pen.setCapStyle(Qt.RoundCap)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             painter.setPen(pen)
             painter.drawArc(rect, 0, 360 * 16)
 
             if self._error:
                 pen = QPen(QColor(STATE_ERROR_GRAPHIC), width)
-                pen.setCapStyle(Qt.RoundCap)
+                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 painter.setPen(pen)
                 painter.drawArc(rect, 0, 360 * 16)
                 self._paint_label(painter, "!")
@@ -204,7 +204,7 @@ class RingProgress(QWidget):
 
             if self._complete:
                 pen = QPen(QColor(STATE_SUCCESS_GRAPHIC), width)
-                pen.setCapStyle(Qt.RoundCap)
+                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 painter.setPen(pen)
                 painter.drawArc(rect, 0, 360 * 16)
                 self._paint_label(painter, "✓")
@@ -214,7 +214,7 @@ class RingProgress(QWidget):
             if self._target is None or self._is_stalled():
                 # Indeterminate sweep (unknown total or stalled work).
                 pen = QPen(QColor(ACCENT_PRIMARY), width)
-                pen.setCapStyle(Qt.RoundCap)
+                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 painter.setPen(pen)
                 start = int(self._sweep_deg * 16)
                 painter.drawArc(rect, start, 110 * 16)
@@ -225,10 +225,10 @@ class RingProgress(QWidget):
 
             fraction = max(0.0, min(1.0, self._displayed))
             pen = QPen(QColor(ACCENT_PRIMARY), width)
-            pen.setCapStyle(Qt.RoundCap)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             painter.setPen(pen)
             painter.drawArc(rect, 90 * 16, int(-360 * 16 * fraction))
-            self._paint_label(painter, f"{int(round(fraction * 100))}")
+            self._paint_label(painter, f"{round(fraction * 100)}")
             painter.end()
         except Exception:
             pass
@@ -271,7 +271,7 @@ class RingProgress(QWidget):
                 else (STATE_ERROR_GRAPHIC if text == "!" else TEXT_PRIMARY)
             )
             painter.setPen(QColor(color))
-            painter.drawText(self._inner_rect(), Qt.AlignCenter, text)
+            painter.drawText(self._inner_rect(), Qt.AlignmentFlag.AlignCenter, text)
         except Exception:
             pass
 
@@ -285,7 +285,7 @@ class RingProgress(QWidget):
         try:
             return t(
                 "ring.percent",
-                percent=int(round(self._displayed * 100)),
+                percent=round(self._displayed * 100),
             )
         except Exception:
             return t("ring.running")

@@ -44,9 +44,7 @@ def test_manifest_scan_column_shows_coverage(qapp):
     from ui.checks_tree import build_tree_model
 
     report = _coverage_report()
-    model = build_tree_model(
-        [("data/survey.tab", 12, "TAB", "")], report, lambda _p: True
-    )
+    model = build_tree_model([("data/survey.tab", 12, "TAB", "")], report, lambda _p: True)
     # "data/survey.tab" gets a folder node; the file row is its child.
     folder = model.item(0, 0)
     scan = folder.child(0, 3).text()
@@ -54,10 +52,10 @@ def test_manifest_scan_column_shows_coverage(qapp):
     assert "2 of 3 variables have labels" in folder.child(0, 0).toolTip()
 
 
-@pytest.fixture()
+@pytest.fixture
 def view(qapp, tmp_path):
-    from config import Config
-    from ui.dataset_detail import DatasetDetailView
+    from curation.config import Config
+    from ui.dataset import DatasetDetailView
 
     try:
         cfg = Config.load(None)
@@ -76,7 +74,7 @@ def view(qapp, tmp_path):
     v._ruleset = {}
     v._report = _coverage_report()
     v._inventory = [{"path": "data/survey.tab", "tabular": True}]
-    v._client = None
+    v._client = None  # type: ignore[assignment]
     v._logged = []
 
     class _StubDl:
@@ -89,14 +87,14 @@ def view(qapp, tmp_path):
         def reports_dir(self, pid):
             return dataset_dir / "reports"
 
-    v._dl_mgr = _StubDl()
+    v._dl_mgr = _StubDl()  # type: ignore[assignment]
 
     def _log(action, notes="", details=None):
         v._logged.append((action, notes, details))
 
-    v._log_action = _log
+    v._log_action = _log  # type: ignore[method-assign]
     v._status_msgs = []
-    v._set_status = lambda msg, **_kw: v._status_msgs.append(msg)
+    v._set_status = lambda msg, **_kw: v._status_msgs.append(msg)  # type: ignore[method-assign]
     return v
 
 
@@ -114,7 +112,8 @@ def test_draft_dictionary_writes_csv(view, monkeypatch):
     assert rows[0] == ["variable", "label", "type"]
     assert ["age", "Age in years", "numeric"] in rows
     assert any(a == "dictionary_drafted" for a, _n, _d in view._logged)
-    assert view._status_msgs and "draft written" in view._status_msgs[-1]
+    assert view._status_msgs
+    assert "draft written" in view._status_msgs[-1]
 
 
 def test_draft_dictionary_without_variables_is_a_noop(view, monkeypatch):
@@ -122,10 +121,15 @@ def test_draft_dictionary_without_variables_is_a_noop(view, monkeypatch):
 
     view._report = None
     called = []
+
+    def _fake_dialog(*_a, **_k):
+        called.append(1)
+        return ("", "")
+
     monkeypatch.setattr(
         QFileDialog,
         "getSaveFileName",
-        staticmethod(lambda *a, **k: called.append(1) or ("", "")),
+        staticmethod(_fake_dialog),
     )
     monkeypatch.setattr("ui.dialogs.show_info", lambda *a, **k: None)
     view._on_draft_dictionary()

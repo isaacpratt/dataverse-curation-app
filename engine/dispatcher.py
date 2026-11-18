@@ -40,9 +40,11 @@ def _match_suffixes(path: Path) -> set[str]:
 
 
 def checks_for_file(path: Path) -> list[type[Check]]:
+    """Format checks registered for a file's extension/name."""
     wanted = _match_suffixes(path)
     return [cls for cls in registry.values() if wanted & set(cls.extensions)]
 
 
 def dataset_level_checks() -> list[type[Check]]:
+    """Whole-dataset checks (run once per staged dataset, not per file)."""
     return [cls for cls in registry.values() if not cls.extensions]
