@@ -62,11 +62,11 @@ uv export --format requirements-txt      # pip escape hatch (lockfile remains so
 <p>Every file the app writes, its resolution rule and who writes it. Runtime caches are all listed as gitignored; a fresh clone starts clean.</p>
 <table>
 <tr><th>Path</th><th>Resolution</th><th>Written by</th><th>Contents</th></tr>
-<tr><td><code>config.json</code></td><td>CWD → exe dir → parent of exe (frozen); CWD (dev)</td><td>Settings / <code>poe build</code> copy of example</td><td>base_url, collection, workspace, tesseract/exiftool paths, <code>api_token_source</code> ("keyring" by default; plaintext token only as fallback when the credential store is unavailable)</td></tr>
+<tr><td><code>config.json</code></td><td>CWD (dev) · <code>%APPDATA%\Dataverse Docent\</code> (installed) · exe folder, its parent or grandparent (portable/plain frozen); a new file lands in the exe's parent</td><td>Settings; <code>poe build</code> ships <code>config.example.json</code> only</td><td>base_url, collection, workspace, tesseract/exiftool paths, <code>api_token_source</code> ("keyring" by default; plaintext token only as fallback when the credential store is unavailable)</td></tr>
 <tr><td><code>table_layout.json</code></td><td>CWD (dev/frozen); probes never write here</td><td>Table layout controller</td><td>per-table saved column widths/orders</td></tr>
 <tr><td><code>dataset_sizes.json</code></td><td>CWD</td><td>Batch size prober</td><td>cached dataset byte sizes for queue hints</td></tr>
 <tr><td><code>dashboard_cache.json</code></td><td>CWD</td><td>Dashboard</td><td>last-seen list state to avoid cold paint</td></tr>
-<tr><td><code>requirements_profiles.json</code></td><td>CWD</td><td>Requirements pane</td><td>saved optional-tool profiles</td></tr>
+<tr><td><code>requirements_profiles.json</code></td><td>Same policy as <code>config.json</code></td><td>Review configuration</td><td>versioned review rulesets (field + text-search rules, per-rule response templates)</td></tr>
 <tr><td><code>curation-workspace/*.db</code> / <code>*.db</code>, <code>*.sqlite</code></td><td><code>~/Documents/curation-workspace</code> (default) or <code>app.workspace</code></td><td>curation/storage.py / actions log</td><td>SQLite local state (WAL): dataset inventory cache, check results, curation actions</td></tr>
 <tr><td><code>downloads/</code></td><td><code>app.workspace</code> subfolder (default <code>~/Documents/curation-workspace/downloads</code>)</td><td>Download manager</td><td>staged originals; skip-if-staged detection; never tracked</td></tr>
 <tr><td><code>workspace/</code>, <code>.curation-workspace/</code></td><td>CWD (if used)</td><td>reserved/caches</td><td>variant of the workspace concept used by older builds; gitignored</td></tr>
