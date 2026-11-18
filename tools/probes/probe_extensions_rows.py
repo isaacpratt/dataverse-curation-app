@@ -6,15 +6,16 @@ buttons, and that the last row's bottom edge sits inside the table's
 viewport — nothing is clipped by the table's own edge at 960x720.
 """
 
-from _common import ROOT, Report, boot
+from __future__ import annotations
 
 import sys
+
+from _common import ROOT, Report, boot
 
 sys.path.insert(0, str(ROOT))
 
 from PySide6.QtWidgets import QPushButton, QTabWidget
 
-from config import Config
 from ui.settings_dialog import SettingsPane
 
 
