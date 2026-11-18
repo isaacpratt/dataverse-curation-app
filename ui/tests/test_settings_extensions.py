@@ -8,6 +8,7 @@ detected packages.
 import json
 
 import pytest
+from PySide6.QtWidgets import QTabWidget
 
 
 @pytest.fixture
@@ -45,7 +46,17 @@ def pane(qapp, tmp_path, monkeypatch):
     cfg.app.tesseract = ""
     cfg.app.exiftool = ""
     widget = SettingsPane(cfg)
+    widget.resize(1100, 750)
+    # The Extensions tab is hidden at construction; Qt lays out the current
+    # page only, so bring the tab forward before measuring the table.
+    tabs = next(iter(widget.findChildren(QTabWidget)), None)
+    if tabs is not None:
+        tabs.setCurrentIndex(1)
+    widget.show()
+    for _ in range(10):
+        qapp.processEvents()
     yield widget
+    widget.close()
     widget.deleteLater()
 
 
@@ -167,3 +178,27 @@ def test_extensions_header_has_version_column(pane):
         pane.ext_table.horizontalHeaderItem(i).text() for i in range(pane.ext_table.columnCount())
     ]
     assert headers == ["Package", "Installed", "Version", "Size", "Used for", "Action"]
+
+
+def test_every_row_fits_its_buttons(pane):
+    from PySide6.QtWidgets import QPushButton
+
+    table = pane.ext_table
+    for row in range(table.rowCount()):
+        cell = table.cellWidget(row, 5)
+        assert cell is not None, f"row {row} action cell missing"
+        buttons = cell.findChildren(QPushButton)
+        assert buttons, f"row {row} carries no buttons"
+        min_button_h = max(b.sizeHint().height() for b in buttons)
+        assert table.rowHeight(row) >= min_button_h + 12, (
+            f"row {row} too short for its buttons ({min_button_h}px + 12)"
+        )
+
+
+def test_last_row_is_not_clipped_by_the_table_edge(pane):
+    table = pane.ext_table
+    last = table.rowCount() - 1
+    bottom = table.rowViewportPosition(last) + table.rowHeight(last)
+    assert bottom <= table.viewport().height(), (
+        f"last row bottom {bottom} exceeds viewport height {table.viewport().height()}"
+    )

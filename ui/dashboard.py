@@ -12,7 +12,7 @@ from datetime import UTC
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QFont
+from PySide6.QtGui import QAction, QBrush, QColor, QFont
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from curation.client import size_unavailable
 from curation.config import Config
 from curation.dashboard_cache import (
     dashboard_cache_key,
@@ -43,6 +44,7 @@ from ui.theme import (
     STATE_ERROR_GRAPHIC,
     SURFACE_CARD,
     SURFACE_TINT,
+    TEXT_MUTED,
     band_qss,
     page_background_qss,
     selectable_labels,
@@ -2183,6 +2185,14 @@ class DashboardView(QWidget):
                         if text_val == t("dashboard.display_state.unknown"):
                             if ds.get("size_pending"):
                                 item.setToolTip(t("dashboard.table.size_pending"))
+                            elif size_unavailable(ds):
+                                # dv-zhf: the size cannot be had — this
+                                # account read no version of the dataset.
+                                # The em dash is dimmed so the cell reads
+                                # as unavailable, and the hover carries the
+                                # reason the Access column gives.
+                                item.setForeground(QBrush(QColor(TEXT_MUTED)))
+                                item.setToolTip(_access_tooltip(ds))
                             else:
                                 item.setToolTip(t("dashboard.table.size_unknown"))
                         elif ds.get("size_enriched"):

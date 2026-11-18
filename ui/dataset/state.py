@@ -414,6 +414,10 @@ class DetailState(QWidget):
         """Run the auto-check suite for this dataset."""
         raise NotImplementedError
 
+    def _apply_auto_filter(self, *args: Any) -> None:
+        """Apply the Auto-Checks severity filter to the card rows."""
+        raise NotImplementedError
+
     def _on_disposition_changed(self, key: str, token: str) -> None:
         """Persist a changed finding disposition."""
         raise NotImplementedError

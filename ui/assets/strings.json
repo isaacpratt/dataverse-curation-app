@@ -823,7 +823,7 @@
       "reports_saved": "Reports saved: {markdown} + {json} (recorded in Dataset log)"
     },
     "auto_checks": {
-      "intro": "Dataset checks appear here with their full messages. Rows list every finding (dataset checks plus per-file failures and skips); per-file passes live in File Manifest below — expand a file to see every check, passes included.",
+      "intro": "What shows up here:\n• Dataset checks (full messages)\n• Every finding: dataset checks plus per-file failures and skips\n• per-file passes live in File Manifest — expand a file to see its checks",
       "legend": "✓ pass · ✕ issue · ○ SKIPPED · MISSING = optional library not installed.",
       "not_run": "Not run yet",
       "no_file_list": "No file list yet — load metadata to see which checks will run.",
@@ -838,6 +838,12 @@
       "will_run_applies": "Applies to: {file_types}",
       "missing_detail": "{applies}\nOptional library not installed: {package}",
       "badge_missing": "MISSING",
+      "filter_all": "All",
+      "filter_errors": "Errors",
+      "filter_warnings": "Warnings",
+      "filter_tip": "Show everything, or only failed checks of one severity",
+      "skipped_many": "Skipped on {count} files — the check did not run.",
+      "skipped_files": "Files:\n{paths}",
       "readme_section_found": "✓ {label}",
       "readme_section_missing": "○ {label}"
     },

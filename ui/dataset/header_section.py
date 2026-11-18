@@ -242,6 +242,7 @@ class HeaderSection(DetailState):
                         disposition_key=key,
                         detail_lines=detail_lines,
                     )
+                    row.setProperty("auto_class", classify(c))
                     try:
                         from ui.checks_tree import format_details_tooltip
 
@@ -260,8 +261,41 @@ class HeaderSection(DetailState):
                     for c in f.checks
                     if classify(c) in ("failed-error", "failed-warning", "skipped")
                 ]
+                # dv-bph (W1): the same skipped check repeated across files
+                # collapses into one row carrying the count — the files
+                # themselves stay in the row's tooltip.
+                skip_groups: dict[tuple[str, str], list[tuple]] = {}
+                for f, c in file_findings:
+                    if classify(c) == "skipped":
+                        skip_groups.setdefault((c.check_id, c.message), []).append((f, c))
+                rendered_skips: set[tuple[str, str]] = set()
                 for f, c in file_findings:
                     kind = classify(c)
+                    if kind == "skipped":
+                        gkey = (c.check_id, c.message)
+                        group = skip_groups[gkey]
+                        if len(group) > 1:
+                            if gkey in rendered_skips:
+                                continue  # the group already has its one row
+                            rendered_skips.add(gkey)
+                            row = self._auto_row(
+                                check_title(c.check_id),
+                                t("detail.auto_checks.skipped_many", count=len(group)),
+                                True,
+                                "warning",
+                                badge=t("status.badges.skipped"),
+                            )
+                            paths = "\n".join(ff.path for ff, _ in group[:15])
+                            if len(group) > 15:
+                                paths += "\n" + t("common.ellipsis")
+                            row.setToolTip(
+                                c.message
+                                + "\n\n"
+                                + t("detail.auto_checks.skipped_files", paths=paths)
+                            )
+                            row.setProperty("auto_class", "skipped")
+                            self._auto_body.addWidget(row)
+                            continue
                     # dv-dcd: the heading is the check's name and the caption
                     # says what was found — never the check_id or the raw
                     # "<filename>: <engine return>" message.
@@ -278,6 +312,7 @@ class HeaderSection(DetailState):
                             "warning",
                             badge=t("status.badges.skipped"),
                         )
+                        row.setProperty("auto_class", "skipped")
                     else:
                         key = finding_key(c.check_id, f.path, c.message)
                         finding_keys.append(key)
@@ -288,6 +323,7 @@ class HeaderSection(DetailState):
                             c.level,
                             disposition_key=key,
                         )
+                        row.setProperty("auto_class", classify(c))
                     try:
                         from ui.checks_tree import format_details_tooltip
 
@@ -363,9 +399,13 @@ class HeaderSection(DetailState):
                             badge=t("detail.auto_checks.will_run_badge"),
                         )
                     row.setToolTip(applies)
+                    # A planned row is not a finding yet — a severity
+                    # filter folds it away (dv-bph).
+                    row.setProperty("auto_class", "planned")
                     self._auto_body.addWidget(row)
         except Exception:
             pass
+        self._apply_auto_filter()
         try:
             selectable_labels(self._auto_card)
         except Exception:

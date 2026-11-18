@@ -15,9 +15,11 @@ from curation.client.access import (
     _ACCESS_STATE_METADATA_ONLY,
     _ACCESS_STATE_READABLE,
     _ACCESS_STATE_RESTRICTED,
+    _log_enrichment_refusal,
     _mark_readable,
     _mark_restricted,
     _set_access,
+    size_unavailable,
 )
 from curation.client.caches import (
     _ALLOWED_LABELS_CACHE,
@@ -132,6 +134,7 @@ __all__ = [
     "_error_message",
     "_extract_contact",
     "_field_value",
+    "_log_enrichment_refusal",
     "_mark_readable",
     "_mark_restricted",
     "_me_cache_key",
@@ -171,6 +174,7 @@ __all__ = [
     "search_item_state",
     "set_cached_allowed_labels",
     "set_cached_metadata_fields",
+    "size_unavailable",
     "top_level_collection",
     "version_probe_order",
     "write_allowed_labels_cache",

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from curation.applog import get_app_log
 from curation.client.constants import _VERSION_DRAFT, _VERSION_PUBLISHED
 from curation.client.http import _error_message
 
@@ -89,6 +90,44 @@ def _mark_restricted(ds: dict[str, Any], exc: BaseException) -> None:
             reason=code or "not_readable",
             detail=detail,
             status=int(status or 0),
+        )
+    except Exception:
+        pass
+
+
+def size_unavailable(ds: dict[str, Any]) -> bool:
+    """Return True when no version of this dataset could be read.
+
+    The size is not missing — it cannot be had (dv-zhf). The dashboard
+    dims the Size cell's em dash for these rows; the Access column says
+    why. A row that was read keeps its size, even when only some of its
+    versions were refused.
+    """
+    access = ds.get("access")
+    if not isinstance(access, dict):
+        return False
+    return str(access.get("state") or "") in (
+        _ACCESS_STATE_RESTRICTED,
+        _ACCESS_STATE_METADATA_ONLY,
+    )
+
+
+def _log_enrichment_refusal(ds: dict[str, Any], exc: BaseException) -> None:
+    """Say in the Log page that a dataset's size could not be read.
+
+    The refusal is the server's documented answer for a dataset outside
+    the account's curation scope, so the line is EXPECTED (muted in the
+    Log page), not an error. Without it, a batch that left rows thin is
+    invisible after the fact.
+    """
+    try:
+        resp = getattr(exc, "response", None)
+        status = int(getattr(resp, "status_code", 0) or 0)
+        code = str(getattr(exc, "refusal_code", "") or "") or "not_readable"
+        pid = str(ds.get("persistent_id") or "")
+        get_app_log().expected(
+            f"Enrichment refused for {pid}: every version was refused "
+            f"(HTTP {status}, {code}) — the size stays unavailable"
         )
     except Exception:
         pass

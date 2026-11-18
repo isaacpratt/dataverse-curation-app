@@ -163,6 +163,30 @@ def test_restricted_row_is_marked_and_the_batch_continues():
     assert rows[1]["total_size_bytes"] == 5
 
 
+def test_refused_row_is_logged_for_the_log_page():
+    """dv-zhf: a refused dataset leaves a line in the Log page.
+
+    Without it, a batch that silently left rows thin is invisible after
+    the fact. The refusal is the server's documented answer for a dataset
+    outside the account's curation scope, so the line is EXPECTED (muted
+    in the Log page), not an error.
+    """
+    import curation.applog as applog
+
+    denied = "doi:10.5072/FK2/DENIED-LOG"
+    client = _StubClient({denied: _http_error(403)})
+    rows = [_thin(denied)]
+    applog.clear()
+    try:
+        client.enrich_datasets_with_inventory(rows, max_workers=1)
+        text = "\n".join(applog.lines())
+    finally:
+        applog.clear()
+    assert denied in text, text
+    assert "EXPECTED" in text, "a refusal is the server's answer, not a bug"
+    assert "ERROR" not in text
+
+
 def test_cancellation():
     pids = [f"doi:10.5072/FK2/{c}" for c in "ABC"]
     docs = {p: _version_doc([_entry("f.csv", 1)]) for p in pids}

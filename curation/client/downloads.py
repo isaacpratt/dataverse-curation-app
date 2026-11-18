@@ -14,7 +14,7 @@ from typing import Any
 import requests
 
 from curation.applog import get_app_log
-from curation.client.access import _mark_readable, _mark_restricted
+from curation.client.access import _log_enrichment_refusal, _mark_readable, _mark_restricted
 from curation.client.constants import _RETRYABLE_NETWORK, _STREAM_CHUNK
 from curation.client.errors import (
     DownloadCancelled,
@@ -276,6 +276,7 @@ class _DownloadsMixin:
                             # That is an expected answer, not a broken
                             # token: mark the row and keep going.
                             _mark_restricted(ds, exc)
+                            _log_enrichment_refusal(ds, exc)
                             result["restricted"] += 1
                             continue
                         continue

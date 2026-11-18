@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QVBoxLayout,
+    QWidget,
 )
 
 from curation.storage import (
@@ -34,6 +35,7 @@ from ui.theme import (
     TEXT_MUTED,
     TEXT_ON_ACCENT,
     surface_frame_qss,
+    transparent_surface_qss,
 )
 from ui.widgets import (
     add_info_tip,
@@ -42,6 +44,7 @@ from ui.widgets import (
     make_badge,
     make_caption_label,
     make_card,
+    make_combo,
     make_disposition_combo,
     make_field_label,
     make_small_body_label,
@@ -65,6 +68,27 @@ class ChecksSection(DetailState):
         # "N check(s) will run"/counts/"No file checks" as data lands.
         self._auto_summary = make_field_label(t("detail.auto_checks.not_run"))
         header_lay.addWidget(self._auto_summary)
+        # dv-bph (W2): a findings filter like the metadata card's, on its
+        # own tools row — narrows the card to one severity per click.
+        auto_tools = QWidget()
+        auto_tools.setObjectName("AutoChecksTools")
+        auto_tools.setStyleSheet(transparent_surface_qss("AutoChecksTools"))
+        tools_lay = QHBoxLayout(auto_tools)
+        tools_lay.setContentsMargins(16, 8, 16, 8)
+        tools_lay.setSpacing(8)
+        self._auto_filter = make_combo(
+            [
+                (t("detail.auto_checks.filter_all"), "all"),
+                (t("detail.auto_checks.filter_errors"), "error"),
+                (t("detail.auto_checks.filter_warnings"), "warning"),
+            ],
+            min_width=110,
+            tip=t("detail.auto_checks.filter_tip"),
+        )
+        self._auto_filter.currentIndexChanged.connect(self._apply_auto_filter)
+        tools_lay.addWidget(self._auto_filter)
+        tools_lay.addStretch(1)
+        card.layout().insertWidget(1, auto_tools)
         # Body: scroll of checks (factory body reused directly)
         self._auto_body = _body_host
         self._auto_body.setContentsMargins(16, 12, 16, 12)
@@ -73,6 +97,46 @@ class ChecksSection(DetailState):
         self._auto_placeholder = make_small_body_label(t("detail.auto_checks.no_file_list"))
         self._auto_body.addWidget(self._auto_placeholder)
         return card
+
+    def _auto_rows(self) -> list[QFrame]:
+        """Return the Auto-Checks rows, in card order.
+
+        ``self._auto_body`` is the card body's QVBoxLayout — a layout has
+        no findChildren(), so the rows are read from the layout itself.
+        """
+        rows: list[QFrame] = []
+        lay = getattr(self, "_auto_body", None)
+        if lay is None:
+            return rows
+        for i in range(lay.count()):
+            item = lay.itemAt(i)
+            widget = item.widget() if item is not None else None
+            if widget is not None and widget.objectName() == "AutoCheckRow":
+                rows.append(widget)
+        return rows
+
+    def _apply_auto_filter(self, *_args) -> None:
+        """Show only the rows of the chosen severity class (dv-bph, W2).
+
+        Every row carries an ``auto_class`` property when it is built
+        (``passed`` / ``failed-error`` / ``failed-warning`` / ``skipped``
+        / ``planned``); the filter reads it and hides what does not
+        match. "Warnings" keeps the skipped rows — they are warnings the
+        curator still has to act on.
+        """
+        try:
+            wanted = self._auto_filter.currentData() or "all"
+        except Exception:
+            wanted = "all"
+        for row in self._auto_rows():
+            cls = str(row.property("auto_class") or "passed")
+            if wanted == "error":
+                visible = cls == "failed-error"
+            elif wanted == "warning":
+                visible = cls in ("failed-warning", "skipped")
+            else:  # "all"
+                visible = True
+            row.setVisible(visible)
 
     def _auto_row(
         self,

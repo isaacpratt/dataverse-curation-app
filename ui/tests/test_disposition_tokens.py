@@ -1,8 +1,9 @@
 """Disposition tokens: the kit and the storage layer must agree (dv-32x).
 
-``ui/widgets.py`` re-declares the tuple on purpose (the kit stays free of
-the storage layer), so the agreement is enforced by this test instead of
-by an import — the engine test suite deliberately carries no Qt imports.
+``ui/widgets.py`` declares the tuple again on purpose (the kit stays
+free of the storage layer), so the agreement is enforced by this test
+instead of by an import — the engine test suite deliberately carries
+no Qt imports.
 """
 
 from curation.storage import DISPOSITION_TOKENS as STORAGE_TOKENS
