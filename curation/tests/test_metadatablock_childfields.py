@@ -1,6 +1,6 @@
 """Parsed metadatablocks → rule catalog rows: composite children included.
 
-Live-schema source for engine/tests/fixtures/metadatablocks_citation.json:
+Live-schema source for curation/tests/fixtures/metadatablocks_citation.json:
 Borealis demo, GET https://demo.borealisdata.ca/api/metadatablocks/citation,
 fetched 2026-11-12, trimmed to the citation author + dsDescription blocks.
 """

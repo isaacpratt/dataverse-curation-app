@@ -9,8 +9,9 @@ from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
 from engine.report_md import render_markdown
 
-CHECK_DIR = Path(__file__).resolve().parents[1] / "checks"
-_RUNNER = Path(__file__).resolve().parents[1] / "runner.py"
+_ROOT = Path(__file__).resolve().parents[2]
+CHECK_DIR = _ROOT / "engine" / "checks"
+_RUNNER = _ROOT / "engine" / "runner.py"
 _ID_RE = re.compile(r'"((?:format|inventory|dataset|metadata|advice)\.[a-z0-9_.]+)"')
 _SKIP_FILES = {"base.py", "_util.py", "guidance.py", "__init__.py"}
 

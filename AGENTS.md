@@ -12,15 +12,17 @@ dataverse-curation-app/
 │   ├── report.py         # DatasetReport JSON contract
 │   ├── dispatcher.py     # extension -> check mapping
 │   ├── runner.py         # run_report / list_planned_checks
-│   └── tests/            # pytest suite (engine + UI; run --collect-only -q for the current count)
+│   └── tests/            # engine suites (Qt-free; run --collect-only -q for the current count)
 ├── ui/                   # PySide6 views (main window, dashboard, detail, settings/about panes, log page, workers, dialogs, theme, widgets incl. AppTable content-fit, progress ring)
 │   ├── dataset/          # the dataset detail page: page.py facade + one module per section, over the shared contract state.py (DetailState)
 │   ├── theme.py          # palette -> semantic roles -> contrast contract -> one button system
 │   ├── widgets.py        # the component kit (every view builds its controls through it)
 │   ├── gallery.py        # the component gallery: every kit component on one page
-│   └── table_layout.py   # one layout controller per table header (persists user gestures only)
+│   ├── table_layout.py   # one layout controller per table header (persists user gestures only)
+│   └── tests/            # view suites (pytest-qt, offscreen)
 ├── tools/                  # operational helpers (audit/SBOM/licenses, build, pack, smoke, doc links, complexity, benchmarks) + probes/
-│   └── probes/             # offscreen UI probes (queue columns, manifest columns, page headings, card corner, buttons, gallery)
+│   ├── probes/             # offscreen UI probes (queue columns, manifest columns, page headings, card corner, buttons, gallery)
+│   └── tests/              # tool-script suites (pack checks, SBOM/NOTICE, complexity report)
 ├── curation/             # the app core: no Qt, no view imports (import-linter enforces both)
 │   ├── client/           # Native/Search API client (constants/errors/http/parsers/caches/downloads/errors/refusals/access/DataverseClient; total-driven paginated search + pooled inventory enrichment, versions/compare/timestamps/notifications/curation labels)
 │   ├── download_manager.py # approval-gated downloads, originals, skip-if-staged, verify (ok/problems/warnings)
@@ -29,7 +31,8 @@ dataverse-curation-app/
 │   ├── response_draft.py   # depositor response assembler
 │   ├── review_rules.py     # rule-driven completeness evaluation
 │   ├── applog.py           # in-memory request log (Log page)
-│   └── storage.py          # SQLite local state + JSON caches (sizes, labels, table layout)
+│   ├── storage.py          # SQLite local state + JSON caches (sizes, labels, table layout)
+│   └── tests/              # curation core suites (Qt-free; fixtures under tests/fixtures/)
 ├── main.py               # entry point (GUI + --headless)
 └── config.example.json   # configuration template (copy to config.json)
 ```

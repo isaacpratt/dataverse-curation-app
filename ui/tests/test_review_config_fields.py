@@ -57,7 +57,7 @@ def test_parse_metadatablock_fields_fixture_roundtrip():
 
     repo = Path(__file__).resolve().parents[2]
     payload = json.loads(
-        (repo / "engine" / "tests" / "fixtures" / "metadatablocks_citation.json").read_text(
+        (repo / "curation" / "tests" / "fixtures" / "metadatablocks_citation.json").read_text(
             encoding="utf-8"
         )
     )

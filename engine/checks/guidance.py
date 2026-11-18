@@ -10,7 +10,7 @@ Surfaced by: the manifest/Auto-Checks tooltips (ui.checks_tree), the
 Markdown report (engine.report_md), and the depositor-response
 ``{remediation}`` placeholder (response_draft).
 
-The conformance test (engine/tests/test_guidance.py) statically scans
+The conformance test (curation/tests/test_guidance.py) statically scans
 every check module for check-id literals and requires each one here, so
 a new check cannot land without its guidance.
 """

@@ -81,7 +81,7 @@ include = ["engine*", "ui*", "curation*"]
 version = { attr = "engine.__version__" }
 
 [tool.pytest.ini_options]
-testpaths = ["engine/tests", "ui/tests"]
+testpaths = ["engine/tests", "curation/tests", "tools/tests", "ui/tests"]
 # Serial by default: a local run is easier to read and to debug. CI passes
 # `-n auto` (pytest-xdist) for the wall-clock win; the suite is
 # order-independent, verified by repeated parallel runs (dv-hcg.41).
@@ -271,6 +271,8 @@ ignore = [
 # Fake Qt header stubs in engine tests mirror the real camelCase API.
 # Test functions document themselves via their names; no docstrings required.
 "engine/tests/**" = ["N802", "D103"]
+"curation/tests/**" = ["N802", "D103"]
+"tools/tests/**" = ["D103"]
 "ui/tests/**" = ["D103"]
 "tools/probes/**" = ["D103"]
 
@@ -294,18 +296,20 @@ warn_unused_configs = true
 ignore_missing_imports = true
 # Gate the engine contract, the curation core it is built on and the UI
 # layer: the engine plus the curation core (client, storage, downloads,
-# metadata rules, request log), the engine test suite, the UI package
-# (source and tests) and the entry point.
+# metadata rules, request log), the test suites that sit with those
+# packages, the tool-script tests, the UI package (source and tests) and
+# the entry point.
 #
-# The engine tests are Qt-free since dv-hcg.26 (the dashboard cache
-# helpers they borrow live in the Qt-free curation.dashboard_cache
-# module), so they join the strict gate instead of needing an exclusion.
+# The engine and curation tests are Qt-free (dv-hcg.26 moved the borrowed
+# dashboard cache helpers into curation.dashboard_cache), so they join
+# the gate under the documented test relaxation instead of an exclusion.
 # The UI layer joined the gate in dv-hcg.28, under the documented
 # relaxation of --strict below; `main.py` is checked under the full
 # strict settings (it is the entry point, not a UI module).
 files = [
     "engine",
     "curation",
+    "tools/tests",
     "ui",
     "main.py",
 ]
@@ -341,14 +345,13 @@ disallow_any_generics = false
 warn_return_any = false
 no_implicit_reexport = false
 
-# The engine test suite runs under the same documented relaxation
-# (2026-11-18, merge of master). The engine contract in `engine/` is
-# checked under full --strict; the tests master added are exercised by
-# pytest, and writing to the strict annotation bar would mean
-# re-annotating a large suite with no defect-finding payoff. The shape
-# checks stay ON for them, exactly as for ui.*.
+# The test suites run under the same documented relaxation (2026-11-18,
+# merge of master). The packages they exercise stay under full --strict;
+# the tests are exercised by pytest, and writing to the strict annotation
+# bar would mean re-annotating a large suite with no defect-finding
+# payoff. The shape checks stay ON for them, exactly as for ui.*.
 [[tool.mypy.overrides]]
-module = ["engine.tests.*"]
+module = ["curation.tests.*", "engine.tests.*", "tools.tests.*"]
 disallow_untyped_defs = false
 disallow_untyped_calls = false
 disallow_incomplete_defs = false

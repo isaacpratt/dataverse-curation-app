@@ -22,7 +22,7 @@ Copy this structure into every new `bd create --description`. A bead is the unit
 <Where it touches: files, functions, tests, docs to update together (e.g. Report contract stays in sync with schema changes).>
 
 ## Tests
-<How it will be verified: unit tests in `engine/tests/` or `ui/tests/`, plus e2e/probe (`tools/probes/`) when the behavior is visual or threading-related. Include what passing looks like (e.g. specific assertions, pixel, or log lines). Note any logging to add on failure paths.>
+<How it will be verified: unit tests in the package's own suite (`engine/tests/`, `curation/tests/`, `tools/tests/` or `ui/tests/`), plus e2e/probe (`tools/probes/`) when the behavior is visual or threading-related. Include what passing looks like (e.g. specific assertions, pixel, or log lines). Note any logging to add on failure paths.>
 ```
 
 ## Rules
