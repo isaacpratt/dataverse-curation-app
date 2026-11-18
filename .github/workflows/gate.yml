@@ -98,7 +98,11 @@ jobs:
       - name: Install
         run: uv sync --locked --group dev
       - name: Engine tests
-        run: uv run --group dev python -m pytest engine/tests -q
+        # The engine suite is Qt-free by design (dv-hcg.26), so pytest-qt
+        # (installed in the dev group, auto-loaded) must not initialize
+        # here: QtGui itself cannot be imported on a headless linux
+        # runner (libEGL is absent). Disable just that plugin.
+        run: uv run --group dev python -m pytest engine/tests -q -p no:pytest-qt
       - name: Headless smoke
         shell: bash
         run: |
