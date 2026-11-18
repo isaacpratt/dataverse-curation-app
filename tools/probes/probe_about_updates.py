@@ -14,7 +14,7 @@ from __future__ import annotations
 import sys
 import time
 
-from _common import Report, boot
+from _common import Report, boot, save_artifact
 
 
 def _find_button_by_text(pane, text: str):
@@ -82,7 +82,7 @@ def main() -> int:
     edge = _right_most_edge(pane)
     report.check(edge <= 960, "nothing clipped at 960 px wide", f"rightmost {edge:.0f} px")
 
-    pane.grab().save("about-updates-fresh.png")
+    save_artifact(pane, "about-updates-fresh.png")
 
     # Second pass: an update is already downloaded and pending a restart.
     _seed_pending_pref(pane, cfg, "0.2.0")
@@ -103,7 +103,7 @@ def main() -> int:
         edge2 <= 960, "nothing clipped at 960 px wide (pending state)", f"rightmost {edge2:.0f} px"
     )
 
-    pane2.grab().save("about-updates-pending.png")
+    save_artifact(pane2, "about-updates-pending.png")
     pane.close()
     pane2.close()
     return report.finish()

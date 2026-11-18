@@ -15,6 +15,15 @@ import tempfile
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+ARTIFACT_DIR = ROOT / "reports" / "probes"
+
+
+def save_artifact(widget, name: str) -> pathlib.Path:
+    """Save a widget screenshot under reports/probes/ and return its path."""
+    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    path = ARTIFACT_DIR / name
+    widget.grab().save(str(path))
+    return path
 
 
 def boot():

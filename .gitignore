@@ -1,37 +1,59 @@
+# Python and tool caches
 __pycache__/
 *.py[cod]
 .venv/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyi-cache/
+.import_linter_cache/
+*.egg-info/
+
+# PyInstaller writes <name>.spec beside the entry point, even though the
+# flag list lives in tools/build_app.py. `poe clean` removes it.
+*.spec
+
+# Build and release output (dist/releases is `poe pack` output)
 build/
 dist/
-*.spec
-*.db
-*.sqlite
-*.sqlite-journal
-*.log
+# Reports written by poe tasks: complexity.md, probe screenshots, junit,
+# coverage and SBOM copies.
+reports/
+htmlcov/
+
+# Coverage and test reports at any depth
+.coverage
+.coverage.*
+coverage.xml
+junit*.xml
+
+# Local runtime state and user data (never committed)
 config.json
 requirements_profiles.json
 dashboard_cache.json
 dataset_sizes.json
 table_layout.json
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.sqlite-journal
 .curation-workspace/
 workspace/
 downloads/
-.idea/
-.vscode/
-.coverage
-htmlcov/
-.mypy_cache/
-.ruff_cache/
-# uv/pytest artifacts (CI coverage XMLs, junit)
-reports/
-*.egg-info/
+
+# Logs and local secrets
+*.log
 .env
 .env.*
+
+# Editors and OS
+.idea/
+.vscode/
 .DS_Store
 Thumbs.db
-.pyi-cache/
-# Local AI-agent tooling (skills, sessions) — environment-specific, not app source.
+
+# Local AI-agent tooling (skills, sessions) - environment-specific, not app source.
 .opencode/
 # Session scratch from design/critique tooling: untracked by design, the
 # durable decisions they carry live in docs/adr/ (see dv-hcg.32).
@@ -39,14 +61,14 @@ Thumbs.db
 .lavish/
 # Agent screenshots/scratch (browser captures, verification images).
 .openchamber/
-# Probe artefacts (tools/probes writes a PNG of the card it checked).
-queue_card.png
-about-updates-fresh.png
-about-updates-pending.png
 
-# Beads / Dolt files (added by bd init)
-.dolt/
+# Beads local files. `.beads/.gitignore` (tracked) owns the Dolt store and
+# runtime locks; these cover the root-level copies and passive exports, which
+# would conflict with the Dolt wire protocol if committed.
 .beads-credential-key
 .beads/proxieddb/
 .beads/seed.ps1
+.beads/issues.jsonl
+.beads/events.jsonl
+.beads/interactions.jsonl
 *.gate.lock*

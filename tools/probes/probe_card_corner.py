@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import sys
 
-from _common import Report, boot
+from _common import ROOT, Report, boot, save_artifact
 
 
 def card_of(widget):
@@ -81,8 +81,8 @@ def main() -> int:
         f"page-coloured pixels={notch}",
     )
 
-    frame.grab().save("queue_card.png")
-    print("  saved queue_card.png")
+    path = save_artifact(frame, "queue_card.png")
+    print(f"  saved {path.relative_to(ROOT)}")
     win.close()
     return report.finish()
 
