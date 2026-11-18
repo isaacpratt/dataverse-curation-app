@@ -17,6 +17,10 @@ python tools/probes/probe_card_corner.py       # a card's bottom-right corner st
 python tools/probes/probe_metadata_rows.py    # the Metadata card's rows, drawer, ghost rows and no-scrollbar rule
 python tools/probes/probe_extensions_rows.py  # the Extensions rows fit their Reinstall/Uninstall buttons, and the last row is never clipped
 python tools/probes/probe_auto_checks_affordances.py  # the Auto-Checks filter narrows the card, and repeated skips collapse into one row
+python tools/probes/probe_disposition_rows.py # finding rows carry one disposition, a note and a header roll-up
+python tools/probes/probe_preview.py          # the preview card fits 960px, with the too-large and not-staged fallbacks
+python tools/probes/probe_about_updates.py    # the About updates section fits, and the restart action appears when pending
+python tools/probes/probe_rail_nav.py         # one navigation map: the workflow rail stays visible folded and unfolded
 ```
 
 `run_all.py` runs each `probe_*.py` in turn and exits non-zero when any
@@ -60,8 +64,10 @@ at columns.
 - Assert on **geometry and pixels**, not on rendered text. The offscreen
   platform has no fonts, so every glyph is tofu and a text measurement
   says nothing.
-- `probe_card_corner.py` saves a PNG of the card it checked. That is the
-  screenshot to eyeball when a probe fails.
+- `probe_card_corner.py` saves a PNG of the card it checked under
+  `reports/probes/` (the probes' shared `save_artifact()` helper does the
+  same for the About-updates screenshots). That is the screenshot to eyeball
+  when a probe fails.
 
 ## What each probe covers
 
@@ -74,6 +80,10 @@ at columns.
 | `probe_metadata_rows.py` | The Metadata card renders the Auto-Checks-style rows: the Title row carries no bar, the author drawer expands and collapses, the Not-checked filter shows its ghost rows, and the card carries no inner scroll area and no visible inner scrollbar. |
 | `probe_extensions_rows.py` | The Settings → Extensions table: every row fits its Reinstall/Uninstall buttons, and the last row is not clipped by the table's own edge. |
 | `probe_auto_checks_affordances.py` | The Auto-Checks card: a findings filter narrows it to Errors or Warnings and restores every row on All, and the same skipped check repeated across files collapses into one row carrying the count. |
+| `probe_disposition_rows.py` | A finding row carries one disposition combo, an overflow action and a Note affordance; the pick persists to `state.db` and the header roll-up follows it. Passed rows carry no combo. |
+| `probe_preview.py` | The preview card fits a 960px window, renders the CSV head inside the card, offers Open folder for a too-large file and explains a not-staged file. |
+| `probe_about_updates.py` | The About pane's Updates section fits 960px with and without a downloaded update; the Restart and install action appears only when one is pending. |
+| `probe_rail_nav.py` | One navigation map: the workflow rail stays visible when the sidebar folds and unfolds, the dataset log moves to the page foot, and the old nav card/menu/collapse controls stay gone. |
 
 ## The same contracts in pytest
 

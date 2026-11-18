@@ -203,7 +203,7 @@ uv run poe smoke         # size report + headless --help check (DOCENT_SMOKE_EXE
 <pre><code>python main.py --gallery          # open the gallery
 python -m ui.gallery               # the same, standalone</code></pre>
 <p>The gallery is itself a view, so it obeys the same rules as every other one: it names roles, not palette entries, and it builds components, not raw widgets. It is also the first thing to look at when a component looks wrong, because it puts that component next to every other one instead of in the middle of a page.</p>
-<div class="callout ok"><b>Adding a component?</b> Add it to the kit, then add it to the gallery. <code>tools/probes/probe_gallery.py</code> checks that the gallery still builds, still shows a component of every kind, and that every button in it wears one of the theme's button object names &mdash; the gallery may not show a button the app cannot produce.</div>
+<div class="callout ok"><b>Adding a component?</b> Add it to the kit, then add it to the gallery. <code>ui/tests/test_gallery_contract.py</code> checks that the gallery still builds, still shows a component of every kind, and that every button in it wears one of the theme's button object names &mdash; the gallery may not show a button the app cannot produce. The same suite covers the app-sheet/scoped-sheet agreement (promoted from the deleted button probe).</div>
 
 <h2>Qt pitfalls</h2>
 <p>The bugs this app had were mostly Qt behaviours working exactly as documented. These are the ones that bite.</p>
@@ -231,9 +231,8 @@ python -m ui.gallery               # the same, standalone</code></pre>
 python tools/probes/probe_queue_columns.py    # the queue's columns fill the viewport, never clip
 python tools/probes/probe_manifest_columns.py  # the manifest fits, persists the user's widths, resets
 python tools/probes/probe_headings.py          # every full-page heading wears the same token
-python tools/probes/probe_card_corner.py       # a card's bottom-right corner stays connected
-python tools/probes/probe_buttons.py          # the app sheet and the scoped sheet agree, kind by kind
-python tools/probes/probe_gallery.py           # the gallery builds and shows every kit component</code></pre>
+python tools/probes/probe_card_corner.py       # a card's bottom-right corner stays connected</code></pre>
+<p>The other probes cover the Auto-Checks and Metadata rows, the Extensions table, finding dispositions, the preview card, the About updates section and the navigation rail; <code>tools/probes/README.md</code> lists all of them with the contract each one checks.</p>
 <div class="callout"><b>CI runs the probes.</b> The workflow has a second job, <code>probes</code>, that installs the requirements and runs <code>python tools/probes/run_all.py</code> offscreen. The runner executes every <code>probe_*.py</code> and exits non-zero when any of them failed, so the pixel-and-geometry checks are part of the build rather than a habit.</div>
 <div class="callout ok"><b>The temp-workspace rule.</b> A probe must never write to the user's <code>workspace/table_layout.json</code>: a probe that saves there leaves the real app with a layout nobody chose. <code>tools/probes/_common.py:boot()</code> points <code>cfg.app.workspace</code> at a fresh temp directory and applies the theme; every probe goes through it. A new probe must do the same, and must stub out anything that would reach the network (the manifest probe replaces <code>_on_load_metadata</code>).</div>
 <p>The same contracts live in <code>ui/tests/</code> as pytest suites, so CI runs them: <code>test_table_layout.py</code> (the controller), <code>test_table_geometry.py</code> (the queue's geometry), <code>test_page_headings.py</code> (the heading contract), <code>test_type_scale.py</code> (the type scale), <code>test_contrast.py</code> (the contrast contract) and <code>test_theme_conformance.py</code> (the layering guards). The probes stay useful for the things pytest cannot see &mdash; a pixel colour at a card's corner, a screenshot to eyeball.</p>

@@ -47,7 +47,7 @@ dataverse-curation-app/
 ```bash
 uv sync                   # create .venv and install everything incl. dev group (from uv.lock; no pip needed)
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
-uv run pytest             # 956 tests; run uv run pytest --collect-only -q for current count
+uv run pytest             # 969 tests; run uv run pytest --collect-only -q for current count
 pre-commit run --all-files # optional local gate (CI runs it too); needs uv on PATH. core.hooksPath is beads-managed, so hooks are not auto-installed — run it manually or rely on CI
 uv run python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
 uv run python main.py --gallery      # the component gallery: every kit component on one page

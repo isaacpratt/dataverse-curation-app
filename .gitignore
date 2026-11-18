@@ -17,9 +17,10 @@ __pycache__/
 # `poe pack` = dist/releases). Anchored: tools/build/ is source, not output.
 /build/
 /dist/
-# Reports written by poe tasks: complexity.md, probe screenshots, junit,
-# coverage and SBOM copies.
-reports/
+# Reports written at the repository root by poe tasks: complexity.md, probe
+# screenshots, junit, coverage and SBOM copies. Anchored: docs/reports/ holds
+# tracked historical reports.
+/reports/
 htmlcov/
 
 # Coverage and test reports at any depth
