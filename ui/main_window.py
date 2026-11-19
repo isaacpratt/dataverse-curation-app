@@ -1339,45 +1339,21 @@ class MainWindow(QMainWindow):
             # border/shadow went missing.
             _declare_dwm_signatures(dwmapi, _MARGINS)
 
-            try:
-                from curation.applog import get_app_log as _get_log
-            except Exception:
-                _get_log = None  # type: ignore[assignment]
-
-            def _report(what: str, hr: int) -> None:
-                if _get_log is None:
-                    return
-                try:
-                    if int(hr) == 0:
-                        _get_log().info(t("main.log.dwm_applied", what=what))
-                    else:
-                        _get_log().error(
-                            t(
-                                "main.log.dwm_failed",
-                                what=what,
-                                code=f"{int(hr) & 0xFFFFFFFF:08X}",
-                            )
-                        )
-                except Exception:
-                    pass
-
             margins = _MARGINS(0, 0, 0, 0) if self.isMaximized() else _MARGINS(1, 1, 1, 1)
-            hr_frame = dwmapi.DwmExtendFrameIntoClientArea(
-                wintypes.HWND(hwnd), ctypes.byref(margins)
-            )
-            _report(t("main.log.dwm_frame"), hr_frame)
+            dwmapi.DwmExtendFrameIntoClientArea(wintypes.HWND(hwnd), ctypes.byref(margins))
             # Win11 22000+: standard rounded corners (fails harmlessly on
-            # Win10, where the attribute does not exist — logged, not raised).
+            # Win10, where the attribute does not exist — silent, not raised).
+            # DWM frame management is infrastructure, not a Dataverse API
+            # call/response, so neither call writes to the app log.
             _DWMWA_WINDOW_CORNER_PREFERENCE = 33
             _DWMWCP_ROUND = 2
             pref = ctypes.c_int(_DWMWCP_ROUND)
-            hr_corners = dwmapi.DwmSetWindowAttribute(
+            dwmapi.DwmSetWindowAttribute(
                 wintypes.HWND(hwnd),
                 _DWMWA_WINDOW_CORNER_PREFERENCE,
                 ctypes.byref(pref),
                 ctypes.sizeof(pref),
             )
-            _report(t("main.log.dwm_corners"), hr_corners)
         except Exception:
             pass
 

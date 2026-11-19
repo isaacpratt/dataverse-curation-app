@@ -66,16 +66,18 @@ def test_hwnd_survives_ctypes_boundary():
 
 
 @win32_only
-def test_dwm_failure_is_logged_with_full_hwnd(monkeypatch):
+def test_dwm_frame_is_silent_with_full_hwnd(monkeypatch):
     """End to end through _apply_dwm_frame with a stub DWM module.
 
     Uses a >32-bit handle: proves the real method path hands DWM the full
-    value (the original truncation bug) and that a failing HRESULT lands in
-    the app log instead of vanishing.
+    value (the original truncation bug). DWM frame management is
+    infrastructure, not a Dataverse API call/response, so neither a success
+    nor a failure writes anything to the app log.
     """
     import curation.applog as applog
     from ui.main_window import MainWindow
 
+    applog.clear()
     seen = {}
 
     class FakeDwm:
@@ -100,11 +102,42 @@ def test_dwm_failure_is_logged_with_full_hwnd(monkeypatch):
         def isMaximized(self):
             return False
 
-    before = len(applog.lines())
     MainWindow._apply_dwm_frame(FakeSelf())
     assert seen["frame_hwnd"] == 0x0000023A4F51C8D1
-    fresh = applog.lines()[before:]
-    assert any("0x80070006" in line for line in fresh)
+    assert applog.lines() == [], "DWM frame application must not log to the app log"
+
+
+@win32_only
+def test_dwm_frame_success_is_silent(monkeypatch):
+    """A successful DWM frame application writes nothing to the app log."""
+    import curation.applog as applog
+    from ui.main_window import MainWindow
+
+    applog.clear()
+
+    class FakeDwm:
+        def DwmExtendFrameIntoClientArea(self, _hwnd, _margins):
+            return 0
+
+        def DwmSetWindowAttribute(self, _hwnd, _attr, _val, _size):
+            return 0
+
+    class FakeWindll:
+        dwmapi = FakeDwm()
+
+    monkeypatch.setattr("ctypes.windll", FakeWindll())
+
+    class FakeSelf:
+        _hwnd = 0
+
+        def winId(self):
+            return 0x0000023A4F51C8D1
+
+        def isMaximized(self):
+            return False
+
+    MainWindow._apply_dwm_frame(FakeSelf())
+    assert applog.lines() == [], "DWM frame application must not log to the app log"
 
 
 def test_apply_dwm_frame_never_raises_without_window():

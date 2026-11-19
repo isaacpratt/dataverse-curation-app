@@ -421,12 +421,6 @@
       "dashboard_refresh": "Could not refresh dashboard:\n{exc}",
       "review_title": "Review configuration",
       "review_open": "Could not open review configuration:\n{exc}"
-    },
-    "log": {
-      "dwm_applied": "DWM frame: {what} applied",
-      "dwm_failed": "DWM frame: {what} failed (HRESULT 0x{code})",
-      "dwm_frame": "1px extended frame (border + shadow)",
-      "dwm_corners": "rounded corners"
     }
   },
   "ring": {
