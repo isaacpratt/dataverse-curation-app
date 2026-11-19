@@ -97,10 +97,12 @@ jobs:
         run: uv run poe build
 
       # vpk is a .NET tool; build time only, nothing for the published app.
-      - name: Set up .NET 8 SDK
+      # .NET 8 LTS reached end of life 2026-11-10. vpk 1.2.161 ships a net10.0
+      # build, so the supported .NET 10 LTS runs it with no version change.
+      - name: Set up .NET 10 SDK
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
       - name: Install vpk
         run: dotnet tool install --global vpk --version 1.2.161
 

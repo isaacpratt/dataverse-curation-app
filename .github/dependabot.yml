@@ -32,3 +32,12 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 6
+
+  # The .NET SDK used only to run vpk at pack time. global.json pins it so
+  # Dependabot can raise it instead of the floor drifting silently.
+  - package-ecosystem: "dotnet-sdk"
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 4

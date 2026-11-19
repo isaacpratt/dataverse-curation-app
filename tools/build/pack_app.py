@@ -9,7 +9,8 @@ shortcut and Apps & Features title, the channel, the executable - comes from
 and the verifier cannot disagree about what "packed" means.
 
 vpk is a .NET tool, needed only to build: `dotnet tool install -g vpk`
-(.NET 8 SDK; the tool is multi-targeted, so no newer SDK is required). Set
+(.NET 10 SDK, pinned in `global.json`; the tool is multi-targeted, so the
+supported LTS runs its net10.0 build). Set
 `VPK` to point at a specific executable, e.g. a CI-pinned download.
 
 Nothing is published here. `vpk upload` belongs to the release workflow, which
@@ -49,7 +50,7 @@ def find_vpk() -> Path:
             return candidate
     raise SystemExit(
         "vpk not found. Install it once per machine (build time only):\n"
-        "  winget install Microsoft.DotNet.SDK.8   # or https://dot.net/v1/dotnet-install.ps1\n"
+        "  winget install Microsoft.DotNet.SDK.10  # or https://dot.net/v1/dotnet-install.ps1\n"
         "  dotnet tool install -g vpk\n"
         "or point VPK at an existing vpk executable."
     )
