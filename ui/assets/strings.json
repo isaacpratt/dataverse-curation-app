@@ -44,7 +44,15 @@
     "separator": " — ",
     "dirty_chip": "● unsaved",
     "dirty_tip": "Unsaved changes — Save or Revert before leaving.",
-    "reset_columns_tip": "Reset column widths and order to defaults"
+    "reset_columns_tip": "Reset column widths and order to defaults",
+    "decrease_tip": "Decrease by one",
+    "decrease_a11y": "Decrease",
+    "increase_tip": "Increase by one",
+    "increase_a11y": "Increase",
+    "add_tip": "Add the phrase to the list",
+    "add_a11y": "Add a phrase",
+    "remove_tip": "Remove this phrase",
+    "remove_a11y": "Remove {value}"
   },
   "status": {
     "error": "Error",
@@ -1288,7 +1296,17 @@
       "check_box_disabled": "A disabled option",
       "check_box_disabled_checked": "A disabled option that is on",
       "progress_label": "Progress",
-      "progress_ring_label": "Progress ring"
+      "progress_ring_label": "Progress ring",
+      "number_label": "Number",
+      "number_tip": "A bounded number field; the stepper is Lucide minus/plus",
+      "number_bound_label": "At its maximum",
+      "number_disabled_label": "Disabled",
+      "value_list_label": "Value list",
+      "value_list_empty_label": "Value list (empty state)",
+      "value_list_placeholder": "Add a phrase",
+      "value_list_empty": "No phrases yet",
+      "value_list_a": "CC0 1.0",
+      "value_list_b": "CC BY 4.0"
     },
     "containers": {
       "title": "Containers",

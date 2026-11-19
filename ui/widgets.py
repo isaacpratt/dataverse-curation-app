@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -34,6 +35,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
+    QSpinBox,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
@@ -120,10 +122,12 @@ __all__ = [
     "make_combo",
     "make_elided_label",
     "make_field_label",
+    "make_icon_button",
     "make_line_edit",
     "make_list",
     "make_metric_value",
     "make_multiline_input",
+    "make_number_field",
     "make_page_heading",
     "make_plain_text_view",
     "make_progress_bar",
@@ -132,6 +136,7 @@ __all__ = [
     "make_section_heading",
     "make_small_body_label",
     "make_split_chip",
+    "make_value_list",
     "tree_style",
 ]
 
@@ -1567,6 +1572,40 @@ def make_elided_label(
     return ElidedLabel(text, parent, mode=mode, object_name=object_name)
 
 
+def make_icon_button(
+    icon_name: str,
+    tip: str = "",
+    *,
+    accessible_name: str = "",
+    kind: str = "ghost",
+    size: str = "sm",
+    fallback_text: str = "",
+    parent: QWidget | None = None,
+) -> AppButton:
+    """Build the kit's icon-only button: one face for every glyph affordance.
+
+    A small AppButton (32px by default) carrying a Lucide icon, an optional
+    accessible name and a tooltip, with a text fallback only for an
+    environment where the SVG cannot be drawn at all. The column-reset
+    button, the number-field stepper and the value-list add button all go
+    through here, so they cannot drift apart.
+    """
+    btn = AppButton("", kind=kind, size=size, parent=parent)
+    btn.setFixedSize(BUTTON_HEIGHTS.get(size, 32), BUTTON_HEIGHTS.get(size, 32))
+    if accessible_name:
+        btn.setAccessibleName(accessible_name)
+    try:
+        from ui.icons import icon as _icon
+
+        btn.setIcon(_icon(icon_name))
+    except Exception:
+        if fallback_text:
+            btn.setText(fallback_text)
+    if tip:
+        btn.setToolTip(tip)
+    return btn
+
+
 def make_reset_columns_button(
     name: str,
     *,
@@ -1581,17 +1620,13 @@ def make_reset_columns_button(
     extensions): a 32px ghost button with the rotate-ccw icon, an
     accessible name and a tooltip.
     """
-    btn = AppButton("", kind="ghost", size="sm", parent=parent)
-    btn.setFixedSize(32, 32)
-    btn.setAccessibleName(accessible_name or f"Reset {name} columns")
-    try:
-        from ui.icons import icon as _icon
-
-        btn.setIcon(_icon("rotate-ccw"))
-    except Exception:
-        btn.setText(fallback_text)
-    btn.setToolTip(tip or t("common.reset_columns_tip"))
-    return btn
+    return make_icon_button(
+        "rotate-ccw",
+        tip or t("common.reset_columns_tip"),
+        accessible_name=accessible_name or f"Reset {name} columns",
+        fallback_text=fallback_text,
+        parent=parent,
+    )
 
 
 def make_card(title: str, parent: QWidget | None = None) -> tuple:
@@ -1868,6 +1903,309 @@ def make_cell_control(
     # coincidence of the current sizeHint.
     lay.addWidget(widget, 1, Qt.AlignmentFlag.AlignVCenter)
     return host
+
+
+class AppNumberField(QWidget):
+    """A bounded number field: a QSpinBox between two Lucide stepper buttons.
+
+    The platform's native stepper is switched off
+    (``ButtonSymbols.NoButtons``: typing is allowed and clamped on focus-out
+    and Enter) and the stepping is the kit's own 32px ghost icon buttons,
+    disabled at the bounds, so the control wears the kit's button face
+    instead of a clipped native arrow. ``value()``/``setValue()``/
+    ``setRange()`` mirror the QSpinBox API the field replaces, and
+    ``changed`` fires only on user action - never on a programmatic
+    ``setValue`` (the params loader sets values by hand and relies on that).
+    """
+
+    changed = Signal(int)
+
+    def __init__(
+        self,
+        value: int = 0,
+        *,
+        minimum: int = 0,
+        maximum: int = 10000,
+        step: int = 1,
+        tip: str = "",
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._spin = QSpinBox(self)
+        self._spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+        self._spin.setRange(minimum, maximum)
+        self._spin.setSingleStep(step)
+        self._spin.setValue(value)
+        self._spin.setFixedHeight(32)
+        self._down = make_icon_button(
+            "minus",
+            tip=t("common.decrease_tip"),
+            accessible_name=t("common.decrease_a11y"),
+            fallback_text="-",
+        )
+        self._up = make_icon_button(
+            "plus",
+            tip=t("common.increase_tip"),
+            accessible_name=t("common.increase_a11y"),
+            fallback_text="+",
+        )
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(4)
+        lay.addWidget(self._down)
+        lay.addWidget(self._spin, 1)
+        lay.addWidget(self._up)
+        if tip:
+            self.setToolTip(tip)
+            self._spin.setToolTip(tip)
+        self._spin.valueChanged.connect(self._on_value)
+        self._down.clicked.connect(lambda: self._spin.stepBy(-1))
+        self._up.clicked.connect(lambda: self._spin.stepBy(1))
+        self._refresh()
+
+    def value(self) -> int:
+        return self._spin.value()
+
+    def setValue(self, value: int) -> None:
+        """Set the value without emitting ``changed`` (a loader, not a user)."""
+        self._spin.blockSignals(True)
+        try:
+            self._spin.setValue(int(value))
+        finally:
+            self._spin.blockSignals(False)
+        self._refresh()
+
+    def setRange(self, minimum: int, maximum: int) -> None:
+        self._spin.setRange(minimum, maximum)
+        self._refresh()
+
+    def _on_value(self, v: int) -> None:
+        self._refresh()
+        self.changed.emit(v)
+
+    def _refresh(self) -> None:
+        v = self._spin.value()
+        self._down.setEnabled(v > self._spin.minimum())
+        self._up.setEnabled(v < self._spin.maximum())
+
+
+def make_number_field(
+    value: int = 0,
+    *,
+    minimum: int = 0,
+    maximum: int = 10000,
+    step: int = 1,
+    tip: str = "",
+    parent: QWidget | None = None,
+) -> AppNumberField:
+    """Build the standard bounded number field (Lucide minus/plus stepper)."""
+    return AppNumberField(
+        value, minimum=minimum, maximum=maximum, step=step, tip=tip, parent=parent
+    )
+
+
+class _ValueChip(QFrame):
+    """One phrase as a chip: its text plus a Lucide x that deletes it."""
+
+    def __init__(self, text: str, *, on_remove, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.value = str(text)
+        self.setObjectName("ValueChip")
+        self.setStyleSheet(
+            f"QFrame#ValueChip {{ background: {SURFACE_TINT}; "
+            f"border: 1px solid {BORDER_SUBTLE}; border-radius: {RADIUS_SM}; "
+            f"padding: 0 2px 0 8px; }}"
+        )
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(4)
+        label = QLabel(self.value)
+        label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        btn = make_icon_button(
+            "x",
+            tip=t("common.remove_tip"),
+            accessible_name=t("common.remove_a11y", value=self.value),
+            fallback_text="×",
+        )
+        btn.clicked.connect(on_remove)
+        lay.addWidget(label)
+        lay.addWidget(btn)
+
+
+class _ChipFlow(QWidget):
+    """Chips laid out left-to-right, wrapping onto rows as the width allows."""
+
+    _GAP = 6
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setSpacing(self._GAP)
+        self._grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self._chips: list[QWidget] = []
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+    def chips(self) -> list:
+        return list(self._chips)
+
+    def add_chip(self, chip: QWidget, index: int | None = None) -> None:
+        self._chips.insert(len(self._chips) if index is None else index, chip)
+        self._relayout()
+
+    def remove_chip(self, chip: QWidget) -> None:
+        if chip in self._chips:
+            self._chips.remove(chip)
+        chip.deleteLater()
+        self._relayout()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._relayout()
+
+    def _relayout(self) -> None:
+        """Place every chip on a row, wrapping when the width runs out.
+
+        The estimate walks the chips' own size hints with the same gap the
+        grid paints, so a chip is never split across rows and none is ever
+        pushed past the right edge.
+        """
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.setParent(None)
+        rows: list[list] = []
+        current: list = []
+        used = 0
+        available = self.width()
+        for chip in self._chips:
+            need = chip.sizeHint().width()
+            if current and available > 0 and used + self._GAP + need > available:
+                rows.append(current)
+                current = []
+                used = 0
+            current.append(chip)
+            used += (self._GAP if used else 0) + need
+        if current:
+            rows.append(current)
+        for row_index, row in enumerate(rows):
+            for col_index, chip in enumerate(row):
+                self._grid.addWidget(chip, row_index, col_index)
+        for chip in self._chips:
+            chip.show()
+
+
+class AppValueList(QWidget):
+    """A multi-value field: one chip per phrase, added one at a time.
+
+    The field takes a single phrase (Enter in it, or the plus button, adds
+    it), each entry renders as its own chip with a Lucide x that deletes
+    just that entry, and the chips wrap onto rows when the control is
+    narrow. Blanks and case-insensitive duplicates are ignored, so a list of
+    values never gains a second copy of the same phrase; an optional
+    empty-state caption names what the list is for.
+    """
+
+    changed = Signal(list)
+
+    def __init__(
+        self,
+        values=(),
+        *,
+        placeholder: str = "",
+        add_tip: str = "",
+        empty_text: str = "",
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._values: list[str] = []
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(6)
+        self._flow = _ChipFlow(self)
+        outer.addWidget(self._flow)
+        self._empty: QLabel | None = None
+        if empty_text:
+            self._empty = QLabel(empty_text)
+            self._empty.setObjectName("CaptionSM")
+            outer.addWidget(self._empty)
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        self._field = make_line_edit(placeholder, height=32)
+        self._field.returnPressed.connect(self._add_current)
+        self._add_btn = make_icon_button(
+            "plus",
+            tip=add_tip,
+            accessible_name=t("common.add_a11y"),
+            fallback_text="+",
+        )
+        self._add_btn.clicked.connect(self._add_current)
+        row.addWidget(self._field, 1)
+        row.addWidget(self._add_btn)
+        outer.addLayout(row)
+        self.setValues(list(values))
+
+    def values(self) -> list[str]:
+        return list(self._values)
+
+    def setValues(self, values) -> None:
+        """Replace the whole list: one ``changed``, never one per item."""
+        for chip in self._flow.chips():
+            self._flow.remove_chip(chip)
+        self._values = []
+        for value in values:
+            self._add(str(value))
+        self._refresh()
+        self.changed.emit(list(self._values))
+
+    def _add_current(self) -> None:
+        if self._add(self._field.text()):
+            self._field.clear()
+            self._refresh()
+            self.changed.emit(list(self._values))
+
+    def _add(self, raw: str) -> bool:
+        value = str(raw or "").strip()
+        if not value:
+            return False
+        if any(value.lower() == existing.lower() for existing in self._values):
+            return False
+        self._values.append(value)
+        self._flow.add_chip(_ValueChip(value, on_remove=lambda: self._remove(value)))
+        return True
+
+    def _remove(self, value: str) -> None:
+        self._values = [v for v in self._values if v != value]
+        for chip in list(self._flow.chips()):
+            if getattr(chip, "value", None) == value:
+                self._flow.remove_chip(chip)
+                break
+        self._refresh()
+        self.changed.emit(list(self._values))
+
+    def _refresh(self) -> None:
+        if self._empty is not None:
+            self._empty.setVisible(not self._values)
+
+
+def make_value_list(
+    values=(),
+    *,
+    placeholder: str = "",
+    add_tip: str = "",
+    empty_text: str = "",
+    parent: QWidget | None = None,
+) -> AppValueList:
+    """Build the standard multi-value field (one chip per phrase)."""
+    return AppValueList(
+        values,
+        placeholder=placeholder,
+        add_tip=add_tip,
+        empty_text=empty_text,
+        parent=parent,
+    )
 
 
 # -- finding dispositions (dv-32x) ----------------------------------------

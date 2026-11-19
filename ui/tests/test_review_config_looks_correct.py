@@ -9,6 +9,19 @@ plausibly correct" is picked. Edits round-trip straight into the rule dict
 
 import copy
 
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QLineEdit
+
+
+def _type_min(rc, text: str) -> None:
+    """Edit the min-length field the way a curator does (type, then Enter)."""
+    edit = rc._p_min._spin.findChild(QLineEdit)
+    edit.setFocus()
+    edit.clear()
+    QTest.keyClicks(edit, text)
+    QTest.keyClick(edit, Qt.Key.Key_Return)
+
 
 def _row_combo(rc, block, field, column):
     """Return the dropdown one field row shows in a column (1 = Level, 2 = Check)."""
@@ -72,7 +85,7 @@ def test_params_panel_shows_only_for_looks_correct(win):
 def test_params_round_trip_into_the_rule(win):
     def _check(rc, probe):
         assert rc._p_min.value() == 10
-        rc._p_min.setValue(50)
+        _type_min(rc, "50")
         assert probe["params"]["min_length"] == 50
 
         rc._p_regex.setText(r"^10\.\d+/\S+$")
@@ -87,7 +100,7 @@ def test_params_round_trip_into_the_rule(win):
 
         # Clearing every knob removes params wholesale (fail closed: the
         # engine reports [no entry checks configured]).
-        rc._p_min.setValue(0)
+        _type_min(rc, "0")
         rc._p_regex.setText("")
         rc._p_regex_full.setChecked(False)
         rc._p_not_common_placeholders.setChecked(False)
@@ -119,7 +132,7 @@ def test_engine_reads_what_the_ui_writes(win):
     import curation.review_rules as rr
 
     def _check(rc, probe):
-        rc._p_min.setValue(60)
+        _type_min(rc, "60")
         rc._p_not_common_placeholders.setChecked(True)
         rs = {"field_rules": [probe]}
         meta = {

@@ -29,7 +29,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidgetItem,
     QScrollArea,
-    QSpinBox,
     QSplitter,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -59,6 +58,7 @@ from ui.widgets import (
     make_line_edit,
     make_list,
     make_multiline_input,
+    make_number_field,
     make_page_heading,
     make_search_field,
     transparent_surface_qss,
@@ -554,11 +554,12 @@ class ReviewConfigView(QWidget):
         form = QFormLayout()
         form.setContentsMargins(0, 0, 0, 0)
         form.setSpacing(6)
-        self._p_min = QSpinBox()
-        self._p_min.setRange(0, 10000)
-        self._p_min.setValue(0)
-        self._p_min.setFixedHeight(32)
-        self._p_min.valueChanged.connect(self._on_params_edited)
+        # The kit's number field replaces the raw QSpinBox: the native
+        # stepper was clipped at the right edge of a 32px field, and a view
+        # may not build a raw spin box at all (dv-6vv). The API mirrors
+        # QSpinBox's, so the loader and the edit slot are unchanged.
+        self._p_min = make_number_field(0, minimum=0, maximum=10000)
+        self._p_min.changed.connect(self._on_params_edited)
         form.addRow(self._params_label(t("review.params_min_length")), self._p_min)
         regex_row = QHBoxLayout()
         regex_row.setContentsMargins(0, 0, 0, 0)

@@ -460,6 +460,8 @@ ignore_imports = [
     "tools.probes.probe_disposition_rows -> ui.i18n",
     "tools.probes.probe_disposition_rows -> ui.widgets",
     "tools.probes.probe_extensions_rows -> ui.settings_dialog",
+    "tools.probes.probe_gallery_inputs -> ui.gallery",
+    "tools.probes.probe_gallery_inputs -> ui.widgets",
     "tools.probes.probe_headings -> ui.main_window",
     "tools.probes.probe_manifest_columns -> ui.dataset",
     "tools.probes.probe_metadata_rows -> ui.dataset",

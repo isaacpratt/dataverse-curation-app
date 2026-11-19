@@ -31,6 +31,7 @@ from ui.theme import (
     contrast_ratio,
     global_qss,
 )
+from ui.widgets import AppNumberField, AppValueList
 
 _COMPARED = ("background", "color", "border-radius", "padding", "font-weight", "font-size")
 
@@ -120,6 +121,8 @@ def test_gallery_builds_and_exhibits_every_kind(qapp):
         "plain-text view": QPlainTextEdit,
         "list": QListWidget,
         "check box": QCheckBox,
+        "number field": AppNumberField,
+        "value list": AppValueList,
         "progress bar": QProgressBar,
         "table": QTableWidget,
         "tree": QTreeWidget,

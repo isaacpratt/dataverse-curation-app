@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui.theme import BUTTON_OBJECTS
+from ui.widgets import AppNumberField, AppValueList
 
 
 def test_kit_public_api_exists(qapp):
@@ -37,6 +38,8 @@ def test_kit_public_api_exists(qapp):
         (kit.make_progress_bar(), QProgressBar),
         (kit.make_badge("Ready"), QLabel),
         (kit.make_field_label("Decision State"), QLabel),
+        (kit.make_number_field(), AppNumberField),
+        (kit.make_value_list(), AppValueList),
         ((kit.make_card("Card")[0]), QFrame),
     ]
     for widget, cls in cases:

@@ -60,12 +60,14 @@ from ui.widgets import (
     make_list,
     make_metric_value,
     make_multiline_input,
+    make_number_field,
     make_page_heading,
     make_plain_text_view,
     make_progress_bar,
     make_search_field,
     make_section_heading,
     make_split_chip,
+    make_value_list,
 )
 
 __all__ = ["GalleryWindow", "build_gallery"]
@@ -330,6 +332,33 @@ def _input_section() -> QWidget:
     disabled_checked = make_checkbox(t("gallery.inputs.check_box_disabled_checked"), checked=True)
     disabled_checked.setEnabled(False)
     lay.addWidget(disabled_checked)
+    lay.addWidget(make_field_label(t("gallery.inputs.number_label")))
+    lay.addWidget(
+        make_number_field(50, minimum=0, maximum=10000, tip=t("gallery.inputs.number_tip"))
+    )
+    lay.addWidget(make_field_label(t("gallery.inputs.number_bound_label")))
+    lay.addWidget(make_number_field(10000, minimum=0, maximum=10000))
+    lay.addWidget(make_field_label(t("gallery.inputs.number_disabled_label")))
+    disabled_num = make_number_field(3, minimum=0, maximum=10000)
+    disabled_num.setEnabled(False)
+    lay.addWidget(disabled_num)
+    lay.addWidget(make_field_label(t("gallery.inputs.value_list_label")))
+    lay.addWidget(
+        make_value_list(
+            [t("gallery.inputs.value_list_a"), t("gallery.inputs.value_list_b")],
+            placeholder=t("gallery.inputs.value_list_placeholder"),
+            add_tip=t("common.add_tip"),
+        )
+    )
+    lay.addWidget(make_field_label(t("gallery.inputs.value_list_empty_label")))
+    lay.addWidget(
+        make_value_list(
+            [],
+            placeholder=t("gallery.inputs.value_list_placeholder"),
+            add_tip=t("common.add_tip"),
+            empty_text=t("gallery.inputs.value_list_empty"),
+        )
+    )
     lay.addWidget(make_field_label(t("gallery.inputs.progress_label")))
     bar = make_progress_bar()
     bar.setRange(0, 100)

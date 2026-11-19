@@ -81,6 +81,8 @@ _RAW_INPUT_WIDGETS = frozenset(
         "QPlainTextEdit",
         "QProgressBar",
         "QPushButton",
+        "QSpinBox",
+        "QDoubleSpinBox",
         "QTableWidget",
         "QTextEdit",
         "QTreeWidget",
@@ -304,7 +306,8 @@ def test_no_view_builds_a_raw_input_widget():
     assert not failures, (
         "the standard inputs come from the kit (make_line_edit, "
         "make_multiline_input, make_list, make_checkbox, "
-        "make_progress_bar, make_combo, make_action_button):\n  " + "\n  ".join(failures)
+        "make_progress_bar, make_combo, make_action_button, make_number_field):\n  "
+        + "\n  ".join(failures)
     )
 
 
