@@ -6,7 +6,7 @@ radio button, with no check mark anywhere. These tests read rendered pixels
 at 2x, which is where a 4px corner and a half-height radius differ.
 """
 
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QPoint
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QApplication, QCheckBox
 
@@ -45,12 +45,12 @@ def _pixel(image: QImage, x: int, y: int):
 
 
 def _indicator_bounds(box: AppCheckBox, image: QImage) -> tuple[int, int, int]:
-    """The indicator rect in image pixels (the render scale applied)."""
+    """Return the indicator rect in image pixels (the render scale applied)."""
     rect = box.indicatorRect()
     ratio = image.devicePixelRatio() or 1.0
-    left = int(round(rect.left() * ratio))
-    top = int(round(rect.top() * ratio))
-    size = max(1, int(round(rect.width() * ratio)))
+    left = round(rect.left() * ratio)
+    top = round(rect.top() * ratio)
+    size = max(1, round(rect.width() * ratio))
     return left, top, size
 
 
@@ -182,6 +182,8 @@ def test_the_kit_owns_the_three_faces(qapp):
     assert on_glyph == ON_PRIMARY
 
     box = make_checkbox("Required")
-    assert isinstance(box, AppCheckBox) and isinstance(box, QCheckBox)
-    assert box.isCheckable() and not box.isChecked()
+    assert isinstance(box, AppCheckBox)
+    assert isinstance(box, QCheckBox)
+    assert box.isCheckable()
+    assert not box.isChecked()
     assert box.indicatorRect().width() == AppCheckBox.INDICATOR_PX
