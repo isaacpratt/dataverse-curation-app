@@ -23,7 +23,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 </style>
 </head>
 <body>
-<header class="hero"><div class="wrap"><h1>Development</h1><p>Setup, layout, adding a check, parity verification, packaging, conventions. Prerequisites: Python 3.10+ on Windows; R 4.x only for parity verification (optional).</p></div></header>
+<header class="hero"><div class="wrap"><h1>Development</h1><p>Setup, layout, adding a check, parity verification, packaging, conventions. Prerequisites: Python 3.11+ on Windows; R 4.x only for parity verification (optional).</p></div></header>
 <nav class="top"><div class="wrap">
 <a href="index.html">Overview</a><a href="architecture.html">Architecture</a><a href="checks-reference.html">Checks reference</a><a href="entry-correctness.html">Entry correctness</a><a href="dataverse-integration.html">Dataverse integration</a><a href="report-contract.html">Report contract</a><a href="engine-port.html">Engine port</a><a href="user-guide.html">User guide</a><a href="development.html" aria-current="page">Development</a><a href="proposals.html">Proposals</a>
 </div></nav>
@@ -260,7 +260,7 @@ python -m ruff check ui/           # lint</code></pre>
 
 <h2>Conventions</h2>
 <ul>
-<li>Python 3.10 typing, dataclasses; no external framework in <code>engine/</code> (stdlib + listed deps). Checks are pure functions of local files — <b>no network I/O inside <code>engine/</code></b>.</li>
+<li>Python 3.11 typing, dataclasses; no external framework in <code>engine/</code> (stdlib + listed deps). Checks are pure functions of local files — <b>no network I/O inside <code>engine/</code></b>.</li>
 <li>Module-per-format naming mirrors the R scripts; keep <a href="report-contract.html">Report contract</a> in sync with schema changes — it is the interface between engine and GUI.</li>
 <li>Selectable dialogs (<code>ui/dialogs.py:show_warning/show_critical/show_info</code>) for traceback-bearing errors; log every request via <code>applog.log_response</code>; the Log page's <code>QSyntaxHighlighter</code> paints ERROR red, WARNING yellow, IPs, SQL keywords, XML tags, Java backtraces.</li>
 <li>Parent every <code>QThread</code> to its view, chain <code>deleteLater</code>, adopt before discarding (<code>MainWindow._open_dataset</code>) — never destroy a live <code>QThread</code>.</li>

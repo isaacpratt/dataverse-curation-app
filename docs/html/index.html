@@ -109,7 +109,7 @@ uv run pytest                            # 969 tests
 uv run python main.py                    # GUI — pick the Dataverse in Settings
 uv run python main.py --gallery          # the component gallery: every kit component on one page
 uv run python main.py --headless &lt;staged_dir&gt; --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE</code></pre>
-<p>Requirements: Python 3.10+ (Windows recommended). Headless exit codes: <b>0</b> clean, <b>1</b> error-level findings, <b>2</b> usage/IO failure.</p>
+<p>Requirements: Python 3.11+ (Windows recommended). Headless exit codes: <b>0</b> clean, <b>1</b> error-level findings, <b>2</b> usage/IO failure.</p>
 
 <h2>Documentation audit — what was fixed</h2>
 <div class="callout ok">The documentation was re-checked against the code (<code>engine/checks/__init__.py:registry</code>, <code>main.py</code> CLI, <code>engine/report.py</code>, <code>ui/</code> views, <code>Makefile</code>) on 2026-10-06 and 2026-10-07, when these HTML pages became the <b>source of truth</b> (the <code>docs/*.md</code> mirrors were retired), again on <b>2026-11-03</b> after the guestbook, section-help and startup batches, and on <b>2026-11-04</b> for the Settings dirty guard and dataset step rail. The tables below record the verified state.</div>
