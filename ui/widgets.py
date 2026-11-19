@@ -1685,7 +1685,10 @@ def add_info_tip(header_layout, *paragraphs: str, name: str = "", group: str = "
     btn.clicked.connect(
         lambda: QToolTip.showText(btn.mapToGlobal(btn.rect().bottomLeft()), tip, btn)
     )
-    header_layout.insertWidget(1, btn)
+    # Insert right after the title. A header with nothing in it yet (a test,
+    # or a card built empty) has no index 1 to insert at, and Qt warns about
+    # it, so clamp to the end.
+    header_layout.insertWidget(min(1, header_layout.count()), btn)
     return btn
 
 

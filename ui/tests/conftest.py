@@ -14,6 +14,33 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
+def _platform_font_dir() -> str:
+    """Return the platform's font directory, or "" when there is none.
+
+    Qt 6 ships no fonts, so an offscreen run without this falls back to a
+    substitute face and logs ``QFontDatabase: Cannot find font directory``.
+    Tests assert geometry, and the warning gate fails on unclassified Qt
+    messages (dv-bjj), so point Qt at the real fonts before the app exists.
+    ``tools/probes/_common.py`` does the same for the probes.
+    """
+    if os.name == "nt":
+        candidates = [os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")]
+    elif os.sys.platform == "darwin":  # type: ignore[attr-defined]
+        candidates = ["/System/Library/Fonts", "/Library/Fonts"]
+    else:
+        candidates = ["/usr/share/fonts", "/usr/local/share/fonts"]
+    for candidate in candidates:
+        if os.path.isdir(candidate):
+            return candidate
+    return ""
+
+
+if not os.environ.get("QT_QPA_FONTDIR"):
+    _font_dir = _platform_font_dir()
+    if _font_dir:
+        os.environ["QT_QPA_FONTDIR"] = _font_dir
+
+
 @pytest.fixture(scope="session")
 def qapp():
     from PySide6.QtWidgets import QApplication

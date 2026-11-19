@@ -25,7 +25,12 @@ def main() -> int:
 
     report = Report("one navigation map")
     view = dd.DatasetDetailView(cfg, "doi:10.5072/FK2/RAILNAV", "Rail nav probe")
-    view.resize(960, 700)
+    # A wide window, so the sidebar starts unfolded and the toggle is what
+    # folds it. At 960px the width rule has already folded it
+    # (``_SIDEBAR_COLLAPSE_BELOW`` is 1100), which the pytest suite
+    # ``ui/tests/test_responsive_960.py`` covers; this probe is about the
+    # toggle, so it starts from the state the toggle acts on.
+    view.resize(1400, 800)
     view.show()
     for _ in range(12):
         app.processEvents()
@@ -48,6 +53,7 @@ def main() -> int:
     report.check(not toggle.isHidden(), "the sidebar toggle is visible")
 
     # Fold the sidebar: the log moves to the page foot; the rail stays.
+    report.check(not view._side_scroll.isHidden(), "the sidebar starts unfolded")
     view._toggle_sidebar()
     for _ in range(8):
         app.processEvents()

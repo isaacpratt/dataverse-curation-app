@@ -21,6 +21,7 @@ python tools/probes/probe_disposition_rows.py # finding rows carry one dispositi
 python tools/probes/probe_preview.py          # the preview card fits 960px, with the too-large and not-staged fallbacks
 python tools/probes/probe_about_updates.py    # the About updates section fits, and the restart action appears when pending
 python tools/probes/probe_rail_nav.py         # one navigation map: the workflow rail stays visible folded and unfolded
+python tools/probes/probe_qt_warnings.py      # a Qt message is a gate: a broken sheet is caught, the two platform ones are classified
 ```
 
 `run_all.py` runs each `probe_*.py` in turn and exits non-zero when any
@@ -55,6 +56,48 @@ replaces `DatasetDetailView._on_load_metadata` with a no-op, because the
 view fetches the dataset's metadata on a timer and the probe only looks
 at columns.
 
+## The Qt-warning gate
+
+**A Qt message is a defect until someone classifies it.** Qt does not raise
+on a stylesheet it cannot parse: it logs `Could not parse stylesheet of
+object QLabel(...)` once and drops the sheet, so the widget renders without
+its face and the page looks almost right. That is how a badge that had one
+closing brace too many (a fragment left as a plain string inside an f-string
+expression) stayed invisible — the whole symptom was one line on stderr, and
+nothing failed (bead `dv-bjj`).
+
+`boot()` installs a `qInstallMessageHandler` before the `QApplication`
+exists, so the first stylesheet and the first font lookup are covered:
+
+- `Report.finish()` ends with a **no unexpected Qt warnings** check, so any
+  probe that provoked an unclassified message fails.
+- The handler echoes each one as `UNEXPECTED Qt message: …` on stderr, and
+  `run_all.py` repeats them under a `WARNING` heading in its summary.
+- Two messages are allowlisted in `_common.ALLOWED_MESSAGES`, because they
+  come from the environment and not from this app:
+  - `QFontDatabase: Cannot find font directory` — the offscreen plugin has
+    no fontconfig. `configure_fonts()` points `QT_QPA_FONTDIR` at the
+    platform's own font directory first, so geometry assertions measure real
+    metrics. (`ui/tests/conftest.py` does the same for pytest.)
+  - `This plugin does not support propagateSizeHints()` — the offscreen
+    plugin cannot ask a window manager about a fixed size.
+- Anything else fails. Adding a third pattern is a decision with a reason
+  recorded next to it, never a way to quiet a run.
+
+`probe_qt_warnings.py` proves the gate end to end: it checks the classifier,
+provokes a deliberately broken sheet (printing muted for that one call, so
+the probe's own output stays clean) and requires the handler to catch it,
+then checks the badge path that lost its face and that a real badge sheet is
+one balanced rule.
+
+The same rule runs in `pytest`: `pyproject.toml` sets
+`qt_log_level_fail = "WARNING"` with the same two `qt_log_ignore` patterns,
+so a test that emits any other Qt message fails where it happened.
+`ui/tests/test_kit_stylesheets.py` is the companion static check — every
+sheet builder in `ui/theme.py` and the kit's chrome is built with each
+branching argument, and its braces must balance with no `{TOKEN}` left
+unsubstituted.
+
 ## Writing a probe
 
 - `Report.check(ok, label, detail)` prints the line and counts a
@@ -84,6 +127,7 @@ at columns.
 | `probe_preview.py` | The preview card fits a 960px window, renders the CSV head inside the card, offers Open folder for a too-large file and explains a not-staged file. |
 | `probe_about_updates.py` | The About pane's Updates section fits 960px with and without a downloaded update; the Restart and install action appears only when one is pending. |
 | `probe_rail_nav.py` | One navigation map: the workflow rail stays visible when the sidebar folds and unfolds, the dataset log moves to the page foot, and the old nav card/menu/collapse controls stay gone. |
+| `probe_qt_warnings.py` | Qt messages are a gate: the two platform messages are classified, a deliberately broken stylesheet is caught by the handler, the badge sheet is one balanced rule, and the probe's own run reports no unexpected message. |
 
 ## The same contracts in pytest
 
@@ -97,6 +141,7 @@ alone covers them in CI:
 - `ui/tests/test_gallery_contract.py` — the button-sheet agreement and the gallery exhibit (promoted from `probe_buttons.py` / `probe_gallery.py`, now deleted)
 - `ui/tests/test_interactions.py` — real input: Tab focus, header click, disabled ink
 - `ui/tests/test_kit_exports.py` — the kit's importable surface
+- `ui/tests/test_kit_stylesheets.py` — every sheet builder emits balanced braces and no unsubstituted placeholder (the `dv-bjj` gate, static side)
 
 ```powershell
 python -m pytest ui/tests -q

@@ -96,6 +96,18 @@ markers = [
     "samples: parity tests that read the external CUR_Res_CurationTools sample data (opt in: uv run poe samples)",
 ]
 qt_api = "pyside6"
+# A Qt warning is a defect until someone classifies it (dv-bjj). pytest-qt
+# turns every Qt message into a log record; WARNING fails the test that
+# emitted it. The two ignored patterns are the environment talking, not the
+# app: the offscreen plugin cannot honour a fixed-size request, and a machine
+# without fontconfig has no font directory (the conftest points Qt at the
+# platform's fonts first, so this one is the Linux-CI safety net). Anything
+# else - a stylesheet Qt could not parse, a paint assertion - fails.
+qt_log_level_fail = "WARNING"
+qt_log_ignore = [
+    "^QFontDatabase: Cannot find font directory",
+    "^This plugin does not support propagateSizeHints\\(\\)",
+]
 xfail_strict = true
 # RuntimeWarning is no longer silenced repo-wide: numerical oddities in a
 # file-format checker should be visible. Narrow exceptions belong to the

@@ -1774,7 +1774,7 @@ def label_badge_style(label: str) -> str:
     return (
         f"QLabel {{ background: {bg}; color: {fg}; border: 1px solid {border}; "
         f"border-radius: {RADIUS_LG}; padding: 3px 8px; font-size: {FONT_SMALL}px; "
-        "font-weight: 700; }}"
+        f"font-weight: 700; }}"
     )
 
 
