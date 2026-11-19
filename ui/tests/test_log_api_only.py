@@ -9,9 +9,6 @@ so the check surfaces infra/UI noise that should be silenced or removed.
 
 import re
 
-import pytest
-
-
 _API_LINE_RE = re.compile(
     r"^(GET|PUT|DELETE|POST|PATCH|HEAD|OPTIONS) "
     r"https?://"
@@ -44,7 +41,7 @@ _DEBUG_API_RE = re.compile(
 
 
 def _is_api_line(line: str) -> bool:
-    """True when `line` is a Dataverse API call or response."""
+    """Return True when `line` is a Dataverse API call or response."""
     return bool(
         _API_LINE_RE.match(line)
         or _EXPECTED_API_RE.match(line)
