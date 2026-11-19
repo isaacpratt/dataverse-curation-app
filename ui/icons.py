@@ -3,8 +3,11 @@
 Files live in ui/assets/lucide/<name>.svg (upstream `stroke="currentColor"`
 artwork); this module resolves them frozen-safe via theme.asset_path,
 tints by replacing currentColor, and caches the results. Everything here
-is best-effort and never raises — a missing asset yields an empty QIcon.
+is best-effort and never raises at the call site — a missing asset yields
+an empty QIcon, and says so once.
 """
+
+import warnings
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap
@@ -26,6 +29,35 @@ MUTED = TEXT_ON_TINT
 GREEN = STATE_SUCCESS_GRAPHIC
 AMBER = STATE_WARNING_GRAPHIC
 RED = STATE_ERROR_GRAPHIC
+
+# One glyph per role, the list the docs, the gallery sheet and
+# ui/tests/test_icon_inventory.py all read (dv-kvb). A role says what a
+# mark is for; the value names the bundled asset. Adding a role here is how
+# a control gets its glyph - a text character or a hand-drawn path is never
+# the answer (see docs/html/development.html, "Icons").
+ICON_ROLES: dict[str, str] = {
+    "refresh": "rotate-ccw",
+    "reset": "rotate-ccw",
+    "back": "arrow-left",
+    "sidebar_hide": "panel-right-close",
+    "sidebar_show": "panel-right-open",
+    "more": "ellipsis",
+    "close": "x",
+    "add": "plus",
+    "remove": "minus",
+    "expand": "chevron-down",
+    "collapse": "chevron-right",
+    "sort_ascending": "chevron-up",
+    "sort_descending": "chevron-down",
+    "done": "check",
+    "info": "info",
+    "warning": "triangle-alert",
+    "error": "octagon-x",
+    "settings": "settings",
+    "log": "square-text",
+}
+
+_MISSING: set[str] = set()
 
 _ICON_CACHE: dict = {}
 _SVG_CACHE: dict = {}
@@ -55,6 +87,11 @@ def icon(name: str, color: str | None = None, size: int = 16) -> QIcon:
 
     color replaces the artwork's currentColor (default INK). size is the
     rendered pixel size; QIcon scales from the cached pixmap gracefully.
+
+    An unknown name returns an empty QIcon *and warns once*: a silent null
+    icon is how a mark disappears from the interface with nothing failing
+    (dv-kvb). ``ui/tests/test_icon_inventory.py`` turns the warning into a
+    CI failure by asserting every name in the app resolves.
     """
     key = (name, color or INK, int(size))
     try:
@@ -78,6 +115,15 @@ def icon(name: str, color: str | None = None, size: int = 16) -> QIcon:
                 painter.end()
             if not pixmap.isNull():
                 result = QIcon(pixmap)
+        if result.isNull() and str(name) not in _MISSING:
+            _MISSING.add(str(name))
+            warnings.warn(
+                f"Lucide icon not bundled: {name!r} (expected "
+                f"ui/assets/lucide/{name}.svg). Add the asset; a text "
+                "character is not a substitute (dv-kvb).",
+                RuntimeWarning,
+                stacklevel=3,
+            )
     except Exception:
         result = QIcon()
     try:
@@ -85,6 +131,16 @@ def icon(name: str, color: str | None = None, size: int = 16) -> QIcon:
     except Exception:
         pass
     return result
+
+
+def role_icon(role: str, color: str | None = None, size: int = 16) -> QIcon:
+    """QIcon for one of the documented roles in ``ICON_ROLES``.
+
+    The role is what the control *is* -- refresh, back, sidebar_hide, more
+    -- so two refresh buttons, or two close buttons, cannot drift onto
+    different glyphs.
+    """
+    return icon(ICON_ROLES.get(str(role), str(role)), color=color, size=size)
 
 
 def icon_label(name: str, size: int = 16, color: str | None = None) -> QLabel:

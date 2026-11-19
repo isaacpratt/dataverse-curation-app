@@ -16,9 +16,10 @@ not raw widgets, and its copy lives in the string catalogue. The
 conformance test covers it too.
 """
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QScrollArea,
@@ -44,6 +45,8 @@ from ui.theme import (
     TEXT_SUBTLE,
     page_background_qss,
     surface_frame_qss,
+    transparent_qss,
+    transparent_surface_qss,
 )
 from ui.widgets import (
     AppTable,
@@ -404,6 +407,58 @@ def _container_section() -> QWidget:
     return host
 
 
+def _icons_section() -> QWidget:
+    """Show every bundled glyph, so a missing or ugly mark is visible here."""
+    from ui.icons import ICON_ROLES, icon
+
+    host, lay = _section(
+        t("gallery.icons.title"),
+        t("gallery.icons.subtitle"),
+    )
+    grid = QGridLayout()
+    grid.setContentsMargins(0, 0, 0, 0)
+    grid.setHorizontalSpacing(18)
+    grid.setVerticalSpacing(10)
+    names = sorted({*ICON_ROLES.values()})
+    columns = 8
+    for index, name in enumerate(names):
+        row, col = divmod(index, columns)
+        cell = QWidget()
+        cell.setObjectName("IconTile")
+        cell.setStyleSheet(transparent_surface_qss("IconTile"))
+        cell_lay = QVBoxLayout(cell)
+        cell_lay.setContentsMargins(0, 0, 0, 0)
+        cell_lay.setSpacing(2)
+        marks = QHBoxLayout()
+        marks.setContentsMargins(0, 0, 0, 0)
+        marks.setSpacing(6)
+        for size in (16, 20):
+            mark = QLabel()
+            mark.setPixmap(icon(name, color=TEXT_PRIMARY, size=size).pixmap(QSize(size, size)))
+            mark.setFixedSize(size + 2, size + 2)
+            mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            mark.setStyleSheet(transparent_qss("QLabel"))
+            mark.setProperty("icon_name", name)
+            mark.setProperty("icon_size", size)
+            mark.setToolTip(t("gallery.icons.mark_tip", name=name, size=size))
+            marks.addWidget(mark)
+        marks.addStretch(1)
+        cell_lay.addLayout(marks)
+        caption = QLabel(name)
+        caption.setObjectName("CaptionSM")
+        caption.setProperty("glyph_caption", name)
+        cell_lay.addWidget(caption)
+        grid.addWidget(cell, row, col)
+    grid.setColumnStretch(columns, 1)
+    lay.addLayout(grid)
+    roles = ", ".join(f"{role} → {glyph}" for role, glyph in sorted(ICON_ROLES.items()))
+    note = QLabel(t("gallery.icons.roles", roles=roles))
+    note.setObjectName("CaptionSM")
+    note.setWordWrap(True)
+    lay.addWidget(note)
+    return host
+
+
 def _data_section() -> QWidget:
     """Show the data components: table, tree and list."""
     host, lay = _section(
@@ -492,6 +547,7 @@ class GalleryWindow(QWidget):
             _badge_section(),
             _input_section(),
             _container_section(),
+            _icons_section(),
             _data_section(),
         ):
             body.addWidget(section)

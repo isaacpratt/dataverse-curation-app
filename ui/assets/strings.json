@@ -1318,6 +1318,12 @@
       "chip_b": "doi:10.5072/FK2/XYZ789",
       "metric_label": "DATASETS"
     },
+    "icons": {
+      "title": "Icons",
+      "subtitle": "One bundled Lucide glyph per role, at 16 and 20px.",
+      "mark_tip": "The {name} glyph at {size}px",
+      "roles": "Roles: {roles}"
+    },
     "data": {
       "title": "Data",
       "subtitle": "Tables, trees and lists share one header and one lane.",

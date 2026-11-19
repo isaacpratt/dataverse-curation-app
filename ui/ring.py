@@ -19,7 +19,7 @@ Colours come from `ui.theme` tokens only (the theme-token test forbids
 hex literals outside theme.py).
 """
 
-from PySide6.QtCore import QRectF, Qt, QTimer
+from PySide6.QtCore import QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
@@ -198,7 +198,7 @@ class RingProgress(QWidget):
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 painter.setPen(pen)
                 painter.drawArc(rect, 0, 360 * 16)
-                self._paint_label(painter, "!")
+                self._paint_icon(painter, "triangle-alert", STATE_ERROR_GRAPHIC)
                 painter.end()
                 return
 
@@ -207,7 +207,10 @@ class RingProgress(QWidget):
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 painter.setPen(pen)
                 painter.drawArc(rect, 0, 360 * 16)
-                self._paint_label(painter, "✓")
+                # The completion mark is the app's Lucide check, not a typed
+                # character: every state mark in the interface is a bundled
+                # glyph tinted from a role (dv-kvb).
+                self._paint_icon(painter, "check", STATE_SUCCESS_GRAPHIC)
                 painter.end()
                 return
 
@@ -255,6 +258,22 @@ class RingProgress(QWidget):
         fit = inner / (0.62 * digits + 0.35)
         return max(6, int(min(self._diameter * 0.36, fit)))
 
+    def _paint_icon(self, painter: QPainter, name: str, color: str) -> None:
+        """Paint a bundled Lucide glyph centred in the clear inner circle."""
+        try:
+            from ui.icons import icon as _icon
+
+            inner = self._inner_rect()
+            size = max(6, int(min(inner.width(), inner.height()) * 0.9))
+            pixmap = _icon(name, color=color, size=size).pixmap(QSize(size, size))
+            if pixmap.isNull():
+                return
+            x = int(inner.left() + (inner.width() - size) / 2)
+            y = int(inner.top() + (inner.height() - size) / 2)
+            painter.drawPixmap(x, y, pixmap)
+        except Exception:
+            pass
+
     def _paint_label(self, painter: QPainter, text: str) -> None:
         if not text:
             return
@@ -265,12 +284,7 @@ class RingProgress(QWidget):
             font.setPixelSize(self._label_pixel_size(text))
             font.setBold(True)
             painter.setFont(font)
-            color = (
-                STATE_SUCCESS_GRAPHIC
-                if text == "✓"
-                else (STATE_ERROR_GRAPHIC if text == "!" else TEXT_PRIMARY)
-            )
-            painter.setPen(QColor(color))
+            painter.setPen(QColor(TEXT_PRIMARY))
             painter.drawText(self._inner_rect(), Qt.AlignmentFlag.AlignCenter, text)
         except Exception:
             pass

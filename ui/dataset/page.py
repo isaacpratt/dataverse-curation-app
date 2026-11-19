@@ -346,9 +346,9 @@ class DatasetDetailView(
         # the rail is navigation, this is chrome (dv-6wb).
         self._sidebar_toggle_btn = make_action_button("", kind="secondary", size="md")
         try:
-            from ui.icons import icon as _side_icon
+            from ui.icons import role_icon as _side_icon
 
-            self._sidebar_toggle_btn.setIcon(_side_icon("chevron-right"))
+            self._sidebar_toggle_btn.setIcon(_side_icon("sidebar_show"))
         except Exception:
             self._sidebar_toggle_btn.setText(t("detail.sidebar.collapse_a11y"))
         self._sidebar_toggle_btn.setToolTip(t("detail.sidebar.collapse_tip"))
@@ -674,10 +674,10 @@ class DatasetDetailView(
             self._sidebar_collapsed = collapsed
             self._side_scroll.setVisible(not collapsed)
             try:
-                from ui.icons import icon as _side_icon
+                from ui.icons import role_icon as _side_icon
 
                 self._sidebar_toggle_btn.setIcon(
-                    _side_icon("chevron-left" if collapsed else "chevron-right")
+                    _side_icon("sidebar_show" if collapsed else "sidebar_hide")
                 )
             except Exception:
                 pass

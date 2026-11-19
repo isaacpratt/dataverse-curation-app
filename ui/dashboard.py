@@ -61,6 +61,7 @@ from ui.widgets import (
     make_card_title,
     make_combo,
     make_elided_label,
+    make_refresh_button,
     make_search_field,
     make_small_body_label,
 )
@@ -644,7 +645,7 @@ class DashboardView(QWidget):
         self._columns_btn.clicked.connect(self._show_columns_menu)
         filter_row.addWidget(self._columns_btn)
 
-        refresh = make_action_button(t("common.refresh"), kind="secondary")
+        refresh = make_refresh_button(t("common.refresh"))
         refresh.clicked.connect(self.reload)
         self._refresh_btn = refresh
         filter_row.addWidget(refresh)

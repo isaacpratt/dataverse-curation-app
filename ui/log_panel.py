@@ -40,6 +40,7 @@ from ui.widgets import (
     make_action_button,
     make_page_heading,
     make_plain_text_view,
+    make_refresh_button,
     make_search_field,
     make_text_label,
 )
@@ -99,7 +100,7 @@ class LogPage(QWidget):
         clear_btn.setAccessibleName(t("log.clear_a11y"))
         clear_btn.clicked.connect(self._clear)
         header.addWidget(clear_btn)
-        refresh_btn = make_action_button(t("log.refresh"), kind="secondary")
+        refresh_btn = make_refresh_button(t("log.refresh"))
         refresh_btn.setToolTip(t("log.refresh_tip"))
         refresh_btn.setAccessibleName(t("log.refresh_a11y"))
         refresh_btn.clicked.connect(self._refresh)

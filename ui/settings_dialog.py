@@ -62,6 +62,7 @@ from ui.widgets import (
     make_action_button,
     make_combo,
     make_field_label,
+    make_icon_text_button,
     make_line_edit,
     make_page_heading,
 )
@@ -777,7 +778,12 @@ class SettingsPane(QWidget):
                 if is_installed
                 else t("settings.extensions.install")
             )
-            install_btn = make_action_button(install_label, kind="cell", size="sm")
+            install_btn = make_icon_text_button(
+                install_label,
+                "rotate-ccw" if is_installed else "plus",
+                kind="cell",
+                size="sm",
+            )
             install_btn.clicked.connect(lambda _checked, n=pip_name: self._install_package(n))
             uninstall_btn = make_action_button(
                 t("settings.extensions.uninstall"), kind="cell", size="sm"

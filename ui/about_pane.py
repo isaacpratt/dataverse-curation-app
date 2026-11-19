@@ -255,9 +255,9 @@ class AboutPane(QWidget):
         back_btn.setAccessibleName(t("about.close_a11y"))
         back_btn.clicked.connect(lambda: self.discarded.emit())
         try:
-            from ui.icons import icon as _about_icon
+            from ui.icons import role_icon as _about_icon
 
-            back_btn.setIcon(_about_icon("x"))
+            back_btn.setIcon(_about_icon("back"))
         except Exception:
             pass
         row.addWidget(back_btn)

@@ -99,7 +99,10 @@ def main() -> int:
     from ui.i18n import t
 
     note_label = t("detail.disposition.note_action")
-    overflow_buttons = [b for b in row.findChildren(QPushButton) if b.text() == "⋯"]
+    copy_label = t("detail.copy_finding.action")
+    overflow_buttons = [
+        b for b in row.findChildren(QPushButton) if b.accessibleName() == copy_label
+    ]
     report.check(
         len(overflow_buttons) == 1,
         "the row carries one overflow (ellipsis) action",

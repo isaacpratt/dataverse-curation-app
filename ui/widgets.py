@@ -123,6 +123,7 @@ __all__ = [
     "make_elided_label",
     "make_field_label",
     "make_icon_button",
+    "make_icon_text_button",
     "make_line_edit",
     "make_list",
     "make_metric_value",
@@ -131,6 +132,7 @@ __all__ = [
     "make_page_heading",
     "make_plain_text_view",
     "make_progress_bar",
+    "make_refresh_button",
     "make_reset_columns_button",
     "make_search_field",
     "make_section_heading",
@@ -1604,6 +1606,63 @@ def make_icon_button(
     if tip:
         btn.setToolTip(tip)
     return btn
+
+
+def make_icon_text_button(
+    label: str,
+    icon_name: str,
+    *,
+    color: str | None = None,
+    kind: str = "secondary",
+    size: str = "md",
+    tip: str = "",
+    parent: QWidget | None = None,
+) -> AppButton:
+    """Build a labelled button that leads with its Lucide glyph.
+
+    A refresh button, a Reinstall button and any other action that reads
+    better with its mark carries the same shape: the icon first, the words
+    after, one glyph per role from ``ui.icons.ICON_ROLES`` (dv-kvb). The
+    label is still the button's text, so the accessible name and the
+    keyboard focus are unchanged.
+    """
+    btn = AppButton(label, kind=kind, size=size, parent=parent)
+    try:
+        from ui.icons import icon as _icon
+
+        btn.setIcon(_icon(icon_name, color=color, size=14))
+        btn.setIconSize(QSize(14, 14))
+    except Exception:
+        pass
+    if tip:
+        btn.setToolTip(tip)
+    return btn
+
+
+def make_refresh_button(
+    label: str,
+    *,
+    kind: str = "secondary",
+    size: str = "md",
+    tip: str = "",
+    parent: QWidget | None = None,
+) -> AppButton:
+    """Build the app's one refresh button: rotate-ccw plus its label (dv-kvb).
+
+    Every refresh in the app (the queue, the Log page) is this button, so
+    the glyph and the wording cannot drift apart. Extensions' Reinstall
+    uses ``make_icon_text_button`` directly: same shape, a different role.
+    """
+    from ui.icons import ICON_ROLES
+
+    return make_icon_text_button(
+        label,
+        ICON_ROLES["refresh"],
+        kind=kind,
+        size=size,
+        tip=tip,
+        parent=parent,
+    )
 
 
 def make_reset_columns_button(

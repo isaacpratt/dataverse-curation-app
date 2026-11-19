@@ -1,4 +1,4 @@
-"""Per-row overflow copy (dv-18z): ⋯ on each finding row copies its text."""
+"""Per-row overflow copy (dv-18z): the ellipsis glyph on each finding row copies it."""
 
 from pathlib import Path
 
@@ -74,10 +74,14 @@ def view(qapp, tmp_path):
 
 
 def _overflow_button(row):
+    """Return the row's overflow button: the ellipsis glyph, named for the action."""
     from PySide6.QtWidgets import QPushButton
 
+    from ui.i18n import t
+
+    wanted = t("detail.copy_finding.action")
     for btn in row.findChildren(QPushButton):
-        if btn.text() == "⋯":
+        if btn.accessibleName() == wanted:
             return btn
     return None
 
@@ -92,7 +96,7 @@ def _meta_row(view, label: str):
 
 
 def test_meta_row_overflow_button_invokes_copy_menu(view):
-    """Clicking ⋯ must ask the view to show the menu with the row's text."""
+    """Clicking the row's ellipsis must ask the view to show the menu."""
     opened = []
     view._show_copy_menu = lambda btn, text: opened.append((btn, text))
 

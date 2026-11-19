@@ -414,6 +414,13 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         "first paint": "startup-probe label (opt-in temp file)",
         "gallery shown": "startup-probe label (opt-in temp file)",
     },
+    "ui/icons.py": {
+        "Lucide icon not bundled: ": "developer warning for a missing asset (never shown in the UI)",
+        " (expected ui/assets/lucide/": "developer warning for a missing asset (never shown in the UI)",
+        ".svg). Add the asset; a text character is not a substitute (dv-kvb).": (
+            "developer warning for a missing asset (never shown in the UI)"
+        ),
+    },
 }
 
 

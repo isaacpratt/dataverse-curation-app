@@ -47,6 +47,7 @@ from ui.widgets import (
     make_combo,
     make_disposition_combo,
     make_field_label,
+    make_icon_button,
     make_small_body_label,
 )
 from ui.workers import CheckWorker
@@ -538,9 +539,11 @@ class ChecksSection(DetailState):
         One item, one job: copy a single line a curator can paste into a
         comment or the depositor letter. No state, no log entry.
         """
-        btn = make_action_button("⋯", kind="ghost", size="sm")
-        btn.setToolTip(t("detail.copy_finding.action"))
-        btn.setAccessibleName(t("detail.copy_finding.action"))
+        btn = make_icon_button(
+            "ellipsis",
+            tip=t("detail.copy_finding.action"),
+            accessible_name=t("detail.copy_finding.action"),
+        )
         btn.clicked.connect(lambda _c=False, b=btn, s=text: self._show_copy_menu(b, s))
         return btn
 
