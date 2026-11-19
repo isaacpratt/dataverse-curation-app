@@ -55,6 +55,7 @@ class Sas7bdatCheck(Check):
     """SAS check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.sas"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".sas7bdat", ".xpt"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:

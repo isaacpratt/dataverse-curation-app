@@ -31,6 +31,7 @@ class GpkgCheck(Check):
     """GeoPackage check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.gpkg"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".gpkg"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:

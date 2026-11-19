@@ -14,6 +14,7 @@ class TiffCheck(Check):
     """TIFF check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.tiff"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".tif", ".tiff"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:

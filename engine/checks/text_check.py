@@ -21,6 +21,7 @@ class TextCheck(Check):
     """Text check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.text"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".txt", ".md", ".rst", ".log"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:

@@ -27,6 +27,7 @@ class SecretCheck(Check):
     """Secret/credential scan (API keys, tokens, private keys, high-entropy)."""
 
     check_id = "format.secrets"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {
         # code
         ".r",

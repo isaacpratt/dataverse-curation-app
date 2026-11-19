@@ -44,6 +44,7 @@ class ContainersCheck(Check):
     """Archive check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.containers"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {
         ".zip",
         ".tar",

@@ -69,7 +69,17 @@ class Check:
     # Checks declare a literal set; the base default is the empty frozenset,
     # so the annotation must admit both (AbstractSet, not `set`). All checks
     # are class-level (ClassVar) — instances carry no extension state.
+    #
+    # ``extensions`` answers *which files a check reads*. ``scope`` answers
+    # *what its findings are about*: "dataset" (the dataset or its inventory
+    # as a whole — reported once under ``dataset_checks``) or "file" (one
+    # file's contents — reported in that file's ``checks``). The two are
+    # independent: a cross-file check can read .csv and still be
+    # dataset-scoped. There is deliberately no default here — the registry
+    # refuses a check that does not declare one (dv-p1d), so a new check
+    # cannot inherit an accidental answer.
     extensions: ClassVar[AbstractSet[str]] = frozenset()
+    scope: ClassVar[str]
 
     def run(self, files: list[Path]) -> list[CheckResult]:
         raise NotImplementedError

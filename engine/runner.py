@@ -75,13 +75,19 @@ def _check_description(check_cls: Any) -> str:
 
 
 def list_planned_checks(files: list[Path]) -> list[dict[str, Any]]:
-    """Return list of checks that will be run for the given file list, with status."""
+    """Return the checks that will run for the given file list, with status.
+
+    ``scope`` says where each one's findings land — ``"dataset"`` (once, in
+    ``dataset_checks``) or ``"file"`` (per matching file, in that file's
+    ``checks``) — so a caller can group the "will run" list by it instead of
+    inferring it from the file types (dv-p1d).
+    """
     from collections import Counter
 
     from engine.checks import registry
 
     planned = []
-    # dataset-level
+    # dataset-scoped
     for check_cls in dataset_level_checks():
         planned.append(
             {
@@ -89,6 +95,7 @@ def list_planned_checks(files: list[Path]) -> list[dict[str, Any]]:
                 "description": _check_description(check_cls),
                 "file_types": "dataset-level",
                 "will_run": True,
+                "scope": "dataset",
             }
         )
     # per-file: single pass over files (O(F) dispatcher calls, not O(C*F)).
@@ -100,7 +107,7 @@ def list_planned_checks(files: list[Path]) -> list[dict[str, Any]]:
         except Exception:
             continue
     for check_cls in registry.values():
-        if not check_cls.extensions:
+        if getattr(check_cls, "scope", "file") != "file":
             continue
         matching_n = counts.get(check_cls.check_id, 0)
         planned.append(
@@ -110,6 +117,7 @@ def list_planned_checks(files: list[Path]) -> list[dict[str, Any]]:
                 "file_types": ", ".join(sorted(check_cls.extensions)),
                 "will_run": matching_n > 0,
                 "matching_files": matching_n,
+                "scope": "file",
             }
         )
     return planned

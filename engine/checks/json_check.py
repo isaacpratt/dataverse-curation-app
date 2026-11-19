@@ -19,6 +19,7 @@ class JsonCheck(Check):
     """JSON check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.json"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".json"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:

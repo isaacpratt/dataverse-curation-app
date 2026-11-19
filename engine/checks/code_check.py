@@ -20,6 +20,7 @@ class CodeCheck(Check):
     """Code check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.code"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {
         ".r",
         ".py",

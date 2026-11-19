@@ -98,6 +98,7 @@ class ReadmeSectionsCheck(Check):
     """Dataset-level check for whether the README is any good, not just present."""
 
     check_id = "metadata.readme_sections"
+    scope: ClassVar[str] = "dataset"
     extensions: ClassVar[set[str]] = set()  # dataset-level
 
     def run(self, files: list[Path]) -> list[CheckResult]:

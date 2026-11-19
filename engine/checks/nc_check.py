@@ -55,6 +55,7 @@ class NcCheck(Check):
     """NetCDF check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.netcdf"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".nc", ".cdf"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:

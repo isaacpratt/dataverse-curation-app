@@ -17,6 +17,7 @@ class SqliteCheck(Check):
     """SQLite check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.sqlite"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".sqlite", ".sqlite3", ".db"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:

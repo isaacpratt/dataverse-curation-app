@@ -282,6 +282,7 @@ class ImagesCheck(Check):
     """Images check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.images"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:

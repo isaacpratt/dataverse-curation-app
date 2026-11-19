@@ -36,6 +36,7 @@ class CsvCheck(Check):
     """CSV/TSV check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.csv"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".csv", ".tsv"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:

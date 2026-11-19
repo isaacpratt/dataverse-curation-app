@@ -62,15 +62,36 @@ _MODULES = (
 )
 
 registry: dict[str, Any] = {}
-for _module in _MODULES:
-    for _name in dir(_module):
-        _obj = getattr(_module, _name)
+
+
+def register_checks(module: Any, target: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Register one module's Check subclasses, insisting on a declared scope.
+
+    The scope is not optional (dv-p1d): it decides whether a check's
+    findings land in ``dataset_checks`` or in a file entry. Refusing here
+    means a new check cannot inherit an accidental answer — ``extensions``
+    only says which files it reads.
+    """
+    target = registry if target is None else target
+    for _name in dir(module):
+        _obj = getattr(module, _name)
         if (
             isinstance(_obj, type)
             and issubclass(_obj, Check)
             and _obj is not Check
             and getattr(_obj, "check_id", None) not in (None, "base.check")
         ):
-            registry[_obj.check_id] = _obj
+            _scope = getattr(_obj, "scope", None)
+            if _scope not in ("dataset", "file"):
+                raise TypeError(
+                    f"{_obj.__name__} must declare scope = 'dataset' or 'file' "
+                    f"(got {_scope!r}); extensions only says which files it reads"
+                )
+            target[_obj.check_id] = _obj
+    return target
 
-__all__ = ["Check", "CheckResult", "registry"]
+
+for _module in _MODULES:
+    register_checks(_module)
+
+__all__ = ["Check", "CheckResult", "register_checks", "registry"]

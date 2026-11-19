@@ -25,6 +25,7 @@ class XlsxCheck(Check):
     """Excel check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.xlsx"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".xlsx", ".xlsm", ".xls"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:

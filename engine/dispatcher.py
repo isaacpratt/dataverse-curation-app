@@ -1,8 +1,12 @@
 """Dispatch staged files to their format checks.
 
-Per-file checks apply when a file's extension (lowercase) matches the Check's
-extensions set. Dataset-level checks have empty extension sets and run on the
-file set as a whole (e.g. inventory.extensions, dataset.filename_policy).
+``scope`` decides where a check's findings live: a ``dataset``-scoped check
+runs once over the file set as a whole (e.g. inventory.extensions,
+inventory.access) and reports under ``dataset_checks``; a ``file``-scoped
+check runs once per file and reports in that file's ``checks``. ``extensions``
+is only the dispatch axis for file-scoped checks — the two axes are
+independent (dv-p1d), so a cross-file check may read .csv and still be
+dataset-scoped.
 """
 
 from pathlib import Path
@@ -40,11 +44,19 @@ def _match_suffixes(path: Path) -> set[str]:
 
 
 def checks_for_file(path: Path) -> list[type[Check]]:
-    """Format checks registered for a file's extension/name."""
+    """File-scoped checks whose extensions match a file's suffixes.
+
+    A dataset-scoped check is never returned here, whatever extensions it
+    declares: its findings belong to the dataset, not to one file.
+    """
     wanted = _match_suffixes(path)
-    return [cls for cls in registry.values() if wanted & set(cls.extensions)]
+    return [
+        cls
+        for cls in registry.values()
+        if getattr(cls, "scope", "file") == "file" and wanted & set(cls.extensions)
+    ]
 
 
 def dataset_level_checks() -> list[type[Check]]:
-    """Whole-dataset checks (run once per staged dataset, not per file)."""
-    return [cls for cls in registry.values() if not cls.extensions]
+    """Dataset-scoped checks (run once per staged dataset, not per file)."""
+    return [cls for cls in registry.values() if getattr(cls, "scope", "file") == "dataset"]

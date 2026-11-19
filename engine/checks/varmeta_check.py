@@ -38,6 +38,7 @@ class VarCoverageCheck(Check):
     """Dataset-level check for whether a stranger can tell what each variable means."""
 
     check_id = "metadata.var_coverage"
+    scope: ClassVar[str] = "dataset"
     extensions: ClassVar[set[str]] = set()  # dataset-level
 
     def run(self, files: list[Path]) -> list[CheckResult]:

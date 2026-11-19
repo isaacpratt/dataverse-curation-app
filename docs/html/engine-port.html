@@ -49,6 +49,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 </table>
 
 <h2>Port matrix</h2>
+<p>The <b>Status</b> column notes a dataset-level check. That is now a declaration, not an inference: every check class carries <code>scope = "dataset"</code> or <code>"file"</code> (<code>Check.scope</code>), the registry refuses a class that does not, and the dispatcher routes on it &mdash; so <code>extensions</code> only says which files a check reads (<code>docs/html/checks-reference.html</code> lists each check's scope). A cross-file check may therefore keep its extensions and still report once for the dataset.</p>
 <table>
 <tr><th>R script (CUR repo)</th><th>Python module</th><th>Key library</th><th>Parity sample</th><th>Status</th></tr>
 <tr><td><code>Inspect_Extensions_Script.R</code></td><td><code>extensions_check.py</code></td><td>stdlib + optional exiftool</td><td><code>data/Inspect_Extensions/</code></td><td><span class="pill p-ok">ported</span> (dataset-level)</td></tr>

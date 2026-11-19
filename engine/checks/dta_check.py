@@ -44,6 +44,7 @@ class DtaCheck(Check):
     """Stata check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.stata"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".dta"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:

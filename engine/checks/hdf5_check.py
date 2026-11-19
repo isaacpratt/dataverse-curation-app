@@ -19,6 +19,7 @@ class Hdf5Check(Check):
     """HDF5 check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.hdf5"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".h5", ".hdf5", ".hdf"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:

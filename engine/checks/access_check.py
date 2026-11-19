@@ -111,6 +111,7 @@ class AccessCheck(Check):
     """Access restrictions — restricted and embargoed files (dataset-level)."""
 
     check_id = "inventory.access"
+    scope: ClassVar[str] = "dataset"
     extensions: ClassVar[set[str]] = set()
 
     def run(self, files: list[Path]) -> list[CheckResult]:

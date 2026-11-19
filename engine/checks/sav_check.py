@@ -27,6 +27,7 @@ class SavCheck(Check):
     """SPSS check - port of the CUR_Res_CurationTools R inspector."""
 
     check_id = "format.spss"
+    scope: ClassVar[str] = "file"
     extensions: ClassVar[set[str]] = {".sav"}
 
     def run(self, files: list[Path]) -> list[CheckResult]:
