@@ -6,6 +6,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed (UI)
+
+- **Check boxes look like check boxes** — the kit's indicator was a 16px box with a half-height radius filled with the accent colour when checked: a solid blue circle, the visual language of a radio button, with no check mark at all. It is now a 16px rounded square (4px corners, `BORDER_CONTROL` edge) carrying the Lucide `check` glyph in `ON_PRIMARY` when checked, with distinct unchecked, checked, disabled and hover faces. `make_checkbox()` keeps its signature (it returns the kit's `AppCheckBox`, still a `QCheckBox`), every existing call site is unchanged, and `ui/tests/test_checkbox_face.py` checks the rendered pixels at 2x.
+
 ### Changed (layout)
 
 - **The application core moved to `curation/`** — the loose root modules (`applog`, `config`, `dashboard_cache`, `download_manager`, `metadata_check`, `response_draft`, `review_rules`, `storage`) and the `client/` package now live under `curation/`, which is the middle layer the dependency graph already had (ADR 0006). `main.py` stays the single entry point for both the GUI and `--headless`, and the PyInstaller builds are unchanged. The `dataverse_client.py` compatibility shim is gone — the app is not a library, so the old absolute paths were rewritten in place instead of being kept alive by a re-export. A new import-linter contract keeps `curation/` free of `ui/` and `PySide6`: the table-layout sort direction is persisted as a plain `int` in `curation.storage` and converted to `Qt.SortOrder` in `ui/table_layout.py`.

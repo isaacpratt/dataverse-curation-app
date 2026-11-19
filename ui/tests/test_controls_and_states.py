@@ -42,13 +42,16 @@ def test_a_field_placeholder_is_readable(qapp):
 def test_field_edges_are_control_edges(qapp):
     """A field's border is a control edge (3:1), not a decorative card edge."""
     from ui.theme import BORDER_CONTROL, SURFACE_CARD, contrast_ratio
-    from ui.widgets import make_checkbox, make_line_edit, make_search_field
+    from ui.widgets import AppCheckBox, make_line_edit, make_search_field
 
     assert contrast_ratio(BORDER_CONTROL, SURFACE_CARD) >= 3.0
     for field in (make_search_field("Search datasets"), make_line_edit("Name")):
         assert BORDER_CONTROL in field.styleSheet(), "a text field's edge must clear the 3:1 floor"
-    box = make_checkbox("Required")
-    assert BORDER_CONTROL in box.styleSheet(), "a checkbox's edge must clear the 3:1 floor"
+    # The check box paints its indicator itself (dv-7mf), so its edge is a
+    # token in the kit, not a line in the sheet.
+    _, edge, _ = AppCheckBox.face_colours(enabled=True, checked=False)
+    assert edge == BORDER_CONTROL, "a checkbox's edge must clear the 3:1 floor"
+    assert contrast_ratio(edge, SURFACE_CARD) >= 3.0
 
 
 def test_icon_only_buttons_are_square_and_big_enough(qapp):

@@ -18,8 +18,8 @@ Intentional one-offs (NOT kit violations):
 import textwrap
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import QEvent, QObject, QRect, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -60,9 +60,11 @@ from ui.theme import (
     FONT_MICRO,
     FONT_SMALL,
     MONO_FAMILY,
+    ON_PRIMARY,
     ON_SURFACE_VARIANT,
     PRIMARY_FIXED,
     RADIUS_LG,
+    RADIUS_SM,
     SURFACE_CARD,
     SURFACE_PAGE,
     SURFACE_RAISED,
@@ -93,6 +95,7 @@ from ui.workflow import STEP_ORDER, Workflow
 __all__ = [
     "BUTTON_HEIGHTS",
     "AppButton",
+    "AppCheckBox",
     "AppTable",
     "AppTree",
     "AppTreeWidget",
@@ -1019,22 +1022,144 @@ def make_checkbox(
     *,
     checked: bool = False,
     parent: QWidget | None = None,
-) -> QCheckBox:
+) -> "AppCheckBox":
     """Build the standard check box (a response checklist item)."""
-    box = QCheckBox(text, parent)
+    box = AppCheckBox(text, parent)
     box.setChecked(checked)
-    box.setStyleSheet(
-        f"QCheckBox {{ color: {TEXT_PRIMARY}; font-size: {FONT_BODY}px; spacing: 8px; }} "
-        # The indicator's edge is a control boundary: 3:1, like every
-        # other control in the app.
-        f"QCheckBox::indicator {{ width: 16px; height: 16px; "
-        f"border: 1px solid {BORDER_CONTROL}; border-radius: {RADIUS_LG}; "
-        f"background: {SURFACE_CARD}; }} "
-        f"QCheckBox::indicator:checked {{ background: {ACCENT_PRIMARY}; "
-        f"border: 1px solid {ACCENT_PRIMARY}; }} "
-        f"QCheckBox:disabled {{ color: {TEXT_DISABLED}; }}"
-    )
     return box
+
+
+# Check box indicator: 16px square, RADIUS_SM corners, a 12px Lucide check.
+_CHECK_INDICATOR_PX = 16
+_CHECK_GLYPH_PX = 12
+_CHECK_GLYPHS: dict[tuple[str, int], QIcon] = {}
+
+
+def _check_glyph(color: str, pixel_size: int) -> QIcon | None:
+    """Return the cached check icon at ``pixel_size`` pixels, in ``color``.
+
+    The glyph is an asset (``ui/icons.py``), never a stylesheet image or a
+    character: the SVG lives in the packaged asset directory, which a QSS
+    ``url(...)`` cannot reach reliably in the frozen build.
+    """
+    key = (color, int(pixel_size))
+    hit = _CHECK_GLYPHS.get(key)
+    if hit is not None:
+        return hit
+    try:
+        from ui.icons import icon as _icon
+
+        glyph = _icon("check", color=color, size=max(1, int(pixel_size)))
+    except Exception:  # no asset, no SVG renderer: paint the face only
+        return None
+    if glyph.isNull():
+        return None
+    _CHECK_GLYPHS[key] = glyph
+    return glyph
+
+
+class AppCheckBox(QCheckBox):
+    """A check box whose indicator is a rounded square carrying a check.
+
+    Qt's indicator at 16px with a half-height radius reads as a chosen radio
+    button, and the kit's QSS face had no check mark at all (dv-7mf). QSS
+    cannot draw the glyph, so the base style keeps the label, the hit target
+    and the focus cue, and this class paints the indicator itself: the three
+    faces a curator can see are unchecked, checked and disabled.
+    """
+
+    INDICATOR_PX = _CHECK_INDICATOR_PX
+
+    @staticmethod
+    def face_colours(
+        *, enabled: bool, checked: bool, hovered: bool = False
+    ) -> tuple[str, str, str]:
+        """Return the indicator's face, edge and glyph colours for one state.
+
+        One place decides the three faces, so the painted indicator and the
+        contrast tests read the same tokens: the edge is always a control
+        boundary (3:1 on a card) except when the face is already the accent.
+        """
+        if not enabled:
+            # Muted, never the accent: a disabled check is not a decision.
+            return SURFACE_SUBTLE, BORDER_SUBTLE, TEXT_DISABLED
+        if checked:
+            return ACCENT_PRIMARY, ACCENT_PRIMARY, ON_PRIMARY
+        if hovered:
+            return SURFACE_CARD, ACCENT_PRIMARY, ON_PRIMARY
+        return SURFACE_CARD, BORDER_CONTROL, ON_PRIMARY
+
+    def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self.setStyleSheet(
+            f"QCheckBox {{ color: {TEXT_PRIMARY}; font-size: {FONT_BODY}px; "
+            f"spacing: 8px; }} "
+            # The indicator is painted below, so the sheet only reserves its
+            # box: the text starts 8px after it, in every state.
+            f"QCheckBox::indicator {{ width: {_CHECK_INDICATOR_PX}px; "
+            f"height: {_CHECK_INDICATOR_PX}px; background: transparent; "
+            f"border: none; }} "
+            f"QCheckBox:disabled {{ color: {TEXT_DISABLED}; }} "
+            # A widget sheet can shadow the app-wide focus rule, so carry it.
+            f'QCheckBox[focusVisible="true"] {{ outline: 2px solid '
+            f"{ACCENT_FOCUS_RING}; outline-offset: 2px; }}"
+        )
+
+    def indicatorRect(self) -> QRect:
+        """Return the indicator's rectangle in widget coordinates.
+
+        Plain geometry, not the style's: the widget sheet reserves exactly
+        ``INDICATOR_PX`` (plus the 8px spacing), so the painted box is the
+        same whether or not the style has been polished yet.
+        """
+        size = self.INDICATOR_PX
+        area = self.contentsRect()
+        height = area.height() or self.sizeHint().height()
+        top = area.top() + max(0, (height - size) // 2)
+        return QRect(area.left(), top, size, size)
+
+    def enterEvent(self, event) -> None:
+        super().enterEvent(event)
+        self.update()
+
+    def leaveEvent(self, event) -> None:
+        super().leaveEvent(event)
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        # Base style first: the label, the elided text and the focus cue.
+        super().paintEvent(event)
+        painter = QPainter(self)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            self._paint_indicator(painter)
+        finally:
+            painter.end()
+
+    def _paint_indicator(self, painter: QPainter) -> None:
+        rect = self.indicatorRect()
+        if rect.isEmpty():
+            return
+        checked = self.isChecked()
+        face, edge, glyph_color = self.face_colours(
+            enabled=self.isEnabled(), checked=checked, hovered=self.underMouse()
+        )
+        radius = float(RADIUS_SM.rstrip("px").strip())
+        face_rect = QRectF(rect).adjusted(0.5, 0.5, -0.5, -0.5)
+        painter.setPen(QPen(QColor(edge), 1.0))
+        painter.setBrush(QColor(face))
+        painter.drawRoundedRect(face_rect, radius, radius)
+        if not checked:
+            return
+        try:
+            ratio = float(self.devicePixelRatioF()) or 1.0
+        except Exception:
+            ratio = 1.0
+        glyph = _check_glyph(glyph_color, round(_CHECK_GLYPH_PX * ratio))
+        if glyph is None:
+            return
+        inset = max(0, (rect.width() - _CHECK_GLYPH_PX) // 2)
+        glyph.paint(painter, rect.adjusted(inset, inset, -inset, -inset))
 
 
 def make_progress_bar(

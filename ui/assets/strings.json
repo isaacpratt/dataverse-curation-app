@@ -1285,7 +1285,9 @@
       "read_only_content": "A read-only plain-text view",
       "check_box_label": "Check box",
       "check_box_checked": "Include the guestbook response",
+      "check_box_unchecked": "A plain option",
       "check_box_disabled": "A disabled option",
+      "check_box_disabled_checked": "A disabled option that is on",
       "progress_label": "Progress",
       "progress_ring_label": "Progress ring"
     },
