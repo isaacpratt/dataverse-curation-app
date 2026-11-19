@@ -67,7 +67,14 @@ jobs:
       - name: Type check
         run: uv run --group dev mypy
       - name: Tests
-        run: uv run --group dev python -m pytest -q -n auto --cov=engine --cov-report=term-missing --cov-fail-under=75
+        # The coverage floor is [tool.coverage.report] fail_under, measured on
+        # production statements only: `*/tests/*` is omitted from the measure
+        # and the sample-data parity tests are deselected by their `samples`
+        # marker. This runner therefore reports the honest clean-clone number
+        # (~65.7%) instead of counting the test modules as covered source (the
+        # 83% that used to pass here) or reading a sibling clone that CI does
+        # not have (the 79% a developer machine shows).
+        run: uv run --group dev python -m pytest -q -n auto --cov=engine --cov-report=term-missing
       - name: Compile check
         run: uv run --group dev python -m compileall -q engine curation ui main.py
       - name: Headless smoke

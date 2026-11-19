@@ -31,6 +31,9 @@ CUR_DATA = Path(__file__).resolve().parents[3] / "CUR_Res_CurationTools" / "data
 requires_samples = pytest.mark.skipif(
     not CUR_DATA.exists(), reason="CUR_Res_CurationTools sample data not found"
 )
+# Parity tests: they read a sibling clone, not this repository, so they are
+# deselected by default (see markers in pyproject.toml).
+samples = pytest.mark.samples
 
 CASES = [
     ("csv", CsvCheck(), "Inspect_csv"),
@@ -60,6 +63,7 @@ def _sample_files(check: Any, subdirectory: str) -> list[Path]:
 
 
 @requires_samples
+@samples
 @pytest.mark.parametrize(("label", "check", "subdirectory"), CASES, ids=[c[0] for c in CASES])
 def test_format_check_on_samples(label: str, check: Any, subdirectory: str) -> None:
     files = _sample_files(check, subdirectory)
@@ -78,6 +82,7 @@ def test_format_check_on_samples(label: str, check: Any, subdirectory: str) -> N
 
 
 @requires_samples
+@samples
 def test_extensions_inventory_flags() -> None:
     files = sorted(path for path in (CUR_DATA / "Inspect_Extensions").rglob("*") if path.is_file())
     results = ExtensionsCheck().run(files)

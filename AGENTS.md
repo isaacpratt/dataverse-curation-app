@@ -61,7 +61,7 @@ Requirements: Python 3.11+ (Windows recommended); builds pin Python 3.11 via `.p
 
 ```bash
 poe build          # dist/DataverseDocent/DataverseDocent.exe + config.example.json (~55 s)
-poe pack           # Velopack release directory in dist/releases (~15 s; needs .NET 8 SDK + vpk)
+poe pack           # Velopack release directory in dist/releases (~15 s; needs .NET 10 SDK + vpk)
 poe check-pack     # verify an existing dist/releases (same check poe pack runs)
 poe smoke          # run the frozen exe: --headless --help + CSV/PII probe
 ```
@@ -110,8 +110,10 @@ bd dolt push          # Push beads data to remote
 
 Gate before handoff; run from the repository root when code (not docs-only) changed:
 
-- `uv run pytest -q` — must exit 0
-- `uv run poe typecheck` — must report `Success: no issues found`; the scope is `[tool.mypy] files` (`engine/`, `curation/`, `tools/tests`, `ui/`, `main.py`), so run bare `uv run mypy`. The engine contract and `main.py` are checked under mypy `--strict`; the test suites and the UI layer are checked under the documented relaxation in `[[tool.mypy.overrides]]` (the "annotate everything" rules off, `check_untyped_defs` and every shape check on), with `ui.*` in its own override
+- `uv run pytest -q` — must exit 0. The default run is the repository's own suite: the parity tests that read the sibling `CUR_Res_CurationTools` clone carry the `samples` marker and are deselected, so the same tests run on every machine
+- `uv run poe samples` — the opt-in parity run against that sample data (skipped when the clone is absent). Not part of the gate: CI has no such clone, and a gate whose result depends on a developer's disk is not a gate
+- `uv run poe cover` — engine coverage, compared against the floor in `[tool.coverage.report]` (65). The measure omits `*/tests/*`: test modules used to sit inside the measured packages and counted as covered source, which is how `83%` was reported while the production number was ~65%
+- `uv run poe typecheck` - must report `Success: no issues found`; the scope is `[tool.mypy] files` (`engine/`, `curation/`, `tools/tests`, `ui/`, `main.py`), so run bare `uv run mypy`. The engine contract and `main.py` are checked under mypy `--strict`; the test suites and the UI layer are checked under the documented relaxation in `[[tool.mypy.overrides]]` (the "annotate everything" rules off, `check_untyped_defs` and every shape check on), with `ui.*` in its own override
 - `uv run poe contracts` — import-linter contracts must stay green: `engine/` and `curation/` may not import `ui/` or `PySide6`, and the operational helpers in `tools/` may not import `ui/` (the UI probes are the documented exception)
 - `python tools/probes/run_all.py` — must end with `all N probes passed`; mandatory for UI/theme changes, and cheap enough to always run
 - headless box? set `QT_QPA_PLATFORM=offscreen` first, or the probes fail for the wrong reason

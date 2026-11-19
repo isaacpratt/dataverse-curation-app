@@ -1,7 +1,8 @@
 """Phase 1 port-spike tests against CUR_Res_CurationTools sample data.
 
 Run the ported checks and assert parity of findings. Skipped
-automatically when the sibling repo or its samples are absent.
+automatically when the sibling repo or its samples are absent, and
+deselected by default: run them with `uv run poe samples`.
 """
 
 from pathlib import Path
@@ -14,6 +15,8 @@ from engine.checks.nc_check import NcCheck
 from engine.checks.sas7bdat_check import Sas7bdatCheck
 
 CUR_DATA = Path(__file__).resolve().parents[3] / "CUR_Res_CurationTools" / "data"
+
+pytestmark = pytest.mark.samples
 
 requires_samples = pytest.mark.skipif(
     not CUR_DATA.exists(), reason="CUR_Res_CurationTools sample data not found"

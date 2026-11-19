@@ -56,6 +56,7 @@ def test_report_roundtrip_via_file(tmp_path: Path) -> None:
     assert loaded == saved
 
 
+@pytest.mark.samples
 @pytest.mark.skipif(not CUR_DATA.exists(), reason="sample data not found")
 def test_run_report_on_cur_gpkg_samples() -> None:
     report = run_report(CUR_DATA / "Inspect_gpkg")

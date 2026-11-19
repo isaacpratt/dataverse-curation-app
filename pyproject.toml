@@ -85,7 +85,16 @@ testpaths = ["engine/tests", "curation/tests", "tools/tests", "ui/tests"]
 # Serial by default: a local run is easier to read and to debug. CI passes
 # `-n auto` (pytest-xdist) for the wall-clock win; the suite is
 # order-independent, verified by repeated parallel runs (dv-hcg.41).
-addopts = "-q --strict-markers"
+addopts = "-q --strict-markers -m 'not samples'"
+# The default run must mean the same thing on every machine. Parity tests that
+# read the CUR_Res_CurationTools sample data (a sibling clone, never vendored)
+# carry the `samples` marker and are deselected here; `uv run poe samples`
+# selects them explicitly. Without this, `pytest` runs a different suite - and
+# reports a different coverage number - depending on what is checked out next
+# to the repository.
+markers = [
+    "samples: parity tests that read the external CUR_Res_CurationTools sample data (opt in: uv run poe samples)",
+]
 qt_api = "pyside6"
 xfail_strict = true
 # RuntimeWarning is no longer silenced repo-wide: numerical oddities in a
@@ -97,11 +106,20 @@ filterwarnings = [
 [tool.coverage.run]
 source = ["engine", "ui", "curation"]
 branch = true
+# Measure production code only. Test modules used to sit inside the measured
+# packages and, being executed, counted as covered source: the engine reported
+# 83% of 6097 statements when 3250 of those statements were the tests. Both
+# test packages still live inside `source` (`curation/tests`, `ui/tests`), so
+# this omit rule is load-bearing, not tidiness.
+omit = ["*/tests/*"]
 
 [tool.coverage.report]
-# Floor locked at 65 to prevent regression from the measured 68.9%
-# (engine subset 77.3%, gated at 75 in CI). Raise toward 75 as UI
-# coverage improves - see dv-hcg.7 for the path.
+# The floor is the honest clean-clone measurement, not a target: engine
+# production statements, 65.7% of 2301 on a runner without the sample data and
+# 75% where it is present (the `samples` tests are deselected either way, so
+# the difference is only which machine's data they would have read). Raise it
+# with real tests for uncovered production paths - dv-hcg.7 tracks the list -
+# never by widening what the measure counts.
 fail_under = 65
 show_missing = true
 
@@ -126,8 +144,15 @@ type = "simple"
   cmd = "pytest -q"
 
   [tool.poe.tasks.cover]
-  help = "Run tests with engine coverage"
+  help = "Run tests with engine coverage (floor from [tool.coverage.report])"
   cmd = "pytest -q --cov=engine --cov-report=term-missing"
+
+  # Parity tests against the R tooling's sample data. They are deselected by
+  # default (the `samples` marker) because that data is a sibling clone, not
+  # part of this repository; run this on purpose when you have it.
+  [tool.poe.tasks.samples]
+  help = "Run the sample-data parity tests (skipped when the sibling clone is absent)"
+  cmd = "pytest -q -m samples"
 
   [tool.poe.tasks.lint]
   help = "Lint with ruff"
