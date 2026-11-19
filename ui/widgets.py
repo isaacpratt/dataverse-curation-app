@@ -115,6 +115,7 @@ __all__ = [
     "make_caption_label",
     "make_card",
     "make_card_title",
+    "make_cell_control",
     "make_checkbox",
     "make_combo",
     "make_elided_label",
@@ -1829,6 +1830,44 @@ def make_combo(
         else:
             combo.addItem(str(entry))
     return combo
+
+
+# The transparent host that centres one control in a table/tree cell.
+_CELL_HOST_NAME = "CellControlHost"
+
+
+def make_cell_control(
+    widget: QWidget,
+    *,
+    v_margin: int = 4,
+    h_margin: int = 8,
+    parent: QWidget | None = None,
+) -> QWidget:
+    """Host ``widget`` in a cell, centred with equal space above and below.
+
+    Qt gives a cell widget the cell's top-left corner and its full height, so
+    a 32px control in a 40px row lands flush against the top edge unless
+    something inside the cell does the centring (dv-7zv: the review rules
+    dropdowns sat 4px high against their own labels). One helper does it, so
+    the review table's two dropdown columns cannot drift apart.
+
+    The host paints nothing (a scoped transparent rule, not a bare
+    ``background: transparent`` that would also reach the control inside it),
+    and its height is the control's plus both margins - exactly the row
+    height the kit uses, so nothing is stretched or clipped.
+    """
+    host = QWidget(parent)
+    host.setObjectName(_CELL_HOST_NAME)
+    host.setStyleSheet(transparent_surface_qss(_CELL_HOST_NAME))
+    lay = QHBoxLayout(host)
+    lay.setContentsMargins(h_margin, v_margin, h_margin, v_margin)
+    lay.setSpacing(0)
+    # AlignVCenter is explicit, not a consequence of the margins: a child
+    # with a fixed height would otherwise be placed wherever Qt's box layout
+    # puts a short item, and the "4px above and below" promise would be a
+    # coincidence of the current sizeHint.
+    lay.addWidget(widget, 1, Qt.AlignmentFlag.AlignVCenter)
+    return host
 
 
 # -- finding dispositions (dv-32x) ----------------------------------------

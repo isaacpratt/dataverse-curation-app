@@ -1,12 +1,24 @@
-"""Review configuration: the Check picker and entry-check params (dv-5id).
+"""Review configuration: the Check dropdown and entry-check params (dv-5id).
 
 A field rule may carry the ``looks_correct`` handler with ``params``; the
-Response card shows a Check picker for field rules and the params panel
-only while that check is picked. Edits round-trip straight into the rule
-dict (JSON on disk), which is what the Response draft evaluates.
+rules table's Check column (moved there by dv-7zv) switches a field between
+checks, and the Response card shows the params panel only while "looks
+plausibly correct" is picked. Edits round-trip straight into the rule dict
+(JSON on disk), which is what the Response draft evaluates.
 """
 
 import copy
+
+
+def _row_combo(rc, block, field, column):
+    """Return the dropdown one field row shows in a column (1 = Level, 2 = Check)."""
+    for item in rc._iter_rows():
+        data = rc._row_data(item)
+        if data.get("block") == block and data.get("field") == field:
+            combo = rc._cell_combo(item, column)
+            assert combo is not None, f"row {block}.{field} has no dropdown in {column}"
+            return combo
+    raise AssertionError(f"no tree row for {block}.{field}")
 
 
 def _with_rule(win, fn):
@@ -44,11 +56,11 @@ def _with_rule(win, fn):
 
 def test_params_panel_shows_only_for_looks_correct(win):
     def _check(rc, probe):
-        assert not rc._check_row.isHidden()
+        check = _row_combo(rc, "citation", "alternativeUrl", 2)
+        assert check.currentData() == "looks_correct"
         assert not rc._params_panel.isHidden()
-        # Switch the picker to nonempty: params panel hides, Check stays.
-        idx = rc._handler_combo.findData("nonempty")
-        rc._handler_combo.setCurrentIndex(idx)
+        # Switch the check to nonempty: params panel hides, the row stays.
+        check.setCurrentIndex(check.findData("nonempty"))
         assert rc._params_panel.isHidden()
         assert probe["handler"] == "nonempty"
         # Params survive the round trip (engine ignores them, JSON keeps them).
@@ -90,11 +102,12 @@ def test_handler_picker_seeds_a_sensible_default(win):
         # Start from plain nonempty: params panel hidden, seeded nothing.
         probe["handler"] = "nonempty"
         probe.pop("params", None)
+        rc._refresh_field_table()
         rc._sel_key = rc._rule_sel_key("citation", "alternativeUrl", "nonempty")
         rc._show_template_for_selection()
         assert rc._params_panel.isHidden()
-        idx = rc._handler_combo.findData("looks_correct")
-        rc._handler_combo.setCurrentIndex(idx)
+        check = _row_combo(rc, "citation", "alternativeUrl", 2)
+        check.setCurrentIndex(check.findData("looks_correct"))
         assert probe["handler"] == "looks_correct"
         assert probe["params"] == {"not_common_placeholders": True}
         assert not rc._params_panel.isHidden()

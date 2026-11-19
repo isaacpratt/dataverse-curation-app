@@ -186,11 +186,13 @@ def test_review_checks_tools_live_below_the_title(win, qapp):
         rc._field_filter,
         rc._level_filter,
         rc._blocks_btn,
-        rc._fields_reset_btn,
     ):
         assert _layout_holds(tools.layout(), widget), (
             f"{type(widget).__name__} must live on the Checks tools row"
         )
+    assert not hasattr(rc, "_fields_reset_btn"), (
+        "the rules table has no column resizing left to reset (dv-7zv)"
+    )
     card = tools.parentWidget()
     assert isinstance(card, QFrame)
     actions = _buttons_in(_title_row(card))

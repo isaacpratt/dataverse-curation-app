@@ -45,7 +45,6 @@ except Exception:  # the built-in catalog is best-effort at import time
 
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.i18n import t
-from ui.table_layout import TableLayout
 from ui.theme import BORDER_SUBTLE, page_background_qss, selectable_labels
 from ui.widgets import (
     AppTreeWidget,
@@ -54,18 +53,25 @@ from ui.widgets import (
     fit_tree_height,
     make_action_button,
     make_card,
+    make_cell_control,
     make_checkbox,
     make_combo,
     make_line_edit,
     make_list,
     make_multiline_input,
     make_page_heading,
-    make_reset_columns_button,
     make_search_field,
     transparent_surface_qss,
 )
 
 _LEVELS = ["required", "optional", "unchecked"]
+
+# The Level column's labels, one per stored value.
+_LEVEL_LABEL_KEYS = {
+    "required": "review.level_required",
+    "optional": "review.level_optional",
+    "unchecked": "review.level_unchecked",
+}
 
 # dv-5id: friendly names for the rule handlers that ship in the ruleset
 # JSON. The Check picker only offers nonempty/looks_correct; any other
@@ -86,6 +92,12 @@ _HANDLER_LABEL_KEYS = {
     "time_anyof": "review.handler_time_anyof",
     "geo": "review.handler_geo",
 }
+
+# The cell host's margins, matching make_cell_control's defaults in the kit
+# (dv-7zv). The column widths are measured with the same numbers, so a
+# dropdown always has its 8px either side inside its column.
+_CELL_V_MARGIN = 4
+_CELL_H_MARGIN = 8
 
 
 class ContentRuleDialog(QDialog):
@@ -425,14 +437,6 @@ class ReviewConfigView(QWidget):
         self._blocks_btn.setToolTip(t("review.blocks_tip"))
         self._blocks_btn.clicked.connect(self._on_toggle_blocks)
         tools_lay.addWidget(self._blocks_btn)
-        self._fields_reset_btn = make_reset_columns_button(
-            "",
-            tip=t("review.reset_tip"),
-            accessible_name=t("review.reset_fields_a11y"),
-            fallback_text=t("review.reset"),
-        )
-        self._fields_reset_btn.clicked.connect(self._on_reset_field_view)
-        tools_lay.addWidget(self._fields_reset_btn)
         # Sibling of the body, not inside it: the tree is rebuilt on filter
         # changes and the tools must survive that.
         card.layout().insertWidget(1, checks_tools)
@@ -442,38 +446,38 @@ class ReviewConfigView(QWidget):
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
         # Block-grouped tree (replaces the flat table): block parents with
-        # native expand/collapse, one child row per field rule with its
-        # level combo. Sorting stays OFF on purpose — children are cell
-        # *widgets*, which Qt does not move when rows sort.
+        # native expand/collapse, one child row per field rule with its level
+        # and check dropdowns. Sorting stays OFF on purpose - children are
+        # cell *widgets*, which Qt does not move when rows sort.
         self._field_tree = AppTreeWidget(row_height=40, flush=True)
-        self._field_tree.setColumnCount(2)
-        self._field_tree.setHeaderLabels([t("review.column_field"), t("review.column_check")])
+        self._field_tree.setColumnCount(3)
+        # The three labels stay (a screen reader and any future re-show use
+        # them) but the band is not painted: the two dropdown columns say
+        # what they hold, and the band cost a row of vertical space (dv-7zv).
+        self._field_tree.setHeaderLabels(
+            [
+                t("review.column_field"),
+                t("review.column_level"),
+                t("review.column_check"),
+            ]
+        )
+        self._field_tree.setHeaderHidden(True)
         self._field_tree.setRootIsDecorated(True)
         self._field_tree.setExpandsOnDoubleClick(True)
         self._field_tree.setAnimated(True)
         self._field_tree.setIndentation(18)
         # No fixed floor; height is fit to content to move scroll to the pane.
         self._field_tree.setMinimumHeight(0)
-        # The standard tree chrome comes with the widget (flush: the tree
-        # sits edge-to-edge inside the card, header meeting the top bar).
+        # Field takes the rest; the two dropdown columns are fixed at their
+        # measured need, so the row always fits and the tree never needs a
+        # horizontal scrollbar (at 1440 or at 960).
         _fld_header = self._field_tree.header()
         _fld_header.setStretchLastSection(False)
         _fld_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        _fld_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        self._field_tree.setColumnWidth(1, 150)
-        # Remember the user's column widths/order across sessions. The
-        # controller owns the persistence: it saves user gestures only.
-        try:
-            self._fields_layout = TableLayout(
-                self._config.app.workspace,
-                "review_fields",
-                _fld_header,
-                view=self._field_tree,
-            )
-            self._fields_layout.restore()
-        except Exception:
-            pass
-        self._floor_check_column()
+        _fld_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        _fld_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        self._field_tree.setColumnWidth(1, self._column_width(self._level_items(), 110))
+        self._field_tree.setColumnWidth(2, self._column_width(self._handler_column_items(), 180))
         self._field_tree.itemSelectionChanged.connect(self._on_field_selected)
 
         # The Collapse/Expand button follows manual expand/collapse too:
@@ -535,32 +539,11 @@ class ReviewConfigView(QWidget):
         self._sel_label.setWordWrap(True)
         self._sel_label.setObjectName("LabelStrongSM")
         body.addWidget(self._sel_label)
-        # Check picker (dv-5id): only field rules have one. The specialized
-        # checks ship in the ruleset JSON; this row is how a field moves
-        # from “non-empty” to the entry-correctness check, whose params
-        # panel appears right below it.
-        self._check_row = QWidget()
-        check_lay = QHBoxLayout(self._check_row)
-        check_lay.setContentsMargins(0, 0, 0, 0)
-        check_lay.setSpacing(8)
-        check_label = QLabel(t("review.check_label"))
-        check_label.setObjectName("LabelStrongSM")
-        check_lay.addWidget(check_label)
-        self._handler_combo = make_combo(
-            [
-                (t("review.handler_nonempty"), "nonempty"),
-                (t("review.handler_looks_correct"), "looks_correct"),
-            ],
-            height=32,
-            min_width=220,
-        )
-        self._handler_combo.currentIndexChanged.connect(self._on_handler_changed)
-        check_lay.addWidget(self._handler_combo, 1)
-        self._check_row.hide()
-        body.addWidget(self._check_row)
-        # Entry-check params (dv-5id): shown only while the “looks
-        # plausibly correct” check is picked. Every edit writes straight
-        # back into the rule's params dict.
+        # Entry-check params (dv-5id, moved here by dv-7zv): the Check
+        # dropdown itself now lives in the rules table's own column, so this
+        # pane holds response text plus the params of a “looks plausibly
+        # correct” rule. Shown only while that check is picked; every edit
+        # writes straight back into the rule's params dict.
         self._params_panel = QWidget()
         params_lay = QVBoxLayout(self._params_panel)
         params_lay.setContentsMargins(0, 0, 0, 0)
@@ -647,6 +630,61 @@ class ReviewConfigView(QWidget):
         key = _HANDLER_LABEL_KEYS.get(str(handler or ""))
         return t(key) if key else t("review.check_other", handler=handler)
 
+    # -- the two dropdown items (dv-7zv) -------------------------------------
+    #
+    # One list per column, used both to build the cell combos and to measure
+    # the column, so a column can never be narrower than the widest thing it
+    # has to show.
+
+    @staticmethod
+    def _level_items() -> list[tuple[str, str]]:
+        return [(t(_LEVEL_LABEL_KEYS[level]), level) for level in _LEVELS]
+
+    def _handler_items(self, handler: str = "") -> list[tuple[str, str]]:
+        """List the Check column's items, plus the rule's own handler if exotic."""
+        items = [
+            (t("review.handler_nonempty"), "nonempty"),
+            (t("review.handler_looks_correct"), "looks_correct"),
+        ]
+        if handler and handler not in ("nonempty", "looks_correct"):
+            items.append((self._handler_label(handler), handler))
+        return items
+
+    def _handler_column_items(self) -> list[tuple[str, str]]:
+        """Every handler label the Check column can ever show, for measuring.
+
+        A row's own combo lists only the two standard checks plus that row's
+        handler, but the column has to fit the widest label any row shows --
+        an exotic handler's label is longer than "Looks plausibly correct".
+        """
+        items = self._handler_items()
+        for key in sorted(_HANDLER_LABEL_KEYS):
+            if key not in ("nonempty", "looks_correct"):
+                items.append((self._handler_label(key), key))
+        return items
+
+    @staticmethod
+    def _column_width(items: list[tuple[str, str]], min_width: int) -> int:
+        """Return the width a dropdown column needs: widest item + the gaps.
+
+        ``QComboBox.sizeHint()`` measures only the *current* item, so each
+        item is selected in turn and the widest hint kept — otherwise a
+        column sized from "Required" elides "Not checked" (dv-7zv).
+        """
+        probe = make_combo(items, height=32, min_width=min_width)
+        widest = 0
+        try:
+            # An unpolished combo measures without its themed chrome (127px
+            # against 147px once styled), which is how a column sized from it
+            # elided its own text (dv-7zv).
+            probe.ensurePolished()
+            for index in range(probe.count()):
+                probe.setCurrentIndex(index)
+                widest = max(widest, probe.sizeHint().width())
+        finally:
+            probe.setCurrentIndex(0)
+        return max(widest, min_width) + 2 * _CELL_H_MARGIN
+
     def _field_rule_for_selection(self):
         """(fr, block, field, handler) for the current field selection."""
         try:
@@ -668,30 +706,13 @@ class ReviewConfigView(QWidget):
         return ""
 
     def _sync_field_extras(self, fr, block: str, field: str, handler: str) -> None:
-        """Fill the Check picker; show the params panel for looks_correct."""
+        """Show the entry-check params panel for a looks_correct field rule.
+
+        The Check picker itself lives in the rules table's own column
+        (dv-7zv), so this only owns the params panel below the response
+        template.
+        """
         try:
-            self._check_row.show()
-        except Exception:
-            return
-        try:
-            items = [
-                (t("review.handler_nonempty"), "nonempty"),
-                (t("review.handler_looks_correct"), "looks_correct"),
-            ]
-            if handler not in ("nonempty", "looks_correct"):
-                items.append((self._handler_label(handler), handler))
-            self._handler_combo.blockSignals(True)
-            try:
-                self._handler_combo.clear()
-                for label, key in items:
-                    self._handler_combo.addItem(label, key)
-                idx = self._handler_combo.findData(handler)
-                self._handler_combo.setCurrentIndex(idx if idx >= 0 else 0)
-            finally:
-                self._handler_combo.blockSignals(False)
-            self._handler_combo.setProperty("block", block)
-            self._handler_combo.setProperty("field", field)
-            self._handler_combo.setProperty("handler", handler)
             if handler == "looks_correct":
                 self._params_panel.show()
                 self._load_params(fr)
@@ -702,7 +723,6 @@ class ReviewConfigView(QWidget):
 
     def _hide_field_extras(self) -> None:
         try:
-            self._check_row.hide()
             self._params_panel.hide()
         except Exception:
             pass
@@ -778,7 +798,9 @@ class ReviewConfigView(QWidget):
     def _on_handler_changed(self, _i: int) -> None:
         if getattr(self, "_loading", False):
             return
-        combo = self._handler_combo
+        combo = self.sender()
+        if not isinstance(combo, QComboBox):
+            return
         new_handler = combo.currentData()
         if not new_handler:
             return
@@ -792,73 +814,75 @@ class ReviewConfigView(QWidget):
         if fr is None:
             # No rule exists yet (level is “unchecked”): revert the picker
             # and point the curator at the level combo instead.
-            self._loading = True
-            try:
-                idx = combo.findData(old)
-                combo.setCurrentIndex(idx if idx >= 0 else 0)
-            finally:
-                self._loading = False
-            try:
-                self._status.setText(t("review.messages.set_level_first"))
-            except Exception:
-                pass
+            self._revert_combo(combo, old)
+            self._set_status("review.messages.set_level_first")
             return
         if self._find_field_rule(block, field, new) is not None:
             # A rule with this check already exists for the field — do not
             # create a duplicate (block, field, handler) triple; the first
             # match would silently win the params panel.
-            self._loading = True
-            try:
-                idx = combo.findData(old)
-                combo.setCurrentIndex(idx if idx >= 0 else 0)
-            finally:
-                self._loading = False
-            try:
-                self._status.setText(t("review.messages.duplicate_rule"))
-            except Exception:
-                pass
+            self._revert_combo(combo, old)
+            self._set_status("review.messages.duplicate_rule")
             return
         fr["handler"] = new
         if new == "looks_correct" and not isinstance(fr.get("params"), dict):
             # Sensible default: catch the obvious placeholder entries first.
             fr["params"] = {"not_common_placeholders": True}
+        self._sel_kind = "field"
         self._sel_key = self._rule_sel_key(block, field, new)
-        combo.setProperty("handler", new)
-        self._update_field_row_handler(block, field, old, new, str(fr.get("requirement") or ""))
+        item = self._row_for_combo(combo)
+        if item is not None:
+            if fr.get("level") in ("required", "optional"):
+                data = self._row_data(item)
+                data["rule_kind"] = "rule"
+                item.setData(0, Qt.ItemDataRole.UserRole, data)
+            self._update_field_row_handler(item, new, str(fr.get("requirement") or ""))
         self._mark_dirty()
         self._show_template_for_selection()
 
-    def _update_field_row_handler(
-        self, block: str, field: str, old_handler: str, new_handler: str, req: str = ""
-    ) -> None:
-        """Re-point the tree row's level combo at the new handler (no rebuild)."""
-        tree = self._field_tree
+    def _revert_combo(self, combo: QComboBox, handler: str) -> None:
+        """Put a rejected pick back without re-entering the slot."""
+        self._loading = True
+        try:
+            idx = combo.findData(handler)
+            combo.setCurrentIndex(idx if idx >= 0 else 0)
+        finally:
+            self._loading = False
 
-        def _tip() -> str:
-            return t(
+    def _set_status(self, key: str) -> None:
+        try:
+            self._status.setText(t(key))
+        except Exception:
+            pass
+
+    def _update_field_row_handler(self, item, new_handler: str, req: str = "") -> None:
+        """Re-point one row at a handler in place (never rebuild the tree).
+
+        Both dropdowns carry the handler property and the row's data owns
+        it, so the level combo keeps editing the same rule after its check
+        changes.
+        """
+        data = self._row_data(item)
+        if not data:
+            return
+        block = str(data.get("block") or "")
+        field = str(data.get("field") or "")
+        data["handler"] = new_handler
+        item.setData(0, Qt.ItemDataRole.UserRole, data)
+        for column in (1, 2):
+            combo = self._cell_combo(item, column)
+            if combo is not None:
+                combo.setProperty("handler", new_handler)
+        item.setToolTip(
+            0,
+            t(
                 "review.messages.field_rule_tip",
                 block=block,
                 field=field,
                 handler=new_handler,
-            ) + (f"\n{req}" if req else "")
-
-        def _fix(item) -> bool:
-            combo = tree.itemWidget(item, 1)
-            if isinstance(combo, QComboBox):
-                if (
-                    str(combo.property("block") or "") == block
-                    and str(combo.property("field") or "") == field
-                    and str(combo.property("handler") or "nonempty") == old_handler
-                ):
-                    combo.setProperty("handler", new_handler)
-                    item.setToolTip(0, _tip())
-                    return True
-                return False
-            return any(_fix(item.child(i)) for i in range(item.childCount()))
-
-        for i in range(tree.topLevelItemCount()):
-            if _fix(tree.topLevelItem(i)):
-                return
+            )
+            + (f"\n{req}" if req else ""),
+        )
 
     # -- data -> ui --------------------------------------------------------
 
@@ -1072,6 +1096,7 @@ class ReviewConfigView(QWidget):
                 def _add_field_row(e, parent_item=None, block_item=None):
                     parent_item = parent_item if parent_item is not None else block_item
                     block, field = e["block"], e["field"]
+                    handler = str(e["handler"] or "nonempty")
                     child = QTreeWidgetItem([str(e.get("label") or field)])
                     child.setToolTip(
                         0,
@@ -1079,31 +1104,43 @@ class ReviewConfigView(QWidget):
                             "review.messages.field_rule_tip",
                             block=block,
                             field=field,
-                            handler=e["handler"],
+                            handler=handler,
                         )
                         + (f"\n{e['req']}" if e["req"] else ""),
                     )
-                    child.setData(0, Qt.ItemDataRole.UserRole, {"kind": "field"})
-                    combo = make_combo(
-                        [
-                            (t("review.level_required"), "required"),
-                            (t("review.level_optional"), "optional"),
-                            (t("review.level_unchecked"), "unchecked"),
-                        ],
-                        height=32,
-                        min_width=110,
+                    # The row's data is the one place that says which rule
+                    # this row edits: selection and both dropdowns read it,
+                    # so they cannot drift apart (dv-7zv).
+                    child.setData(
+                        0,
+                        Qt.ItemDataRole.UserRole,
+                        {
+                            "kind": "field",
+                            "block": block,
+                            "field": field,
+                            "handler": handler,
+                            "rule_kind": e["kind"],
+                        },
                     )
-                    combo.setCurrentIndex(
-                        {"required": 0, "optional": 1, "unchecked": 2}.get(e["level"], 2)
-                    )
-                    combo.setProperty("kind", e["kind"])
-                    combo.setProperty("block", block)
-                    combo.setProperty("field", field)
-                    combo.setProperty("handler", e["handler"])
-                    combo.currentIndexChanged.connect(self._on_field_level_changed)
+                    level = make_combo(self._level_items(), height=32, min_width=110)
+                    level.setCurrentIndex(max(0, level.findData(str(e["level"] or "unchecked"))))
+                    level.setProperty("kind", e["kind"])
+                    level.setProperty("block", block)
+                    level.setProperty("field", field)
+                    level.setProperty("handler", handler)
+                    level.setToolTip(t("review.column_level_tip"))
+                    level.currentIndexChanged.connect(self._on_field_level_changed)
+                    check = make_combo(self._handler_items(handler), height=32, min_width=180)
+                    check.setCurrentIndex(max(0, check.findData(handler)))
+                    check.setProperty("block", block)
+                    check.setProperty("field", field)
+                    check.setProperty("handler", handler)
+                    check.setToolTip(t("review.column_check_tip"))
+                    check.currentIndexChanged.connect(self._on_handler_changed)
                     target = parent_item if parent_item is not None else block_item
                     target.addChild(child)
-                    tree.setItemWidget(child, 1, combo)
+                    tree.setItemWidget(child, 1, make_cell_control(level, v_margin=_CELL_V_MARGIN))
+                    tree.setItemWidget(child, 2, make_cell_control(check, v_margin=_CELL_V_MARGIN))
                     return child
 
                 groups_by_prefix: dict[str, list] = {}
@@ -1176,33 +1213,65 @@ class ReviewConfigView(QWidget):
         except Exception:
             pass
 
-    def _selected_field_combo(self):
-        """Level combo of the selected field row (None for block rows)."""
-        try:
-            items = self._field_tree.selectedItems()
-            if not items:
-                return None
-            combo = self._field_tree.itemWidget(items[0], 1)
-            return combo if isinstance(combo, QComboBox) else None
-        except Exception:
-            return None
+    # -- row lookup (dv-7zv) -------------------------------------------------
 
-    def _find_combo_item(self, combo):
-        """Tree child item hosting a level combo (for in-place updates)."""
+    @staticmethod
+    def _row_data(item) -> dict[str, Any]:
+        """One field row's own data ({kind: field, block, field, handler})."""
+        try:
+            data = item.data(0, Qt.ItemDataRole.UserRole) if item is not None else None
+        except Exception:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _iter_rows(self):
+        """Every field row, in tree order (block and group headings skipped)."""
         try:
             tree = self._field_tree
-            for bi in range(tree.topLevelItemCount()):
-                top = tree.topLevelItem(bi)
-                if top is None:
-                    continue
-                for ci in range(top.childCount()):
-                    child = top.child(ci)
-                    if child is None:
-                        continue
-                    if tree.itemWidget(child, 1) is combo:
-                        return child
         except Exception:
-            pass
+            return
+        stack = [tree.topLevelItem(i) for i in range(tree.topLevelItemCount())]
+        while stack:
+            item = stack.pop()
+            if item is None:
+                continue
+            if self._row_data(item).get("kind") == "field":
+                yield item
+            stack.extend(item.child(i) for i in range(item.childCount()))
+
+    def _cell_combo(self, item, column: int):
+        """Return the dropdown in one of a row's two cell hosts (None if absent).
+
+        The cell widget is the transparent host ``make_cell_control`` builds,
+        not the combo itself, so the lookup goes through the host.
+        """
+        try:
+            host = self._field_tree.itemWidget(item, column)
+        except Exception:
+            return None
+        if isinstance(host, QComboBox):
+            return host
+        if host is None:
+            return None
+        return host.findChild(QComboBox)
+
+    def _row_for_combo(self, combo):
+        """Return the field row hosting a given dropdown (a signal sender)."""
+        for item in self._iter_rows():
+            for column in (1, 2):
+                if self._cell_combo(item, column) is combo:
+                    return item
+        return None
+
+    def _selected_field_row(self):
+        """Return the selected field row (None while a block heading is selected)."""
+        try:
+            items = self._field_tree.selectedItems()
+        except Exception:
+            return None
+        for item in items:
+            if self._row_data(item).get("kind") == "field":
+                return item
         return None
 
     def _blocks_any_collapsed(self) -> bool:
@@ -1235,49 +1304,6 @@ class ReviewConfigView(QWidget):
                 self._field_tree.collapseAll()
             fit_tree_height(self._field_tree, row_height=40)
             self._update_blocks_btn()
-        except Exception:
-            pass
-
-    def _floor_check_column(self) -> None:
-        """Floor the Check column at the combos' measured need.
-
-        Narrower squeezes "Not checked" + chevron. Also repairs stale
-        110px restores from the old 3-column table era. Signals stay
-        blocked: the floor is a correction, not a user edit, so it must
-        not re-save (reset would otherwise immediately re-persist).
-        """
-        try:
-            header = self._field_tree.header()
-            _probe = make_combo(
-                [
-                    (t("review.level_required"), "required"),
-                    (t("review.level_optional"), "optional"),
-                    (t("review.level_unchecked"), "unchecked"),
-                ],
-                height=32,
-                min_width=110,
-            )
-            _need = _probe.sizeHint().width() + 8
-            if header.sectionSize(1) < _need:
-                try:
-                    header.blockSignals(True)
-                    header.resizeSection(1, _need)
-                finally:
-                    try:
-                        header.blockSignals(False)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-    def _on_reset_field_view(self) -> None:
-        """Reset the field tree to its construction view, then rebuild."""
-        try:
-            layout = getattr(self, "_fields_layout", None)
-            if layout is not None:
-                layout.reset()
-            self._floor_check_column()
-            self._refresh_field_table()
         except Exception:
             pass
 
@@ -1357,14 +1383,14 @@ class ReviewConfigView(QWidget):
         if self._loading:
             return
         try:
-            combo = self._selected_field_combo()
-            if combo is None:
+            data = self._row_data(self._selected_field_row())
+            if not data:
                 return
             self._sel_kind = "field"
             self._sel_key = self._rule_sel_key(
-                str(combo.property("block") or ""),
-                str(combo.property("field") or ""),
-                str(combo.property("handler") or "nonempty"),
+                str(data.get("block") or ""),
+                str(data.get("field") or ""),
+                str(data.get("handler") or "nonempty"),
             )
             self._show_template_for_selection()
         except Exception:
@@ -1377,9 +1403,14 @@ class ReviewConfigView(QWidget):
             combo = self.sender()
             if not isinstance(combo, QComboBox):
                 return
-            kind = str(combo.property("kind") or "new")
-            block, field = str(combo.property("block") or ""), str(combo.property("field") or "")
-            handler = str(combo.property("handler") or "nonempty")
+            item = self._row_for_combo(combo)
+            if item is None:
+                return
+            data = self._row_data(item)
+            kind = str(data.get("rule_kind") or "new")
+            block = str(data.get("block") or "")
+            field = str(data.get("field") or "")
+            handler = str(data.get("handler") or "nonempty")
             level = combo.currentData() or "required"
             rs = self._current_ruleset()
             rules = [r for r in (rs.get("field_rules") or []) if isinstance(r, dict)]
@@ -1425,26 +1456,12 @@ class ReviewConfigView(QWidget):
             self._sel_key = self._rule_sel_key(block, field, handler)
             # Update this row in place (never rebuild the tree here: the
             # emitting combo would be destroyed mid-signal).
-            try:
-                child = self._find_combo_item(combo)
-                if child is not None:
-                    combo.setProperty(
-                        "kind", "rule" if found is not None and level != "unchecked" else "new"
-                    )
-                    if found is not None and level != "unchecked":
-                        tip_req = str(found.get("requirement") or "")
-                        child.setToolTip(
-                            0,
-                            t(
-                                "review.messages.field_rule_tip",
-                                block=block,
-                                field=field,
-                                handler=handler,
-                            )
-                            + (f"\n{tip_req}" if tip_req else ""),
-                        )
-            except Exception:
-                pass
+            data["rule_kind"] = "rule" if found is not None and level != "unchecked" else "new"
+            data["handler"] = handler
+            item.setData(0, Qt.ItemDataRole.UserRole, data)
+            self._update_field_row_handler(
+                item, handler, str(found.get("requirement") or "") if found else ""
+            )
             self._show_template_for_selection()
         except Exception:
             pass
@@ -1496,18 +1513,18 @@ class ReviewConfigView(QWidget):
                 # Fall back to the tree's current row when nothing chosen yet.
                 if fr is None:
                     try:
-                        combo = self._selected_field_combo()
-                        if combo is not None:
+                        data = self._row_data(self._selected_field_row())
+                        if data:
                             fr = self._find_field_rule(
-                                str(combo.property("block") or ""),
-                                str(combo.property("field") or ""),
-                                str(combo.property("handler") or "nonempty"),
+                                str(data.get("block") or ""),
+                                str(data.get("field") or ""),
+                                str(data.get("handler") or "nonempty"),
                             )
                             if fr is not None:
                                 self._sel_key = self._rule_sel_key(
-                                    str(combo.property("block") or ""),
-                                    str(combo.property("field") or ""),
-                                    str(combo.property("handler") or "nonempty"),
+                                    str(data.get("block") or ""),
+                                    str(data.get("field") or ""),
+                                    str(data.get("handler") or "nonempty"),
                                 )
                     except Exception:
                         fr = None

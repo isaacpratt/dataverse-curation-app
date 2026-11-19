@@ -464,6 +464,9 @@ ignore_imports = [
     "tools.probes.probe_manifest_columns -> ui.dataset",
     "tools.probes.probe_metadata_rows -> ui.dataset",
     "tools.probes.probe_preview -> ui.preview",
+    "tools.probes.probe_qt_warnings -> ui.theme",
+    "tools.probes.probe_qt_warnings -> ui.widgets",
     "tools.probes.probe_queue_columns -> ui.main_window",
     "tools.probes.probe_rail_nav -> ui.dataset",
+    "tools.probes.probe_review_table -> ui.review_config",
 ]

@@ -22,6 +22,7 @@ python tools/probes/probe_preview.py          # the preview card fits 960px, wit
 python tools/probes/probe_about_updates.py    # the About updates section fits, and the restart action appears when pending
 python tools/probes/probe_rail_nav.py         # one navigation map: the workflow rail stays visible folded and unfolded
 python tools/probes/probe_qt_warnings.py      # a Qt message is a gate: a broken sheet is caught, the two platform ones are classified
+python tools/probes/probe_review_table.py     # the review rules table: Field | Level | Check rows, no header band, no h-scroll
 ```
 
 `run_all.py` runs each `probe_*.py` in turn and exits non-zero when any
@@ -128,6 +129,7 @@ unsubstituted.
 | `probe_about_updates.py` | The About pane's Updates section fits 960px with and without a downloaded update; the Restart and install action appears only when one is pending. |
 | `probe_rail_nav.py` | One navigation map: the workflow rail stays visible when the sidebar folds and unfolds, the dataset log moves to the page foot, and the old nav card/menu/collapse controls stay gone. |
 | `probe_qt_warnings.py` | Qt messages are a gate: the two platform messages are classified, a deliberately broken stylesheet is caught by the handler, the badge sheet is one balanced rule, and the probe's own run reports no unexpected message. |
+| `probe_review_table.py` | The review rules table keeps one row shape at 1440x900 and 960x720: three columns (Field, Level, Check) with no header band, both 32px dropdowns centred 4px above and below in their 40px rows, no elided dropdown text, no reset control or saved column layout, and no horizontal scrollbar. |
 
 ## The same contracts in pytest
 
