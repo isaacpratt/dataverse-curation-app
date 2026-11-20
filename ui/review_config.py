@@ -61,6 +61,7 @@ from ui.widgets import (
     make_number_field,
     make_page_heading,
     make_search_field,
+    make_value_list,
     transparent_surface_qss,
 )
 
@@ -279,10 +280,17 @@ class ReviewConfigView(QWidget):
             scroll.setWidget(host)
             return scroll
 
-        split.addWidget(make_pane(self._build_field_rules_card, self._build_content_rules_card))
-        split.addWidget(make_pane(self._build_templates_card))
+        left_pane = make_pane(self._build_field_rules_card, self._build_content_rules_card)
+        right_pane = make_pane(self._build_templates_card)
+        split.addWidget(left_pane)
+        split.addWidget(right_pane)
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 2)
+        # A floor per pane: the stacked form controls (a chip field plus its
+        # plus button) cannot get narrower than their own content (dv-5nd).
+        split.setChildrenCollapsible(False)
+        left_pane.setMinimumWidth(360)
+        right_pane.setMinimumWidth(384)
         # A 16px gap between the Checks card and the Response text card,
         # matching the page's own spacing (the default 1px handle made the
         # two cards look welded together).
@@ -557,53 +565,86 @@ class ReviewConfigView(QWidget):
         self._params_panel = QWidget()
         params_lay = QVBoxLayout(self._params_panel)
         params_lay.setContentsMargins(0, 0, 0, 0)
-        params_lay.setSpacing(6)
+        params_lay.setSpacing(8)
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
         params_title = QLabel(t("review.params_title"))
         params_title.setObjectName("LabelStrongSM")
-        params_lay.addWidget(params_title)
-        form = QFormLayout()
-        form.setContentsMargins(0, 0, 0, 0)
-        form.setSpacing(6)
+        title_row.addWidget(params_title)
+        # The fail-closed sentence stays a tooltip, not a painted paragraph.
+        add_info_tip(
+            title_row,
+            t("review.params_title_tip"),
+            name=t("review.params_title"),
+            group=t("review.params_title"),
+        )
+        title_row.addStretch(1)
+        params_lay.addLayout(title_row)
+
+        def _param_row(label_key: str, help_key: str, control) -> None:
+            """Put a short label above a full-width control, both with one tip."""
+            tip = t(help_key)
+            label = self._params_label(t(label_key))
+            label.setToolTip(tip)
+            label.setWordWrap(False)
+            control.setToolTip(tip)
+            row = QWidget()
+            row_lay = QVBoxLayout(row)
+            row_lay.setContentsMargins(0, 0, 0, 0)
+            row_lay.setSpacing(4)
+            row_lay.addWidget(label)
+            row_lay.addWidget(control)
+            params_lay.addWidget(row)
+
         # The kit's number field replaces the raw QSpinBox: the native
         # stepper was clipped at the right edge of a 32px field, and a view
-        # may not build a raw spin box at all (dv-6vv). The API mirrors
+        # may not build a raw spin box at all (dv-6vv). Its API mirrors
         # QSpinBox's, so the loader and the edit slot are unchanged.
         self._p_min = make_number_field(0, minimum=0, maximum=10000)
         self._p_min.changed.connect(self._on_params_edited)
-        form.addRow(self._params_label(t("review.params_min_length")), self._p_min)
-        regex_row = QHBoxLayout()
-        regex_row.setContentsMargins(0, 0, 0, 0)
-        regex_row.setSpacing(8)
+        _param_row("review.params_min_length", "review.params_min_length_help", self._p_min)
+
         self._p_regex = make_line_edit(height=32)
         self._p_regex.textChanged.connect(self._on_params_edited)
-        regex_row.addWidget(self._p_regex, 1)
+        _param_row("review.params_regex", "review.params_regex_help", self._p_regex)
         self._p_regex_full = make_checkbox(t("review.params_regex_full"))
+        self._p_regex_full.setToolTip(t("review.params_regex_full_help"))
         self._p_regex_full.toggled.connect(self._on_params_edited)
-        regex_row.addWidget(self._p_regex_full)
-        form.addRow(self._params_label(t("review.params_regex")), regex_row)
-        self._p_blocklist = make_multiline_input("", fixed=False, min_height=64)
-        self._p_blocklist.textChanged.connect(self._on_params_edited)
-        form.addRow(self._params_label(t("review.params_blocklist")), self._p_blocklist)
-        self._p_vocab = make_multiline_input("", fixed=False, min_height=64)
-        self._p_vocab.textChanged.connect(self._on_params_edited)
-        form.addRow(self._params_label(t("review.params_vocabulary")), self._p_vocab)
-        params_lay.addLayout(form)
-        for key, label_key in [
-            ("not_common_placeholders", "review.params_placeholders"),
-            ("not_all_caps", "review.params_all_caps"),
-            ("date", "review.params_date"),
-            ("date_order", "review.params_date_order"),
-            ("url", "review.params_url"),
+        params_lay.addWidget(self._p_regex_full)
+
+        # Two phrase lists: one chip per entry, added one at a time.
+        self._p_blocklist = make_value_list([], add_tip=t("review.params_blocklist_help"))
+        self._p_blocklist.changed.connect(self._on_params_edited)
+        _param_row(
+            "review.params_blocklist",
+            "review.params_blocklist_help",
+            self._p_blocklist,
+        )
+        self._p_vocab = make_value_list([], add_tip=t("review.params_vocabulary_help"))
+        self._p_vocab.changed.connect(self._on_params_edited)
+        _param_row(
+            "review.params_vocabulary",
+            "review.params_vocabulary_help",
+            self._p_vocab,
+        )
+
+        for key, label_key, help_key in [
+            (
+                "not_common_placeholders",
+                "review.params_placeholders",
+                "review.params_placeholders_help",
+            ),
+            ("not_all_caps", "review.params_all_caps", "review.params_all_caps_help"),
+            ("date", "review.params_date", "review.params_date_help"),
+            ("date_order", "review.params_date_order", "review.params_date_order_help"),
+            ("url", "review.params_url", "review.params_url_help"),
         ]:
             box = make_checkbox(t(label_key))
+            box.setToolTip(t(help_key))
             box.toggled.connect(self._on_params_edited)
             box.setProperty("param_key", key)
             setattr(self, f"_p_{key}", box)
             params_lay.addWidget(box)
-        hint = QLabel(t("review.params_hint"))
-        hint.setWordWrap(True)
-        hint.setObjectName("CaptionSM")
-        params_lay.addWidget(hint)
         self._params_panel.hide()
         body.addWidget(self._params_panel)
         self._template_edit = make_multiline_input(
@@ -709,12 +750,12 @@ class ReviewConfigView(QWidget):
         return None, "", "", ""
 
     @staticmethod
-    def _params_lines(value) -> str:
+    def _params_lines(value) -> list[str]:
         if isinstance(value, list):
-            return "\n".join(str(v) for v in value)
+            return [str(v) for v in value]
         if isinstance(value, str):
-            return value
-        return ""
+            return [line.strip() for line in value.splitlines() if line.strip()]
+        return []
 
     def _sync_field_extras(self, fr, block: str, field: str, handler: str) -> None:
         """Show the entry-check params panel for a looks_correct field rule.
@@ -764,8 +805,8 @@ class ReviewConfigView(QWidget):
                 self._p_min.setValue(0)
             self._p_regex.setText(str(p.get("regex") or ""))
             self._p_regex_full.setChecked(str(p.get("regex_mode") or "").strip().lower() == "full")
-            self._p_blocklist.setPlainText(self._params_lines(p.get("blocklist")))
-            self._p_vocab.setPlainText(self._params_lines(p.get("controlled_vocabulary")))
+            self._p_blocklist.setValues(self._params_lines(p.get("blocklist")))
+            self._p_vocab.setValues(self._params_lines(p.get("controlled_vocabulary")))
             for key in ("not_common_placeholders", "not_all_caps", "date", "date_order", "url"):
                 getattr(self, f"_p_{key}").setChecked(bool(p.get(key)))
         finally:
@@ -789,12 +830,10 @@ class ReviewConfigView(QWidget):
             p["regex"] = rx
         if self._p_regex_full.isChecked():
             p["regex_mode"] = "full"
-        blocklist = [
-            line.strip() for line in self._p_blocklist.toPlainText().splitlines() if line.strip()
-        ]
+        blocklist = [value for value in self._p_blocklist.values() if value.strip()]
         if blocklist:
             p["blocklist"] = blocklist
-        vocab = [line.strip() for line in self._p_vocab.toPlainText().splitlines() if line.strip()]
+        vocab = [value for value in self._p_vocab.values() if value.strip()]
         if vocab:
             p["controlled_vocabulary"] = vocab
         for key in ("not_common_placeholders", "not_all_caps", "date", "date_order", "url"):

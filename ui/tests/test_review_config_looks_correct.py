@@ -98,6 +98,13 @@ def test_params_round_trip_into_the_rule(win):
         assert probe["params"]["not_common_placeholders"] is True
         assert probe["params"]["url"] is True
 
+        # Phrase lists are chip fields: one entry at a time, display order
+        # preserved, and both keys survive the JSON round trip.
+        rc._p_blocklist.setValues(["todo", "TBD"])
+        rc._p_vocab.setValues(["doi", "url"])
+        assert probe["params"]["blocklist"] == ["todo", "TBD"]
+        assert probe["params"]["controlled_vocabulary"] == ["doi", "url"]
+
         # Clearing every knob removes params wholesale (fail closed: the
         # engine reports [no entry checks configured]).
         _type_min(rc, "0")
@@ -105,6 +112,8 @@ def test_params_round_trip_into_the_rule(win):
         rc._p_regex_full.setChecked(False)
         rc._p_not_common_placeholders.setChecked(False)
         rc._p_url.setChecked(False)
+        rc._p_blocklist.setValues([])
+        rc._p_vocab.setValues([])
         assert "params" not in probe
 
     _with_rule(win, _check)

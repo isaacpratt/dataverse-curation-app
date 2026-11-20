@@ -478,4 +478,6 @@ ignore_imports = [
     "tools.probes.probe_review_selection -> ui.theme",
     "tools.probes.probe_review_selection -> ui.widgets",
     "tools.probes.probe_review_cards -> ui.review_config",
+    "tools.probes.probe_review_params -> ui.review_config",
+    "tools.probes.probe_review_params -> ui.widgets",
 ]
