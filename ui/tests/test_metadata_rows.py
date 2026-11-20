@@ -8,16 +8,17 @@ off the result list.
 """
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PySide6.QtWidgets import QComboBox, QToolButton
 
 
-def _fv(value):
+def _fv(value: Any):
     return {"typeName": "text", "multiple": False, "typeClass": "primitive", "value": value}
 
 
-def _metadata() -> dict:
+def _metadata() -> dict[str, Any]:
     return {
         "latestVersion": {
             "license": {"name": "CC0 1.0"},
@@ -89,7 +90,7 @@ def detail(qapp, tmp_path):
     view.deleteLater()
 
 
-def _rows(detail):
+def _rows(detail: Any):
     out = []
     lay = detail._meta_body_lay
     for i in range(lay.count()):
@@ -106,7 +107,7 @@ def _row(detail, label: str):
     raise AssertionError(f"row {label!r} not found")
 
 
-def _drawer(detail, row):
+def _drawer(detail: Any, row: Any):
     """Return the drawer directly following a compound-field row, if any."""
     lay = detail._meta_body_lay
     for i in range(lay.count() - 1):
@@ -137,7 +138,7 @@ def test_badge_and_status_complete_for_title(detail):
     assert "Complete" in _labels_in(row)
 
 
-def _qframe_by_name(row, name):
+def _qframe_by_name(row: Any, name: Any):
     from PySide6.QtWidgets import QFrame
 
     return [w for w in row.findChildren(QFrame) if w.objectName() == name]
@@ -342,7 +343,7 @@ def test_section_headers_group_the_blocks(detail):
     from PySide6.QtWidgets import QPushButton
 
     lay = detail._meta_body_lay
-    buttons: list = []
+    buttons: list[Any] = []
     for i in range(lay.count()):
         widget = lay.itemAt(i).widget()
         if widget is not None and widget.objectName() == "MetaSectionHeader":
@@ -402,7 +403,7 @@ def test_drawer_keeps_its_open_state_across_section_collapse(detail):
 
 
 def test_note_without_disposition_defaults_to_acknowledged(detail, monkeypatch):
-    written: dict = {}
+    written: dict[str, Any] = {}
 
     class _State:
         def list_finding_dispositions(self, pid):

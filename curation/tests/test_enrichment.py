@@ -6,6 +6,8 @@ W-03 (progressive merge helper) and W-04 (cache round-trip preserves
 enriched fields; size-only changes stay out of the diff fingerprint).
 """
 
+from typing import Any
+
 import requests
 
 from curation.client import DataverseClient
@@ -19,7 +21,7 @@ from curation.dashboard_cache import (
 )
 
 
-def _version_doc(files, depositor="", state="DRAFT"):
+def _version_doc(files: Any, depositor: Any = "", state: Any = "DRAFT") -> Any:
     return {
         "datasetVersion": {
             "versionState": state,
@@ -36,7 +38,7 @@ def _version_doc(files, depositor="", state="DRAFT"):
     }
 
 
-def _entry(name, size):
+def _entry(name: Any, size: Any) -> Any:
     return {
         "filename": name,
         "dataFile": {
@@ -48,7 +50,7 @@ def _entry(name, size):
     }
 
 
-def _thin(pid, draft=True):
+def _thin(pid: Any, draft: Any = True) -> Any:
     return {
         "persistent_id": pid,
         "title": f"Title {pid}",
@@ -64,7 +66,7 @@ def _thin(pid, draft=True):
 class _StubClient(DataverseClient):
     """DataverseClient with canned version docs (no network)."""
 
-    def __init__(self, docs):
+    def __init__(self, docs: Any) -> None:
         super().__init__("https://example.invalid", "token")
         self._docs = docs
 
@@ -75,7 +77,7 @@ class _StubClient(DataverseClient):
         return doc, ":draft", []
 
 
-def _http_error(status):
+def _http_error(status: Any) -> requests.HTTPError:
     resp = requests.Response()
     resp.status_code = status
     exc = requests.HTTPError(f"HTTP {status}")

@@ -6,10 +6,12 @@ and the log page's severity colours need a visible, non-hover legend
 whose chips use the highlighter's exact fills (WYSIWYG).
 """
 
+from typing import Any, cast
+
 import pytest
 from PySide6.QtWidgets import QLabel
 
-from curation.client import DownloadCancelled
+from curation.client import DataverseClient, DownloadCancelled
 from ui.workers import DownloadWorker
 
 
@@ -27,7 +29,7 @@ def det(win, qapp):
 
 
 class _FakeWorker:
-    def __init__(self):
+    def __init__(self) -> None:
         self.cancel_called = False
 
     def cancel(self):
@@ -54,7 +56,7 @@ def test_cancel_click_signals_worker_and_disables(det):
 
 
 def test_cancelled_handler_resets_action_row(det, monkeypatch):
-    logged: dict = {}
+    logged: dict[str, Any] = {}
 
     def _record(action, notes="", details=None):
         logged.update(action=action, notes=notes, details=details or {})
@@ -96,7 +98,7 @@ def test_worker_cancel_from_client_stream_emits_cancelled(qapp, tmp_path):
             return []
 
     hits = []
-    worker = DownloadWorker(_CancelClient(), tmp_path, "doi:10.5072/FK2/W1")
+    worker = DownloadWorker(cast(DataverseClient, _CancelClient()), tmp_path, "doi:10.5072/FK2/W1")
     worker.cancelled.connect(lambda: hits.append("cancelled"))
     worker.error.connect(lambda msg: hits.append("error"))
     worker.run()  # synchronous — no thread needed for the contract
@@ -109,7 +111,7 @@ def test_worker_cancel_before_start_never_touches_network(qapp, tmp_path):
             raise AssertionError("client touched after pre-run cancel")
 
     hits = []
-    worker = DownloadWorker(_NeverClient(), tmp_path, "doi:10.5072/FK2/W2")
+    worker = DownloadWorker(cast(DataverseClient, _NeverClient()), tmp_path, "doi:10.5072/FK2/W2")
     worker.cancelled.connect(lambda: hits.append("cancelled"))
     worker.error.connect(lambda msg: hits.append("error"))
     worker.cancel()  # pre-run: Python-side flag must still stop the run

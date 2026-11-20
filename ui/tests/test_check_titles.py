@@ -7,12 +7,13 @@ a check the same way and say what was found.
 
 import ast
 from pathlib import Path
+from typing import Any
 
 from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
 
 
-def _report(checks, path="CA-TP4-HH.csv"):
+def _report(checks: Any, path: Any = "CA-TP4-HH.csv"):
     return DatasetReport(
         persistent_id="doi:10.5072/FK2/EXAMPLE",
         label="Example",
@@ -21,7 +22,7 @@ def _report(checks, path="CA-TP4-HH.csv"):
     )
 
 
-def _tree(report, dispositions=None):
+def _tree(report: Any, dispositions: Any = None):
     from ui.checks_tree import build_tree_model
 
     rows = [(f.path, f.size_bytes, "CSV", "") for f in report.files]
@@ -216,7 +217,7 @@ class _Bare:
         return DatasetDetailView._finding_overflow_button(self, text)  # type: ignore[arg-type]
 
 
-def _auto_row(title, desc, passed, level, badge=None):
+def _auto_row(title: Any, desc: Any, passed: Any, level: Any, badge: Any = None):
     from ui.dataset import DatasetDetailView
 
     return DatasetDetailView._auto_row(_Bare(), title, desc, passed, level, badge)  # type: ignore[arg-type]

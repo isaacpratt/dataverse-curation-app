@@ -1,6 +1,6 @@
 """The dataset log card: the curator's own action trail for this dataset."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -9,6 +9,9 @@ from PySide6.QtWidgets import (
 )
 
 from ui.dataset.state import DetailState
+
+if TYPE_CHECKING:
+    from curation.storage import AppState
 from ui.i18n import t
 from ui.widgets import (
     add_info_tip,
@@ -43,7 +46,7 @@ class LogRail(DetailState):
         body.addWidget(self._dataset_log)
         return card
 
-    def _state(self):
+    def _state(self) -> "AppState | None":
         """Open the workspace state.db (best-effort; returns None on failure)."""
         try:
             from curation.storage import open_state
@@ -52,7 +55,9 @@ class LogRail(DetailState):
         except Exception:
             return None
 
-    def _log_action(self, action: str, notes: str = "", details: dict | None = None) -> None:
+    def _log_action(
+        self, action: str, notes: str = "", details: dict[str, Any] | None = None
+    ) -> None:
         st = None
         try:
             st = self._state()

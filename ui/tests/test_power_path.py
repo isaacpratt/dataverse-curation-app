@@ -9,18 +9,18 @@ the count.
 """
 
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 
 
-def _fv(value):
+def _fv(value: Any):
     return {"typeName": "text", "multiple": False, "typeClass": "primitive", "value": value}
 
 
-def _metadata() -> dict:
+def _metadata() -> dict[str, Any]:
     return {
         "latestVersion": {
             "license": {"name": "CC0 1.0"},
@@ -147,7 +147,7 @@ def test_run_button_tooltip_lists_the_chords(view):
     assert "Ctrl+Shift+O" in tip
 
 
-def _fake_datasets(n):
+def _fake_datasets(n: Any):
     return [
         {"persistent_id": f"doi:10.5072/FK2/T{i:04d}", "title": f"dataset {i}"} for i in range(n)
     ]
@@ -156,7 +156,7 @@ def _fake_datasets(n):
 class _FakeBulk:
     """Stand-in for BulkCheckWorker: records the jobs, never starts a thread."""
 
-    instances: ClassVar[list] = []
+    instances: ClassVar[list[Any]] = []
 
     def __init__(self, jobs, workspace, parent=None):
         from PySide6.QtCore import QObject, Signal

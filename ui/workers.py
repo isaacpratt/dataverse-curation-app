@@ -1,10 +1,18 @@
 """Background workers for network and engine tasks."""
 
+from __future__ import annotations
+
 import atexit
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QThread, Signal
+
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QWidget
+
+    from curation.client import DataverseClient
 
 from ui.i18n import t
 from ui.progress import (
@@ -25,7 +33,7 @@ _POOL_SIZE = 8
 # reopening a dataset skips the rescan. Token hash is included so a token
 # switch never reuses the prior user's inbox.
 _INBOX_TTL_S = 600.0
-_inbox_cache: dict = {}
+_inbox_cache: dict[tuple[str, str, str], tuple[float, list[dict[str, str]]]] = {}
 _inbox_lock = __import__("threading").Lock()
 
 # Every QThread the app starts is tracked here, so the process can stop
@@ -33,7 +41,7 @@ _inbox_lock = __import__("threading").Lock()
 # aborts the process (Qt prints "QThread: Destroyed while thread is
 # still running" and calls abort), which is reachable when the user
 # quits mid-scan and when an offscreen probe ends with a worker live.
-_LIVE_WORKERS: set = set()
+_LIVE_WORKERS: set[QThread] = set()
 
 
 def register_worker(worker: QThread) -> None:
@@ -77,7 +85,7 @@ def stop_all_workers(timeout_ms: int = 10000) -> None:
 atexit.register(stop_all_workers)
 
 
-def _inbox_key(base_url: str, pid: str, api_token: str) -> tuple:
+def _inbox_key(base_url: str, pid: str, api_token: str) -> tuple[str, str, str]:
     import hashlib
 
     try:
@@ -141,7 +149,13 @@ class CrawlWorker(QThread):
             attempted=attempted,
         )
 
-    def __init__(self, base_url: str, api_token: str, subtree: str, parent=None):
+    def __init__(
+        self,
+        base_url: str,
+        api_token: str,
+        subtree: str,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         register_worker(self)
         self._base_url = base_url
@@ -219,8 +233,8 @@ class CrawlWorker(QThread):
                 total_rows = len(datasets)
                 if total_rows:
                     self.progress.emit(t("workers.enriching", count=total_rows))
-                emitted: set = set()
-                pending_batch: list = []
+                emitted: set[str] = set()
+                pending_batch: list[dict[str, Any]] = []
 
                 def _on_enrich_progress(done: int, total: int) -> None:
                     try:
@@ -300,7 +314,7 @@ class CrawlWorker(QThread):
             total = len(datasets)
             in_review_n = 0
 
-            def _check_lock(ds: dict) -> tuple:
+            def _check_lock(ds: dict[str, Any]) -> tuple[dict[str, Any], bool]:
                 try:
                     flag = bool(client.dataset_in_review(ds.get("persistent_id", "")))
                 except Exception:
@@ -310,7 +324,7 @@ class CrawlWorker(QThread):
             from concurrent.futures import as_completed
 
             with ThreadPoolExecutor(max_workers=_POOL_SIZE) as pool:
-                futures = [pool.submit(_check_lock, ds) for ds in datasets]
+                futures: list[Any] = [pool.submit(_check_lock, ds) for ds in datasets]
                 # as_completed avoids head-of-line blocking: one stalled
                 # locks call no longer stalls all later results.
                 for done_n, fut in enumerate(as_completed(futures), start=1):
@@ -341,7 +355,7 @@ class CrawlWorker(QThread):
             # published/deaccessioned rows are never attempted.
             from curation.client import is_draft_dataset
 
-            labels: list = []
+            labels: list[str] = []
             report = None
             # Labels phase starts here; the fraction advances as the
             # per-dataset reads or the bulk report complete.
@@ -416,11 +430,13 @@ class CrawlWorker(QThread):
                     pass
             else:
 
-                def _read_status(ds: dict) -> tuple:
+                def _read_status(
+                    ds: dict[str, Any],
+                ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
                     # The refusal (if any) is kept: a curation status this
                     # account may not read is an expected answer, and the
                     # dashboard says so instead of showing an empty column.
-                    refusal: dict = {}
+                    refusal: dict[str, Any] = {}
                     try:
                         status = client.get_curation_status(
                             ds.get("persistent_id", ""), refusal=refusal
@@ -430,7 +446,7 @@ class CrawlWorker(QThread):
                     return ds, status or {}, refusal
 
                 # Drafts only — non-drafts have no readable curation status.
-                drafts: list = []
+                drafts: list[dict[str, Any]] = []
                 for ds in datasets:
                     if is_draft_dataset(ds):
                         drafts.append(ds)
@@ -564,12 +580,12 @@ class DownloadWorker(QThread):
 
     def __init__(
         self,
-        client,
+        client: DataverseClient,
         workspace: Path,
         persistent_id: str,
-        parent=None,
-        guestbook_response: dict | None = None,
-    ):
+        parent: QWidget | None = None,
+        guestbook_response: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(parent)
         register_worker(self)
         self._client = client
@@ -658,12 +674,12 @@ class CheckWorker(QThread):
         dataset_dir: Path,
         persistent_id: str,
         label: str,
-        inventory: list | None = None,
-        metadata: dict | None = None,
-        client=None,
-        ruleset: dict | None = None,
-        parent=None,
-    ):
+        inventory: list[dict[str, Any]] | None = None,
+        metadata: dict[str, Any] | None = None,
+        client: DataverseClient | None = None,
+        ruleset: dict[str, Any] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         register_worker(self)
         self._dataset_dir = dataset_dir
@@ -711,7 +727,7 @@ class CheckWorker(QThread):
             workers = max(1, min(8, (os.cpu_count() or 4)))
             # Variable metadata for tabular files (dv-tfy): best-effort DDI
             # fetch, capped so a large deposit never stalls the check pass.
-            variable_metadata: dict | None = None
+            variable_metadata: dict[str, Any] | None = None
             if self._client is not None and isinstance(self._inventory, list):
                 variable_metadata = {}
                 tabular = [
@@ -775,7 +791,12 @@ class BulkCheckWorker(QThread):
     cancelled = Signal()
     error = Signal(str)
 
-    def __init__(self, jobs: list, workspace, parent=None):
+    def __init__(
+        self,
+        jobs: list[tuple[Any, Any]],
+        workspace: Path | str,
+        parent: QWidget | None = None,
+    ) -> None:
         """jobs: list of (persistent_id, title) in paint order."""
         super().__init__(parent)
         register_worker(self)
@@ -857,7 +878,13 @@ class MetadataBlocksWorker(QThread):
     finished = Signal(list)
     error = Signal(str)
 
-    def __init__(self, base_url: str, api_token: str, workspace, parent=None):
+    def __init__(
+        self,
+        base_url: str,
+        api_token: str,
+        workspace: Path,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         register_worker(self)
         self._base_url = base_url
@@ -905,10 +932,10 @@ class MetadataWorker(QThread):
         base_url: str,
         api_token: str,
         persistent_id: str,
-        parent=None,
+        parent: QWidget | None = None,
         collection: str = "",
         draft_hint: bool | None = None,
-    ):
+    ) -> None:
         super().__init__(parent)
         register_worker(self)
         self._base_url = base_url
@@ -954,16 +981,16 @@ class MetadataWorker(QThread):
             client = DataverseClient(self._base_url, self._api_token)
 
             # Parallel independent fetches (was serial sum of 8x RTT).
-            refusals: dict = {}
+            refusals: dict[str, Any] = {}
 
-            def _fetch(name: str):  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+            def _fetch(name: str) -> tuple[str, Any]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
                 try:
                     if name == "metadata":
                         return ("metadata", client.get_dataset_metadata(self._pid))
                     if name == "inventory":
                         return ("inventory", client.get_file_inventory(self._pid))
                     if name == "curation":
-                        refusal: dict = {}
+                        refusal: dict[str, Any] = {}
                         status = client.get_curation_status(self._pid, refusal=refusal)
                         if refusal:
                             refusals["curation"] = refusal
@@ -1005,7 +1032,7 @@ class MetadataWorker(QThread):
                     return (name, None)
                 return (name, None)
 
-            results: dict = {}
+            results: dict[str, Any] = {}
             names = self._fetch_names()
             with ThreadPoolExecutor(max_workers=5) as pool:
                 futures = {pool.submit(_fetch, n): n for n in names}

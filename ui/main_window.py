@@ -11,13 +11,33 @@ bar's repository badge always shows the chosen Dataverse (base URL +
 collection alias).
 """
 
+from __future__ import annotations
+
 # ctypes at module level: only struct *layouts* live here (no handles), so
 # this is safe on every platform; all real Win32 calls stay Windows-gated.
 import ctypes
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
-from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
+from PySide6.QtCore import (
+    QEvent,
+    QObject,
+    QPoint,
+    QSize,
+    Qt,
+    QTimer,
+)
+from PySide6.QtGui import (
+    QCloseEvent,
+    QColor,
+    QEnterEvent,
+    QIcon,
+    QKeySequence,
+    QMouseEvent,
+    QPainter,
+    QPixmap,
+    QShortcut,
+    QShowEvent,
+)
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -54,8 +74,11 @@ from ui.theme import (
 )
 from ui.widgets import AppButton, make_caption_label, make_split_chip
 
+if TYPE_CHECKING:
+    from ui.settings_dialog import SettingsPane
 
-def _declare_dwm_signatures(dwmapi, margins_type) -> None:
+
+def _declare_dwm_signatures(dwmapi: Any, margins_type: Any) -> None:
     """Declare ctypes signatures for the DWM calls (Windows-only helper).
 
     Without argtypes ctypes coerces every argument to 32-bit int, silently
@@ -159,7 +182,7 @@ _SW_SHOWMAXIMIZED = 3
 _MONITOR_DEFAULTTONEAREST = 2
 
 
-def _user32():
+def _user32() -> Any:
     """user32 with the signatures this module needs, configured once."""
     import ctypes
     from ctypes import wintypes
@@ -177,7 +200,7 @@ def _user32():
     return handle
 
 
-def _work_area_for_hwnd(hwnd: int):
+def _work_area_for_hwnd(hwnd: int) -> tuple[int, int, int, int] | None:
     """Work area (taskbar-excluded) of the monitor holding hwnd.
 
     Returns (left, top, right, bottom) or None when it cannot be
@@ -204,7 +227,7 @@ def _work_area_for_hwnd(hwnd: int):
         return None
 
 
-def _maximized_client_rect(hwnd: int):
+def _maximized_client_rect(hwnd: int) -> tuple[int, int, int, int] | None:
     """Client rect to enforce while maximized, else None.
 
     Caption-style windows overscan the screen edges when maximized (to
@@ -380,19 +403,19 @@ class _CaptionButton(QPushButton):
             pass
         self._apply_icon()
 
-    def enterEvent(self, event) -> None:
+    def enterEvent(self, event: QEnterEvent) -> None:
         super().enterEvent(event)
         self.set_hovered(True)
 
-    def leaveEvent(self, event) -> None:
+    def leaveEvent(self, event: QEvent) -> None:
         super().leaveEvent(event)
         self.set_hovered(False)
 
-    def mousePressEvent(self, event) -> None:
+    def mousePressEvent(self, event: QMouseEvent) -> None:
         super().mousePressEvent(event)
         self._apply_icon()
 
-    def mouseReleaseEvent(self, event) -> None:
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         super().mouseReleaseEvent(event)
         self._apply_icon()
 
@@ -401,7 +424,7 @@ class MainWindow(QMainWindow):
     def __init__(self, config: Config) -> None:
         super().__init__()
         self._config = config
-        self._metadata_cache: dict[str, tuple[dict, list]] = {}
+        self._metadata_cache: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
         self._open_pids: list[tuple[str, str]] = []
         self.setWindowTitle(t("main.window_title"))
         # Window-level icon so the Windows taskbar always shows the 16x16
@@ -430,7 +453,7 @@ class MainWindow(QMainWindow):
         # (WS_POPUP, no caption) gets NO DWM shadow even with an extended
         # glass frame, which is how the border/shadow went missing before.
         self.setWindowFlags(Qt.WindowType.Window)
-        self._drag_pos = None
+        self._drag_pos: QPoint | None = None
         self._border_width = 8
         # Native handle cache for use inside nativeEvent: NEVER call winId()
         # from a WindowProc callback — forcing native creation there re-enters
@@ -639,7 +662,7 @@ class MainWindow(QMainWindow):
     # -- status / repo badge -------------------------------------------
 
     @staticmethod
-    def _wrap_pane_page(pane) -> QWidget:
+    def _wrap_pane_page(pane: QWidget) -> QWidget:
         """Scroll-wrapped stack page for a tall pane.
 
         The scroll area (not the pane) joins the stack, so the page's
@@ -660,7 +683,7 @@ class MainWindow(QMainWindow):
     # construction path is what lets the window appear before the heavy
     # widgets exist.
 
-    def _ensure_settings(self):
+    def _ensure_settings(self) -> SettingsPane:
         """Build the Settings pane on first use and return it."""
         if self._settings is None:
             from ui.settings_dialog import SettingsPane
@@ -671,9 +694,9 @@ class MainWindow(QMainWindow):
             # Scroll-wrapped: tall panes scroll in place, never grow the window.
             self._settings_page = self._wrap_pane_page(self._settings)
             self._stack.addWidget(self._settings_page)
-        return self._settings
+        return cast("SettingsPane", self._settings)
 
-    def _ensure_about(self):
+    def _ensure_about(self) -> QWidget:
         """Build the About pane on first use and return it."""
         if self._about is None:
             from ui.about_pane import AboutPane
@@ -682,9 +705,9 @@ class MainWindow(QMainWindow):
             self._about.discarded.connect(lambda: self._show_pane(None))
             self._about_page = self._wrap_pane_page(self._about)
             self._stack.addWidget(self._about_page)
-        return self._about
+        return cast(QWidget, self._about)
 
-    def _ensure_help(self):
+    def _ensure_help(self) -> QWidget:
         """Build the Help page on first use and return it."""
         if self._help is None:
             from ui.help_page import HelpPane
@@ -692,16 +715,16 @@ class MainWindow(QMainWindow):
             self._help = HelpPane(self)
             self._help_page = self._wrap_pane_page(self._help)
             self._stack.addWidget(self._help_page)
-        return self._help
+        return cast(QWidget, self._help)
 
-    def _ensure_log(self):
+    def _ensure_log(self) -> QWidget:
         """Build the full-page log view on first use and return it."""
         if self._log_page is None:
             from ui.log_panel import LogPage
 
             self._log_page = LogPage(self)
             self._stack.addWidget(self._log_page)
-        return self._log_page
+        return cast(QWidget, self._log_page)
 
     def start_background_load(self) -> None:
         """Paint the cached dashboard, then start the first crawl.
@@ -737,13 +760,13 @@ class MainWindow(QMainWindow):
             return "detail"
         return "dashboard"
 
-    def _role_widget(self, role) -> QWidget:
+    def _role_widget(self, role: str | None) -> QWidget:
         """Stack widget for a content role (dashboard fallback, never raises)."""
         try:
             if role == "review" and getattr(self, "_review_config", None) is not None:
-                return self._review_config
+                return cast(QWidget, self._review_config)
             if role == "detail" and self._detail is not None:
-                return self._detail
+                return cast(QWidget, self._detail)
         except Exception:
             pass
         return self._dashboard
@@ -784,7 +807,7 @@ class MainWindow(QMainWindow):
                     pass
         self._sync_nav_icons()
 
-    def _set_nav_icon(self, btn, name: str, active: bool) -> None:
+    def _set_nav_icon(self, btn: QPushButton, name: str, active: bool) -> None:
         """Lucide glyph for a nav button, tinted to its active state."""
         try:
             color = TEXT_ON_SECONDARY if active else TEXT_MUTED
@@ -824,7 +847,7 @@ class MainWindow(QMainWindow):
         except Exception:
             return True
 
-    def _show_pane(self, name) -> bool:
+    def _show_pane(self, name: str | None) -> bool:
         """Show one pane exclusively (settings/about/help) or switch to log page.
 
         Returns False when a dirty Settings pane cancelled the switch.
@@ -920,7 +943,9 @@ class MainWindow(QMainWindow):
     def _on_settings_saved(self) -> None:
         self._show_pane(None)
 
-    def _open_dataset(self, persistent_id: str, title: str, row: dict | None = None) -> None:
+    def _open_dataset(
+        self, persistent_id: str, title: str, row: dict[str, Any] | None = None
+    ) -> None:
         # A dirty Settings pane must be resolved before the stack switches.
         if not self._can_leave_settings():
             self._refresh_nav_state()
@@ -1010,20 +1035,29 @@ class MainWindow(QMainWindow):
             # Each chip has an x-icon button to close that dataset.
             label = (title or pid).strip() or pid
             is_active = active_pid is not None and pid == active_pid
+
             # The chip is two halves of one control: the label opens the
             # dataset, the x closes it. The kit owns that shape.
+            # Explicit functions (not lambdas) so mypy can type the defaulted
+            # parameters that bind this chip's pid/title.
+            def _open(_c: bool = False, p: str = pid, title_: str = title) -> None:
+                self._open_dataset(p, title_)
+
+            def _close(_c: bool = False, p: str = pid) -> None:
+                self._close_dataset(p)
+
             chip = make_split_chip(
                 label,
                 active=is_active,
                 tip=t("main.chip_open", label=label, pid=pid),
                 close_tip=t("main.chip_close", label=label),
-                on_open=lambda _c=False, p=pid, t=title: self._open_dataset(p, t),
-                on_close=lambda _c=False, p=pid: self._close_dataset(p),
+                on_open=_open,
+                on_close=_close,
             )
             self._chips_lay.addWidget(chip)
         self._chips_lay.addStretch()
 
-    def closeEvent(self, event) -> None:
+    def closeEvent(self, event: QCloseEvent) -> None:
         # Do not lose unsaved Settings edits on window close.
         if not self._can_leave_settings():
             event.ignore()
@@ -1036,7 +1070,7 @@ class MainWindow(QMainWindow):
             self._dashboard.stop()
         except Exception:
             pass
-        workers: list = []
+        workers: list[Any] = []
         try:
             if self._detail is not None:
                 workers.extend(self._detail.take_running_workers())
@@ -1060,11 +1094,11 @@ class MainWindow(QMainWindow):
                 pass
         super().closeEvent(event)
 
-    def _adopt_running_workers(self, view) -> None:
+    def _adopt_running_workers(self, view: Any) -> None:
         """Reparent live workers so destroying their view cannot kill a QThread."""
         try:
             if not hasattr(self, "_adopted_workers"):
-                self._adopted_workers: list = []
+                self._adopted_workers: list[Any] = []
             for worker in view.take_running_workers():
                 worker.setParent(self)
                 self._adopted_workers.append(worker)
@@ -1079,7 +1113,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _forget_worker(self, worker) -> None:
+    def _forget_worker(self, worker: Any) -> None:
         try:
             tracked = getattr(self, "_adopted_workers", [])
             if worker in tracked:
@@ -1124,7 +1158,9 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _cache_metadata(self, pid: str, metadata: dict, inventory: list) -> None:
+    def _cache_metadata(
+        self, pid: str, metadata: dict[str, Any], inventory: list[dict[str, Any]]
+    ) -> None:
         self._metadata_cache[pid] = (metadata, inventory)
 
     def _show_dashboard(self) -> None:
@@ -1168,7 +1204,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def changeEvent(self, event) -> None:
+    def changeEvent(self, event: QEvent) -> None:
         try:
             super().changeEvent(event)
         except Exception:
@@ -1181,7 +1217,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def showEvent(self, event) -> None:
+    def showEvent(self, event: QShowEvent) -> None:
         # Re-assert the cloak before the first map (normally set in __init__
         # already): a cloaked window is never composited, so neither an empty
         # client nor a transient native caption can flash on screen.
@@ -1357,7 +1393,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _topnav_is_interactive(self, topnav_pos) -> bool:
+    def _topnav_is_interactive(self, topnav_pos: QPoint) -> bool:
         """Check whether the TopNav point sits on a clickable control."""
         try:
             for btn in self._topnav.findChildren(QPushButton):
@@ -1374,13 +1410,14 @@ class MainWindow(QMainWindow):
             pass
         return False
 
-    def eventFilter(self, obj, event):
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         # Fallback drag for platforms without nativeEvent (non-Windows).
         # Windows uses HTCAPTION in nativeEvent, so this is a no-op there.
         try:
             import sys as _sys
 
             if obj is self._topnav and not _sys.platform.startswith("win"):
+                event = cast(QMouseEvent, event)
                 etype = event.type()
                 if (
                     etype == QEvent.Type.MouseButtonPress
@@ -1415,7 +1452,9 @@ class MainWindow(QMainWindow):
         except Exception:
             return False
 
-    def nativeEvent(self, event_type, message):  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    def nativeEvent(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+        self, event_type: Any, message: int
+    ) -> object:
         """Custom-frame handling on Windows.
 
         WM_NCCALCSIZE strips the native caption/borders (whole window becomes

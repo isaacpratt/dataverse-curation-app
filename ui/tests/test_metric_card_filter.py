@@ -1,11 +1,13 @@
 """Dashboard metric cards: hover affordance, no tooltip, whole-chip click (dv-1k4)."""
 
+from typing import Any
+
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QLabel
 
 
-def _mval(card):
+def _mval(card: Any):
     # The value label carries its theme token as its object name
     # (DisplayLG / StateMD), so it is found by type, not by a fixed name.
     labels = [
@@ -30,7 +32,7 @@ def test_metric_card_children_are_mouse_transparent(win):
             )
 
 
-def _labelled_rows():
+def _labelled_rows() -> Any:
     return [
         {"title": "a", "persistent_id": "p1", "state": "RELEASED", "curation_label": "In Review"},
         {"title": "b", "persistent_id": "p2", "state": "DRAFT"},

@@ -8,6 +8,7 @@ to the dataset list and never to a file entry.
 """
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -58,7 +59,7 @@ def test_the_registry_refuses_a_check_without_a_scope():
             return []
 
     stub = type("_Stub", (), {"_Undecided": _Undecided})
-    target: dict = {}
+    target: dict[str, Any] = {}
     with pytest.raises(TypeError, match="must declare scope"):
         register_checks(stub, target)
     assert "test.no_scope" not in target, "the half-built registry is untouched"

@@ -13,6 +13,7 @@ editing".
 """
 
 import copy
+from typing import Any
 
 from PySide6.QtWidgets import QComboBox
 
@@ -37,13 +38,13 @@ def _review(win, qapp, width: int = 1440, height: int = 900):
     return rc
 
 
-def _first_row(rc):
+def _first_row(rc: Any):
     for item in rc._iter_rows():
         return item
     raise AssertionError("the rules table has no field row")
 
 
-def _cells(rc, item):
+def _cells(rc: Any, item: Any):
     """(level combo, check combo) of one row, through their cell hosts."""
     return rc._cell_combo(item, LEVEL_COLUMN), rc._cell_combo(item, CHECK_COLUMN)
 
@@ -110,7 +111,7 @@ def test_the_table_fits_without_a_horizontal_scrollbar(win, qapp):
 # -- what each dropdown writes ----------------------------------------------
 
 
-def _with_field_row(win, qapp, field="dateOfDeposit"):
+def _with_field_row(win: Any, qapp: Any, field: Any = "dateOfDeposit"):
     """Select a schema field with no rule yet (an 'unchecked' row)."""
     rc = _review(win, qapp)
     rs = rc._current_ruleset()
@@ -129,7 +130,7 @@ def _with_field_row(win, qapp, field="dateOfDeposit"):
     raise AssertionError(f"no row for citation.{field}")
 
 
-def _restore(rc, snapshot):
+def _restore(rc: Any, snapshot: Any):
     rc._current_ruleset()["field_rules"] = snapshot
     rc._refresh_field_table()
     rc._sel_kind, rc._sel_key = "field", ""

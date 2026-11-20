@@ -6,10 +6,12 @@ Metadata Field Rules and Content-based Rules — with their own titles,
 (i) tips and summaries; the tools row follows the field card's name.
 """
 
+from typing import Any
+
 from PySide6.QtWidgets import QFrame, QLabel
 
 
-def _card_of(widget):
+def _card_of(widget: Any):
     node = widget
     while node is not None and node.objectName() != "Card":
         node = node.parentWidget()

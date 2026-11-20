@@ -24,12 +24,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import QModelIndex, QTimer, Signal
 from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -223,7 +224,7 @@ class DetailState(QWidget):
     _dispositions_cache: dict[Any, Any]
     # Test fixtures poke these onto the view (see ui/tests); declared so
     # mypy accepts the pattern without weakening the shape checks.
-    _logged: list[tuple]
+    _logged: list[tuple[Any, ...]]
     _status_msgs: list[str]
     _statuses: Any
     _jumps: Any
@@ -265,15 +266,15 @@ class DetailState(QWidget):
     # ------------------------------------------------------------------
 
     # -- the facade (ui/dataset/page.py) -----------------------------------
-    def _layout_for(self, name: str, header) -> TableLayout:
+    def _layout_for(self, name: str, header: QHeaderView) -> TableLayout:
         """Return the persisted-layout controller for a table header."""
         raise NotImplementedError
 
-    def _track_table_widths(self, name: str, header) -> None:
+    def _track_table_widths(self, name: str, header: QHeaderView) -> None:
         """Remember the widths a table header settled on."""
         raise NotImplementedError
 
-    def _reset_table_view(self, name: str, header) -> bool:
+    def _reset_table_view(self, name: str, header: QHeaderView) -> bool:
         """Put a table header back to its fitted defaults."""
         raise NotImplementedError
 
@@ -308,7 +309,7 @@ class DetailState(QWidget):
         raise NotImplementedError
 
     # -- the metadata card (ui/dataset/metadata_section.py) -----------------
-    def _populate_completeness(self, metadata: dict) -> None:
+    def _populate_completeness(self, metadata: dict[str, Any]) -> None:
         """Show the completeness results for the given metadata."""
         raise NotImplementedError
 
@@ -331,7 +332,7 @@ class DetailState(QWidget):
         """Build the row that shows one check result."""
         raise NotImplementedError
 
-    def _on_tree_clicked(self, index) -> None:
+    def _on_tree_clicked(self, index: QModelIndex) -> None:
         """Show the detail of the check row the curator clicked."""
         raise NotImplementedError
 
@@ -354,7 +355,9 @@ class DetailState(QWidget):
         raise NotImplementedError
 
     # -- the dataset log card (ui/dataset/log_rail.py) ---------------------
-    def _log_action(self, action: str, notes: str = "", details: dict | None = None) -> None:
+    def _log_action(
+        self, action: str, notes: str = "", details: dict[str, Any] | None = None
+    ) -> None:
         """Record one action in the dataset's own log."""
         raise NotImplementedError
 
@@ -402,7 +405,7 @@ class DetailState(QWidget):
         """Build the sensitivity (ethics) review card."""
         raise NotImplementedError
 
-    def _dispositions_map(self) -> dict:
+    def _dispositions_map(self) -> dict[str, Any]:
         """Return the finding dispositions already recorded for the pid."""
         raise NotImplementedError
 
@@ -451,7 +454,7 @@ class DetailState(QWidget):
         raise NotImplementedError
 
     # -- the header (ui/dataset/header_section.py) -------------------------
-    def _update_header_link(self, metadata: dict | None = None) -> None:
+    def _update_header_link(self, metadata: dict[str, Any] | None = None) -> None:
         """Point the title link at the dataset's landing page."""
         raise NotImplementedError
 

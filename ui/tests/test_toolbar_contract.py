@@ -6,6 +6,8 @@ real: the File Manifest's Open folder / Expand all and the queue's
 Columns / Refresh had drifted back into the title row.
 """
 
+from typing import Any, cast
+
 import pytest
 from PySide6.QtWidgets import (
     QAbstractButton,
@@ -18,7 +20,7 @@ from PySide6.QtWidgets import (
 from ui.i18n import t
 
 
-def _pump(qapp, times=15):
+def _pump(qapp: Any, times: int = 15) -> None:
     for _ in range(times):
         qapp.processEvents()
 
@@ -30,13 +32,13 @@ def _layout_holds(layout, widget) -> bool:
 def _title_row(card) -> QHBoxLayout:
     bar = card.findChild(QFrame, "CardTopBar")
     assert bar is not None, "card has no top bar"
-    return bar.layout()
+    return cast(QHBoxLayout, bar.layout())
 
 
 def _tools_row(card, name: str) -> QWidget:
     tools = card.findChild(QWidget, name)
     assert tools is not None, f"{name} row missing"
-    return tools
+    return cast(QWidget, tools)
 
 
 def _buttons_in(layout) -> list[QAbstractButton]:

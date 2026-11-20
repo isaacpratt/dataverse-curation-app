@@ -1,6 +1,7 @@
 """The page header: the title link, the status pill, the ring and the curation preview."""
 
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -46,7 +47,7 @@ from ui.widgets import (
 class HeaderSection(DetailState):
     """The page header: the title link, the status pill, the ring and the curation preview."""
 
-    def _update_header_link(self, metadata: dict | None = None) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    def _update_header_link(self, metadata: dict[str, Any] | None = None) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         # Defensive: runs mid-__init__ before all header widgets exist, and
         # again on every metadata load (cached metadata makes `meta` truthy
         # on the very first call — see the reopen crash this guards).

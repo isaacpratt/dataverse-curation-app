@@ -1,8 +1,9 @@
 """The Auto-Checks card: running the checks and reading the result tree."""
 
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, cast
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QModelIndex, QPoint, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -52,6 +53,9 @@ from ui.widgets import (
 )
 from ui.workers import CheckWorker
 
+if TYPE_CHECKING:
+    from engine.report import DatasetReport
+
 
 class ChecksSection(DetailState):
     """The Auto-Checks card: running the checks and reading the result tree."""
@@ -89,7 +93,7 @@ class ChecksSection(DetailState):
         self._auto_filter.currentIndexChanged.connect(self._apply_auto_filter)
         tools_lay.addWidget(self._auto_filter)
         tools_lay.addStretch(1)
-        card.layout().insertWidget(1, auto_tools)
+        cast(QVBoxLayout, card.layout()).insertWidget(1, auto_tools)
         # Body: scroll of checks (factory body reused directly)
         self._auto_body = _body_host
         self._auto_body.setContentsMargins(16, 12, 16, 12)
@@ -116,7 +120,7 @@ class ChecksSection(DetailState):
                 rows.append(widget)
         return rows
 
-    def _apply_auto_filter(self, *_args) -> None:
+    def _apply_auto_filter(self, *_args: Any) -> None:
         """Show only the rows of the chosen severity class (dv-bph, W2).
 
         Every row carries an ``auto_class`` property when it is built
@@ -253,7 +257,7 @@ class ChecksSection(DetailState):
             note = str(current.get("note") or "")
             combo = make_disposition_combo(
                 token,
-                on_change=lambda tok, k=disposition_key: self._on_disposition_changed(k, tok),
+                on_change=lambda tok: self._on_disposition_changed(disposition_key, tok),
             )
             lay.addWidget(combo)
             note_btn = make_action_button(
@@ -261,9 +265,11 @@ class ChecksSection(DetailState):
             )
             if note:
                 note_btn.setToolTip(note)
-            note_btn.clicked.connect(
-                lambda _c=False, k=disposition_key: self._on_edit_disposition_note(k)
-            )
+
+            def _on_note_clicked(_c: bool = False, k: str = disposition_key) -> None:
+                self._on_edit_disposition_note(k)
+
+            note_btn.clicked.connect(_on_note_clicked)
             lay.addWidget(note_btn)
         badge_lbl = make_badge(
             badge_text,
@@ -286,7 +292,7 @@ class ChecksSection(DetailState):
         """Return the fixed cache path inside the dataset's curation workspace folder."""
         return self._dl_mgr.dataset_dir(self._pid) / "checks-report.json"
 
-    def _load_cached_report(self):
+    def _load_cached_report(self) -> "DatasetReport | None":
         """Last auto-saved checks report for this dataset, or None."""
         try:
             path = self._cached_report_path()
@@ -357,7 +363,7 @@ class ChecksSection(DetailState):
         self._checks_cancel_btn.setEnabled(True)
         self._set_status(t("detail.status.checks_cancelled"))
 
-    def _on_checks_finished(self, report) -> None:
+    def _on_checks_finished(self, report: Any) -> None:
         from engine.status import summarize
 
         self._check_worker = None
@@ -448,7 +454,7 @@ class ChecksSection(DetailState):
             self, t("detail.checks.title"), headline, details=details, retry=self._on_run_checks
         )
 
-    def _on_tree_clicked(self, index) -> None:
+    def _on_tree_clicked(self, index: QModelIndex) -> None:
         try:
             from ui.checks_tree import node_kind
         except Exception:
@@ -513,14 +519,14 @@ class ChecksSection(DetailState):
         else:
             return
 
-    def _build_copy_menu(self, text: str):
+    def _build_copy_menu(self, text: str) -> QMenu:
         """Build the one-item copy menu for a finding row (dv-18z)."""
         from PySide6.QtWidgets import QApplication, QMenu
 
         menu = QMenu(self)
         action = menu.addAction(t("detail.copy_finding.action"))
 
-        def _copy():
+        def _copy() -> None:
             QApplication.clipboard().setText(text)
             try:
                 self._set_status(t("detail.copy_finding.copied"), tone="success")
@@ -530,10 +536,10 @@ class ChecksSection(DetailState):
         action.triggered.connect(_copy)
         return menu
 
-    def _show_copy_menu(self, btn, text: str) -> None:
+    def _show_copy_menu(self, btn: QWidget, text: str) -> None:
         self._build_copy_menu(text).exec(btn.mapToGlobal(btn.rect().bottomLeft()))
 
-    def _finding_overflow_button(self, text: str):
+    def _finding_overflow_button(self, text: str) -> QWidget:
         """⋯ ghost button opening the copy-this-finding menu (dv-18z).
 
         One item, one job: copy a single line a curator can paste into a
@@ -545,14 +551,14 @@ class ChecksSection(DetailState):
             accessible_name=t("detail.copy_finding.action"),
         )
         btn.clicked.connect(lambda _c=False, b=btn, s=text: self._show_copy_menu(b, s))
-        return btn
+        return cast(QWidget, btn)
 
-    def _dispositions_map(self) -> dict:
+    def _dispositions_map(self) -> dict[str, Any]:
         """{finding_key: {disposition, note}} for this dataset (cached)."""
         cached = getattr(self, "_dispositions_cache", None)
         if isinstance(cached, dict):
             return cached
-        out: dict = {}
+        out: dict[str, Any] = {}
         try:
             st = self._state()
             if st is not None:
@@ -620,7 +626,7 @@ class ChecksSection(DetailState):
         if ok:
             self._set_disposition(key, token, text, refresh=True)
 
-    def _show_disposition_menu(self, key: str, global_pos) -> None:
+    def _show_disposition_menu(self, key: str, global_pos: QPoint) -> None:
         """Right-click menu for one finding: mark, note, or clear."""
         current = str(self._dispositions_map().get(key, {}).get("disposition") or "")
         menu = QMenu(self)
@@ -638,7 +644,7 @@ class ChecksSection(DetailState):
         clear_action.triggered.connect(lambda: self._set_disposition(key, "", refresh=True))
         menu.exec(global_pos)
 
-    def _on_file_context_menu(self, pos) -> None:
+    def _on_file_context_menu(self, pos: QPoint) -> None:
         """Disposition menu for one check node in the file manifest tree."""
         tree = self._file_tree
         index = tree.indexAt(pos)

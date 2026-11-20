@@ -5,13 +5,18 @@ pages, the scrolling main column and the sticky sidebar) and nothing
 else; every section's behaviour lives in its own module next door.
 """
 
+from typing import Any, cast
+
 from PySide6.QtCore import (
+    QSize,
     Qt,
     QTimer,
 )
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QScrollArea,
     QVBoxLayout,
@@ -84,7 +89,7 @@ class DatasetDetailView(
 
     _SIDEBAR_COLLAPSE_BELOW = 1100
 
-    def minimumSizeHint(self):
+    def minimumSizeHint(self) -> QSize:
         """Never let the stacked layout force-grow the main window.
 
         QStackedWidget's minimum is the max over ALL pages — the tall
@@ -92,13 +97,9 @@ class DatasetDetailView(
         window the first time a dataset opens. Every page scrolls its own
         content, so a modest floor is safe.
         """
-        from PySide6.QtCore import QSize
-
         return QSize(720, 480)
 
-    def sizeHint(self):
-        from PySide6.QtCore import QSize
-
+    def sizeHint(self) -> QSize:
         return QSize(1200, 760)
 
     def __init__(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
@@ -106,9 +107,9 @@ class DatasetDetailView(
         config: Config,
         persistent_id: str,
         title: str,
-        cached_metadata: dict | None = None,
-        cached_inventory: list | None = None,
-        dataset_hint: dict | None = None,
+        cached_metadata: dict[str, Any] | None = None,
+        cached_inventory: list[dict[str, Any]] | None = None,
+        dataset_hint: dict[str, Any] | None = None,
     ) -> None:
         super().__init__()
         self._config = config
@@ -117,23 +118,23 @@ class DatasetDetailView(
         # What the dashboard already knew about this dataset (the search
         # payload's state and access facts). It saves the detail view from
         # asking for versions that cannot exist.
-        self._dataset_hint: dict = dataset_hint if isinstance(dataset_hint, dict) else {}
+        self._dataset_hint: dict[str, Any] = dataset_hint if isinstance(dataset_hint, dict) else {}
         self._report = None
-        self._inventory: list[dict] = cached_inventory or []
+        self._inventory: list[dict[str, Any]] = cached_inventory or []
         # One declaration for the file-row table (path, size, ext, path);
         # it is filled by _populate_from_inventory and the staged scan.
         self._all_file_rows: list[tuple[str, int, str, str]] = []
-        self._metadata: dict | None = cached_metadata
-        self._guestbook: dict | None = None
-        self._account: dict = {}
-        self._curation: dict = {}
-        self._version_diff: dict | None = None
-        self._versions: list = []
-        self._timestamps: dict = {}
+        self._metadata: dict[str, Any] | None = cached_metadata
+        self._guestbook: dict[str, Any] | None = None
+        self._account: dict[str, Any] = {}
+        self._curation: dict[str, Any] = {}
+        self._version_diff: dict[str, Any] | None = None
+        self._versions: list[Any] = []
+        self._timestamps: dict[str, Any] = {}
         # Open depositor follow-up for this dataset (dv-5eg), refreshed from
         # storage on load and after a decision commits; None when closed.
-        self._follow_up: dict | None = None
-        self._review_submissions: list = []
+        self._follow_up: dict[str, Any] | None = None
+        self._review_submissions: list[Any] = []
         self._in_review: bool = False
         self._profile = DEFAULT_PROFILE
         # Workflow-rail state (all cheap flags/counts; the rail never stats
@@ -149,9 +150,9 @@ class DatasetDetailView(
         self._meta_worker: MetadataWorker | None = None
         # Response pane state: full rule results (with rule_id/level/pending),
         # assembled sections, and whether the draft has manual edits.
-        self._completeness_full: list = []
-        self._ruleset: dict = {}
-        self._response_sections: list = []
+        self._completeness_full: list[Any] = []
+        self._ruleset: dict[str, Any] = {}
+        self._response_sections: list[Any] = []
         self._response_dirty = False
         self._response_loading = False
         self._response_save_timer: QTimer | None = None
@@ -164,7 +165,7 @@ class DatasetDetailView(
         self._auto_load_timer.setSingleShot(True)
         self._auto_load_timer.timeout.connect(self._on_load_metadata)
         # Sensitivity & ethics review (dv-3c2): answers load with the card.
-        self._sensitivity_answers: dict = {}
+        self._sensitivity_answers: dict[str, Any] = {}
 
         self._client = DataverseClient(config.dataverse.base_url, config.dataverse.api_token)
         self._dl_mgr = DownloadManager(self._client, config.app.workspace)
@@ -604,11 +605,11 @@ class DatasetDetailView(
 
         self._install_shortcuts()
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._sync_sidebar()
 
-    def _layout_for(self, name: str, header) -> "TableLayout":
+    def _layout_for(self, name: str, header: QHeaderView) -> "TableLayout":
         """Return the persisted-layout controller for a header (one per header).
 
         TableLayout owns the save/restore/reset contract: it persists
@@ -629,7 +630,7 @@ class DatasetDetailView(
             layouts[name] = layout
         return layout
 
-    def _track_table_widths(self, name: str, header) -> None:
+    def _track_table_widths(self, name: str, header: QHeaderView) -> None:
         """Restore the saved layout for a header, then keep it up to date.
 
         The controller saves on column resize, column move and sort
@@ -640,13 +641,13 @@ class DatasetDetailView(
         try:
             layout = self._layout_for(name, header)
             if layout.restore():
-                tbl = header.parent()
+                tbl = cast(Any, header.parent())
                 if hasattr(tbl, "disable_auto_fit"):
                     tbl.disable_auto_fit()
         except Exception:
             pass
 
-    def _reset_table_view(self, name: str, header) -> bool:
+    def _reset_table_view(self, name: str, header: QHeaderView) -> bool:
         """Reset a tracked table to its construction view.
 
         Restores widths/order/visibility/sort. Clears the persisted entry
@@ -656,7 +657,7 @@ class DatasetDetailView(
         try:
             layout = self._layout_for(name, header)
             ok = layout.reset()
-            tbl = header.parent()
+            tbl = cast(Any, header.parent())
             if hasattr(tbl, "enable_auto_fit"):
                 tbl.enable_auto_fit()
             return ok
@@ -747,7 +748,7 @@ class DatasetDetailView(
         except Exception:
             pass
 
-    def take_running_workers(self) -> list:
+    def take_running_workers(self) -> list[Any]:
         """QThreads still running (for the owner to adopt before teardown)."""
         out = []
         for attr in ("_meta_worker", "_dl_worker", "_check_worker"):
@@ -768,7 +769,7 @@ class DatasetDetailView(
         """
         from PySide6.QtGui import QKeySequence, QShortcut
 
-        def _sc(seq: str, handler):
+        def _sc(seq: str, handler: Any) -> QShortcut:
             sc = QShortcut(
                 QKeySequence(seq, QKeySequence.SequenceFormat.PortableText), self, handler
             )

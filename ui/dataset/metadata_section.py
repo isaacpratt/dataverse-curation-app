@@ -1,8 +1,8 @@
 """The Metadata card: the profile picker, the metadata tree and the results."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -130,7 +130,7 @@ class MetadataSection(DetailState):
         self._meta_body_lay = QVBoxLayout(self._meta_body)
         self._meta_body_lay.setContentsMargins(16, 12, 16, 12)
         self._meta_body_lay.setSpacing(8)
-        self._meta_row_results: list[dict] = []
+        self._meta_row_results: list[dict[str, Any]] = []
         self._meta_row_widgets: list[tuple[QFrame, int]] = []
         self._meta_body_lay.addWidget(self._meta_pending_row())
         body.addWidget(self._meta_body)
@@ -176,7 +176,7 @@ class MetadataSection(DetailState):
         return text[:1].upper() + text[1:] if text else raw
 
     @staticmethod
-    def _meta_display(value) -> str:
+    def _meta_display(value: Any) -> str:
         """Compact display text for any metadata value (never raises)."""
         try:
             from curation.metadata_check import _display_value as _dv
@@ -189,14 +189,14 @@ class MetadataSection(DetailState):
                 return t("common.em_dash")
 
     @staticmethod
-    def _meta_is_compound(value) -> bool:
+    def _meta_is_compound(value: Any) -> bool:
         """Return True when a dict has real subfields (not just a wrapped ``value``)."""
         if not isinstance(value, dict):
             return False
         keys = [k for k in value if k != "typeName"]
         return any(k != "value" for k in keys)
 
-    def _meta_subfields(self, entry: dict, prefix: str = "") -> list[tuple[str, str]]:
+    def _meta_subfields(self, entry: dict[str, Any], prefix: str = "") -> list[tuple[str, str]]:
         """(label, display) pairs for one compound metadata entry.
 
         The entry's own noun is stripped from each subfield label, so an
@@ -219,7 +219,7 @@ class MetadataSection(DetailState):
             rows.append((label, shown))
         return rows
 
-    def _meta_value_entries(self, result: dict) -> list[tuple[str, str, list]]:
+    def _meta_value_entries(self, result: dict[str, Any]) -> list[tuple[str, str, list[Any]]]:
         """Child entries for a check: [(label, summary, subfields)]."""
         block = str(result.get("block") or "")
         name = str(result.get("name") or "")
@@ -251,7 +251,7 @@ class MetadataSection(DetailState):
             return []
         noun = self._pretty_meta_key(name) or str(result.get("field") or "Entry")
         single_entry = (str(block).lower(), str(name).lower()) in self._META_SINGLE_ENTRY_FIELDS
-        entries: list[tuple[str, str, list]] = []
+        entries: list[tuple[str, str, list[Any]]] = []
         if single_entry and len(seq) == 1 and isinstance(seq[0], dict):
             # Single-entry compound (dsDescription): no "Description 1"
             # entry row — its children attach directly to the check row.
@@ -266,7 +266,7 @@ class MetadataSection(DetailState):
                 entries.append((label, self._meta_display(item), []))
         return entries
 
-    def _entry_identity_summary(self, item: dict, subs: list[tuple[str, str]]) -> str:
+    def _entry_identity_summary(self, item: dict[str, Any], subs: list[tuple[str, str]]) -> str:
         dash = t("common.em_dash")
         for key in self._META_ENTRY_IDENTITY_KEYS:
             raw_sub = item.get(key)
@@ -307,12 +307,12 @@ class MetadataSection(DetailState):
                     pass
                 self._block_labels = cache
             if b in cache:
-                return cache[b]
+                return str(cache[b])
         except Exception:
             pass
         return b[:1].upper() + b[1:]
 
-    def _populate_completeness(self, metadata: dict) -> None:
+    def _populate_completeness(self, metadata: dict[str, Any]) -> None:
         # Rule-driven evaluation (keeps rule_id/level/pending for Response).
         try:
             from curation.metadata_check import check_with_ruleset
@@ -397,7 +397,7 @@ class MetadataSection(DetailState):
         except Exception:
             pass
 
-    def _build_meta_rows(self, results: list[dict]) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    def _build_meta_rows(self, results: list[dict[str, Any]]) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         """Rebuild the rows; the caller has already applied the filter."""
         lay = self._meta_body_lay
         self._clear_meta_body()
@@ -411,11 +411,11 @@ class MetadataSection(DetailState):
             return
 
         # Group by block, citation first, then alphabetical by display name.
-        groups: dict[str, list[tuple[int, dict]]] = {}
+        groups: dict[str, list[tuple[int, dict[str, Any]]]] = {}
         for idx, r in enumerate(results):
             groups.setdefault(str(r.get("block") or "other"), []).append((idx, r))
 
-        def _group_key(block: str):
+        def _group_key(block: str) -> tuple[int, str]:
             return (
                 0 if block.lower() == "citation" else 1,
                 (self._meta_block_label(block) or block).lower(),
@@ -446,7 +446,12 @@ class MetadataSection(DetailState):
             frame, btn, chev = self._meta_section_header(label, counts_text)
             open_state = {"open": True}
 
-            def _toggle(_c=False, _rows=widgets, _open=open_state, _chev=chev):
+            def _toggle(
+                _c: bool = False,
+                _rows: list[tuple[QFrame, bool]] = widgets,
+                _open: dict[str, bool] = open_state,
+                _chev: QLabel = chev,
+            ) -> None:
                 opening = not _open["open"]
                 _open["open"] = opening
                 for w, is_drawer in _rows:
@@ -472,7 +477,9 @@ class MetadataSection(DetailState):
                 lay.addWidget(w)
         lay.addStretch(1)
 
-    def _meta_row(self, result: dict, idx: int):  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    def _meta_row(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+        self, result: dict[str, Any], idx: int
+    ) -> tuple[QFrame, QFrame | None]:
         """One rule as an Auto-Checks row; returns (row, drawer_or_None)."""
         dash = t("common.em_dash")
         status = str(result.get("status") or "incomplete")
@@ -561,7 +568,7 @@ class MetadataSection(DetailState):
             note = str(current.get("note") or "")
             combo = make_disposition_combo(
                 token,
-                on_change=lambda tok, k=disposition_key: self._on_disposition_changed(k, tok),
+                on_change=lambda tok: self._on_disposition_changed(disposition_key, tok),
             )
             lay.addWidget(combo)
             note_btn = make_action_button(
@@ -574,11 +581,11 @@ class MetadataSection(DetailState):
             )
             lay.addWidget(note_btn)
             frame.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            frame.customContextMenuRequested.connect(
-                lambda pos, k=disposition_key: self._show_disposition_menu(
-                    k, frame.mapToGlobal(pos)
-                )
-            )
+
+            def _on_context_menu(pos: QPoint, k: str = disposition_key) -> None:
+                self._show_disposition_menu(k, frame.mapToGlobal(pos))
+
+            frame.customContextMenuRequested.connect(_on_context_menu)
 
         # Compound fields (authors, contacts, …) expand into a drawer.
         drawer = None
@@ -598,7 +605,9 @@ class MetadataSection(DetailState):
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setToolTip(t("detail.metadata_check.drawer_tip"))
 
-            def _toggle_drawer(_c=False, _d=drawer, _btn=btn):
+            def _toggle_drawer(
+                _c: bool = False, _d: QFrame = drawer, _btn: QToolButton = btn
+            ) -> None:
                 opening = _d.isHidden()
                 _d.setVisible(opening)
                 # Section collapse/expand reads this to restore the drawer's
@@ -633,7 +642,7 @@ class MetadataSection(DetailState):
         self._meta_row_widgets.append((frame, idx))
         return frame, drawer
 
-    def _meta_drawer(self, entries: list[tuple[str, str, list]]) -> QFrame:
+    def _meta_drawer(self, entries: list[tuple[str, str, list[Any]]]) -> QFrame:
         """Build the inline expansion for a compound field, one block per entry."""
         frame = QFrame()
         frame.setObjectName("AutoCheckRow")
@@ -662,7 +671,7 @@ class MetadataSection(DetailState):
                 )
         return frame
 
-    def _meta_section_header(self, label: str, counts_text: str):
+    def _meta_section_header(self, label: str, counts_text: str) -> tuple[QFrame, Any, QLabel]:
         """Block heading: chevron + bold label + counts; click toggles the block."""
         from PySide6.QtCore import QSize
 

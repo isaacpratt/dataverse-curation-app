@@ -9,6 +9,7 @@ page-heading style.
 
 import re
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtWidgets import QLabel
 
@@ -18,7 +19,7 @@ _UI_DIR = Path(__file__).resolve().parents[1]
 _INLINE_HEADING_PX = re.compile(r"font-size:\s*22px")
 
 
-def _pages(win):
+def _pages(win: Any):
     settings = win._ensure_settings()
     about = win._ensure_about()
     log = win._ensure_log()

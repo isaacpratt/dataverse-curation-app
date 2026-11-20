@@ -59,7 +59,7 @@ def test_prerelease_versions_pick_the_beta_channel() -> None:
     assert version_mod.tag_version("V0.2.0-rc.1") == "0.2.0-rc.1"
 
 
-def _run(*args: str) -> subprocess.CompletedProcess:
+def _run(*args: str) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     env.pop("GITHUB_REF_NAME", None)
     return subprocess.run(

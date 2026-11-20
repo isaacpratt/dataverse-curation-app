@@ -7,6 +7,7 @@ so every section renders the same values the same way.
 
 import json
 from pathlib import Path
+from typing import Any
 
 from ui.i18n import t
 
@@ -35,7 +36,7 @@ def _icon_for_ext(path: str) -> str:
     return "description"
 
 
-def _manifest_display_for_entry(e: dict) -> tuple[str, int, str]:
+def _manifest_display_for_entry(e: dict[str, Any]) -> tuple[str, int, str]:
     """(display_path, size_bytes, fmt) for one file-inventory entry.
 
     Tabular ingests are server-generated `.tab` derivatives of the
@@ -104,7 +105,7 @@ def _pill_state(version_state: str, in_review: bool = False) -> tuple[str, str]:
     return ("PillDraft", s.title())
 
 
-def _format_metadata(metadata: dict) -> str:
+def _format_metadata(metadata: dict[str, Any]) -> str:
     if not metadata:
         return t("detail.meta.no_metadata")
     try:

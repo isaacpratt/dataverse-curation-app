@@ -139,7 +139,7 @@ class AboutPane(QWidget):
 
     discarded = Signal()
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds below this pane.
@@ -441,7 +441,7 @@ class AboutPane(QWidget):
         self._check_worker = worker
         worker.start()
 
-    def _on_check_finished(self, outcome: dict) -> None:
+    def _on_check_finished(self, outcome: dict[str, Any]) -> None:
         import ui.updater as _updater
 
         status = outcome.get("status")

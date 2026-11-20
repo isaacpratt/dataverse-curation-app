@@ -2,6 +2,7 @@
 
 import csv
 from pathlib import Path
+from typing import Any
 
 from engine.checks.varmeta_check import (
     DRAFT_COLUMNS,
@@ -12,7 +13,7 @@ from engine.checks.varmeta_check import (
 from engine.runner import run_report
 
 
-def _inventory():
+def _inventory() -> list[dict[str, Any]]:
     return [
         {"path": "data/survey.tab", "tabular": True},
         {"path": "data/readme.txt"},
@@ -20,7 +21,7 @@ def _inventory():
     ]
 
 
-def _variables():
+def _variables() -> dict[str, Any]:
     return {
         "data/survey.tab": {
             "age": {"label": "Age in years", "type": "numeric"},

@@ -14,10 +14,12 @@ applies to ("*" = all). Stored as requirements_profiles.json v2.
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -44,7 +46,7 @@ except Exception:  # the built-in catalog is best-effort at import time
 
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.i18n import t
-from ui.theme import page_background_qss, selectable_labels
+from ui.theme import page_background_qss, selectable_labels, transparent_surface_qss
 from ui.widgets import (
     AppTreeWidget,
     PaneFooter,
@@ -62,7 +64,6 @@ from ui.widgets import (
     make_page_heading,
     make_search_field,
     make_value_list,
-    transparent_surface_qss,
 )
 
 _LEVELS = ["required", "optional", "unchecked"]
@@ -104,7 +105,7 @@ _CELL_H_MARGIN = 8
 class ContentRuleDialog(QDialog):
     """Add/edit one text-search rule (filenames / metadata / file-content)."""
 
-    def __init__(self, parent=None, rule: dict[str, Any] | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, rule: dict[str, Any] | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(t("review.rule_dialog.title"))
         self.resize(520, 560)
@@ -223,7 +224,7 @@ class ReviewConfigView(QWidget):
     _p_date_order: Any
     _p_url: Any
 
-    def __init__(self, config: Config, parent=None) -> None:
+    def __init__(self, config: Config, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._config = config
         self._worker: Any = None
@@ -266,7 +267,7 @@ class ReviewConfigView(QWidget):
         # Two scroll areas: Checks (stretch 3) and Response (stretch 2).
         # Each holds a card that grows to its content, moving the scrollbar
         # to the pane's own right edge — the dataset page's two-column idiom.
-        def make_pane(*card_builders):
+        def make_pane(*card_builders: Callable[[], QWidget]) -> QScrollArea:
             """One scroll pane holding a vertical stack of cards (dv-gcn)."""
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
@@ -458,7 +459,7 @@ class ReviewConfigView(QWidget):
         lay.addWidget(self._blocks_btn)
         # Sibling of the body, not inside it: the tree is rebuilt on filter
         # changes and the tools must survive that.
-        card.layout().insertWidget(1, tools)
+        cast(QVBoxLayout, card.layout()).insertWidget(1, tools)
         # Body margins go to zero so the tree bleeds edge-to-edge like
         # every other flush table in the app; the text-rules section
         # below carries its own inset.
@@ -509,7 +510,7 @@ class ReviewConfigView(QWidget):
         # without these, collapsing one block left the button reading
         # "Collapse all" and clicking it expanded everything. The tree is
         # content-fitted, so a manual toggle must refit too.
-        def _refit(_i) -> None:
+        def _refit(_i: QTreeWidgetItem) -> None:
             self._update_blocks_btn()
             fit_tree_height(self._field_tree, row_height=40)
 
@@ -581,7 +582,7 @@ class ReviewConfigView(QWidget):
         title_row.addStretch(1)
         params_lay.addLayout(title_row)
 
-        def _param_row(label_key: str, help_key: str, control) -> None:
+        def _param_row(label_key: str, help_key: str, control: QWidget) -> None:
             """Put a short label above a full-width control, both with one tip."""
             tip = t(help_key)
             label = self._params_label(t(label_key))
@@ -737,7 +738,9 @@ class ReviewConfigView(QWidget):
             probe.setCurrentIndex(0)
         return max(widest, min_width) + 2 * _CELL_H_MARGIN
 
-    def _field_rule_for_selection(self):
+    def _field_rule_for_selection(
+        self,
+    ) -> tuple[dict[str, Any] | None, str, str, str]:
         """(fr, block, field, handler) for the current field selection."""
         try:
             parts = str(self._sel_key or "").split("\x1f")
@@ -750,14 +753,16 @@ class ReviewConfigView(QWidget):
         return None, "", "", ""
 
     @staticmethod
-    def _params_lines(value) -> list[str]:
+    def _params_lines(value: Any) -> list[str]:
         if isinstance(value, list):
             return [str(v) for v in value]
         if isinstance(value, str):
             return [line.strip() for line in value.splitlines() if line.strip()]
         return []
 
-    def _sync_field_extras(self, fr, block: str, field: str, handler: str) -> None:
+    def _sync_field_extras(
+        self, fr: dict[str, Any] | None, block: str, field: str, handler: str
+    ) -> None:
         """Show the entry-check params panel for a looks_correct field rule.
 
         The Check picker itself lives in the rules table's own column
@@ -779,8 +784,9 @@ class ReviewConfigView(QWidget):
         except Exception:
             pass
 
-    def _load_params(self, fr) -> None:
-        p = fr.get("params") if isinstance(fr.get("params"), dict) else {}
+    def _load_params(self, fr: dict[str, Any] | None) -> None:
+        raw = cast(dict[str, Any], fr).get("params")
+        p: dict[str, Any] = raw if isinstance(raw, dict) else {}
         widgets = (
             self._p_min,
             self._p_regex,
@@ -816,7 +822,7 @@ class ReviewConfigView(QWidget):
                 except Exception:
                     pass
 
-    def _on_params_edited(self, *_args) -> None:
+    def _on_params_edited(self, *_args: Any) -> None:
         if getattr(self, "_loading", False):
             return
         fr, _block, _field, handler = self._field_rule_for_selection()
@@ -905,7 +911,9 @@ class ReviewConfigView(QWidget):
         except Exception:
             pass
 
-    def _update_field_row_handler(self, item, new_handler: str, req: str = "") -> None:
+    def _update_field_row_handler(
+        self, item: QTreeWidgetItem, new_handler: str, req: str = ""
+    ) -> None:
         """Re-point one row at a handler in place (never rebuild the tree).
 
         Both dropdowns carry the handler property and the row's data owns
@@ -976,7 +984,7 @@ class ReviewConfigView(QWidget):
         so a plain (block, field) key would collide and edit the wrong rule.
         """
         entries: list[dict[str, Any]] = []
-        covered: set = set()
+        covered: set[tuple[str, str, str]] = set()
         schema_labels = {
             (str(f.get("block") or ""), str(f.get("field") or "")): str(f.get("block_label") or "")
             for f in self._schema_fields()
@@ -1077,7 +1085,7 @@ class ReviewConfigView(QWidget):
             status = self._level_filter.currentData() or "all"
         except Exception:
             status = "all"
-        groups: dict[str, list] = {}
+        groups: dict[str, list[dict[str, Any]]] = {}
         group_labels: dict[str, str] = {}
         for e in self._rule_entries():
             if status != "all" and str(e.get("level") or "") != status:
@@ -1140,10 +1148,14 @@ class ReviewConfigView(QWidget):
                 # "Author") — Borealis shows the same shape: the composite is
                 # the heading, its children fill it. Composite rule rows
                 # (author_affiliation, author_count) join the group too.
-                def _grp(e):
+                def _grp(e: dict[str, Any]) -> str:
                     return str(e.get("field") or "").split(".", 1)[0]
 
-                def _add_field_row(e, parent_item=None, block_item=None):
+                def _add_field_row(
+                    e: dict[str, Any],
+                    parent_item: QTreeWidgetItem | None = None,
+                    block_item: QTreeWidgetItem | None = None,
+                ) -> QTreeWidgetItem:
                     parent_item = parent_item if parent_item is not None else block_item
                     block, field = e["block"], e["field"]
                     handler = str(e["handler"] or "nonempty")
@@ -1188,7 +1200,7 @@ class ReviewConfigView(QWidget):
                     check.setToolTip(t("review.column_check_tip"))
                     check.currentIndexChanged.connect(self._on_handler_changed)
                     target = parent_item if parent_item is not None else block_item
-                    target.addChild(child)
+                    cast(QTreeWidgetItem, target).addChild(child)
                     level_host = make_cell_control(level, v_margin=_CELL_V_MARGIN)
                     check_host = make_cell_control(check, v_margin=_CELL_V_MARGIN)
                     tree.setItemWidget(child, 1, level_host)
@@ -1199,7 +1211,7 @@ class ReviewConfigView(QWidget):
                         widget.installEventFilter(self)
                     return child
 
-                groups_by_prefix: dict[str, list] = {}
+                groups_by_prefix: dict[str, list[dict[str, Any]]] = {}
                 for e in rows:
                     groups_by_prefix.setdefault(_grp(e), []).append(e)
                 for prefix, members in sorted(groups_by_prefix.items(), key=lambda kv: kv[0]):
@@ -1272,7 +1284,7 @@ class ReviewConfigView(QWidget):
     # -- row lookup (dv-7zv) -------------------------------------------------
 
     @staticmethod
-    def _row_data(item) -> dict[str, Any]:
+    def _row_data(item: QTreeWidgetItem | None) -> dict[str, Any]:
         """One field row's own data ({kind: field, block, field, handler})."""
         try:
             data = item.data(0, Qt.ItemDataRole.UserRole) if item is not None else None
@@ -1280,7 +1292,7 @@ class ReviewConfigView(QWidget):
             return {}
         return data if isinstance(data, dict) else {}
 
-    def _iter_rows(self):
+    def _iter_rows(self) -> Iterator[QTreeWidgetItem]:
         """Every field row, in tree order (block and group headings skipped)."""
         try:
             tree = self._field_tree
@@ -1295,7 +1307,7 @@ class ReviewConfigView(QWidget):
                 yield item
             stack.extend(item.child(i) for i in range(item.childCount()))
 
-    def _cell_combo(self, item, column: int):
+    def _cell_combo(self, item: QTreeWidgetItem, column: int) -> QComboBox | None:
         """Return the dropdown in one of a row's two cell hosts (None if absent).
 
         The cell widget is the transparent host ``make_cell_control`` builds,
@@ -1311,7 +1323,7 @@ class ReviewConfigView(QWidget):
             return None
         return host.findChild(QComboBox)
 
-    def _row_for_combo(self, combo):
+    def _row_for_combo(self, combo: QComboBox) -> QTreeWidgetItem | None:
         """Return the field row hosting a given dropdown (a signal sender)."""
         for item in self._iter_rows():
             for column in (1, 2):
@@ -1319,7 +1331,7 @@ class ReviewConfigView(QWidget):
                     return item
         return None
 
-    def _selected_field_row(self):
+    def _selected_field_row(self) -> QTreeWidgetItem | None:
         """Return the selected field row (None while a block heading is selected)."""
         try:
             items = self._field_tree.selectedItems()
@@ -1440,7 +1452,7 @@ class ReviewConfigView(QWidget):
 
     # -- selecting a row is a deliberate act (dv-ud0) ------------------------
 
-    def eventFilter(self, obj, event) -> bool:
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         """Route a press on a cell widget to the row it belongs to.
 
         QComboBox (and the transparent cell host) eat the press before the
@@ -1449,6 +1461,7 @@ class ReviewConfigView(QWidget):
         selection: only ``MouseButtonPress`` is handled here.
         """
         if event.type() == QEvent.Type.MouseButtonPress:
+            event = cast(QMouseEvent, event)
             item = None
             if obj is self._field_tree.viewport():
                 try:
@@ -1466,17 +1479,19 @@ class ReviewConfigView(QWidget):
                 self._select_row(item)
         return super().eventFilter(obj, event)
 
-    def _on_row_pressed(self, item, _column: int = 0) -> None:
+    def _on_row_pressed(self, item: QTreeWidgetItem, _column: int = 0) -> None:
         """Make a press on any part of a field row choose it for editing."""
         self._select_row(item)
 
-    def _on_current_item_changed(self, current, _previous) -> None:
+    def _on_current_item_changed(
+        self, current: QTreeWidgetItem | None, _previous: QTreeWidgetItem | None
+    ) -> None:
         """Arrow keys move the current row; the pane follows. Hover does not."""
         if self._loading or self._selecting or current is None:
             return
         self._select_row(current)
 
-    def _select_row(self, item) -> None:
+    def _select_row(self, item: QTreeWidgetItem) -> None:
         """Make one field row the edited rule and retarget the Response pane."""
         data = self._row_data(item)
         if not data or data.get("kind") != "field":
@@ -1934,7 +1949,7 @@ class ReviewConfigView(QWidget):
                 t("review.messages.load_start_failed", exc=exc),
             )
 
-    def _on_fields_finished(self, fields: list) -> None:
+    def _on_fields_finished(self, fields: list[Any]) -> None:
         self._fields_btn.setEnabled(True)
         if isinstance(fields, list) and fields:
             self._schema = [dict(f) for f in fields if isinstance(f, dict) and f.get("field")]

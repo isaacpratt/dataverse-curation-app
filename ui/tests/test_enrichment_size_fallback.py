@@ -8,12 +8,14 @@ dimmed (a visual "not applicable"), and the hover carries the reason the
 Access column gives.
 """
 
+from typing import Any
+
 from PySide6.QtCore import Qt
 
 from ui.theme import TEXT_MUTED
 
 
-def _dashboard(tmp_path):
+def _dashboard(tmp_path: Any):
     from curation.config import Config
     from ui.dashboard import DashboardView
 
@@ -22,7 +24,7 @@ def _dashboard(tmp_path):
     return DashboardView(cfg)
 
 
-def _paint(dash, rows):
+def _paint(dash: Any, rows: Any):
     """Paint the rows into the queue and return the Size cells."""
     from ui.dashboard import COLUMNS
 
@@ -32,7 +34,7 @@ def _paint(dash, rows):
     return [dash._table.item(r, col) for r in range(dash._table.rowCount())]
 
 
-def _refused(pid="doi:10.5072/FK2/DENIED"):
+def _refused(pid: Any = "doi:10.5072/FK2/DENIED"):
     return {
         "persistent_id": pid,
         "title": "Denied dataset",

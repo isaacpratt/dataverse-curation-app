@@ -24,7 +24,10 @@ show the full untruncated message with PASS/WARN/FAIL/SKIPPED badge text in
 the Scan column and a details tooltip.
 """
 
-from PySide6.QtCore import Qt
+from collections.abc import Callable
+from typing import Any
+
+from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 from curation.storage import finding_key
@@ -59,7 +62,10 @@ def _strip_legacy_caret(text: str) -> str:
     return text
 
 
-def update_carets(model, is_expanded) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+def update_carets(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    model: QStandardItemModel | None,
+    is_expanded: Callable[[QModelIndex], bool],
+) -> None:
     """Sync folder icons + names with the tree's live expanded state.
 
     model: QStandardItemModel built by build_tree_model.
@@ -70,7 +76,7 @@ def update_carets(model, is_expanded) -> None:  # noqa: C901 - grandfathered; co
     if model is None:
         return
 
-    def _sync(item, index) -> None:
+    def _sync(item: QStandardItem | None, index: QModelIndex) -> None:
         try:
             data = item.data(_KIND_ROLE) if item is not None else None
         except Exception:
@@ -116,7 +122,7 @@ def update_carets(model, is_expanded) -> None:  # noqa: C901 - grandfathered; co
         pass
 
 
-def format_details_tooltip(result, path: str = "") -> str:
+def format_details_tooltip(result: Any, path: str = "") -> str:
     """Prose tooltip for a check result (dv-r0z); see ui.check_titles."""
     from ui.check_titles import format_details_tooltip as _tooltip
 
@@ -132,7 +138,7 @@ def _human_size(n: int) -> str:
     return _shared(n)
 
 
-def variable_coverage(report) -> dict[str, dict[str, int]]:
+def variable_coverage(report: Any) -> dict[str, dict[str, int]]:
     """Per-file ``{labeled, total}`` from the report's var-coverage check.
 
     The check (dv-tfy) rides its coverage map on the first result's details;
@@ -166,7 +172,12 @@ def _new_item(text: str, tooltip: str = "") -> QStandardItem:
 
 
 def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-    rows, report=None, is_staged=None, human_size=None, inventory=None, dispositions=None
+    rows: list[tuple[str, int, str, str]] | None,
+    report: Any = None,
+    is_staged: Callable[[str], bool] | None = None,
+    human_size: Callable[[int], str] | None = None,
+    inventory: list[dict[str, Any]] | None = None,
+    dispositions: dict[Any, Any] | None = None,
 ) -> QStandardItemModel:
     """Build the folder>file>check model.
 
@@ -194,7 +205,7 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
             if isinstance(e, dict) and e.get("path"):
                 inv_by_path[str(e["path"])] = e
 
-    folders: dict[str, list] = {}
+    folders: dict[str, list[Any]] = {}
     for row in rows or []:
         path = row[0] if len(row) > 0 else ""
         size = row[1] if len(row) > 1 else 0
@@ -398,7 +409,7 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
     return model
 
 
-def node_kind(index) -> dict:
+def node_kind(index: QModelIndex) -> dict[str, Any]:
     try:
         from PySide6.QtCore import QModelIndex
         from PySide6.QtGui import QStandardItemModel

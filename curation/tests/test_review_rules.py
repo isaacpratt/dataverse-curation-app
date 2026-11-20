@@ -1,12 +1,13 @@
 """Tests for rule-driven completeness (review_rules) + legacy parity."""
 
 import copy
+from typing import Any
 
 import curation.metadata_check as mc
 import curation.review_rules as rr
 
 
-def _meta(fields=(), license_name="CC0"):
+def _meta(fields: Any = (), license_name: Any = "CC0") -> Any:
     return {
         "latestVersion": {
             "license": {"name": license_name} if license_name else {},
@@ -15,7 +16,7 @@ def _meta(fields=(), license_name="CC0"):
     }
 
 
-def _f(name, value):
+def _f(name: Any, value: Any) -> Any:
     return {"typeName": name, "value": value}
 
 

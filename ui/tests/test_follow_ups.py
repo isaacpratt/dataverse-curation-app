@@ -6,7 +6,7 @@ import pytest
 
 
 class TestFollowUpCellText:
-    def _cell(self, ds):
+    def _cell(self, ds: Any):
         from ui.dashboard import DashboardView
 
         pane = DashboardView.__new__(DashboardView)

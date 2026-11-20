@@ -24,9 +24,12 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from engine.feed import REPO_URL
+
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QWidget
 
 LAST_CHECK_PREF = "update_check_last"  # epoch seconds (ui_prefs.json)
 PENDING_PREF = "update_pending_version"  # downloaded, waiting for a restart
@@ -45,7 +48,7 @@ def _now_s() -> float:
     return time.time()
 
 
-def _resolve_workspace(workspace) -> Path | None:
+def _resolve_workspace(workspace: Path | str | None) -> Path | None:
     if workspace is not None:
         return Path(workspace)
     try:
@@ -56,7 +59,7 @@ def _resolve_workspace(workspace) -> Path | None:
         return None
 
 
-def _pref_get(key: str, default=None, workspace=None):
+def _pref_get(key: str, default: Any = None, workspace: Path | str | None = None) -> Any:
     ws = _resolve_workspace(workspace)
     if ws is None:
         return default
@@ -65,7 +68,7 @@ def _pref_get(key: str, default=None, workspace=None):
     return read_ui_pref(ws, key, default)
 
 
-def _pref_set(key: str, value, workspace=None) -> None:
+def _pref_set(key: str, value: Any, workspace: Path | str | None = None) -> None:
     ws = _resolve_workspace(workspace)
     if ws is None:
         return
@@ -74,7 +77,7 @@ def _pref_set(key: str, value, workspace=None) -> None:
     write_ui_pref(ws, key, value)
 
 
-def is_check_due(now_s: float | None = None, workspace=None) -> bool:
+def is_check_due(now_s: float | None = None, workspace: Path | str | None = None) -> bool:
     """Return True when no check has been recorded inside the last 24 h."""
     last = _pref_get(LAST_CHECK_PREF, workspace=workspace)
     if last is None:
@@ -85,11 +88,11 @@ def is_check_due(now_s: float | None = None, workspace=None) -> bool:
         return True
 
 
-def record_check(now_s: float | None = None, workspace=None) -> None:
+def record_check(now_s: float | None = None, workspace: Path | str | None = None) -> None:
     _pref_set(LAST_CHECK_PREF, int(now_s if now_s is not None else _now_s()), workspace=workspace)
 
 
-def last_checked_at(workspace=None) -> int | None:
+def last_checked_at(workspace: Path | str | None = None) -> int | None:
     value = _pref_get(LAST_CHECK_PREF, workspace=workspace)
     try:
         return int(value) if value is not None else None
@@ -97,12 +100,12 @@ def last_checked_at(workspace=None) -> int | None:
         return None
 
 
-def pending_version(workspace=None) -> str | None:
+def pending_version(workspace: Path | str | None = None) -> str | None:
     value = _pref_get(PENDING_PREF, workspace=workspace)
     return str(value) if value else None
 
 
-def set_pending_version(version: str | None, workspace=None) -> None:
+def set_pending_version(version: str | None, workspace: Path | str | None = None) -> None:
     _pref_set(PENDING_PREF, version, workspace=workspace)
 
 
@@ -129,7 +132,7 @@ def _log_failure(detail: str) -> None:
         pass
 
 
-def make_update_manager():
+def make_update_manager() -> Any:
     """Return an UpdateManager for this install, or None when updates don't apply.
 
     Returns None for a source checkout, a portable zip and a frozen build
@@ -154,7 +157,9 @@ def make_update_manager():
         return None
 
 
-def check_for_updates(manager=None, *, force: bool = False, workspace=None) -> dict[str, Any]:
+def check_for_updates(
+    manager: Any = None, *, force: bool = False, workspace: Path | str | None = None
+) -> dict[str, Any]:
     """Check once and return a plain-dict outcome (never raises).
 
     Outcome keys:
@@ -189,7 +194,12 @@ def check_for_updates(manager=None, *, force: bool = False, workspace=None) -> d
         return {"status": "failed", "reason": reason}
 
 
-def download_update(manager, info=None, progress_callback=None, workspace=None):
+def download_update(
+    manager: Any,
+    info: Any = None,
+    progress_callback: Any = None,
+    workspace: Path | str | None = None,
+) -> tuple[bool, Any]:
     """Download the pending update; returns (ok, update_info). Never raises."""
     try:
         info = info if info is not None else manager.check_for_updates()
@@ -205,7 +215,7 @@ def download_update(manager, info=None, progress_callback=None, workspace=None):
         return False, None
 
 
-def apply_update_on_restart(manager, info=None) -> bool:
+def apply_update_on_restart(manager: Any, info: Any = None) -> bool:
     """Queue the downloaded update to apply after the app exits. Never raises."""
     try:
         target = info if info is not None else manager.get_update_pending_restart()
@@ -252,7 +262,7 @@ class UpdateCheckWorker(QThread):
 
     finished = Signal(dict)
 
-    def __init__(self, force: bool = False, parent=None):
+    def __init__(self, force: bool = False, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         from ui.workers import register_worker
 
@@ -272,7 +282,7 @@ class UpdateDownloadWorker(QThread):
     progress = Signal(int)  # 0..100
     finished = Signal(bool)
 
-    def __init__(self, info=None, parent=None):
+    def __init__(self, info: Any = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         from ui.workers import register_worker
 
@@ -287,7 +297,7 @@ class UpdateDownloadWorker(QThread):
                 self.finished.emit(False)
                 return
 
-            def _progress(*args) -> None:
+            def _progress(*args: Any) -> None:
                 try:
                     pct = float(args[0]) if args else 0.0
                     self.progress.emit(max(0, min(100, int(pct))))

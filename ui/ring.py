@@ -20,7 +20,7 @@ hex literals outside theme.py).
 """
 
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import QWidget
 
 from ui.i18n import t
@@ -180,7 +180,7 @@ class RingProgress(QWidget):
             return False
         return (self._now_ms() - self._last_update_ms) >= _STALL_MS
 
-    def paintEvent(self, event) -> None:
+    def paintEvent(self, event: QPaintEvent) -> None:
         try:
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)

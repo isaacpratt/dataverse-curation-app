@@ -1,6 +1,6 @@
 # ADR 0007 — The UI layer joins the mypy gate under a documented relaxation of `--strict`
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR 0008 — the `ui.*` relaxation is withdrawn; all application code is now checked under full `--strict`.
 - **Date:** 2026-11-17
 
 ## Context

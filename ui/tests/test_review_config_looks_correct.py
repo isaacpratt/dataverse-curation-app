@@ -8,6 +8,7 @@ plausibly correct" is picked. Edits round-trip straight into the rule dict
 """
 
 import copy
+from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
@@ -23,7 +24,7 @@ def _type_min(rc, text: str) -> None:
     QTest.keyClick(edit, Qt.Key.Key_Return)
 
 
-def _row_combo(rc, block, field, column):
+def _row_combo(rc: Any, block: Any, field: Any, column: Any):
     """Return the dropdown one field row shows in a column (1 = Level, 2 = Check)."""
     for item in rc._iter_rows():
         data = rc._row_data(item)
@@ -34,7 +35,7 @@ def _row_combo(rc, block, field, column):
     raise AssertionError(f"no tree row for {block}.{field}")
 
 
-def _with_rule(win, fn):
+def _with_rule(win: Any, fn: Any):
     """Inject a looks_correct rule, run fn(rc), restore the ruleset after."""
     win._show_review_config()
     rc = win._review_config

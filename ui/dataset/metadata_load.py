@@ -1,5 +1,7 @@
 """Loading the dataset's metadata: the worker, the profile switch and the errors."""
 
+from typing import Any
+
 from ui import dialogs
 from ui.dataset.helpers import _format_metadata
 from ui.dataset.state import DetailState
@@ -65,11 +67,11 @@ class MetadataLoadSection(DetailState):
 
     def _on_metadata_finished(
         self,
-        metadata: dict,
-        inventory: list[dict],
-        curation: dict | None = None,
-        version_diff: dict | None = None,
-        extra: dict | None = None,
+        metadata: dict[str, Any],
+        inventory: list[dict[str, Any]],
+        curation: dict[str, Any] | None = None,
+        version_diff: dict[str, Any] | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> None:
         # Drop the reference before the worker's deleteLater runs; a stale
         # reference made the next Load metadata click crash with
@@ -110,7 +112,7 @@ class MetadataLoadSection(DetailState):
         self._refresh_dataset_log()
         inv_failed = bool(extra.get("inventory_failed", False))
         self._inventory_ok = not inv_failed
-        refusal: dict = {}
+        refusal: dict[str, Any] = {}
         try:
             refusals = extra.get("refusals")
             if isinstance(refusals, dict):

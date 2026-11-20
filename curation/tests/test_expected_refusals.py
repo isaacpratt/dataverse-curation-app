@@ -9,6 +9,7 @@ an expected answer (500, a bad request, a wrong path) stays an ERROR.
 """
 
 import json
+from typing import Any
 
 import pytest
 import requests
@@ -34,7 +35,7 @@ class _Response:
         self.status_code = int(status)
         self._message = str(message)
         self.url = url
-        self.headers: dict = {}
+        self.headers: dict[str, Any] = {}
         self.content = b""
 
     @property
@@ -54,11 +55,11 @@ class _Response:
 
 
 class _Session:
-    def __init__(self, response):
+    def __init__(self, response: Any) -> None:
         self._response = response
         self.calls: list[str] = []
 
-    def get(self, url, **kwargs):
+    def get(self, url: str, **kwargs: Any) -> Any:
         self.calls.append(url)
         return self._response
 
@@ -135,7 +136,7 @@ def test_curation_status_refusal_is_reported_to_the_caller():
     client = _client(
         _Response(403, "You are not permitted to view the curation status of this dataset.")
     )
-    refusal: dict = {}
+    refusal: dict[str, Any] = {}
     assert client.get_curation_status("doi:10.5072/FK2/A", refusal=refusal) is None
     assert refusal["status"] == 403
     assert refusal["code"] == "not_under_curation"

@@ -19,6 +19,7 @@ import ast
 import re
 from pathlib import Path
 from string import Formatter
+from typing import Any, cast
 
 import pytest
 
@@ -108,11 +109,11 @@ def _key_like(value: str, namespaces: set[str]) -> bool:
     return head in namespaces
 
 
-def _catalog_data() -> dict:
+def _catalog_data() -> dict[str, Any]:
     import json
 
     with _CATALOG.open(encoding="utf-8") as fh:
-        return json.load(fh)
+        return cast(dict[str, Any], json.load(fh))
 
 
 def _lookup_calls() -> list[tuple[Path, int, str, set[str]]]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
@@ -307,6 +308,7 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
     },
     "ui/dataset/checks_section.py": {
         "not executed": "needle matched against an engine check description",
+        "DatasetReport | None": "quoted forward-reference return annotation (TYPE_CHECKING import)",
     },
     "ui/help_index.py": {
         "metadata check": "keyword match for grouping tips under the Checks task",
@@ -323,6 +325,9 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         "apply failed: ": "Log line prefix for the in-app update check",
         "worker: ": "Log line prefix for the in-app update check",
         "download worker: ": "Log line prefix for the in-app update check",
+    },
+    "ui/dataset/log_rail.py": {
+        "AppState | None": "quoted forward-reference return annotation (TYPE_CHECKING import)",
     },
     "ui/dialogs.py": {
         "max retries exceeded": "needle matched against raw exception text",

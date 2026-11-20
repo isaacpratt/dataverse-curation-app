@@ -5,10 +5,12 @@ Help page renders them grouped and filters as you type. Tests open the
 detail view once so its tips exist, then search the index.
 """
 
+from typing import Any
+
 import curation.applog as applog
 
 
-def _open_detail_defaults(win):
+def _open_detail_defaults(win: Any):
     win._open_dataset("doi:10.5072/FK2/HELP", "Help test (tests)")
 
 

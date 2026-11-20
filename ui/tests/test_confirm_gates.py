@@ -11,6 +11,8 @@ Two actions reach outside the app:
 Both ask first, and the dialog's safe answer is the default (No).
 """
 
+from typing import Any
+
 import pytest
 from PySide6.QtWidgets import QDialog, QDialogButtonBox
 
@@ -38,7 +40,7 @@ def quiet_commit(monkeypatch):
     monkeypatch.setattr("ui.dialogs.show_critical", lambda *a, **k: None)
 
 
-def _choose_instance_label(detail, label="Approved"):
+def _choose_instance_label(detail: Any, label: Any = "Approved"):
     """Point the decision combo at a label from the instance's own list."""
     detail._curation = {"allowed": [label, "Needs work"]}
     detail._refresh_decision_options()
@@ -66,9 +68,9 @@ def test_declining_writes_nothing_and_logs_nothing(detail, monkeypatch, quiet_co
     """No means no: no log entry, no workflow step, no push."""
     _choose_instance_label(detail)
     monkeypatch.setattr(detail, "_confirm_remote_write", lambda _decision: False)
-    logged: list = []
+    logged: list[Any] = []
     monkeypatch.setattr(detail, "_log_action", lambda *a, **k: logged.append(a))
-    pushed: list = []
+    pushed: list[Any] = []
 
     def _fake_set_label(pid, label):
         pushed.append((pid, label))
@@ -91,9 +93,9 @@ def test_confirming_writes_logs_and_closes_the_step(detail, monkeypatch, quiet_c
     """Yes means yes: the label is pushed, the decision is logged."""
     label = _choose_instance_label(detail)
     monkeypatch.setattr(detail, "_confirm_remote_write", lambda _decision: True)
-    logged: list = []
+    logged: list[Any] = []
     monkeypatch.setattr(detail, "_log_action", lambda *a, **k: logged.append(a))
-    pushed: list = []
+    pushed: list[Any] = []
 
     def _fake_set_label(pid, value):
         pushed.append((pid, value))
@@ -117,7 +119,7 @@ def test_a_local_only_decision_asks_nothing(detail, monkeypatch, quiet_commit):
     combo = detail._decision_combo
     combo.setCurrentIndex(1)
     assert combo.currentData()
-    asked: list = []
+    asked: list[Any] = []
 
     def _fake_confirm(decision):
         asked.append(decision)
@@ -134,7 +136,7 @@ def test_confirm_dialog_defaults_to_no_and_is_themed(qapp, monkeypatch):
     """The safe answer is the default, and the buttons wear the kit's roles."""
     from ui.dialogs import confirm
 
-    captured: dict = {}
+    captured: dict[str, Any] = {}
 
     def _fake_exec(self):
         captured["dialog"] = self
@@ -157,14 +159,14 @@ def test_confirm_dialog_defaults_to_no_and_is_themed(qapp, monkeypatch):
 def test_uninstall_asks_before_removing_a_package(win, monkeypatch):
     """Uninstalling an extension asks first."""
     pane = win._ensure_settings()
-    asked: list = []
+    asked: list[Any] = []
 
     def _fake_confirm(parent, title, text, **kwargs):
         asked.append(title)
         return False
 
     monkeypatch.setattr("ui.settings_dialog.confirm", _fake_confirm)
-    ran: list = []
+    ran: list[Any] = []
     monkeypatch.setattr(pane, "_run_shell", lambda fn, status: ran.append(status))
     pane._uninstall_package("Pillow")
     assert asked, "uninstall must ask first"
@@ -178,7 +180,7 @@ def test_confirmed_uninstall_runs(win, monkeypatch):
         "ui.settings_dialog.confirm",
         lambda parent, title, text, **kwargs: True,
     )
-    ran: list = []
+    ran: list[Any] = []
     monkeypatch.setattr(pane, "_run_shell", lambda fn, status: ran.append(status))
     pane._uninstall_package("Pillow")
     assert ran, "a confirmed uninstall must run"

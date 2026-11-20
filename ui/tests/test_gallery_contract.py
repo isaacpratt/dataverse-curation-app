@@ -9,6 +9,7 @@ This file is the same two checks, offscreen and in-repo.
 """
 
 import re
+from typing import Any
 
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -59,7 +60,7 @@ def _base_rule(rules, object_name: str):
     return None
 
 
-def _scoped_rule(rules):
+def _scoped_rule(rules: Any):
     """Find the plain rule for a bare QPushButton selector."""
     for selector, props in rules:
         if selector == "QPushButton" and ":" not in selector:

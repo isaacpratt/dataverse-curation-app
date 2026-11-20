@@ -92,7 +92,7 @@ release publishes a `SHA256SUMS.txt` next to its artefacts, and Windows
 SmartScreen or institutional AV tools may flag an unsigned build as an
 unknown publisher. That is expected for the first release; the
 click-through and the checksum check are documented in the
-[user guide](docs/html/user-guide.html) (First run). Verify an
+[user guide](https://isaacpratt.github.io/dataverse-curation-app/user-guide/) (First run). Verify an
 artefact before running it:
 
 ```powershell

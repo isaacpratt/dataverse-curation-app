@@ -1,11 +1,12 @@
 """Variable-dictionary draft + manifest coverage suffix (dv-tfy)."""
 
 import csv
+from typing import Any
 
 import pytest
 
 
-def _coverage_report():
+def _coverage_report() -> Any:
     from engine.checks.base import CheckResult
     from engine.report import DatasetReport
 

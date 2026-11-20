@@ -1,5 +1,7 @@
 """Download window renders guestbook fields and returns the POST body."""
 
+from typing import Any
+
 from PySide6.QtWidgets import QComboBox, QDialog
 
 from curation.download_manager import DownloadQuote
@@ -36,7 +38,7 @@ ACCOUNT = {
 }
 
 
-def _quote():
+def _quote() -> Any:
     return DownloadQuote("doi:10.80240/FK2/RZXIKC", 2, 1024)
 
 

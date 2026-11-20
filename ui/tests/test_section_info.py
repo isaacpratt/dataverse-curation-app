@@ -1,11 +1,13 @@
 """Section headers carry a Lucide (i) button whose tooltip holds the help."""
 
+from typing import Any
+
 from PySide6.QtWidgets import QToolButton
 
 from ui.widgets import add_info_tip, make_card
 
 
-def _tips(widget):
+def _tips(widget: Any):
     return [b for b in widget.findChildren(QToolButton) if b.objectName() == "InfoTip"]
 
 

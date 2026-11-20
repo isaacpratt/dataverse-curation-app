@@ -6,6 +6,7 @@ detected packages.
 """
 
 import json
+from typing import Any
 
 import pytest
 from PySide6.QtWidgets import QTabWidget
@@ -60,7 +61,7 @@ def pane(qapp, tmp_path, monkeypatch):
     widget.deleteLater()
 
 
-def _row(pane, package):
+def _row(pane: Any, package: Any):
     for row in range(pane.ext_table.rowCount()):
         item = pane.ext_table.item(row, 0)
         if item is not None and item.text() == package:

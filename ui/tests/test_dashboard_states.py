@@ -7,6 +7,7 @@ removed, footer Open Settings link replaced by the Docent mark).
 """
 
 import re
+from typing import Any
 
 import pytest
 from PySide6.QtWidgets import QAbstractButton, QFrame, QLabel
@@ -21,7 +22,7 @@ class _FakeWorker:
         return True
 
 
-def _mval(card):
+def _mval(card: Any):
     # The value label carries its theme token as its object name
     # (DisplayLG / StateMD), so it is found by type, not by a fixed name.
     labels = [

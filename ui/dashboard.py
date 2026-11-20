@@ -7,12 +7,15 @@ leftover space, and toggleable via Columns… including the local Downloaded
 date sourced from the workspace state.db + staged folders.
 """
 
+from __future__ import annotations
+
 import math
 from datetime import UTC
 from pathlib import Path
+from typing import Any, cast
 
-from PySide6.QtCore import QEvent, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QBrush, QColor, QFont
+from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, Signal
+from PySide6.QtGui import QAction, QBrush, QColor, QFont, QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -170,7 +173,7 @@ _ACCESS_TIP_KEYS = {
 }
 
 
-def _access_facts(ds: dict) -> tuple[str, str]:
+def _access_facts(ds: dict[str, Any]) -> tuple[str, str]:
     """(reason code, server detail) for what this account could read.
 
     Empty when everything about the dataset could be read - the Access
@@ -196,7 +199,7 @@ def _access_facts(ds: dict) -> tuple[str, str]:
     return "", ""
 
 
-def _access_text(ds: dict) -> str:
+def _access_text(ds: dict[str, Any]) -> str:
     """Return the Access cell: a short label, empty when there is nothing to say."""
     reason, _detail = _access_facts(ds)
     if not reason:
@@ -205,7 +208,7 @@ def _access_text(ds: dict) -> str:
     return t(key) if key else t("dashboard.access.not_readable")
 
 
-def _access_tooltip(ds: dict) -> str:
+def _access_tooltip(ds: dict[str, Any]) -> str:
     """Why the account could not read everything (empty when it could)."""
     reason, detail = _access_facts(ds)
     if not reason:
@@ -360,7 +363,7 @@ def _local_downloaded(workspace: Path, persistent_id: str) -> str:
         return ""
 
 
-def local_follow_ups(workspace: Path) -> dict[str, dict]:
+def local_follow_ups(workspace: Path) -> dict[str, dict[str, Any]]:
     """{persistent_id: follow-up} for every open depositor follow-up (dv-5eg).
 
     One sqlite connect for the whole queue; never raises.
@@ -379,7 +382,9 @@ def local_follow_ups(workspace: Path) -> dict[str, dict]:
         return {}
 
 
-def attach_follow_ups(datasets: list, follow_ups: dict[str, dict] | None) -> None:
+def attach_follow_ups(
+    datasets: list[dict[str, Any]], follow_ups: dict[str, dict[str, Any]] | None
+) -> None:
     """Stamp each dataset with its follow-up state for the queue column.
 
     The state is recomputed against the row's ``draft_updated_at`` (the
@@ -443,7 +448,7 @@ def _decided_ids(workspace: Path) -> set[str]:
 
 
 class _SortItem(QTableWidgetItem):
-    def __lt__(self, other):
+    def __lt__(self, other: QTableWidgetItem) -> bool:
         a = self.data(Qt.ItemDataRole.UserRole)
         b = other.data(Qt.ItemDataRole.UserRole) if isinstance(other, QTableWidgetItem) else None
         # Numeric/date sort when both sides carry a float epoch or number
@@ -500,8 +505,8 @@ class DashboardView(QWidget):
         super().__init__()
         self._config = config
         self._worker: CrawlWorker | None = None
-        self._all_datasets: list[dict] = []
-        self._datasets: list[dict] = []
+        self._all_datasets: list[dict[str, Any]] = []
+        self._datasets: list[dict[str, Any]] = []
         # Metrics state "Checking…"/"Not fetched" until real data exists
         # (first crawl / cache paint); a visible 0 then always means a
         # completed check counted zero — zeros before that would claim
@@ -961,7 +966,7 @@ class DashboardView(QWidget):
         except Exception:
             return "default"
 
-    def _read_dashboard_cache(self) -> dict | None:
+    def _read_dashboard_cache(self) -> dict[str, Any] | None:
         """Read this instance+collection's cached crawl (JSON only, no paint)."""
         try:
             ws = Path(getattr(getattr(self._config, "app", None), "workspace", Path.home()))
@@ -1078,7 +1083,7 @@ class DashboardView(QWidget):
             except Exception:
                 pass
 
-    def _on_labels_discovered(self, labels: list) -> None:
+    def _on_labels_discovered(self, labels: list[Any]) -> None:
         clean = [str(lbl).strip() for lbl in (labels or []) if str(lbl).strip()]
         # Preserve first-appearance order, drop dupes
         seen: list[str] = []
@@ -1113,7 +1118,7 @@ class DashboardView(QWidget):
         except Exception:
             pass
 
-    def _on_allowed_probed(self, payload: dict) -> None:
+    def _on_allowed_probed(self, payload: dict[str, Any]) -> None:
         """Stamp the disk slot — but only for a REAL probe round.
 
         The worker reports {"labels", "probed", "collection"} where probed
@@ -1480,7 +1485,7 @@ class DashboardView(QWidget):
             self._columns_btn.mapToGlobal(self._columns_btn.rect().bottomLeft())
         )
 
-    def _show_columns_menu_at(self, pos) -> None:
+    def _show_columns_menu_at(self, pos: QPoint) -> None:
         menu = QMenu(self)
         for idx, (_key, header, _v) in enumerate(COLUMNS):
             action = QAction(header, menu)
@@ -1540,7 +1545,7 @@ class DashboardView(QWidget):
         action.triggered.connect(self._enqueue_visible_checks)
         return menu
 
-    def _show_queue_context_menu(self, pos) -> None:
+    def _show_queue_context_menu(self, pos: QPoint) -> None:
         menu = self._build_queue_context_menu()
         menu.exec(self._table.viewport().mapToGlobal(pos))
 
@@ -1596,7 +1601,7 @@ class DashboardView(QWidget):
         self._bulk_worker = None
         self._sync_status_bar()
 
-    def _on_bulk_checks_finished(self, summary) -> None:
+    def _on_bulk_checks_finished(self, summary: dict[str, Any]) -> None:
         total = int(summary.get("total", 0)) if isinstance(summary, dict) else 0
         completed = int(summary.get("completed", 0)) if isinstance(summary, dict) else 0
         skipped = int(summary.get("skipped", 0)) if isinstance(summary, dict) else 0
@@ -1774,7 +1779,7 @@ class DashboardView(QWidget):
         # Pre-crawl cards now read "Checking…" instead of staying idle.
         self._update_metrics()
 
-    def _apply_size_cache(self, datasets: list[dict]) -> None:
+    def _apply_size_cache(self, datasets: list[dict[str, Any]]) -> None:
         """Fill unknown Size cells from the downloaded-metadata cache.
 
         Search records carry no byte totals; once a dataset's metadata has
@@ -1850,7 +1855,7 @@ class DashboardView(QWidget):
         except Exception:
             pass
 
-    def _on_enrichment_batch(self, batch: list[dict]) -> None:
+    def _on_enrichment_batch(self, batch: list[dict[str, Any]]) -> None:
         """Merge one worker enrichment batch into the painted table.
 
         Batches arrive while the crawl runs (progressive paint); the final
@@ -1865,7 +1870,9 @@ class DashboardView(QWidget):
         except Exception:
             pass
 
-    def _on_crawl_finished(self, datasets: list[dict]) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    def _on_crawl_finished(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+        self, datasets: list[dict[str, Any]]
+    ) -> None:
         try:
             self._worker = None
             # Crawl done: show the completed state briefly, then clear the
@@ -2011,7 +2018,7 @@ class DashboardView(QWidget):
                 _apply_metric_token(v_lbl)
         self._update_empty_state()
 
-    def _cell_text(self, ds: dict, key: str) -> str:
+    def _cell_text(self, ds: dict[str, Any], key: str) -> str:
         if key == "total_size_bytes":
             raw = ds.get(key)
             if raw is None or raw == "":
@@ -2034,7 +2041,7 @@ class DashboardView(QWidget):
         v = ds.get(key, "")
         return "" if v is None else str(v)
 
-    def _cell_sort_key(self, ds: dict, key: str) -> float | str:
+    def _cell_sort_key(self, ds: dict[str, Any], key: str) -> float | str:
         # Fast path: precomputed epoch cached at ingest (avoids 12k
         # strptime calls per keystroke on 1000-row tables).
         if key in ("date_created", "date_published", "downloaded_at"):
@@ -2250,7 +2257,9 @@ class DashboardView(QWidget):
         )
         self._update_empty_state()
 
-    def eventFilter(self, obj, event):  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    def eventFilter(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+        self, obj: QObject, event: QEvent
+    ) -> bool:
         """Keyboard parity for the queue table (P0).
 
         Enter/Return opens the focused row (double-click alone locks out
@@ -2270,13 +2279,14 @@ class DashboardView(QWidget):
                 pass
         # Metric cards are tappable filters (dv-896).
         if isinstance(obj, QFrame) and obj.objectName() == "MetricCard":
+            event = cast(QMouseEvent, event)
             if (
                 event.type() == QEvent.Type.MouseButtonPress
                 and event.button() == Qt.MouseButton.LeftButton
             ):
                 self._on_metric_clicked(str(obj.property("accent") or ""))
                 return True
-            if event.type() == QEvent.Type.KeyPress and event.key() in (
+            if event.type() == QEvent.Type.KeyPress and cast(QKeyEvent, event).key() in (
                 Qt.Key.Key_Return,
                 Qt.Key.Key_Enter,
                 Qt.Key.Key_Space,
@@ -2284,6 +2294,7 @@ class DashboardView(QWidget):
                 self._on_metric_clicked(str(obj.property("accent") or ""))
                 return True
         if tbl is not None and obj is tbl and event.type() == QEvent.Type.KeyPress:
+            event = cast(QKeyEvent, event)
             key = event.key()
             if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 row = self._table.currentRow()
@@ -2299,9 +2310,12 @@ class DashboardView(QWidget):
         # Header keyboard sort: Space/Return toggles sort on focused section
         hdr = tbl.horizontalHeader() if tbl is not None else None
         if hdr is not None and obj is hdr and event.type() == QEvent.Type.KeyPress:
+            event = cast(QKeyEvent, event)
             key = event.key()
             if key in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                logical = hdr.currentIndex()
+                logical = cast(
+                    Any, hdr
+                ).currentIndex()  # QHeaderView.currentIndex() is an int at runtime
                 if logical >= 0:
                     self._sort_by_column(logical)
                     return True
@@ -2318,7 +2332,7 @@ class DashboardView(QWidget):
             title_item = self._table.item(row, title_col)
             pid = pid_item.text().strip() if pid_item else ""
             title = title_item.text().strip() if title_item else ""
-            row_data: dict = {}
+            row_data: dict[str, Any] = {}
             if not pid:
                 # Fallback: match by title (titles are unique enough here)
                 match = next((d for d in self._datasets if d.get("title") == title), None)

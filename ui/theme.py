@@ -10,6 +10,16 @@ theme - so switching theme is a table swap, not a re-skin.
 """
 
 from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from PySide6.QtCore import QEvent, QObject
+    from PySide6.QtWidgets import (
+        QApplication,
+        QListWidget,
+        QTableWidget,
+        QWidget,
+    )
 
 # --- Colors ---
 PRIMARY = "#004ccd"
@@ -1647,7 +1657,7 @@ QSplitter::handle:vertical {{ height: 1px; }}
 """
 
 
-def apply_theme(app) -> None:
+def apply_theme(app: "QApplication") -> None:
     """Apply global QSS and default font."""
     from PySide6.QtGui import QFont
 
@@ -1783,7 +1793,7 @@ def label_badge_style(label: str) -> str:
     )
 
 
-def _install_interaction_tracking(app) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+def _install_interaction_tracking(app: "QApplication") -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Pointing-hand cursors + keyboard-only focus tint, in one app filter.
 
     Two behaviours share one QApplication event filter: QSS cannot set
@@ -1817,7 +1827,7 @@ def _install_interaction_tracking(app) -> None:  # noqa: C901 - grandfathered; c
             Qt.Key.Key_PageDown,
         }
 
-        def _paint(w, on: bool) -> None:
+        def _paint(w: "QWidget | None", on: bool) -> None:
             try:
                 if w is None:
                     return
@@ -1832,7 +1842,7 @@ def _install_interaction_tracking(app) -> None:  # noqa: C901 - grandfathered; c
                 pass
 
         class _Interaction(QObject):
-            def eventFilter(self, obj, event):
+            def eventFilter(self, obj: "QObject", event: "QEvent") -> bool:
                 try:
                     t = event.type()
                     if t == QEvent.Type.Enter:
@@ -1842,7 +1852,7 @@ def _install_interaction_tracking(app) -> None:  # noqa: C901 - grandfathered; c
                             else:
                                 obj.unsetCursor()
                     elif t == QEvent.Type.KeyPress:
-                        if event.key() in nav_keys:
+                        if cast(Any, event).key() in nav_keys:
                             state["kbd"] = True
                     elif t == QEvent.Type.MouseButtonPress:
                         state["kbd"] = False
@@ -1854,11 +1864,11 @@ def _install_interaction_tracking(app) -> None:  # noqa: C901 - grandfathered; c
         filt = _Interaction(app)
         app.installEventFilter(filt)
         try:
-            app._interaction_ref = filt
+            cast(Any, app)._interaction_ref = filt
         except Exception:
             pass
 
-        def _on_focus_changed(old, new) -> None:
+        def _on_focus_changed(old: "QWidget | None", new: "QWidget | None") -> None:
             try:
                 _paint(old, False)
                 if state["kbd"]:
@@ -1871,7 +1881,7 @@ def _install_interaction_tracking(app) -> None:  # noqa: C901 - grandfathered; c
         pass
 
 
-def selectable_labels(root) -> None:
+def selectable_labels(root: "QWidget") -> None:
     """Make every QLabel under root selectable with mouse + keyboard.
 
     The selection is themed: the system highlight colour is not used (it
@@ -1905,7 +1915,7 @@ def selectable_labels(root) -> None:
         pass
 
 
-def enable_table_copy(table) -> None:
+def enable_table_copy(table: "QTableWidget") -> None:
     """Ctrl+C support + extended selection for a QTableWidget (best-effort)."""
     try:
         from PySide6.QtCore import QEvent, QObject, Qt
@@ -1914,9 +1924,11 @@ def enable_table_copy(table) -> None:
         table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
 
         class _CopyFilter(QObject):
-            def eventFilter(self, _obj, event):
+            def eventFilter(self, _obj: "QObject", event: "QEvent") -> bool:
                 try:
-                    if event.type() == QEvent.Type.KeyPress and event.matches(Qt.Key.Key_Copy):
+                    if event.type() == QEvent.Type.KeyPress and cast(Any, event).matches(
+                        Qt.Key.Key_Copy
+                    ):
                         ranges = table.selectedRanges()
                         if ranges:
                             rows: set[int] = set()
@@ -1940,25 +1952,27 @@ def enable_table_copy(table) -> None:
         table.installEventFilter(_CopyFilter(table))
         try:
             # Keep a reference so the filter is not garbage-collected.
-            table._copy_filter_ref = table.findChildren(_CopyFilter)[-1]
+            cast(Any, table)._copy_filter_ref = table.findChildren(_CopyFilter)[-1]
         except Exception:
             pass
     except Exception:
         pass
 
 
-def enable_list_copy(list_widget) -> None:
+def enable_list_copy(list_widget: "QListWidget") -> None:
     """Ctrl+C support for a QListWidget (copies selected rows as lines)."""
     try:
         from PySide6.QtCore import QEvent, QObject, Qt
         from PySide6.QtWidgets import QApplication
 
-        list_widget.setSelectionMode(list_widget.ExtendedSelection)
+        list_widget.setSelectionMode(cast(Any, list_widget).ExtendedSelection)
 
         class _ListCopyFilter(QObject):
-            def eventFilter(self, _obj, event):
+            def eventFilter(self, _obj: "QObject", event: "QEvent") -> bool:
                 try:
-                    if event.type() == QEvent.Type.KeyPress and event.matches(Qt.Key.Key_Copy):
+                    if event.type() == QEvent.Type.KeyPress and cast(Any, event).matches(
+                        Qt.Key.Key_Copy
+                    ):
                         items = list_widget.selectedItems()
                         if items:
                             QApplication.clipboard().setText("\n".join(i.text() for i in items))
@@ -1969,7 +1983,7 @@ def enable_list_copy(list_widget) -> None:
 
         list_widget.installEventFilter(_ListCopyFilter(list_widget))
         try:
-            list_widget._copy_filter_ref = list_widget.findChildren(_ListCopyFilter)[-1]
+            cast(Any, list_widget)._copy_filter_ref = list_widget.findChildren(_ListCopyFilter)[-1]
         except Exception:
             pass
     except Exception:

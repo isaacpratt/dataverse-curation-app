@@ -12,7 +12,9 @@ this?".
 | [0004](0004-no-pypi-packaging-app-not-library.md) | The app is not a PyPI package (`package = false`) | Accepted | 2026-11-13 |
 | [0005](0005-api-token-os-credential-store.md) | The API token lives in the OS credential store | Accepted | 2026-11-13 |
 | [0006](0006-curation-core-package.md) | The application core lives in `curation/`; `main.py` stays the entry point | Accepted | 2026-11-16 |
-| [0007](0007-ui-typing-gate.md) | The UI layer joins the mypy gate under a documented relaxation of `--strict` | Accepted | 2026-11-17 |
+| [0007](0007-ui-typing-gate.md) | The UI layer joins the mypy gate under a documented relaxation of `--strict` | Superseded by ADR-0008 | 2026-11-17 |
+| [0008](0008-strict-app-relaxed-tests.md) | All application code is strict; only tests relax annotation requirements | Accepted | 2026-11-20 |
+| [0009](0009-zensical-docs.md) | Documentation is built from Markdown by Zensical and published on GitHub Pages | Accepted | 2026-11-20 |
 
 ## Format
 

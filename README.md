@@ -74,14 +74,22 @@ Copy `config.example.json` to `config.json` and set your instance URL and API to
 
 ## Documentation
 
-- [User guide](docs/html/user-guide.html) — the dashboard, dataset detail, metadata check, response draft and log.
-- [Development guide](docs/html/development.html) — setup, tests, adding checks, UI conventions, packaging and release.
-- [Architecture](docs/html/architecture.html) — components, threading, storage, the UI/table contracts, decisions.
-- [Checks reference](docs/html/checks-reference.html) — what each check examines and what its findings mean.
-- [Engine port matrix](docs/html/engine-port.html) — R-to-Python parity and go/no-go criteria.
-- [Report contract](docs/html/report-contract.html) — the JSON report shared by the engine and the GUI.
-- [Dataverse integration](docs/html/dataverse-integration.html) — endpoints, auth, discovery and downloads.
-- [Documentation index](docs/html/index.html).
+The documentation is built with [Zensical](https://zensical.org/) from the
+Markdown tree in `docs/` and published to GitHub Pages at
+**https://isaacpratt.github.io/dataverse-curation-app/**. The hand-authored
+HTML pages remain in `docs/html/` as a frozen pre-migration reference until
+the planned Diátaxis rewrite; the published site is the source of truth.
+
+- [User guide](https://isaacpratt.github.io/dataverse-curation-app/user-guide/) — the dashboard, dataset detail, metadata check, response draft and log.
+- [Development guide](https://isaacpratt.github.io/dataverse-curation-app/development/) — setup, tests, adding checks, UI conventions, packaging and release.
+- [Architecture](https://isaacpratt.github.io/dataverse-curation-app/architecture/) — components, threading, storage, the UI/table contracts, decisions.
+- [Checks reference](https://isaacpratt.github.io/dataverse-curation-app/checks-reference/) — what each check examines and what its findings mean.
+- [Engine port matrix](https://isaacpratt.github.io/dataverse-curation-app/engine-port/) — R-to-Python parity and go/no-go criteria.
+- [Report contract](https://isaacpratt.github.io/dataverse-curation-app/report-contract/) — the JSON report shared by the engine and the GUI.
+- [Dataverse integration](https://isaacpratt.github.io/dataverse-curation-app/dataverse-integration/) — endpoints, auth, discovery and downloads.
+- [Documentation index](https://isaacpratt.github.io/dataverse-curation-app/).
+
+Build or preview locally with `uv run poe docs` or `uv run poe docs-serve`.
 
 ## Contributing, support and security
 
@@ -89,7 +97,7 @@ The plan and open work live in [beads](https://github.com/gastownhall/beads): `b
 
 ## Roadmap
 
-Remaining work is tracked in beads (`bd ready` / `bd list`); completed decisions are recorded in `docs/html/architecture.html` and `docs/adr/`.
+Remaining work is tracked in beads (`bd ready` / `bd list`); completed decisions are recorded in [Architecture](https://isaacpratt.github.io/dataverse-curation-app/architecture/) and `docs/adr/`.
 
 ## Context
 

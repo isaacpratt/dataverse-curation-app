@@ -11,6 +11,7 @@ The rules this file protects:
 """
 
 import json
+from typing import Any
 
 import pytest
 from PySide6.QtWidgets import QHeaderView
@@ -36,7 +37,7 @@ def header(qapp):
     return table, table.horizontalHeader(), ws
 
 
-def _entry(ws, key="probe"):
+def _entry(ws: Any, key: Any = "probe"):
     path = ws / "table_layout.json"
     if not path.exists():
         return None

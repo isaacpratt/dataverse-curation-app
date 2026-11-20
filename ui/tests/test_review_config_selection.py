@@ -7,6 +7,8 @@ name, on the padding around a dropdown, or on the dropdown itself makes
 that row the one the Response pane edits; arrow keys do too.
 """
 
+from typing import Any
+
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtTest import QTest
@@ -35,22 +37,22 @@ def _press_combo(rc, combo) -> None:
     rc.eventFilter(combo, event)
 
 
-def _rows(rc):
+def _rows(rc: Any):
     return list(rc._iter_rows())
 
 
-def _row(rc, field):
+def _row(rc: Any, field: Any):
     for item in _rows(rc):
         if rc._row_data(item).get("field") == field:
             return item
     raise AssertionError(f"no row for {field}")
 
 
-def _combo(rc, item, column):
+def _combo(rc: Any, item: Any, column: Any):
     return rc._cell_combo(item, column)
 
 
-def _center_of(widget, x_fraction=0.5, y_fraction=0.5):
+def _center_of(widget: Any, x_fraction: Any = 0.5, y_fraction: Any = 0.5):
     rect = widget.rect()
     return QPoint(
         int(rect.left() + rect.width() * x_fraction),
@@ -63,12 +65,12 @@ def _click(view, widget, button=Qt.MouseButton.LeftButton):
     QTest.mouseClick(widget, button, pos=_center_of(widget))
 
 
-def _pump(qapp, rounds=6):
+def _pump(qapp: Any, rounds: Any = 6):
     for _ in range(rounds):
         qapp.processEvents()
 
 
-def _show(win, qapp):
+def _show(win: Any, qapp: Any):
     win._show_review_config()
     win.resize(1440, 900)
     _pump(qapp)
@@ -78,7 +80,7 @@ def _show(win, qapp):
     return rc
 
 
-def _choose(rc, field):
+def _choose(rc: Any, field: Any):
     rc._select_row(_row(rc, field))
     return rc._sel_key
 

@@ -59,8 +59,8 @@ ICON_ROLES: dict[str, str] = {
 
 _MISSING: set[str] = set()
 
-_ICON_CACHE: dict = {}
-_SVG_CACHE: dict = {}
+_ICON_CACHE: dict[tuple[str, str, int], QIcon] = {}
+_SVG_CACHE: dict[str, str] = {}
 
 
 def _svg_text(name: str) -> str:

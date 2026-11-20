@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QListWidgetItem,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -319,7 +320,7 @@ class ResponseSection(DetailState):
         except Exception:
             pass
 
-    def _on_response_item_changed(self, _item) -> None:
+    def _on_response_item_changed(self, _item: QListWidgetItem | None) -> None:
         if getattr(self, "_response_loading", False):
             return
         try:
@@ -466,13 +467,13 @@ class ResponseSection(DetailState):
         )
         self._set_status(t("detail.status.response_saved", name=out.name), tone="success")
 
-    def _response_draft_path(self):
+    def _response_draft_path(self) -> Path | None:
         try:
             return self._dl_mgr.dataset_dir(self._pid) / "response_draft.md"
         except Exception:
             return None
 
-    def _staged_dir_or_none(self):
+    def _staged_dir_or_none(self) -> Path | None:
         try:
             staged = self._dl_mgr.files_dir(self._pid)
             return staged if staged.exists() else None

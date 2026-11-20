@@ -16,10 +16,35 @@ Intentional one-offs (NOT kit violations):
 """
 
 import textwrap
-from typing import Any
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any, cast
 
-from PySide6.QtCore import QEvent, QObject, QRect, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen
+from PySide6.QtCore import (
+    QEvent,
+    QModelIndex,
+    QObject,
+    QPersistentModelIndex,
+    QRect,
+    QRectF,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
+from PySide6.QtGui import (
+    QColor,
+    QEnterEvent,
+    QFocusEvent,
+    QHelpEvent,
+    QIcon,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QPen,
+    QResizeEvent,
+    QShowEvent,
+    QWheelEvent,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -146,7 +171,7 @@ __all__ = [
 # "sm" is 32px, not 28: WCAG 2.5.8 asks for a 24px target, but the
 # platform's own menus and toolbars land on 32, and a 28px chip is easy
 # to miss with a mouse or a stylus. Every button in the app clears 32.
-BUTTON_HEIGHTS = {"sm": 32, "md": 36, "lg": 40}
+BUTTON_HEIGHTS: dict[str, int] = {"sm": 32, "md": 36, "lg": 40}
 
 
 def human_size(n: int) -> str:
@@ -198,13 +223,13 @@ class AppButton(QPushButton):
         if tip:
             self.setToolTip(tip)
 
-    def clicked_to(self, slot) -> "AppButton":
+    def clicked_to(self, slot: Callable[..., Any]) -> "AppButton":
         """Chainable connect: AppButton("Save").clicked_to(self._on_save)."""
         self.clicked.connect(slot)
         return self
 
 
-def _section_is_user_resizable(header, logical: int) -> bool:
+def _section_is_user_resizable(header: QHeaderView, logical: int) -> bool:
     """Tell whether the user could have dragged this section's edge.
 
     A section the layout owns is never a user gesture, however Qt
@@ -237,18 +262,19 @@ class _HeaderTooltipFilter(QObject):
     has to carry the name the section cannot show.
     """
 
-    def eventFilter(self, obj, event) -> bool:
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         if event.type() == QEvent.Type.ToolTip:
-            header = obj
+            header = cast(QHeaderView, obj)
+            help_event = cast(QHelpEvent, event)
             try:
-                index = header.logicalIndexAt(event.pos())
+                index = header.logicalIndexAt(help_event.pos())
                 label = header.model().headerData(
                     index, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole
                 )
             except Exception:
                 return False
             if index >= 0 and label:
-                QToolTip.showText(event.globalPos(), str(label), header)
+                QToolTip.showText(help_event.globalPos(), str(label), header)
                 return True
         return super().eventFilter(obj, event)
 
@@ -293,11 +319,11 @@ class SortArrowHeaderView(QHeaderView):
         # would lag one paint behind the sorted order.
         self.sortIndicatorChanged.connect(self._on_sort_indicator_changed)
 
-    def _on_sort_indicator_changed(self, *_args) -> None:
+    def _on_sort_indicator_changed(self, *_args: Any) -> None:
         if not self._painting:
             self.update()
 
-    def paintEvent(self, event) -> None:
+    def paintEvent(self, event: QPaintEvent) -> None:
         section = self.sortIndicatorSection()
         active = (
             self.orientation() == Qt.Orientation.Horizontal
@@ -376,7 +402,12 @@ class SelectionDelegate(QStyledItemDelegate):
     the row tint stays, because selection is a separate state.
     """
 
-    def paint(self, painter, option, index) -> None:
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
+    ) -> None:
         if option.state & QStyle.StateFlag.State_HasFocus:
             option = QStyleOptionViewItem(option)
             option.state &= ~QStyle.StateFlag.State_HasFocus
@@ -400,7 +431,7 @@ class AppTable(QTableWidget):
     columns_fitted = Signal()
     user_layout_changed = Signal()
 
-    def setHorizontalHeaderLabels(self, labels) -> None:
+    def setHorizontalHeaderLabels(self, labels: Sequence[str]) -> None:
         """Set the column titles in sentence case, as painted.
 
         Headers read as the catalogue writes them ("Dataset Title",
@@ -415,13 +446,13 @@ class AppTable(QTableWidget):
 
     def __init__(
         self,
-        headers: list,
+        headers: Sequence[str],
         parent: QWidget | None = None,
         *,
         sortable: bool = True,
         row_height: int = 40,
         stretch_last: bool = True,
-        widths: dict | None = None,
+        widths: dict[int, int] | None = None,
     ) -> None:
         super().__init__(0, len(headers), parent)
         # The kit header draws the sort arrow itself (see
@@ -469,7 +500,7 @@ class AppTable(QTableWidget):
         hdr.sectionMoved.connect(self._on_user_section_moved)
         enable_table_copy(self)
 
-    def showEvent(self, event) -> None:
+    def showEvent(self, event: QShowEvent) -> None:
         """First visible paint: fit once the viewport has a real width.
 
         Populates often run during __init__ (cached dashboard, settings
@@ -524,7 +555,7 @@ class AppTable(QTableWidget):
         self.setRowCount(row_count)
         self.setSortingEnabled(was)
 
-    def _on_user_section_resized(self, logical: int, *_args) -> None:
+    def _on_user_section_resized(self, logical: int, *_args: Any) -> None:
         """Lock content auto-fit once the user drags a column edge."""
         if self._fitting:
             return
@@ -533,7 +564,7 @@ class AppTable(QTableWidget):
         self._auto_fit = False
         self.user_layout_changed.emit()
 
-    def _on_user_section_moved(self, *_args) -> None:
+    def _on_user_section_moved(self, *_args: Any) -> None:
         """Note that the user dragged a column to a new position."""
         if self._fitting:
             return
@@ -749,11 +780,15 @@ class _BranchPainting:
     indentation: Any
     isExpanded: Any
 
-    def drawBranches(self, painter, rect, index) -> None:
+    def drawBranches(
+        self, painter: QPainter, rect: QRect, index: QModelIndex | QPersistentModelIndex
+    ) -> None:
         """Replace the style's branch painting with one chevron."""
         self._paint_branch(painter, rect, index)
 
-    def _paint_branch(self, painter, rect, index) -> None:
+    def _paint_branch(
+        self, painter: QPainter, rect: QRect, index: QModelIndex | QPersistentModelIndex
+    ) -> None:
         """Draw the expand/collapse chevron for *index*, if it has children."""
         try:
             model = self.model()
@@ -831,19 +866,19 @@ class AppTree(_BranchPainting, QTreeView):
         hdr.sectionResized.connect(self._on_user_section_resized)
         hdr.sectionMoved.connect(self._on_user_section_moved)
 
-    def _on_user_section_resized(self, logical: int, *_args) -> None:
+    def _on_user_section_resized(self, logical: int, *_args: Any) -> None:
         if self._fitting:
             return
         if not _section_is_user_resizable(self.header(), logical):
             return
         self.user_layout_changed.emit()
 
-    def _on_user_section_moved(self, *_args) -> None:
+    def _on_user_section_moved(self, *_args: Any) -> None:
         if self._fitting:
             return
         self.user_layout_changed.emit()
 
-    def fit_columns_to_contents(self, *, floors: dict | None = None) -> None:
+    def fit_columns_to_contents(self, *, floors: dict[int, int] | None = None) -> None:
         """Size every column to its content, honouring per-column floors.
 
         Signals stay blocked: a content fit is the app's doing, not the
@@ -886,7 +921,7 @@ class AppTreeWidget(_BranchPainting, QTreeWidget):
 
     user_layout_changed = Signal()
 
-    def setHeaderLabels(self, labels) -> None:
+    def setHeaderLabels(self, labels: Sequence[str]) -> None:
         """Set the column titles in sentence case, as painted.
 
         Same rule as AppTable: the stored label is the painted label, so
@@ -925,14 +960,14 @@ class AppTreeWidget(_BranchPainting, QTreeWidget):
         hdr.sectionResized.connect(self._on_user_section_resized)
         hdr.sectionMoved.connect(self._on_user_section_moved)
 
-    def _on_user_section_resized(self, logical: int, *_args) -> None:
+    def _on_user_section_resized(self, logical: int, *_args: Any) -> None:
         if self._fitting:
             return
         if not _section_is_user_resizable(self.header(), logical):
             return
         self.user_layout_changed.emit()
 
-    def _on_user_section_moved(self, *_args) -> None:
+    def _on_user_section_moved(self, *_args: Any) -> None:
         if self._fitting:
             return
         self.user_layout_changed.emit()
@@ -1130,15 +1165,15 @@ class AppCheckBox(QCheckBox):
         top = area.top() + max(0, (height - size) // 2)
         return QRect(area.left(), top, size, size)
 
-    def enterEvent(self, event) -> None:
+    def enterEvent(self, event: QEnterEvent) -> None:
         super().enterEvent(event)
         self.update()
 
-    def leaveEvent(self, event) -> None:
+    def leaveEvent(self, event: QEvent) -> None:
         super().leaveEvent(event)
         self.update()
 
-    def paintEvent(self, event) -> None:
+    def paintEvent(self, event: QPaintEvent) -> None:
         # Base style first: the label, the elided text and the focus cue.
         super().paintEvent(event)
         painter = QPainter(self)
@@ -1296,7 +1331,7 @@ class _ElidedChipButton(QPushButton):
         shown = metrics.horizontalAdvance(self._shown_text)
         return QSize(hint.width() + max(0, full - shown), hint.height())
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._apply_elide()
 
@@ -1315,8 +1350,8 @@ def make_split_chip(
     active: bool = False,
     tip: str = "",
     close_tip: str = "",
-    on_open=None,
-    on_close=None,
+    on_open: Callable[[], Any] | None = None,
+    on_close: Callable[[], Any] | None = None,
     parent: QWidget | None = None,
 ) -> QFrame:
     """Build the dataset chip: a label half joined to a close half.
@@ -1395,7 +1430,7 @@ def _split_chip_qss(active: bool, part: str) -> str:
     )
 
 
-def make_page_heading(title: str, subtitle: str = "") -> tuple:
+def make_page_heading(title: str, subtitle: str = "") -> tuple[QLabel, QLabel | None]:
     """Build the standard full-page heading (title + optional subtitle).
 
     One contract for every top-level page (Settings, Review configuration,
@@ -1550,7 +1585,7 @@ class ElidedLabel(QLabel):
         self.setToolTip(self._full_text)
         self._apply_elide()
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._apply_elide()
 
@@ -1692,7 +1727,9 @@ def make_reset_columns_button(
     )
 
 
-def make_card(title: str, parent: QWidget | None = None) -> tuple:
+def make_card(
+    title: str, parent: QWidget | None = None
+) -> tuple[QFrame, QVBoxLayout, QLabel, QHBoxLayout]:
     """Build a standard white card (8px unified radius) with a header bar.
 
     Returns (card, body_layout, title_label, header_layout) — append extra
@@ -1744,7 +1781,9 @@ def _wrap_tip(*paragraphs: str, width: int = 76) -> str:
     return "\n\n".join(chunks)
 
 
-def add_info_tip(header_layout, *paragraphs: str, name: str = "", group: str = "") -> QToolButton:
+def add_info_tip(
+    header_layout: QHBoxLayout, *paragraphs: str, name: str = "", group: str = ""
+) -> QToolButton:
     """Add a small Lucide (i) button right after a card title.
 
     The explanation lives in the tooltip, so section headers read as
@@ -1852,7 +1891,9 @@ class _ComboPopupRowDelegate(QStyledItemDelegate):
 
     _ROW_HEIGHT = 34  # 22px min-height + 2 x 6px padding
 
-    def sizeHint(self, option, index):
+    def sizeHint(
+        self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex
+    ) -> QSize:
         hint = super().sizeHint(option, index)
         try:
             font_h = option.fontMetrics.height()
@@ -1874,21 +1915,21 @@ class _NoWheelCombo(QComboBox):
         super().__init__(parent)
         self._wheel_armed = False
 
-    def mousePressEvent(self, event) -> None:
+    def mousePressEvent(self, event: QMouseEvent) -> None:
         self._wheel_armed = True
         try:
             super().mousePressEvent(event)
         except Exception:
             pass
 
-    def focusOutEvent(self, event) -> None:
+    def focusOutEvent(self, event: QFocusEvent) -> None:
         self._wheel_armed = False
         try:
             super().focusOutEvent(event)
         except Exception:
             pass
 
-    def wheelEvent(self, event) -> None:
+    def wheelEvent(self, event: QWheelEvent) -> None:
         try:
             if not self._wheel_armed:
                 event.ignore()
@@ -1902,7 +1943,7 @@ class _NoWheelCombo(QComboBox):
 
 
 def make_combo(
-    items=None,
+    items: Iterable[Any] | None = None,
     parent: QWidget | None = None,
     *,
     height: int = 36,
@@ -2070,7 +2111,9 @@ def make_number_field(
 class _ValueChip(QFrame):
     """One phrase as a chip: its text plus a Lucide x that deletes it."""
 
-    def __init__(self, text: str, *, on_remove, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, text: str, *, on_remove: Callable[[], Any], parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self.value = str(text)
         self.setObjectName("ValueChip")
@@ -2109,7 +2152,7 @@ class _ChipFlow(QWidget):
         self._chips: list[QWidget] = []
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
-    def chips(self) -> list:
+    def chips(self) -> list[QWidget]:
         return list(self._chips)
 
     def add_chip(self, chip: QWidget, index: int | None = None) -> None:
@@ -2122,7 +2165,7 @@ class _ChipFlow(QWidget):
         chip.deleteLater()
         self._relayout()
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._relayout()
 
@@ -2138,8 +2181,8 @@ class _ChipFlow(QWidget):
             widget = item.widget() if item is not None else None
             if widget is not None:
                 widget.setParent(None)
-        rows: list[list] = []
-        current: list = []
+        rows: list[list[QWidget]] = []
+        current: list[QWidget] = []
         used = 0
         available = self.width()
         for chip in self._chips:
@@ -2174,7 +2217,7 @@ class AppValueList(QWidget):
 
     def __init__(
         self,
-        values=(),
+        values: Iterable[Any] = (),
         *,
         placeholder: str = "",
         add_tip: str = "",
@@ -2213,7 +2256,7 @@ class AppValueList(QWidget):
     def values(self) -> list[str]:
         return list(self._values)
 
-    def setValues(self, values) -> None:
+    def setValues(self, values: Iterable[Any]) -> None:
         """Replace the whole list: one ``changed``, never one per item."""
         for chip in self._flow.chips():
             self._flow.remove_chip(chip)
@@ -2254,7 +2297,7 @@ class AppValueList(QWidget):
 
 
 def make_value_list(
-    values=(),
+    values: Iterable[Any] = (),
     *,
     placeholder: str = "",
     add_tip: str = "",
@@ -2293,7 +2336,9 @@ def disposition_label(token: str) -> str:
 
 
 def make_disposition_combo(
-    current: str = "", on_change=None, parent: QWidget | None = None
+    current: str = "",
+    on_change: Callable[[Any], Any] | None = None,
+    parent: QWidget | None = None,
 ) -> QComboBox:
     """Compact disposition dropdown for one finding row.
 
@@ -2521,7 +2566,7 @@ class WorkflowRail(QWidget):
         self.hint.setToolTip(workflow.hint)
 
 
-def fit_tree_height(tree, row_height: int = 40, floor: int = 80) -> None:
+def fit_tree_height(tree: QTreeView, row_height: int = 40, floor: int = 80) -> None:
     """Grow a tree to its visible rows so the page scrolls, not the tree.
 
     Content fit for flush trees on a scrolling canvas (file manifest,

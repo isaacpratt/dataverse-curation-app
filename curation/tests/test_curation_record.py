@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from typing import Any
 
 from curation.curation_record import export_record
 from curation.storage import AppState
@@ -9,7 +10,7 @@ from engine.checks.base import CheckResult
 from engine.report import DatasetReport, FileEntry
 
 
-def _report():
+def _report() -> DatasetReport:
     return DatasetReport(
         persistent_id="doi:10.5072/FK2/EXAMPLE",
         label="Example",
@@ -25,7 +26,7 @@ def _report():
     )
 
 
-def _sha(path):
+def _sha(path: Any) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 

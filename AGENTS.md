@@ -6,7 +6,11 @@ Design decisions: native PySide6 desktop app (single process), API-token authent
 
 ```
 dataverse-curation-app/
-├── docs/html/            # documentation (source of truth): architecture, engine port, checks, dataverse, report contract, dev, user guide
+├── docs/                 # Zensical Markdown docs (published source of truth): zensical.toml at repo root
+│   ├── *.md              # 10 live pages mirroring the retired HTML names + proposals/ snapshots (out of nav)
+│   ├── html/             # frozen pre-Zensical HTML reference (retired after the Diátaxis rewrite)
+│   ├── reports/          # tracked historical reports (proposal snapshots, link checker)
+│   └── adr/              # architecture decision records
 ├── engine/               # Python check engine (ports of the R inspectors)
 │   ├── checks/           # one module per format (22), plus base.py/_util.py
 │   ├── report.py         # DatasetReport JSON contract
@@ -74,14 +78,20 @@ Outputs: `dist/DataverseDocent/DataverseDocent.exe` (onedir folder, fast launche
 
 ## Documentation
 
-- `docs/html/architecture.html` — components, threading, storage, the UI layering contract (palette → role → component), the table component contract, packaging
-- `docs/html/engine-port.html` — R-to-Python port matrix and go/no-go criteria
-- `docs/html/checks-reference.html` — what each auto-check examines, PASS semantics, issue taxonomy
-- `docs/html/dataverse-integration.html` — Native/Search API endpoints, auth, discovery + download flow
-- `docs/html/report-contract.html` — the JSON report format shared by engine and GUI
-- `docs/html/development.html` — setup, testing, adding checks, UI conventions, the component gallery, Qt pitfalls, probes, the planned dark-mode step, packaging
-- `docs/html/user-guide.html` — how a curator uses the app (dashboard, detail, metadata, log)
-- `docs/html/proposals.html` — pointer stub; plan lives in beads (`bd ready` / `bd list`)
+Published at https://isaacpratt.github.io/dataverse-curation-app/, built from
+Markdown in `docs/` by Zensical (`zensical.toml`, native config, explicit nav).
+Edit the Markdown pages, not the frozen `docs/html/` reference. Build/preview
+with `uv run poe docs` / `uv run poe docs-serve`. The two proposal snapshots in
+`docs/proposals/` are historical and intentionally out of the nav.
+
+- `docs/architecture.md` — components, threading, storage, the UI layering contract (palette → role → component), the table component contract, packaging, decision log
+- `docs/engine-port.md` — R-to-Python port matrix and go/no-go criteria
+- `docs/checks-reference.md` — what each auto-check examines, PASS semantics, issue taxonomy
+- `docs/dataverse-integration.md` — Native/Search API endpoints, auth, discovery + download flow
+- `docs/report-contract.md` — the JSON report format shared by engine and GUI
+- `docs/development.md` — setup, testing, adding checks, UI conventions, the component gallery, Qt pitfalls, probes, the planned dark-mode step, packaging
+- `docs/user-guide.md` — how a curator uses the app (dashboard, detail, metadata, log)
+- `docs/proposals.md` — pointer stub; plan lives in beads (`bd ready` / `bd list`)
 
 This project uses **bd** (beads) for issue tracking and project plan. Run `bd prime` for full workflow context.
 

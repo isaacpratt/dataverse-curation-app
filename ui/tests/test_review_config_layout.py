@@ -6,10 +6,12 @@ each of the two panes scrolls on its own with the scrollbar at the pane's
 right edge — the dataset page's two-column idiom.
 """
 
+from typing import Any
+
 from PySide6.QtWidgets import QFrame, QScrollArea, QSplitter
 
 
-def _rc(win):
+def _rc(win: Any):
     win._show_review_config()
     return win._review_config
 
@@ -33,7 +35,7 @@ def test_checks_tree_is_sized_to_its_content(win):
     assert tree.height() > 0
 
 
-def _card_of(widget):
+def _card_of(widget: Any):
     node = widget
     while node is not None and node.objectName() != "Card":
         node = node.parentWidget()

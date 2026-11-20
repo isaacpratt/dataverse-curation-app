@@ -1,0 +1,86 @@
+# Zensical configuration for the Dataverse Docent documentation.
+# Native Zensical format (not mkdocs.yml compatibility mode) — decision
+#dv-l1f, 2026-11-20. The Markdown tree mirrors the retired HTML page names;
+# the two frozen proposal snapshots are deliberately out of the nav. The docs
+# set is scheduled for a Diátaxis rewrite (dv-uq6), so this is a faithful build
+# of today's content rather than a new information architecture.
+
+[project]
+site_name = "Dataverse Docent"
+site_description = "Desktop curation assistant for Alliance Dataverse — checks, metadata review, and curation reports."
+site_url = "https://isaacpratt.github.io/dataverse-curation-app/"
+repo_url = "https://github.com/isaacpratt/dataverse-curation-app"
+repo_name = "isaacpratt/dataverse-curation-app"
+docs_dir = "docs"
+site_dir = "site"
+exclude_docs = """
+/html/
+/reports/
+/adr/
+"""
+# Frozen proposal snapshots: built and searchable, but not in the navigation.
+not_in_nav = """
+/proposals/
+"""
+
+# Explicit nav mirrors the 12 retired page names (10 live + 2 historical).
+nav = [
+  { "Home" = "index.md" },
+  { "Architecture" = "architecture.md" },
+  { "Checks reference" = "checks-reference.md" },
+  { "Entry correctness" = "entry-correctness.md" },
+  { "Dataverse integration" = "dataverse-integration.md" },
+  { "Report contract" = "report-contract.md" },
+  { "Engine port" = "engine-port.md" },
+  { "User guide" = "user-guide.md" },
+  { "Development" = "development.md" },
+  { "Proposals" = "proposals.md" },
+]
+
+extra_css = ["assets/extra.css"]
+
+[project.theme]
+language = "en"
+features = [
+  "announce.dismiss",
+  "content.code.annotate",
+  "content.code.copy",
+  "content.code.select",
+  "content.footnote.tooltips",
+  "content.tabs.link",
+  "content.tooltips",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.instant",
+  "navigation.instant.prefetch",
+  "navigation.path",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+  "search.suggest",
+  "toc.follow",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
+
+# Mermaid is Zensical-native: the runtime is initialised automatically when a
+# page contains a ```mermaid block. These fences match the retired inline SVGs.
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]

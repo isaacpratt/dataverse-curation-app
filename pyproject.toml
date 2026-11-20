@@ -42,7 +42,7 @@ dependencies = [
 [project.urls]
 Repository = "https://github.com/isaacpratt/dataverse-curation-app"
 Issues = "https://github.com/isaacpratt/dataverse-curation-app/issues"
-Documentation = "https://github.com/isaacpratt/dataverse-curation-app/tree/master/docs/html"
+Documentation = "https://isaacpratt.github.io/dataverse-curation-app/"
 
 # Application, not library: never build/install it as a package. The wheel
 # produced by the deleted setuptools config excluded the root modules, so
@@ -69,6 +69,7 @@ dev = [
     "pre-commit>=4.0",
     "pytest-xdist>=3.6",
     "import-linter>=2.3",
+    "zensical>=0.0.53",
 ]
 
 [tool.setuptools.packages.find]
@@ -203,8 +204,16 @@ type = "simple"
   sequence = ["license-report", "notice", "sbom"]
 
   [tool.poe.tasks.docs-links]
-  help = "Offline link/anchor check for docs/html/*.html"
+  help = "Offline link/anchor check for docs/html/*.html (the retired pre-Zensical pages)"
   cmd = "python tools/docs/check_doc_links.py"
+
+  [tool.poe.tasks.docs]
+  help = "Build the Zensical documentation site into site/ (strict: broken links fail)"
+  cmd = "zensical build --strict"
+
+  [tool.poe.tasks.docs-serve]
+  help = "Preview the Zensical docs with live reload"
+  cmd = "zensical serve"
 
   [tool.poe.tasks.complexity]
   help = "Advisory cyclomatic-complexity report (radon) -> reports/complexity.md"
@@ -356,45 +365,16 @@ exclude = [
     "^dist/",
 ]
 
-# The UI layer is gated under a documented relaxation of --strict
-# (dv-hcg.28). Full strictness would demand an annotation on every one
-# of the ~4,000 lines of Qt glue; what the gate actually buys is the
-# *shape* checks - attr-defined, union-attr, assignment, arg-type,
-# operator, has-type, var-annotated, func-returns-value, no-redef - and
-# those are exactly the checks that found the real defects the audit
-# listed (the int(QSize) bug, the undeclared mixin attributes, the
-# twice-declared attribute, the functions used for their return value).
-# `check_untyped_defs` stays ON, so the bodies of unannotated functions
-# are still checked; only the "you must annotate this" rules are relaxed.
-#
-# Justification for the relaxation: PySide6 ships no usable stubs for
-# the widget tree (the widgets are created in code, not declared), so
-# a strict UI would need thousands of `Any` annotations that add no
-# safety and would be erased by the first refactor. The enum sweep
-# (scoped PySide6 enum names) and the shape fixes are the parts that
-# pay for themselves.
+# Test policy (ratified 2026-11-20, dv-a4w / ADR 0008): every application
+# module — ui.* included — is now checked under full --strict. Only the
+# test modules relax, and only the three "you must annotate" rules below;
+# every shape check and `check_untyped_defs` stay ON for them as well.
 [[tool.mypy.overrides]]
-module = ["ui.*"]
+module = ["curation.tests.*", "engine.tests.*", "tools.tests.*", "ui.tests.*"]
 disallow_untyped_defs = false
-disallow_untyped_calls = false
 disallow_incomplete_defs = false
-disallow_any_generics = false
-warn_return_any = false
-no_implicit_reexport = false
-
-# The test suites run under the same documented relaxation (2026-11-18,
-# merge of master). The packages they exercise stay under full --strict;
-# the tests are exercised by pytest, and writing to the strict annotation
-# bar would mean re-annotating a large suite with no defect-finding
-# payoff. The shape checks stay ON for them, exactly as for ui.*.
-[[tool.mypy.overrides]]
-module = ["curation.tests.*", "engine.tests.*", "tools.tests.*"]
-disallow_untyped_defs = false
-disallow_untyped_calls = false
-disallow_incomplete_defs = false
-disallow_any_generics = false
-warn_return_any = false
-no_implicit_reexport = false
+disallow_untyped_decorators = false
+check_untyped_defs = true
 
 # Machine-enforced dependency direction (import-linter).
 #

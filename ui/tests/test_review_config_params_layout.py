@@ -6,12 +6,14 @@ lists are chip fields with Lucide adds/deletes rather than text areas.
 Nothing clips at 1440x900 or 960x720.
 """
 
+from typing import Any
+
 from PySide6.QtWidgets import QCheckBox, QLabel, QSpinBox, QTextEdit
 
 from ui.widgets import AppNumberField, AppValueList
 
 
-def _pane(rc):
+def _pane(rc: Any):
     """Return the Response pane: the splitter's second scroll area."""
     from PySide6.QtWidgets import QSplitter
 
@@ -19,7 +21,7 @@ def _pane(rc):
     return splitter.widget(1)
 
 
-def _shown(win, rule, qapp):
+def _shown(win: Any, rule: Any, qapp: Any):
     win._show_review_config()
     rc = win._review_config
     rs = rc._current_ruleset()
@@ -54,13 +56,13 @@ def _shown(win, rule, qapp):
     return rc, snapshot
 
 
-def _restore(rc, snapshot):
+def _restore(rc: Any, snapshot: Any):
     rc._current_ruleset()["field_rules"] = snapshot
     rc._refresh_field_table()
     rc._clear_dirty()
 
 
-def _labels(rc):
+def _labels(rc: Any):
     return [
         label
         for label in rc._params_panel.findChildren(QLabel)

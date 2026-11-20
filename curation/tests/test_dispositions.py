@@ -1,5 +1,7 @@
 """Finding dispositions (dv-32x): finding_key stability, storage round-trip, and the response-draft exclusion of "Won't fix" findings."""
 
+from typing import Any
+
 from curation.response_draft import (
     build_response,
     collect_filecheck_sections,
@@ -135,7 +137,7 @@ def _report() -> DatasetReport:
     )
 
 
-def _completeness() -> list[dict]:
+def _completeness() -> list[dict[str, Any]]:
     return [
         {
             "field": "Affiliation",

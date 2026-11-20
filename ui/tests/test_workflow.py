@@ -5,6 +5,8 @@ states. The rail tests construct a ``DatasetDetailView`` from cached metadata
 and inventory only — no metadata worker, no network.
 """
 
+from typing import Any
+
 import pytest
 
 from ui.workflow import (
@@ -18,7 +20,7 @@ from ui.workflow import (
 )
 
 
-def _states(inp):
+def _states(inp: Any):
     return {s.key: s.state for s in derive_workflow(inp).steps}
 
 

@@ -7,12 +7,14 @@ case-insensitive duplicates. ``setValues`` replaces the list wholesale with
 one ``changed``, never one per item.
 """
 
+from typing import Any, cast
+
 from PySide6.QtWidgets import QLineEdit
 
 from ui.widgets import AppValueList, make_value_list
 
 
-def _enter(field, text):
+def _enter(field: Any, text: Any):
     edit = field._field
     edit.setText(text)
     edit.returnPressed.emit()
@@ -20,7 +22,7 @@ def _enter(field, text):
 
 def test_add_one_phrase_per_enter_and_per_click(qapp):
     field = make_value_list()
-    seen: list = []
+    seen: list[Any] = []
     field.changed.connect(seen.append)
     _enter(field, "CC0 1.0")
     assert field.values() == ["CC0 1.0"]
@@ -37,7 +39,7 @@ def test_add_one_phrase_per_enter_and_per_click(qapp):
 
 def test_blanks_and_duplicates_are_ignored(qapp):
     field = make_value_list(["CC0 1.0"])
-    seen: list = []
+    seen: list[Any] = []
     field.changed.connect(seen.append)
     _enter(field, "   ")
     _enter(field, "")
@@ -51,9 +53,9 @@ def test_deleting_a_chip_removes_only_that_entry(qapp):
     from PySide6.QtWidgets import QPushButton
 
     field = make_value_list(["CC0 1.0", "CC BY 4.0", "MIT"])
-    seen: list = []
+    seen: list[Any] = []
     field.changed.connect(seen.append)
-    chips = field._flow.chips()
+    chips = cast(list[Any], field._flow.chips())
     assert [c.value for c in chips] == ["CC0 1.0", "CC BY 4.0", "MIT"]
     # Each chip's only button is its Lucide x delete.
     middle = chips[1]
@@ -70,7 +72,7 @@ def test_values_preserve_display_order(qapp):
 
 def test_set_values_replaces_wholesale_without_per_item_signals(qapp):
     field = make_value_list(["one", "two", "three"])
-    seen: list = []
+    seen: list[Any] = []
     field.changed.connect(seen.append)
     field.setValues(["alpha", "beta"])
     assert field.values() == ["alpha", "beta"]
@@ -104,7 +106,7 @@ def test_chips_wrap_onto_rows_when_narrow(qapp):
     field.resize(180, field.height())
     for _ in range(4):
         qapp.processEvents()
-    rows: dict = {}
+    rows: dict[Any, Any] = {}
     for chip in field._flow.chips():
         rows.setdefault(round(chip.geometry().top()), []).append(chip)
     assert len(rows) >= 2, "a narrow list wraps its chips onto more than one row"

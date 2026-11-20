@@ -35,7 +35,7 @@ def check_title(check_id: str) -> str:
     return title_for(cid) or t("checks.check_text.unknown_check", id=cid)
 
 
-def _result_get(result: Any, key: str, default=None):
+def _result_get(result: Any, key: str, default: Any = None) -> Any:
     if isinstance(result, dict):
         return result.get(key, default)
     try:

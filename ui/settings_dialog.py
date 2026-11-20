@@ -11,11 +11,14 @@ design). Edits are tracked against a baseline snapshot; leaving with unsaved
 changes asks Save / Discard / Cancel instead of silently discarding them.
 """
 
+from __future__ import annotations
+
 import importlib.metadata
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import requests
 from PySide6.QtCore import Qt, QThread, Signal
@@ -74,7 +77,11 @@ class _ShellWorker(QThread):
 
     done = Signal(bool, str, str)  # ok, title, message
 
-    def __init__(self, func, parent=None):
+    def __init__(
+        self,
+        func: Callable[[], tuple[bool, str, str]],
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         register_worker(self)
         self._func = func
@@ -96,7 +103,11 @@ class _SizeWorker(QThread):
 
     done = Signal(dict)
 
-    def __init__(self, func, parent=None):
+    def __init__(
+        self,
+        func: Callable[[], dict[str, str]],
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         register_worker(self)
         self._func = func
@@ -138,7 +149,7 @@ class SettingsPane(QWidget):
         ("hush-scan", "hush", t("settings.extensions.used_hush")),
     ]
 
-    def __init__(self, config: Config, parent=None) -> None:
+    def __init__(self, config: Config, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._config = config
         # Scoped to self: a bare `background` rule would act subtree-wide
@@ -408,7 +419,7 @@ class SettingsPane(QWidget):
             pass
 
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
-        self._tool_paths: dict = {}
+        self._tool_paths: dict[str, str] = {}
         self._shell_worker: _ShellWorker | None = None
         self._size_worker: _SizeWorker | None = None
         # Package-size cache: os.walk per package is seconds-slow, so sizes
@@ -433,7 +444,7 @@ class SettingsPane(QWidget):
         # The scan is interruptible: the process may need to stop it
         # (quit, a probe's exit), and walking every package takes
         # seconds.
-        holder: list = []
+        holder: list[_SizeWorker] = []
 
         def _work() -> dict[str, str]:
             out: dict[str, str] = {}
@@ -547,7 +558,7 @@ class SettingsPane(QWidget):
     def has_unsaved_changes(self) -> bool:
         return bool(self._dirty)
 
-    def confirm_leave(self, parent=None) -> bool:
+    def confirm_leave(self, parent: QWidget | None = None) -> bool:
         """Ask Save/Discard/Cancel when leaving with unsaved edits.
 
         Returns True when navigation may proceed (saved or discarded), False
@@ -892,7 +903,7 @@ class SettingsPane(QWidget):
             self._refresh_extensions()
             self._refresh_dirty()
 
-    def _run_shell(self, func, status: str) -> None:
+    def _run_shell(self, func: Callable[[], tuple[bool, str, str]], status: str) -> None:
         """Run one blocking `func() -> (ok, title, message)` off the GUI thread."""
         if self._shell_worker is not None and self._shell_worker.isRunning():
             self.ext_status.setText(t("settings.extensions.busy"))
@@ -924,7 +935,7 @@ class SettingsPane(QWidget):
         self._refresh_extensions()
 
     @staticmethod
-    def _pip_run(args: list, pip_name: str, verb: str) -> tuple:
+    def _pip_run(args: list[str], pip_name: str, verb: str) -> tuple[bool, str, str]:
         result = subprocess.run(
             [sys.executable, "-m", "pip", *args],
             capture_output=True,
@@ -1051,7 +1062,7 @@ class SettingsPane(QWidget):
             pass
 
     def _set_collection_role(
-        self, roles: list | None, alias: str = "", checked: bool = True
+        self, roles: list[Any] | None, alias: str = "", checked: bool = True
     ) -> None:
         """Render the caller's role(s) on the alias collection.
 
@@ -1116,7 +1127,9 @@ class SettingsPane(QWidget):
         except Exception:
             pass
 
-    def _set_user_info(self, me: dict | None, status: str = "", checked: bool = False) -> None:
+    def _set_user_info(
+        self, me: dict[str, Any] | None, status: str = "", checked: bool = False
+    ) -> None:
         """Render a /api/users/:me profile into the identity rows.
 
         checked=False (never queried: no URL/token yet) reads "Not checked
@@ -1199,7 +1212,7 @@ class SettingsPane(QWidget):
         self._user_status.setText(t("settings.user.checking_identity"))
         self._set_user_rows(t("settings.user.checking"))
 
-        def _fetch() -> tuple:
+        def _fetch() -> tuple[bool, str, str]:
             import json as _json
 
             try:
@@ -1282,7 +1295,7 @@ class SettingsPane(QWidget):
             self._set_conn_status(False, t("settings.connection.enter_url"))
             return
 
-        def _probe() -> tuple:
+        def _probe() -> tuple[bool, str, str]:
             try:
                 r = requests.get(f"{base}/api/info/version", timeout=12)
                 r.raise_for_status()

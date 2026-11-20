@@ -8,9 +8,10 @@ subfield — not a bolt-on handler on the composite.
 
 import json
 from pathlib import Path
+from typing import Any
 
 
-def _citation_group(rc):
+def _citation_group(rc: Any):
     tree = rc._field_tree
     for i in range(tree.topLevelItemCount()):
         top = tree.topLevelItem(i)
@@ -19,7 +20,7 @@ def _citation_group(rc):
     return None
 
 
-def _find_child(item, text):
+def _find_child(item: Any, text: Any):
     for i in range(item.childCount()):
         child = item.child(i)
         if child.text(0) == text:

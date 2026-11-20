@@ -61,7 +61,7 @@ def test_success_strip_is_loud_and_persists(view):
     assert not view._status_row.isVisible()
 
 
-def QApplication_process():
+def QApplication_process() -> None:
     from PySide6.QtWidgets import QApplication
 
     QApplication.processEvents()

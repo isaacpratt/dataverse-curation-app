@@ -6,8 +6,10 @@ curation status, no label history and no version comparison, so those
 calls are not sent.
 """
 
+from typing import Any
 
-def _worker(draft_hint):
+
+def _worker(draft_hint: Any):
     from ui.workers import MetadataWorker
 
     return MetadataWorker(

@@ -7,13 +7,15 @@ native stepper is off; the minus/plus buttons are the kit's 32px ghost icon
 buttons, disabled at the bounds.
 """
 
+from typing import Any
+
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QLineEdit
 
 from ui.widgets import AppNumberField, make_number_field
 
 
-def _press(btn):
+def _press(btn: Any):
     btn.click()
 
 
@@ -28,7 +30,7 @@ def test_value_clamps_to_the_range(qapp):
 
 def test_each_button_steps_one_and_emits_changed_once(qapp):
     field = make_number_field(0, minimum=0, maximum=10)
-    seen: list = []
+    seen: list[Any] = []
     field.changed.connect(seen.append)
     _press(field._up)
     assert field.value() == 1
@@ -52,7 +54,7 @@ def test_buttons_are_disabled_at_the_bounds(qapp):
 
 def test_typing_beyond_the_maximum_clamps_on_commit(qapp):
     field = make_number_field(0, minimum=0, maximum=100)
-    seen: list = []
+    seen: list[Any] = []
     field.changed.connect(seen.append)
     edit = field._spin.findChild(QLineEdit)
     assert edit is not None, "the spin box owns one line edit"
@@ -68,7 +70,7 @@ def test_typing_beyond_the_maximum_clamps_on_commit(qapp):
 
 def test_set_value_does_not_emit(qapp):
     field = make_number_field(0, minimum=0, maximum=100)
-    seen: list = []
+    seen: list[Any] = []
     field.changed.connect(seen.append)
     field.setValue(42)
     assert field.value() == 42

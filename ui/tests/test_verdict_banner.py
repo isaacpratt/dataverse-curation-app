@@ -1,5 +1,7 @@
 """Verdict banner (dv-6nv): the card renders levels + reason chips and a chip routes to the card that owns the reason."""
 
+from typing import Any
+
 import pytest
 
 from engine.verdict import Verdict
@@ -93,7 +95,7 @@ def test_chip_routes_to_owner(view, qapp):
     assert v.reasons[0].target == "respond"
 
 
-def _clean_report():
+def _clean_report() -> Any:
     from engine.checks.base import CheckResult
     from engine.report import DatasetReport, FileEntry
 

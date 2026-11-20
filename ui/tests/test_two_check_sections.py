@@ -6,6 +6,7 @@ both places, and each section has its own summary.
 """
 
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtWidgets import QLabel
 
@@ -13,7 +14,7 @@ _EXE = "inventory.executables"
 _CSV = "format.csv.openable"
 
 
-def _result(check_id, level, passed, message, path=""):
+def _result(check_id: Any, level: Any, passed: Any, message: Any, path: Any = ""):
     from engine.checks.base import CheckResult
 
     return CheckResult(
@@ -25,7 +26,7 @@ def _result(check_id, level, passed, message, path=""):
     )
 
 
-def _report():
+def _report() -> Any:
     from engine.report import DatasetReport, FileEntry
 
     return DatasetReport(
@@ -57,7 +58,7 @@ def _report():
     )
 
 
-def _view(qapp, tmp_path):
+def _view(qapp: Any, tmp_path: Any):
     from curation.config import Config
     from ui.dataset import DatasetDetailView
 
@@ -85,7 +86,7 @@ def _view(qapp, tmp_path):
     return view
 
 
-def _headings(view):
+def _headings(view: Any):
     return [
         label.text()
         for layout in (view._main_wrap,)
@@ -96,8 +97,8 @@ def _headings(view):
     ]
 
 
-def _auto_rows(view):
-    out = []
+def _auto_rows(view: Any):
+    out: list[Any] = []
     for i in range(view._auto_body.count()):
         widget = view._auto_body.itemAt(i).widget()
         if widget is not None and widget.objectName() == "AutoCheckRow":
@@ -105,13 +106,13 @@ def _auto_rows(view):
     return out
 
 
-def _tree_texts(view):
+def _tree_texts(view: Any):
     from PySide6.QtCore import QModelIndex
 
-    texts = []
+    texts: list[str] = []
     model = view._file_tree.model()
 
-    def walk(parent=None):
+    def walk(parent: Any = None) -> None:
         if parent is None:
             parent = QModelIndex()
         for row in range(model.rowCount(parent)):

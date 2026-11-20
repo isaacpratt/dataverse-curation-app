@@ -236,7 +236,7 @@ def test_the_check_worker_emits_its_outcome(
 ) -> None:
     monkeypatch.setattr(updater, "make_update_manager", lambda: FakeManager(info="0.2.0"))
     monkeypatch.setattr(updater, "is_check_due", lambda **_: True)
-    outcomes: list[dict] = []
+    outcomes: list[dict[str, Any]] = []
 
     worker = updater.UpdateCheckWorker(force=True)
     worker.finished.connect(lambda outcome: outcomes.append(outcome))

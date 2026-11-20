@@ -8,6 +8,7 @@ the tests never call (detail loaders fire async and are never awaited).
 """
 
 import os
+from typing import cast
 
 import pytest
 
@@ -49,7 +50,7 @@ def qapp():
     try:
         from ui.theme import apply_theme
 
-        apply_theme(app)
+        apply_theme(cast(QApplication, app))
     except Exception:
         pass
     return app

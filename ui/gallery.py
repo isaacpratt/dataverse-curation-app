@@ -16,6 +16,8 @@ not raw widgets, and its copy lives in the string catalogue. The
 conformance test covers it too.
 """
 
+from __future__ import annotations
+
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QFrame,
@@ -23,6 +25,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QScrollArea,
+    QTableWidgetItem,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -495,17 +499,13 @@ def _data_section() -> QWidget:
     return host
 
 
-def _table_item(text: str):
+def _table_item(text: str) -> QTableWidgetItem:
     """Build a table cell (the table owns the item, the gallery owns the text)."""
-    from PySide6.QtWidgets import QTableWidgetItem
-
     return QTableWidgetItem(text)
 
 
-def _tree_item(label: str):
+def _tree_item(label: str) -> QTreeWidgetItem:
     """Build a tree item (the tree owns the item, the gallery owns the text)."""
-    from PySide6.QtWidgets import QTreeWidgetItem
-
     return QTreeWidgetItem([label])
 
 

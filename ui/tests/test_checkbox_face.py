@@ -54,7 +54,7 @@ def _indicator_bounds(box: AppCheckBox, image: QImage) -> tuple[int, int, int]:
     return left, top, size
 
 
-def _near(a, b, tolerance: int = 24) -> bool:
+def _near(a: QColor, b: QColor, tolerance: int = 24) -> bool:
     return (
         abs(a.red() - b.red()) <= tolerance
         and abs(a.green() - b.green()) <= tolerance

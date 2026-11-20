@@ -16,8 +16,8 @@ _UNRENDERED = re.compile(r"\{[A-Z][A-Z0-9_]{1,}\}")
 _UI_DIR = Path(__file__).resolve().parents[1]
 
 
-def _hex_string_hits():
-    hits = []
+def _hex_string_hits() -> list[str]:
+    hits: list[str] = []
     for path in sorted(_UI_DIR.glob("*.py")):
         if path.name == "theme.py":  # the one place raw hex is allowed
             continue

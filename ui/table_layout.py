@@ -31,10 +31,13 @@ Usage::
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any, cast
 
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QHeaderView, QWidget
 
 from curation.storage import (
     apply_table_view,
@@ -71,9 +74,9 @@ class TableLayout:
         self,
         workspace: Path | str,
         key: str,
-        header,
+        header: QHeaderView,
         *,
-        view=None,
+        view: QWidget | None = None,
         persist_sort: bool = True,
         autosave: bool = True,
     ) -> None:
@@ -98,7 +101,7 @@ class TableLayout:
         # used instead -- and the suppressed() scope tells the two apart.
         if view is not None and hasattr(view, "user_layout_changed"):
             try:
-                view.user_layout_changed.connect(self._on_layout_changed)
+                cast(Any, view).user_layout_changed.connect(self._on_layout_changed)
             except Exception:
                 pass
         else:
@@ -114,7 +117,7 @@ class TableLayout:
                 pass
 
     # -- user gestures -----------------------------------------------------
-    def _on_layout_changed(self, *_args) -> None:
+    def _on_layout_changed(self, *_args: Any) -> None:
         """Persist the layout: a column was resized, moved or re-sorted."""
         if self._depth or not self.autosave:
             return
@@ -129,7 +132,7 @@ class TableLayout:
 
     # -- programmatic changes ---------------------------------------------
     @contextmanager
-    def suppressed(self):
+    def suppressed(self) -> Iterator[TableLayout]:
         """Scope for programmatic changes: they are not persisted.
 
         Use it around content fits, viewport refits and any other resize

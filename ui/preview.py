@@ -17,12 +17,13 @@ import csv
 import io
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
 
 from ui.i18n import t
 from ui.theme import FONT_CAPTION
@@ -450,8 +451,8 @@ _COL_CLAMP = 24  # cell text is clamped so wide CSVs never widen the card
 
 
 def _clamp(text: Any, limit: int = _COL_CLAMP) -> str:
-    text = "" if text is None else str(text)
-    return text if len(text) <= limit else text[: limit - 1] + "…"
+    value: str = "" if text is None else str(text)
+    return value if len(value) <= limit else value[: limit - 1] + "…"
 
 
 def render_tabular(result: dict[str, Any]) -> str:
@@ -499,7 +500,11 @@ class PreviewCard(QFrame):
     depending on the preview ``kind``.
     """
 
-    def __init__(self, on_open_folder=None, parent=None):
+    def __init__(
+        self,
+        on_open_folder: Callable[[], None] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._on_open_folder = on_open_folder
         lay = QVBoxLayout(self)

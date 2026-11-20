@@ -4,10 +4,12 @@ Each sub-shape is exercised against fixture metadata blocks; every failure
 must carry a bracketed reason so a result is never a silent pass.
 """
 
+from typing import Any
+
 import curation.review_rules as rr
 
 
-def _meta(fields=()):
+def _meta(fields: Any = ()) -> Any:
     return {
         "latestVersion": {
             "metadataBlocks": {"citation": {"fields": list(fields)}},
@@ -15,11 +17,11 @@ def _meta(fields=()):
     }
 
 
-def _f(name, value):
+def _f(name: Any, value: Any) -> Any:
     return {"typeName": name, "value": value}
 
 
-def _rule(params, level="required", label="Field", field="title"):
+def _rule(params: Any, level: Any = "required", label: Any = "Field", field: Any = "title") -> Any:
     return {
         "block": "citation",
         "field": field,
@@ -32,7 +34,7 @@ def _rule(params, level="required", label="Field", field="title"):
     }
 
 
-def _run(meta, params, field="title", level="required"):
+def _run(meta: Any, params: Any, field: Any = "title", level: Any = "required") -> Any:
     blocks = rr._blocks(meta)
     return rr._eval_handler(
         "looks_correct",
@@ -195,7 +197,7 @@ def test_date_parses_iso_shapes():
     )
 
 
-def _time_period(start, end):
+def _time_period(start: Any, end: Any) -> Any:
     return _f(
         "timePeriodCovered",
         [

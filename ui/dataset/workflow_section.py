@@ -77,7 +77,7 @@ class WorkflowSection(DetailState):
             )
             # Unresolved review signals from the verdict derivation (the
             # same numbers the banner shows; resolved findings stop counting).
-            counts: dict = {}
+            counts: dict[str, int] = {}
             try:
                 from engine.verdict import assess
 

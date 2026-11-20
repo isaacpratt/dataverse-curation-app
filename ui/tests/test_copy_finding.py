@@ -1,15 +1,16 @@
 """Per-row overflow copy (dv-18z): the ellipsis glyph on each finding row copies it."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 
-def _fv(value):
+def _fv(value: Any):
     return {"typeName": "text", "multiple": False, "typeClass": "primitive", "value": value}
 
 
-def _metadata() -> dict:
+def _metadata() -> dict[str, Any]:
     return {
         "latestVersion": {
             "license": {"name": "CC0 1.0"},
@@ -73,7 +74,7 @@ def view(qapp, tmp_path):
     v.deleteLater()
 
 
-def _overflow_button(row):
+def _overflow_button(row: Any):
     """Return the row's overflow button: the ellipsis glyph, named for the action."""
     from PySide6.QtWidgets import QPushButton
 

@@ -5,14 +5,16 @@ per-file findings live in File checks. The severity filter narrows the
 card to findings (All / Errors / Warnings).
 """
 
+from typing import Any
+
 from PySide6.QtWidgets import QLabel
 
 
-def _report():
+def _report() -> Any:
     from engine.checks.base import CheckResult
     from engine.report import DatasetReport, FileEntry
 
-    def skip(path):
+    def skip(path: Any):
         return CheckResult(
             check_id="format.spss",
             level="warning",
@@ -21,7 +23,7 @@ def _report():
             details={"skipped": True},
         )
 
-    def err(path):
+    def err(path: Any):
         return CheckResult(
             check_id="format.xml",
             level="error",
@@ -77,7 +79,7 @@ def _report():
     )
 
 
-def _view(qapp, tmp_path):
+def _view(qapp: Any, tmp_path: Any):
     from pathlib import Path
 
     from curation.config import Config
@@ -103,7 +105,7 @@ def _view(qapp, tmp_path):
     return v
 
 
-def _rows(view):
+def _rows(view: Any):
     """Return the Auto-Checks rows, in card order (the card body is a layout)."""
     out = []
     lay = view._auto_body
@@ -115,7 +117,7 @@ def _rows(view):
     return out
 
 
-def _shown_kinds(view):
+def _shown_kinds(view: Any):
     """Return the severity classes of the rows the filter leaves on show."""
     return sorted(str(r.property("auto_class") or "?") for r in _rows(view) if not r.isHidden())
 

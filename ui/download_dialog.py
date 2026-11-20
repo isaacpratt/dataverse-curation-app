@@ -6,6 +6,8 @@ position plus the guestbook's custom questions). The answers are POSTed with
 the download; Dataverse then returns a signed URL for the ZIP.
 """
 
+from typing import Any, cast
+
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -41,10 +43,10 @@ class DownloadApprovalDialog(QDialog):
     def __init__(
         self,
         quote: DownloadQuote,
-        parent=None,
-        guestbook: dict | None = None,
-        account: dict | None = None,
-    ):
+        parent: QWidget | None = None,
+        guestbook: dict[str, Any] | None = None,
+        account: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle(t("download.title"))
         self.setMinimumWidth(480)
@@ -52,7 +54,7 @@ class DownloadApprovalDialog(QDialog):
         self._account = account if isinstance(account, dict) else {}
         self._base_inputs: dict[str, QLineEdit] = {}
         self._base_specs: list[tuple[str, str, bool]] = []
-        self._question_inputs: list[tuple[dict, QWidget]] = []
+        self._question_inputs: list[tuple[dict[str, Any], QWidget]] = []
         self._error = QLabel("")
         layout = QVBoxLayout(self)
         msg = QLabel(
@@ -101,7 +103,7 @@ class DownloadApprovalDialog(QDialog):
 
     # -- guestbook form ----------------------------------------------------
     @staticmethod
-    def _account_defaults(account: dict) -> dict[str, str]:
+    def _account_defaults(account: dict[str, Any]) -> dict[str, str]:
         name = " ".join(
             part
             for part in (
@@ -167,7 +169,7 @@ class DownloadApprovalDialog(QDialog):
         self._base_inputs[key] = edit
         self._base_specs.append((key, label, required))
 
-    def _add_question(self, form: QVBoxLayout, question: dict) -> None:
+    def _add_question(self, form: QVBoxLayout, question: dict[str, Any]) -> None:
         label = str(question.get("question") or t("download.question_fallback"))
         if question.get("required"):
             label += t("download.required_marker")
@@ -202,7 +204,7 @@ class DownloadApprovalDialog(QDialog):
             return str(widget.currentData() or "").strip()
         if isinstance(widget, QPlainTextEdit):
             return widget.toPlainText().strip()
-        return widget.text().strip()  # type: ignore[attr-defined]
+        return cast(QLineEdit, widget).text().strip()
 
     def accept(self) -> None:
         if self._guestbook is not None:
@@ -222,16 +224,16 @@ class DownloadApprovalDialog(QDialog):
                 return
         super().accept()
 
-    def guestbook_response(self) -> dict | None:
+    def guestbook_response(self) -> dict[str, Any] | None:
         """Return the JSON body Dataverse expects inside ``guestbookResponse``."""
         if self._guestbook is None:
             return None
-        response: dict = {}
+        response: dict[str, Any] = {}
         for key, edit in self._base_inputs.items():
             value = edit.text().strip()
             if value:
                 response[key] = value
-        answers = []
+        answers: list[dict[str, Any]] = []
         for question, widget in self._question_inputs:
             value = self._value(widget)
             if not value:

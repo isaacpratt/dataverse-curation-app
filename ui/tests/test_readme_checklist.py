@@ -1,7 +1,9 @@
 """README section checklist in the Auto-Checks card (dv-81q)."""
 
+from typing import Any
 
-def _view():
+
+def _view() -> Any:
     from ui.dataset import DatasetDetailView
 
     v = DatasetDetailView.__new__(DatasetDetailView)

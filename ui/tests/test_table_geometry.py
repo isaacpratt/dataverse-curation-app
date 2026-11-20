@@ -7,6 +7,8 @@ pin that invariant for the three interactions that used to break it (a
 dragged edge, a moved column, a resized window).
 """
 
+from typing import Any
+
 import pytest
 
 
@@ -34,7 +36,7 @@ def _last_visible_logical(header) -> int:
     return last
 
 
-def _settle(qapp, rounds=8):
+def _settle(qapp: Any, rounds: int = 8) -> None:
     for _ in range(rounds):
         qapp.processEvents()
 

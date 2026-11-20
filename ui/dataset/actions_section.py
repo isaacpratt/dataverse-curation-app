@@ -790,7 +790,7 @@ class ActionsSection(DetailState):
         except Exception:
             return False, ""
 
-    def _sensitivity_suggestions(self) -> dict:
+    def _sensitivity_suggestions(self) -> dict[str, str | None]:
         """Machine-suggested answers from the report + inventory."""
         try:
             return suggested_answers(self._report, self._inventory)

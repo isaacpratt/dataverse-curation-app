@@ -16,6 +16,8 @@ controls have to fit the width the window actually has, and the page
 must never scroll sideways.
 """
 
+from typing import Any, cast
+
 import pytest
 from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QFrame
@@ -26,7 +28,7 @@ from ui.i18n import t
 SMALL = (960, 640)
 
 
-def _pump(qapp, times=15):
+def _pump(qapp: Any, times: int = 15) -> None:
     for _ in range(times):
         qapp.processEvents()
 
@@ -57,7 +59,7 @@ def detail(win, qapp):
 
 def _right_edge_in(parent, widget) -> int:
     """Return the widget's right edge, in the parent's coordinates."""
-    return widget.mapTo(parent, QPoint(widget.width(), 0)).x()
+    return cast(int, widget.mapTo(parent, QPoint(widget.width(), 0)).x())
 
 
 def _layout_holds(layout, widget) -> bool:

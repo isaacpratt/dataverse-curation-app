@@ -1,5 +1,7 @@
 """The Version log card: the version list and the compare view."""
 
+from typing import Any, cast
+
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame,
@@ -74,7 +76,7 @@ class VersionsSection(DetailState):
         _version_tools_lay.addStretch()
         # Sibling of the body (not inside it): _populate_version_diff clears
         # the body on every refresh and must not take the tools with it.
-        card.layout().insertWidget(1, self._version_tools)
+        cast(QVBoxLayout, card.layout()).insertWidget(1, self._version_tools)
         self._version_body = _body_host
         return card
 
@@ -105,7 +107,7 @@ class VersionsSection(DetailState):
         versions = [v for v in versions if isinstance(v, dict)]
         # Flush children in card order: corners are painted by position
         # (first: square top; last: 8px bottom; middle: square both).
-        flush_widgets: list = []
+        flush_widgets: list[tuple[QWidget, str]] = []
 
         def _apply_flush_corners() -> None:
             for i, (w, kind) in enumerate(flush_widgets):
@@ -119,7 +121,7 @@ class VersionsSection(DetailState):
                 except Exception:
                     pass
 
-        def _version_line(v: dict) -> tuple[str, str]:
+        def _version_line(v: dict[str, Any]) -> tuple[str, str]:
             num = v.get("number", "") or ""
             state = (v.get("state", "") or "").upper()
             ct, rt = v.get("create_time", ""), v.get("release_time", "")
@@ -245,7 +247,7 @@ class VersionsSection(DetailState):
             flush_widgets.append((table, "table"))
 
         # File changes
-        def _fname(f: dict) -> str:
+        def _fname(f: dict[str, Any]) -> str:
             path, name = (f.get("path") or "").strip(), (f.get("name") or "").strip()
             if path and name:
                 return f"{path}/{name}"

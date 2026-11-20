@@ -8,10 +8,12 @@ _refresh_user_info only runs when URL *and* token are set, so the
 empty-token refresh below is synchronous and offline.
 """
 
+from typing import Any
+
 DASH = "\u2014"
 
 
-def _identity_rows(pane):
+def _identity_rows(pane: Any):
     return [
         pane._user_identifier.text(),
         pane._user_display.text(),

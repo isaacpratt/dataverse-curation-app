@@ -14,8 +14,18 @@ Manifest colours are pulled from ui.theme tokens so the log follows the
 same brand palette as the rest of the app.
 """
 
+from re import Match
+
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QHideEvent,
+    QShowEvent,
+    QSyntaxHighlighter,
+    QTextCharFormat,
+    QTextDocument,
+)
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QVBoxLayout,
@@ -49,7 +59,7 @@ from ui.widgets import (
 class LogPage(QWidget):
     """Full-page log view — lives in the main stack alongside dashboard/detail."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("LogPage")
         layout = QVBoxLayout(self)
@@ -123,7 +133,7 @@ class LogPage(QWidget):
         self._search_debounce.setInterval(200)
         self._search_debounce.timeout.connect(self._refresh)
 
-    def showEvent(self, event) -> None:
+    def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         # Only poll while visible — a permanent QStackedWidget child would
         # otherwise re-join the full log every 800 ms forever.
@@ -133,7 +143,7 @@ class LogPage(QWidget):
         except Exception:
             pass
 
-    def hideEvent(self, event) -> None:
+    def hideEvent(self, event: QHideEvent) -> None:
         super().hideEvent(event)
         try:
             self._timer.stop()
@@ -228,7 +238,7 @@ class LogHighlighter(QSyntaxHighlighter):
     # Status codes after an arrow ("→ 403:") tint the number by class.
     _STATUS_RE = r"(?:→|->|=>)\s*(\d{3})\b"
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QTextDocument) -> None:
         super().__init__(parent)
 
         def _format(color: str, *, bold: bool = False) -> QTextCharFormat:
@@ -316,7 +326,7 @@ class LogHighlighter(QSyntaxHighlighter):
             return "error"
         return None
 
-    def _apply(self, match, fmt: QTextCharFormat) -> None:
+    def _apply(self, match: Match[str], fmt: QTextCharFormat) -> None:
         length = match.end() - match.start()
         if length > 0:
             self.setFormat(match.start(), length, fmt)

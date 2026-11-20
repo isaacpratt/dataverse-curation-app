@@ -1,9 +1,9 @@
 """The File Manifest card: the files, the tree, the filters and the download state."""
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -128,7 +128,7 @@ class FilesSection(DetailState):
         lay.addWidget(tools)
         # NOTE: tree + footer live in a flush sub-layout so the header keeps
         # its top radius and the footer keeps its bottom radius.
-        card.layout().addLayout(lay)
+        cast(QVBoxLayout, card.layout()).addLayout(lay)
 
         # Tree: folder > file > check hierarchy (Carbon-inspired, native QTreeView).
         # Column 0 carries the tree (caret + indent + icons); Size/Format/Scan
@@ -175,7 +175,7 @@ class FilesSection(DetailState):
 
         # Hidden checks list for compatibility (was QListWidget; now we show inline)
         # Keep _file_checks as simple list for optional advanced view
-        self._file_checks_data: dict[str, list] = {}
+        self._file_checks_data: dict[str, list[Any]] = {}
         return card
 
     def _update_file_checks_summary(self) -> None:
@@ -551,7 +551,7 @@ class FilesSection(DetailState):
         self._track_table_widths("dataset_files", self._file_tree.header())
         self._fit_file_tree_height()
 
-    def _on_tree_expansion_changed(self, _index=None) -> None:
+    def _on_tree_expansion_changed(self, _index: QModelIndex | None = None) -> None:
         self._sync_tree_carets()
         self._update_expand_btn()
         self._fit_file_tree_height()
@@ -637,7 +637,7 @@ class FilesSection(DetailState):
 
         from engine.checks.varmeta_check import write_dictionary_draft
 
-        variables_by_path: dict[str, dict] = {}
+        variables_by_path: dict[str, dict[str, Any]] = {}
         if self._report is not None:
             for check in getattr(self._report, "dataset_checks", []) or []:
                 if getattr(check, "check_id", "") != "metadata.var_coverage":

@@ -1,7 +1,16 @@
 """Selectable message dialogs — replacement for QMessageBox with copyable text."""
 
+from collections.abc import Callable
+
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
+from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ui.i18n import t
 from ui.theme import (
@@ -100,12 +109,12 @@ def describe_error(msg: str) -> tuple[str, str]:
 
 
 def _show(
-    parent,
+    parent: QWidget | None,
     title: str,
     text: str,
     icon: str = "",
     details: str = "",
-    retry=None,
+    retry: Callable[[], None] | None = None,
 ) -> None:
     from PySide6.QtWidgets import QHBoxLayout
 
@@ -163,7 +172,7 @@ def _show(
     if retry is not None:
         retry_btn = buttons.button(QDialogButtonBox.StandardButton.Retry)
 
-        def _on_click(btn, _rb=retry_btn) -> None:
+        def _on_click(btn: QPushButton, _rb: QPushButton | None = retry_btn) -> None:
             if btn is _rb:
                 state["retry"] = True
                 dlg.accept()
@@ -175,22 +184,40 @@ def _show(
         retry()
 
 
-def show_warning(parent, title: str, text: str, details: str = "", retry=None) -> None:
+def show_warning(
+    parent: QWidget | None,
+    title: str,
+    text: str,
+    details: str = "",
+    retry: Callable[[], None] | None = None,
+) -> None:
     """Non-blocking warning dialog with copyable details."""
     _show(parent, title, text, "triangle-alert", details, retry)
 
 
-def show_critical(parent, title: str, text: str, details: str = "", retry=None) -> None:
+def show_critical(
+    parent: QWidget | None,
+    title: str,
+    text: str,
+    details: str = "",
+    retry: Callable[[], None] | None = None,
+) -> None:
     """Blocking error dialog with copyable details and optional retry."""
     _show(parent, title, text, "octagon-x", details, retry)
 
 
-def show_info(parent, title: str, text: str, details: str = "", retry=None) -> None:
+def show_info(
+    parent: QWidget | None,
+    title: str,
+    text: str,
+    details: str = "",
+    retry: Callable[[], None] | None = None,
+) -> None:
     """Informational dialog with copyable details."""
     _show(parent, title, text, "info", details, retry)
 
 
-def confirm(parent, title: str, text: str, *, confirm_label: str = "") -> bool:
+def confirm(parent: QWidget | None, title: str, text: str, *, confirm_label: str = "") -> bool:
     """Yes/No confirmation for destructive actions. Defaults to No."""
     from PySide6.QtWidgets import QHBoxLayout
 
@@ -236,7 +263,7 @@ def confirm(parent, title: str, text: str, *, confirm_label: str = "") -> bool:
     return dlg.exec() == QDialog.DialogCode.Accepted
 
 
-def confirm_save_discard_cancel(parent, title: str, text: str) -> str:
+def confirm_save_discard_cancel(parent: QWidget | None, title: str, text: str) -> str:
     """Ask Save / Discard / Cancel for dirty settings and return the choice.
 
     Returns "save", "discard", or "cancel".
@@ -281,7 +308,7 @@ def confirm_save_discard_cancel(parent, title: str, text: str) -> str:
 
     result = {"action": "cancel"}
 
-    def _on_click(btn):
+    def _on_click(btn: QPushButton) -> None:
         if btn is save_btn:
             result["action"] = "save"
             dlg.accept()

@@ -7,6 +7,7 @@ Uses an offscreen QApplication so no display is required.
 """
 
 import os
+from typing import Any
 
 import pytest
 
@@ -26,7 +27,7 @@ def qapp():
     return app
 
 
-def _make_table(rows=5, cols=3, cell_text="x" * 40):
+def _make_table(rows: Any = 5, cols: Any = 3, cell_text: Any = "x" * 40):
     from ui.widgets import AppTable
 
     tbl = AppTable([f"Column {i}" for i in range(cols)], stretch_last=False)
@@ -39,7 +40,7 @@ def _make_table(rows=5, cols=3, cell_text="x" * 40):
     return tbl
 
 
-def _item(text):
+def _item(text: Any):
     from PySide6.QtWidgets import QTableWidgetItem
 
     return QTableWidgetItem(text)

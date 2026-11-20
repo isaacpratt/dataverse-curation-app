@@ -17,6 +17,9 @@ __pycache__/
 # `poe pack` = dist/releases). Anchored: tools/build/ is source, not output.
 /build/
 /dist/
+# Zensical static-site build output (dv-l1f). Anchored so a docs/ subfolder
+# named site would still be source.
+/site/
 # Reports written at the repository root by poe tasks: complexity.md, probe
 # screenshots, junit, coverage and SBOM copies. Anchored: docs/reports/ holds
 # tracked historical reports.

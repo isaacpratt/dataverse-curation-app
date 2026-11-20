@@ -1,0 +1,59 @@
+/* Dataverse Docent docs theme — derived from ui/theme.py tokens (dv-l1f).
+   Zensical-native CSS: only brand accents and a few rhythm tweaks; the theme
+   owns layout, search and the light/dark palettes. */
+
+:root {
+  --md-primary-fg-color: #004ccd;
+  --md-primary-fg-color--light: #4d86e0;
+  --md-primary-fg-color--dark: #00308c;
+  --md-accent-fg-color: #0e7490;
+  --md-default-fg-color--light: #424656;
+  --md-typeset-a-color: #004ccd;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #8fb4ff;
+  --md-accent-fg-color: #6fd7e8;
+  --md-typeset-a-color: #8fb4ff;
+}
+
+/* The app's surface/tint vocabulary, used for callouts and code chrome. */
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
+.md-typeset .admonition.note,
+.md-typeset details.note {
+  border-left-color: #004ccd;
+}
+.md-typeset .admonition.warning,
+.md-typeset details.warning {
+  border-left-color: #d97706;
+}
+
+/* Tables mirror the app's AppTable: sentence-case headers, quiet rules. */
+.md-typeset table:not([class]) th {
+  background: #f2f3ff;
+  color: #131b2e;
+  font-weight: 650;
+}
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
+  background: #222a47;
+  color: #eef1ff;
+}
+.md-typeset table:not([class]) td,
+.md-typeset table:not([class]) th {
+  border-bottom: 1px solid #c3c6d8;
+  padding: 0.5em 0.7em;
+}
+
+.md-typeset code {
+  font-family: "Cascadia Code", Consolas, "Segoe UI Mono", monospace;
+  font-size: 0.85em;
+}
+
+/* Mermaid diagrams pick up the brand palette without inline SVG. */
+.md-typeset .mermaid {
+  background: transparent;
+}

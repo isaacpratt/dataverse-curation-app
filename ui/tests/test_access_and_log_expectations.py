@@ -5,10 +5,12 @@ documented answer is not a bug. The Log says EXPECTED (and keeps the raw
 call and response), and the queue says what could not be read and why.
 """
 
+from typing import Any
+
 from ui.i18n import t
 
 
-def _row(pid="doi:10.5072/FK2/A", **facts):
+def _row(pid: Any = "doi:10.5072/FK2/A", **facts: Any):
     row = {"title": "T", "persistent_id": pid, "state": "DRAFT"}
     row.update(facts)
     return row
@@ -117,7 +119,7 @@ def test_queue_paints_the_access_cell(win):
     assert second.text() == ""
 
 
-def _highlighter():
+def _highlighter() -> Any:
     from PySide6.QtWidgets import QPlainTextEdit
 
     from ui.log_panel import LogHighlighter

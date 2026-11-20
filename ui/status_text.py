@@ -9,6 +9,9 @@ English labels back as if they were data.
 
 from __future__ import annotations
 
+from typing import Any
+
+from engine.checks.base import CheckResult
 from engine.status import classify, file_status, summarize
 from ui.i18n import t
 
@@ -22,12 +25,12 @@ _BADGE_KEYS = {
 }
 
 
-def badge_text(result) -> str:
+def badge_text(result: CheckResult) -> str:
     """Short badge in the Scan column: PASS / WARN / FAIL / SKIPPED."""
     return t(_BADGE_KEYS.get(classify(result), "status.badges.passed"))
 
 
-def status_text(checks: list) -> str:
+def status_text(checks: list[Any]) -> str:
     """Human scan string for a file row, e.g. ``Clean · 4 passed``."""
     if not checks:
         return t("status.no_automated")

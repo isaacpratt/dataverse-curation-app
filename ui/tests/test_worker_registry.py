@@ -8,6 +8,8 @@ bound the payload to it and `set.discard()` raised
 then stayed registered for the life of the process.
 """
 
+from typing import Any
+
 from PySide6.QtCore import QThread, Signal
 
 from ui import workers
@@ -41,7 +43,7 @@ class _UnhashableReport:
     __hash__ = None  # type: ignore[assignment]
 
 
-def _run_and_flush(qapp, worker):
+def _run_and_flush(qapp: Any, worker: Any):
     worker.start()
     assert worker.wait(5000), "worker thread did not finish"
     for _ in range(10):

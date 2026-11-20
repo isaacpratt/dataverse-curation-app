@@ -6,6 +6,7 @@ whole story. Rebuilt on every show so the index covers pages opened
 during the session — a few dozen string copies, microseconds of work.
 """
 
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -40,7 +41,7 @@ _GROUP_KEYS = {
 class HelpPane(QWidget):
     """Searchable task-grouped list of the app's help tips."""
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         # Scoped to self (same contract as the other stack pages).
         self.setObjectName("HelpPane")
@@ -136,7 +137,7 @@ class HelpPane(QWidget):
         except Exception:
             pass
 
-    def showEvent(self, event):
+    def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         # Re-index so tips from lazily opened pages (Settings, Review
         # configuration, dataset detail) appear without an app restart.
