@@ -250,94 +250,9 @@ class HeaderSection(DetailState):
                     except Exception:
                         pass
                     self._auto_body.addWidget(row)
-                # Every per-file finding also surfaces here (not just
-                # inventory.*): failed checks with their file path, and
-                # skipped checks (missing library) that did not run.
-                # Passes stay in the manifest tree only — they are the
-                # bulk and the tree shows them per file.
-                file_findings = [
-                    (f, c)
-                    for f in self._report.files
-                    for c in f.checks
-                    if classify(c) in ("failed-error", "failed-warning", "skipped")
-                ]
-                # dv-bph (W1): the same skipped check repeated across files
-                # collapses into one row carrying the count — the files
-                # themselves stay in the row's tooltip.
-                skip_groups: dict[tuple[str, str], list[tuple]] = {}
-                for f, c in file_findings:
-                    if classify(c) == "skipped":
-                        skip_groups.setdefault((c.check_id, c.message), []).append((f, c))
-                rendered_skips: set[tuple[str, str]] = set()
-                for f, c in file_findings:
-                    kind = classify(c)
-                    if kind == "skipped":
-                        gkey = (c.check_id, c.message)
-                        group = skip_groups[gkey]
-                        if len(group) > 1:
-                            if gkey in rendered_skips:
-                                continue  # the group already has its one row
-                            rendered_skips.add(gkey)
-                            row = self._auto_row(
-                                check_title(c.check_id),
-                                t("detail.auto_checks.skipped_many", count=len(group)),
-                                True,
-                                "warning",
-                                badge=t("status.badges.skipped"),
-                            )
-                            paths = "\n".join(ff.path for ff, _ in group[:15])
-                            if len(group) > 15:
-                                paths += "\n" + t("common.ellipsis")
-                            row.setToolTip(
-                                c.message
-                                + "\n\n"
-                                + t("detail.auto_checks.skipped_files", paths=paths)
-                            )
-                            row.setProperty("auto_class", "skipped")
-                            self._auto_body.addWidget(row)
-                            continue
-                    # dv-dcd: the heading is the check's name and the caption
-                    # says what was found — never the check_id or the raw
-                    # "<filename>: <engine return>" message.
-                    desc = t(
-                        "detail.auto_checks.file_result_format",
-                        path=f.path,
-                        message=check_summary(c, f.path),
-                    )
-                    if kind == "skipped":
-                        row = self._auto_row(
-                            check_title(c.check_id),
-                            desc,
-                            True,
-                            "warning",
-                            badge=t("status.badges.skipped"),
-                        )
-                        row.setProperty("auto_class", "skipped")
-                    else:
-                        key = finding_key(c.check_id, f.path, c.message)
-                        finding_keys.append(key)
-                        row = self._auto_row(
-                            check_title(c.check_id),
-                            desc,
-                            c.passed,
-                            c.level,
-                            disposition_key=key,
-                        )
-                        row.setProperty("auto_class", classify(c))
-                    try:
-                        from ui.checks_tree import format_details_tooltip
-
-                        row.setToolTip(format_details_tooltip(c, f.path))
-                    except Exception:
-                        pass
-                    self._auto_body.addWidget(row)
                 self._finding_keys = finding_keys
                 self._refresh_finding_summary()
-                if (
-                    not self._report.dataset_checks
-                    and not file_findings
-                    and not any(f.checks for f in self._report.files)
-                ):
+                if not self._report.dataset_checks:
                     ok = QLabel(t("detail.auto_checks.all_passed"))
                     ok.setObjectName("AccentSM")
                     self._auto_body.addWidget(ok)
@@ -350,6 +265,10 @@ class HeaderSection(DetailState):
                     ph = make_small_body_label(t("detail.auto_checks.no_matching_checks"))
                     self._auto_body.addWidget(ph)
                 for p in planned:
+                    # Only dataset-scoped checks belong to this section;
+                    # per-file checks are listed by File checks instead.
+                    if p.get("scope", "file") != "dataset":
+                        continue
                     if not p.get("will_run"):
                         continue
                     # lib_map check

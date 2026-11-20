@@ -50,7 +50,7 @@ def test_dataset_sections_get_info_tips_and_no_legend(qapp):
             assert len(_tips(card)) == 1
         auto = _tips(view._auto_card)[0]
         auto_help = " ".join(auto.toolTip().split())
-        assert "per-file passes live in File Manifest" in auto_help
+        assert "Per-file findings live under File checks" in auto_help
         assert "✓ pass · ✕ issue" in auto_help
         assert not hasattr(view, "_auto_legend"), "the inline legend moved to the tooltip"
         assert len(_tips(view._response_page)) == 4

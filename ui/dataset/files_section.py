@@ -165,6 +165,10 @@ class FilesSection(DetailState):
         self._file_footer_left = make_elided_label(t("detail.files.no_files"), object_name="BodySM")
         fl.addWidget(self._file_footer_left, 1)
         fl.addStretch()
+        # The file section's own summary: checks across report.files[], not
+        # the dataset-level totals in the Automated checks card (dv-yg6).
+        self._file_checks_summary = make_small_body_label("", wrap=False)
+        fl.addWidget(self._file_checks_summary, 0)
         self._file_footer_right = make_small_body_label("", wrap=False)
         fl.addWidget(self._file_footer_right, 0)
         lay.addWidget(footer)
@@ -173,6 +177,29 @@ class FilesSection(DetailState):
         # Keep _file_checks as simple list for optional advanced view
         self._file_checks_data: dict[str, list] = {}
         return card
+
+    def _update_file_checks_summary(self) -> None:
+        """Return a file-checks summary built from per-file results only."""
+        try:
+            from engine.status import summarize
+
+            report = getattr(self, "_report", None)
+            checks = [c for f in report.files for c in f.checks] if report is not None else []
+            if not checks:
+                self._file_checks_summary.setText("")
+                return
+            summary = summarize(checks)
+            self._file_checks_summary.setText(
+                t(
+                    "detail.auto_checks.summary_counts",
+                    passed=summary["passed"],
+                    warnings=summary["failed-warning"],
+                    errors=summary["failed-error"],
+                    skipped=summary["skipped"],
+                )
+            )
+        except Exception:
+            self._file_checks_summary.setText("")
 
     def _refresh_files_placeholder(self) -> None:
         # Note: Run checks / Export stay enabled at all times — without
@@ -208,6 +235,7 @@ class FilesSection(DetailState):
 
             self._file_tree.setModel(build_tree_model([], None))
             self._file_footer_left.setText(t("detail.files.no_files_hint"))
+            self._file_checks_summary.setText("")
             self._file_footer_right.setText("")
         self._refresh_curation_preview()
         self._refresh_workflow()
@@ -516,6 +544,7 @@ class FilesSection(DetailState):
         self._file_footer_right.setText(
             t("detail.files.total_size", size=_human_size(total)) if total else ""
         )
+        self._update_file_checks_summary()
         self._refresh_download_state()
         self._update_expand_btn()
         # Re-apply the saved layout (the user's widths win over the fit).

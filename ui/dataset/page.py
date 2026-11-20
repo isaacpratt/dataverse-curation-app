@@ -58,6 +58,7 @@ from ui.widgets import (
     make_multiline_input,
     make_page_heading,
     make_progress_bar,
+    make_section_heading,
 )
 from ui.workers import (
     CheckWorker,
@@ -418,7 +419,9 @@ class DatasetDetailView(
         top_lay.addWidget(self._rail)
 
         # ---- Main column content (inside main_scroll canvas) ----
-        # MAIN column: verdict → completeness → files → auto-checks → version diff
+        # Two top-level sections (dv-yg6): Dataset checks (metadata
+        # completeness + the automated checks about the dataset itself)
+        # above File checks (the renamed manifest, every per-file result).
         main_wrap = QVBoxLayout()
         main_wrap.setSpacing(20)
         main_wrap.setContentsMargins(0, 0, 0, 0)
@@ -432,14 +435,18 @@ class DatasetDetailView(
         self._verdict_card = self._build_verdict_card()
         main_wrap.addWidget(self._verdict_card)
 
+        self._dataset_checks_heading = make_section_heading(t("detail.sections.dataset_checks"))
+        main_wrap.addWidget(self._dataset_checks_heading)
         self._meta_card = self._build_metadata_card()
         main_wrap.addWidget(self._meta_card)
 
-        self._file_card = self._build_file_manifest_card()
-        main_wrap.addWidget(self._file_card, 1)
-
         self._auto_card = self._build_auto_checks_card()
         main_wrap.addWidget(self._auto_card)
+
+        self._file_checks_heading = make_section_heading(t("detail.sections.file_checks"))
+        main_wrap.addWidget(self._file_checks_heading)
+        self._file_card = self._build_file_manifest_card()
+        main_wrap.addWidget(self._file_card, 1)
 
         self._version_card = self._build_version_card()
         main_wrap.addWidget(self._version_card)

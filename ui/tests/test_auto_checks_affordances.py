@@ -1,9 +1,8 @@
-"""Auto-Checks affordances (dv-bph): findings filter, skipped-row aggregation.
+"""Automated checks affordances (dv-bph, dv-yg6): the findings filter.
 
-W2: the Auto-Checks card carries the same class of filter as the metadata
-card (All / Errors / Warnings). W1: identical "skipped — missing library"
-rows for one check collapse into a single count row. W3: the card's (i)
-text is split into short labelled lines (see test_section_info).
+After the two-section split this card holds only dataset-level results;
+per-file findings live in File checks. The severity filter narrows the
+card to findings (All / Errors / Warnings).
 """
 
 from PySide6.QtWidgets import QLabel
@@ -41,6 +40,20 @@ def _report():
                 level="warning",
                 passed=True,
                 message="ok",
+                details={},
+            ),
+            CheckResult(
+                check_id="inventory.executables",
+                level="error",
+                passed=False,
+                message="1 executable found",
+                details={},
+            ),
+            CheckResult(
+                check_id="inventory.unchecked_types",
+                level="warning",
+                passed=False,
+                message="2 files with no automated check",
                 details={},
             ),
         ],
@@ -107,21 +120,17 @@ def _shown_kinds(view):
     return sorted(str(r.property("auto_class") or "?") for r in _rows(view) if not r.isHidden())
 
 
-def test_skipped_rows_collapse_into_one_affordances(qapp, tmp_path):
+def test_per_file_findings_stay_in_file_checks(qapp, tmp_path):
+    """The dataset card lists dataset results only — no file paths."""
     view = _view(qapp, tmp_path)
     view.show()
     for _ in range(5):
         qapp.processEvents()
     view._refresh_curation_preview()
-    rows = [r for r in _rows(view) if r.property("auto_class") == "skipped"]
-    assert len(rows) == 1, "five identical skipped rows must collapse into one"
-    text = " ".join(label.text() for label in rows[0].findChildren(QLabel))
-    assert "5" in text, "collapsed row carries the count"
-    tip = rows[0].toolTip()
-    assert "data/0.sav" in tip
-    assert "data/4.sav" in tip, "the files stay in the tooltip"
-    err_rows = [r for r in _rows(view) if r.property("auto_class") == "failed-error"]
-    assert len(err_rows) == 1
+    kinds = [str(r.property("auto_class") or "?") for r in _rows(view)]
+    assert sorted(kinds) == ["failed-error", "failed-warning", "passed"]
+    labels = [label.text() for r in _rows(view) for label in r.findChildren(QLabel)]
+    assert not [text for text in labels if ".sav" in text or ".xml" in text]
     view.deleteLater()
 
 
@@ -132,16 +141,16 @@ def test_findings_filter_narrows_and_restores(qapp, tmp_path):
         qapp.processEvents()
     view._refresh_curation_preview()
 
-    assert sorted(_shown_kinds(view)) == ["failed-error", "passed", "skipped"]
+    assert sorted(_shown_kinds(view)) == ["failed-error", "failed-warning", "passed"]
 
     view._auto_filter.setCurrentIndex(1)  # Errors
     assert sorted(_shown_kinds(view)) == ["failed-error"]
 
     view._auto_filter.setCurrentIndex(2)  # Warnings
-    assert sorted(_shown_kinds(view)) == ["skipped"]
+    assert sorted(_shown_kinds(view)) == ["failed-warning"]
 
     view._auto_filter.setCurrentIndex(0)  # All
-    assert sorted(_shown_kinds(view)) == ["failed-error", "passed", "skipped"]
+    assert sorted(_shown_kinds(view)) == ["failed-error", "failed-warning", "passed"]
     view.deleteLater()
 
 

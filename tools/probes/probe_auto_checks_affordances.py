@@ -1,9 +1,9 @@
-"""Probe: the Auto-Checks card's affordances (dv-bph).
+"""Probe: the Automated checks card's affordances (dv-bph, dv-yg6).
 
-Offscreen, against a throwaway workspace (never the user's files).
-Asserts that the card carries a findings filter, that the same skipped
-check repeated across files collapses into one row carrying the count,
-and that the filter narrows the card to one severity and restores it.
+Offscreen, against a throwaway workspace (never the user's files). The
+card now lists only dataset-level results; per-file findings live in File
+checks. This probe asserts the card carries a findings filter and that the
+filter narrows the card to one severity and restores it.
 
 Run: python tools/probes/probe_auto_checks_affordances.py
 """
@@ -38,6 +38,22 @@ def _report():
                 level="warning",
                 passed=True,
                 message="ok",
+                details={},
+            ),
+            # Dataset-level skipped and failed rows stand in for the
+            # per-file ones this card no longer duplicates.
+            CheckResult(
+                check_id="inventory.unchecked_types",
+                level="warning",
+                passed=False,
+                message="2 files with no automated check",
+                details={},
+            ),
+            CheckResult(
+                check_id="inventory.executables",
+                level="error",
+                passed=False,
+                message="1 executable found",
                 details={},
             ),
         ],
@@ -126,12 +142,19 @@ def main() -> int:
         )
         report.check(bool(combo.toolTip()), "the filter explains itself")
 
-    skipped = [r for r in _rows(view) if r.property("auto_class") == "skipped"]
+    labels = [r for r in _rows(view) if r.property("auto_class") == "failed-warning"]
     report.check(
-        len(skipped) == 1, "five identical skipped rows collapse into one", f"rows={len(skipped)}"
+        len(labels) == 1, "the dataset-level warning keeps its own row", f"rows={len(labels)}"
     )
     errors = [r for r in _rows(view) if r.property("auto_class") == "failed-error"]
     report.check(len(errors) == 1, "the failed check keeps its own row", f"rows={len(errors)}")
+    paths = [
+        label.text()
+        for row in _rows(view)
+        for label in row.findChildren(type(view._auto_summary))
+        if ".sav" in label.text()
+    ]
+    report.check(not paths, "no per-file finding is duplicated in this card", f"paths={paths}")
 
     before = len(_rows(view))
     if combo is not None:
@@ -149,8 +172,8 @@ def main() -> int:
         for _ in range(4):
             app.processEvents()
         report.check(
-            _shown_kinds(view) == ["skipped"],
-            "the Warnings filter keeps the skipped row",
+            _shown_kinds(view) == ["failed-warning"],
+            "the Warnings filter keeps the dataset warning",
             f"shown={_shown_kinds(view)}",
         )
 
@@ -158,7 +181,7 @@ def main() -> int:
         for _ in range(4):
             app.processEvents()
         report.check(
-            _shown_kinds(view) == ["failed-error", "passed", "skipped"],
+            _shown_kinds(view) == ["failed-error", "failed-warning", "passed"],
             "the All filter restores every row",
             f"shown={_shown_kinds(view)}",
         )

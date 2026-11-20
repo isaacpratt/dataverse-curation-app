@@ -180,7 +180,7 @@ def test_rail_steps_scroll_the_review_page_without_running_actions(detail, monke
 
     detail._rail.buttons["checks"].click()
     assert detail._pages.currentIndex() == 0
-    assert anchors[-1] == "_auto_card"
+    assert anchors[-1] == "_dataset_checks_heading"
 
     detail._rail.buttons["changes"].click()
     assert anchors[-1] == "_version_card"

@@ -52,7 +52,9 @@ class WorkflowSection(DetailState):
                 if self._dl_btn is not None:
                     self._dl_btn.setFocus()
             elif key == "checks":
-                self._goto_section("_auto_card")
+                # The rail's Checks step lands on the Dataset checks section;
+                # File checks is reached through the manifest itself.
+                self._goto_section("_dataset_checks_heading")
                 if self._check_btn is not None:
                     self._check_btn.setFocus()
             elif key == "export":

@@ -14,7 +14,7 @@ MECHANICAL = {
     "metadata": "_meta_card",
     "changes": "_version_card",
     "download": "_file_card",
-    "checks": "_auto_card",
+    "checks": "_dataset_checks_heading",
     "respond": "respond",
 }
 # curated step -> owning card (or the response page)

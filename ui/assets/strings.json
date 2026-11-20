@@ -785,12 +785,14 @@
       "export_hint": "Use Export reports… in the header to save the JSON + Markdown."
     },
     "sections": {
-      "auto_checks": "Auto-Checks",
+      "dataset_checks": "Dataset checks",
+      "auto_checks": "Automated checks",
       "metadata_check": "Metadata check",
       "assessment_action": "Assessment Action",
       "dataset_log": "Dataset log",
       "version_log": "Version log",
-      "file_manifest": "File Manifest"
+      "file_manifest": "File checks",
+      "file_checks": "File checks"
     },
     "status": {
       "saved_metadata_refreshing": "Loaded saved metadata ({count} file(s)) — refreshing… ",
@@ -836,8 +838,8 @@
       "reports_saved": "Reports saved: {markdown} + {json} (recorded in Dataset log)"
     },
     "auto_checks": {
-      "intro": "What shows up here:\n• Dataset checks (full messages)\n• Every finding: dataset checks plus per-file failures and skips\n• per-file passes live in File Manifest — expand a file to see its checks",
-      "legend": "✓ pass · ✕ issue · ○ SKIPPED · MISSING = optional library not installed.",
+      "intro": "Dataset-level results with their full messages: the file inventory, access conditions and other checks about the dataset as a whole. Per-file findings live under File checks.",
+      "legend": "✓ pass · ✕ issue · SKIPPED = a check that could not run.",
       "not_run": "Not run yet",
       "no_file_list": "No file list yet — load metadata to see which checks will run.",
       "no_file_checks": "No file checks",
@@ -855,8 +857,6 @@
       "filter_errors": "Errors",
       "filter_warnings": "Warnings",
       "filter_tip": "Show everything, or only failed checks of one severity",
-      "skipped_many": "Skipped on {count} files — the check did not run.",
-      "skipped_files": "Files:\n{paths}",
       "readme_section_found": "✓ {label}",
       "readme_section_missing": "○ {label}"
     },
@@ -1078,7 +1078,7 @@
     "files": {
       "not_in_report": "Not in report",
       "no_automated_check": "No automated check",
-      "tip": "Every file in this dataset — the staged download when available, otherwise the Dataverse inventory — grouped folder > file > check. Expand a file to see every check, passes included; hover a check for its full message and details. Open folder reveals the staged files.",
+      "tip": "File checks: every file in this dataset — the staged download when available, otherwise the Dataverse inventory — grouped folder > file > check. Expand a file to see every per-file result, passes included; hover a check for its full message and details. Dataset-level results live under Dataset checks above. Open folder reveals the staged files.",
       "open_folder": "Open folder",
       "open_folder_tip": "Open the staged download folder in the file explorer",
       "expand_all": "Expand all",
@@ -1105,7 +1105,7 @@
       "staged_tip": "{staged} of {total} file(s) already staged — only missing files will be fetched after approval",
       "open_folder_nothing": "Nothing downloaded yet — download the dataset first.",
       "could_not_open": "Could not open {path}:\n{exc}",
-      "reset_columns_a11y": "Reset file manifest columns",
+      "reset_columns_a11y": "Reset file checks columns",
       "reset_columns_tip": "Reset columns, sort and widths to default"
     },
     "decision": {
@@ -1351,7 +1351,7 @@
       "tree_repository": "Repository",
       "tree_one": "Dataset one",
       "tree_two": "Dataset two",
-      "list_manifest": "File manifest",
+      "list_manifest": "File checks",
       "list_fields": "Metadata fields",
       "list_extensions": "Extensions"
     }

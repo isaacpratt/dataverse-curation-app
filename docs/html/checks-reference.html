@@ -47,7 +47,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 <h2>What PASS means (two contexts)</h2>
 <table>
 <tr><th>When</th><th>Badge</th><th>Meaning</th></tr>
-<tr><td rowspan="3"><b>Before running</b> (Auto-Checks card)</td><td><span class="pill p-ok">PASS</span></td><td>Check is planned and applicable to this dataset's files</td></tr>
+<tr><td rowspan="3"><b>Before running</b> (Dataset checks card)</td><td><span class="pill p-ok">PASS</span></td><td>Check is planned and applicable to this dataset's files</td></tr>
 <tr><td><span class="pill p-mut">—</span></td><td>No matching files for this check</td></tr>
 <tr><td><span class="pill p-warn">MISSING</span></td><td>Optional library absent in this build</td></tr>
 <tr><td rowspan="4"><b>After running</b></td><td><span class="pill p-ok">✓ passed:true</span></td><td>Policy held (info results typically pass with details, e.g. “consistent 12 columns”)</td></tr>
@@ -66,7 +66,7 @@ footer{border-top:1px solid var(--line);background:#fff;color:var(--muted);font-
 </table>
 
 <h2>Per-format checks (22 modules)</h2>
-<p><b>Scope</b> is <code>dataset</code> or <code>file</code>, declared by each check class (<code>Check.scope</code>) and enforced at registration: <code>dataset</code> checks run once over the whole staged set and report under <code>dataset_checks</code>; <code>file</code> checks run once per matching file and report in that file's <code>checks</code>. Extensions say <i>which files a check reads</i>, not <i>what its findings are about</i> &mdash; the two are independent, so a cross-file check can read <code>.csv</code> and still be dataset-scoped (<code>engine/tests/test_check_scope.py</code> proves it).</p>
+<p><b>Scope</b> is <code>dataset</code> or <code>file</code>, declared by each check class (<code>Check.scope</code>) and enforced at registration: <code>dataset</code> checks run once over the whole staged set and report under <code>dataset_checks</code>; <code>file</code> checks run once per matching file and report in that file's <code>checks</code>. Extensions say <i>which files a check reads</i>, not <i>what its findings are about</i> &mdash; the two are independent, so a cross-file check can read <code>.csv</code> and still be dataset-scoped (<code>engine/tests/test_check_scope.py</code> proves it). On the dataset page, <b>Dataset checks</b> shows <code>dataset_checks</code> (and the metadata completeness card), while <b>File checks</b> shows every <code>files[].checks</code> entry in its folder &rarr; file &rarr; check tree; a finding is never printed in both.</p>
 <table>
 <tr><th>Module</th><th>Scope</th><th>Check IDs</th><th>Examines</th><th>Notable findings</th></tr>
 <tr><td><code>csv_check</code></td><td>file</td><td><code>format.csv.*</code></td><td>Encoding, delimiter sniff, ragged/missing/duplicate rows, PII (piigex + CA) on 1k-row sample; full parse capped 50k rows (<code>truncated:true</code> when sampled)</td><td>Ragged / duplicates / PII (warning)</td></tr>
