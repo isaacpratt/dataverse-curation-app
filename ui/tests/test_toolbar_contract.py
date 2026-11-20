@@ -181,7 +181,7 @@ def test_review_checks_tools_live_below_the_title(win, qapp):
     win._show_review_config()
     _pump(qapp)
     rc = win._review_config
-    tools = _tools_row(rc, "ChecksTools")
+    tools = _tools_row(rc, "FieldRulesTools")
     for widget in (
         rc._field_filter,
         rc._level_filter,

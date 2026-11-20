@@ -26,6 +26,7 @@ python tools/probes/probe_review_table.py     # the review rules table: Field | 
 python tools/probes/probe_gallery_inputs.py   # the gallery's number field and value list: whole steppers, whole chips, no h-scroll
 python tools/probes/probe_icon_sheet.py       # every mark is a bundled Lucide glyph, painted at 16 and 20px
 python tools/probes/probe_review_selection.py # hover never paints a chosen-row band; a click chooses the row
+python tools/probes/probe_review_cards.py     # the two Review configuration rule cards fit at 1440 and 960
 ```
 
 `run_all.py` runs each `probe_*.py` in turn and exits non-zero when any
@@ -136,6 +137,7 @@ unsubstituted.
 | `probe_gallery_inputs.py` | The gallery's new input controls render whole at 1440px: every number-field stepper is a 32px button fully inside its field with a non-null Lucide icon, every value-list chip sits fully inside its wrapping flow with its own delete button, and the gallery never grows a horizontal scrollbar. |
 | `probe_icon_sheet.py` | Every role glyph has a tile on the gallery's icon sheet and paints real ink at both 16 and 20px, the re-pointed controls carry their glyph (refresh = rotate-ccw plus label, sidebar toggle = panel-right-close/open, ring = the Lucide check), and a screenshot of the sheet is saved. |
 | `probe_review_selection.py` | Hovering another field row leaves the Response pane on the clicked rule and paints no selected band under the pointer; the clicked row keeps the selected face and a real click retargets the pane. A screenshot with the other row hovered is saved. |
+| `probe_review_cards.py` | The left Review configuration pane holds two titled sibling cards (Metadata Field Rules, Content-based Rules) 16px apart, with one scrollbar, an unclipped field table and no horizontal scroll at 1440x900 or 960x720; screenshots of the pane at both widths are saved. |
 
 ## The same contracts in pytest
 

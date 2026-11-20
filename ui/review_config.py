@@ -44,7 +44,7 @@ except Exception:  # the built-in catalog is best-effort at import time
 
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.i18n import t
-from ui.theme import BORDER_SUBTLE, page_background_qss, selectable_labels
+from ui.theme import page_background_qss, selectable_labels
 from ui.widgets import (
     AppTreeWidget,
     PaneFooter,
@@ -265,15 +265,21 @@ class ReviewConfigView(QWidget):
         # Two scroll areas: Checks (stretch 3) and Response (stretch 2).
         # Each holds a card that grows to its content, moving the scrollbar
         # to the pane's own right edge — the dataset page's two-column idiom.
-        def make_pane(card_builder):
+        def make_pane(*card_builders):
+            """One scroll pane holding a vertical stack of cards (dv-gcn)."""
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QFrame.Shape.NoFrame)
-            card = card_builder()
-            scroll.setWidget(card)
+            host = QWidget()
+            host_lay = QVBoxLayout(host)
+            host_lay.setContentsMargins(0, 0, 0, 0)
+            host_lay.setSpacing(16)
+            for builder in card_builders:
+                host_lay.addWidget(builder())
+            scroll.setWidget(host)
             return scroll
 
-        split.addWidget(make_pane(self._build_rules_card))
+        split.addWidget(make_pane(self._build_field_rules_card, self._build_content_rules_card))
         split.addWidget(make_pane(self._build_templates_card))
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 2)
@@ -392,22 +398,26 @@ class ReviewConfigView(QWidget):
         body.addLayout(row2)
         return card
 
-    def _build_rules_card(self) -> QWidget:
-        card, body, _t, header_lay = make_card(t("review.card_checks"))
-        # The checks help lives in the header's (i) tooltip, the same
+    def _build_field_rules_card(self) -> QWidget:
+        """Build the field table: one card, one tools row, no divider."""
+        card, body, _t, header_lay = make_card(t("review.card_field_rules"))
+        # The field-rules help lives in the header's (i) tooltip, the same
         # pattern the dataset page uses — not a permanent paragraph that
         # pushed the tree down.
         add_info_tip(
-            header_lay, t("review.checks_hint"), name=t("review.card_checks"), group="Checks"
+            header_lay,
+            t("review.checks_hint"),
+            name=t("review.card_field_rules"),
+            group=t("review.card_field_rules"),
         )
         # The title bar keeps title + (i) only; the filters and actions are
         # tools, so they sit on their own row under it (file-manifest pattern).
-        checks_tools = QWidget()
-        checks_tools.setObjectName("ChecksTools")
-        checks_tools.setStyleSheet(transparent_surface_qss("ChecksTools"))
-        tools_lay = QHBoxLayout(checks_tools)
-        tools_lay.setContentsMargins(16, 8, 16, 8)
-        tools_lay.setSpacing(8)
+        tools = QWidget()
+        tools.setObjectName("FieldRulesTools")
+        tools.setStyleSheet(transparent_surface_qss("FieldRulesTools"))
+        lay = QHBoxLayout(tools)
+        lay.setContentsMargins(16, 8, 16, 8)
+        lay.setSpacing(8)
         self._field_filter = make_search_field(
             t("review.filter_placeholder"), height=36, min_width=160
         )
@@ -420,7 +430,7 @@ class ReviewConfigView(QWidget):
         self._filter_timer.setInterval(200)
         self._filter_timer.timeout.connect(self._refresh_field_table)
         self._field_filter.textChanged.connect(lambda _t: self._filter_timer.start())
-        tools_lay.addWidget(self._field_filter, 1)
+        lay.addWidget(self._field_filter, 1)
         self._level_filter = make_combo(
             [
                 (t("review.level_all"), "all"),
@@ -433,14 +443,14 @@ class ReviewConfigView(QWidget):
             tip=t("review.level_filter_tip"),
         )
         self._level_filter.currentIndexChanged.connect(lambda _i: self._refresh_field_table())
-        tools_lay.addWidget(self._level_filter)
+        lay.addWidget(self._level_filter)
         self._blocks_btn = make_action_button(t("review.collapse_all"), kind="secondary", size="md")
         self._blocks_btn.setToolTip(t("review.blocks_tip"))
         self._blocks_btn.clicked.connect(self._on_toggle_blocks)
-        tools_lay.addWidget(self._blocks_btn)
+        lay.addWidget(self._blocks_btn)
         # Sibling of the body, not inside it: the tree is rebuilt on filter
         # changes and the tools must survive that.
-        card.layout().insertWidget(1, checks_tools)
+        card.layout().insertWidget(1, tools)
         # Body margins go to zero so the tree bleeds edge-to-edge like
         # every other flush table in the app; the text-rules section
         # below carries its own inset.
@@ -497,33 +507,29 @@ class ReviewConfigView(QWidget):
 
         self._field_tree.itemExpanded.connect(_refit)
         self._field_tree.itemCollapsed.connect(_refit)
-        # The tree and text rules are now stacked in a single vertical flow
-        # inside the scroll pane, so the tree doesn't compete for height.
-        scroll_content = QWidget()
-        content_lay = QVBoxLayout(scroll_content)
-        content_lay.setContentsMargins(0, 0, 0, 0)
-        content_lay.setSpacing(0)
+        # The tree bleeds edge-to-edge in the card body; the content rules
+        # live in their own sibling card (dv-gcn).
+        body.addWidget(self._field_tree)
+        return card
 
-        content_lay.addWidget(self._field_tree)
-
-        divider = QFrame()
-        divider.setObjectName("ReviewSectionDivider")
-        divider.setFixedHeight(1)
-        # theme-allow: simple divider colour is a one-off
-        divider.setStyleSheet(f"background: {BORDER_SUBTLE};")
-        content_lay.addWidget(divider)
-
-        rules_section = QWidget()
-        rules_lay = QVBoxLayout(rules_section)
-        rules_lay.setContentsMargins(16, 12, 16, 12)
-        rules_lay.setSpacing(8)
-        rules_head = QLabel(t("review.text_rules_label"))
-        rules_head.setObjectName("HeadlineMD")
-        rules_lay.addWidget(rules_head)
+    def _build_content_rules_card(self) -> QWidget:
+        """Build the text-search rules: their own card, title and summary."""
+        card, body, _t, header_lay = make_card(t("review.card_content_rules"))
+        add_info_tip(
+            header_lay,
+            t("review.content_rules_hint"),
+            name=t("review.card_content_rules"),
+            group=t("review.card_content_rules"),
+        )
+        body.setContentsMargins(16, 12, 16, 12)
+        body.setSpacing(8)
+        self._content_summary = QLabel()
+        self._content_summary.setObjectName("CaptionSM")
+        body.addWidget(self._content_summary)
         self._content_list = make_list()
         self._content_list.setMinimumHeight(96)
         self._content_list.itemSelectionChanged.connect(self._on_content_selected)
-        rules_lay.addWidget(self._content_list, 1)
+        body.addWidget(self._content_list, 1)
         row = QHBoxLayout()
         for text, slot in [
             (t("review.add_rule"), self._on_content_add),
@@ -534,10 +540,7 @@ class ReviewConfigView(QWidget):
             b.clicked.connect(slot)
             row.addWidget(b)
         row.addStretch(1)
-        rules_lay.addLayout(row)
-
-        content_lay.addWidget(rules_section)
-        body.addWidget(scroll_content)
+        body.addLayout(row)
         return card
 
     def _build_templates_card(self) -> QWidget:
@@ -1325,9 +1328,12 @@ class ReviewConfigView(QWidget):
         try:
             self._content_list.blockSignals(True)
             self._content_list.clear()
-            for cr in self._current_ruleset().get("content_rules") or []:
-                if not isinstance(cr, dict):
-                    continue
+            rules = [
+                cr
+                for cr in (self._current_ruleset().get("content_rules") or [])
+                if isinstance(cr, dict)
+            ]
+            for cr in rules:
                 scope = ", ".join(cr.get("scope") or [])
                 item = QListWidgetItem(
                     t(
@@ -1347,6 +1353,7 @@ class ReviewConfigView(QWidget):
                     )
                 )
                 self._content_list.addItem(item)
+            self._content_summary.setText(t("review.content_summary", count=len(rules)))
         finally:
             try:
                 self._content_list.blockSignals(False)
