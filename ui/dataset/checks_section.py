@@ -356,6 +356,9 @@ class ChecksSection(DetailState):
             except Exception:
                 pass
         self._set_status(t("detail.status.cancelling"))
+        widget = getattr(self, "_status_widget", None)
+        if widget is not None and widget.isVisible():
+            widget.set_running(t("detail.statuswidget.cancelling"), "", None, cancelling=True)
         self._checks_cancel_btn.setEnabled(False)
 
     def _on_checks_cancelled(self) -> None:
@@ -396,6 +399,15 @@ class ChecksSection(DetailState):
         all_results = list(report.dataset_checks) + [c for f in report.files for c in f.checks]
         summary = summarize(all_results)
         findings = summary["failed"]
+        # The mockup's completed face: check icon, "All checks complete",
+        # counts and a full bar — all in the compact widget beside the title.
+        self._show_status_complete(
+            t("detail.statuswidget.complete"),
+            t("detail.rail.passed", count=summary["passed"])
+            + " · "
+            + t("detail.rail.warnings", count=summary["failed-warning"]),
+        )
+        self._refresh_rail_counts(summary)
         self._set_status(
             t(
                 "detail.status.checks_complete",
@@ -451,6 +463,7 @@ class ChecksSection(DetailState):
         self._checks_cancel_btn.setVisible(False)
         self._checks_cancel_btn.setEnabled(True)
         headline, details = dialogs.describe_error(msg)
+        self._show_status_error(t("detail.statuswidget.error"), headline)
         # The failure stays on the page: an empty status strip read as
         # "nothing happened" once the dialog was closed. The strip now
         # carries the reason and stays until the next run replaces it.

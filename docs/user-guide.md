@@ -82,6 +82,16 @@ switch to the Response page, and never start a download, a check pass or a
 save dialog. The old six-step rail, its CURATE(D) toggle and the separate
 "Open in Dataverse" link under the title are gone.
 
+The header itself is three bands. The **top band** carries the chips
+(DOI link, publication status, "Submitted for Review" stage, curation label)
+and the actions. The **middle band** puts the dataset title and depositor on
+the left and a **compact status widget** on the right; the widget is hidden
+while idle and shows a spinner, the count (e.g. 14/21), a progress bar and a
+Cancel button while work runs. It switches to a green check and full bar when
+checks complete, and to a red alert with a Retry button on failure. The
+**bottom band** is the three-button rail with result pills (passed / warnings /
+errors) at its right edge. All glyphs are bundled Lucide icons; buttons,
+chips and text use the app's standard kit faces.
 Header actions are now placed where they belong:
 
 - The **DOI chip is the Dataverse link**. Click it to open the dataset's

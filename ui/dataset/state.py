@@ -144,6 +144,7 @@ class DetailState(QWidget):
     # -- the header ---------------------------------------------------------
     _id_badge: QLabel
     _status_pill: QLabel
+    _stage_pill: QLabel
     _curation_pill: QLabel
     _depositor_lbl: QLabel
     _title_lbl: Any
@@ -156,6 +157,7 @@ class DetailState(QWidget):
     _checks_cancel_btn: AppButton
     _progress: QProgressBar
     _ring: RingProgress
+    _status_widget: Any
     _in_response: bool
     #: The row that carries the status line (an icon plus the message).
     _status_row: QWidget
@@ -491,6 +493,30 @@ class DetailState(QWidget):
 
     def _set_status(self, msg: str, tone: str = "info") -> None:
         """Show a message in the page's status line."""
+        raise NotImplementedError
+
+    def _on_status_action(self) -> None:
+        """Handle the compact status widget's cancel, retry or dismiss action."""
+        raise NotImplementedError
+
+    def _on_download_cancel_click(self) -> None:
+        """Ask the staged download worker to stop at the next chunk."""
+        raise NotImplementedError
+
+    def _on_cancel_checks_click(self) -> None:
+        """Ask the running check pass to stop at the next checkpoint."""
+        raise NotImplementedError
+
+    def _refresh_rail_counts(self, summary: Any = None) -> None:
+        """Feed the rail's result pills from a check-run summary."""
+        raise NotImplementedError
+
+    def _show_status_complete(self, title: str, detail: str = "") -> None:
+        """Show the success face of the compact status widget."""
+        raise NotImplementedError
+
+    def _show_status_error(self, title: str, detail: str = "") -> None:
+        """Show the error face of the compact status widget."""
         raise NotImplementedError
 
     def _on_ring_fraction(self, fraction: float) -> None:

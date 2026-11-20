@@ -55,6 +55,17 @@ ICON_ROLES: dict[str, str] = {
     "error": "octagon-x",
     "settings": "settings",
     "log": "square-text",
+    # Dataset hero header (dv-cv3) — one glyph per affordance.
+    "open_external": "external-link",
+    "run": "play",
+    "export": "upload",
+    "depositor": "user",
+    "submitted": "calendar-days",
+    "progress": "loader-circle",
+    "complete": "circle-check",
+    "error_status": "circle-alert",
+    "section_checks": "square-check",
+    "section_response": "message-square",
 }
 
 _MISSING: set[str] = set()

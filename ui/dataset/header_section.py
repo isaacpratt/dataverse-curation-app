@@ -409,7 +409,10 @@ class HeaderSection(DetailState):
         except Exception:
             pass
         self._status.setVisible(visible)
-        self._status_row.setVisible(visible)
+        # While the compact widget owns progress, its own line is enough —
+        # the general message strip would duplicate it (dv-cv3).
+        widget = getattr(self, "_status_widget", None)
+        self._status_row.setVisible(visible and not (widget is not None and widget.isVisible()))
 
     @staticmethod
     def _dress_pill(pill: QLabel, text: str, label: str) -> None:
@@ -421,17 +424,83 @@ class HeaderSection(DetailState):
         """
         set_badge_label(pill, text, label=label)
 
+    def _status_context(self) -> str:
+        """Short count detail for the compact widget, from state in memory."""
+        staged = int(getattr(self, "_staged_n", 0) or 0)
+        total = int(getattr(self, "_staged_total", 0) or 0)
+        return f"{staged}/{total}" if total else ""
+
+    def _refresh_rail_counts(self, summary: Any = None) -> None:
+        """Feed the rail's result pills from a check-run summary."""
+        rail = getattr(self, "_rail", None)
+        if rail is None:
+            return
+        if summary is None:
+            report = getattr(self, "_report", None)
+            if report is None:
+                rail.set_nav_counts()
+                return
+            from engine.status import summarize
+
+            summary = summarize(
+                list(getattr(report, "dataset_checks", []) or [])
+                + [c for f in (getattr(report, "files", []) or []) for c in (f.checks or [])]
+            )
+        rail.set_nav_counts(
+            passed=int(summary.get("passed", 0) or 0),
+            warnings=int(summary.get("failed-warning", 0) or 0),
+            errors=int(summary.get("failed-error", 0) or 0),
+        )
+
+    def _on_status_action(self) -> None:
+        """Route the widget's action to the right cancel/retry/dismiss path."""
+        widget = getattr(self, "_status_widget", None)
+        if widget is None or not widget.isVisible():
+            return
+        tip = widget._action.toolTip().lower()
+        if "retry" in tip:
+            self._on_run_checks()
+        elif "cancel" in tip:
+            if getattr(self, "_check_worker", None) is not None:
+                self._on_cancel_checks_click()
+            elif getattr(self, "_dl_worker", None) is not None:
+                self._on_download_cancel_click()
+        widget.clear()
+
+    def _show_status_complete(self, title: str, detail: str = "") -> None:
+        widget = getattr(self, "_status_widget", None)
+        if widget is not None:
+            widget.set_complete(title, detail or self._status_context())
+        self._status_row.setVisible(False)
+
+    def _show_status_error(self, title: str, detail: str = "") -> None:
+        widget = getattr(self, "_status_widget", None)
+        if widget is not None:
+            widget.set_error(title, detail)
+        self._status_row.setVisible(False)
+
     def _on_ring_fraction(self, fraction: float) -> None:
-        """Drive the circular progress ring (download / checks)."""
+        """Drive the compact status widget's progress bar (download / checks)."""
+        widget = getattr(self, "_status_widget", None)
+        if widget is not None:
+            if getattr(self, "_check_worker", None) is not None:
+                title = t("detail.statuswidget.running")
+            else:
+                title = t("detail.statuswidget.downloading")
+            widget.set_running(title, self._status_context(), fraction)
+            self._status_row.setVisible(False)
+        # Keep the retired ring object coherent for any caller that still
+        # reaches for it, but it no longer occupies a row.
         try:
-            self._ring.show()
             self._ring.setFraction(fraction)
-            self._ring.setAccessibleDescription(self._ring.accessibleDescription())
         except Exception:
             pass
 
     def _hide_ring(self) -> None:
-        """Hide the ring when the work it tracks is done."""
+        """Clear the compact status widget when the work it tracked is done."""
+        widget = getattr(self, "_status_widget", None)
+        if widget is not None:
+            widget.clear()
         try:
             self._ring.hide()
         except Exception:

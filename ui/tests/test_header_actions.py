@@ -145,3 +145,58 @@ def test_export_reports_button_is_gone(view):
     v, _ = view
     labels = [w.text() for w in v.findChildren(QPushButton)]
     assert not any("Export reports" in label for label in labels)
+
+
+def test_status_widget_starts_hidden_and_shows_three_faces(view):
+    v, _ = view
+    w = v._status_widget
+    assert not w.isVisible()
+
+    w.set_running("Running checks…", "14/21", 14 / 21)
+    assert w.isVisible()
+    assert w._title.text() == "Running checks…"
+    assert w._detail.text() == "14/21"
+    assert w._bar.value() == 66
+    assert "cancel" in w._action.toolTip().lower()
+
+    w.set_complete("All checks complete", "21/21")
+    assert w._title.text() == "All checks complete"
+    assert w._bar.value() == 100
+    assert "dismiss" in w._action.toolTip().lower()
+
+    w.set_error("Check error", "Checksum mismatch")
+    assert w._title.text() == "Check error"
+    assert w._detail.text() == "Checksum mismatch"
+    assert "retry" in w._action.toolTip().lower()
+
+    w.clear()
+    assert not w.isVisible()
+
+
+def test_rail_buttons_carry_lucide_icons(view):
+    v, _ = view
+    rail = v._rail
+    for key in ("dataset_checks", "file_checks", "response"):
+        assert not rail.buttons[key].icon().isNull(), key
+
+
+def test_action_buttons_carry_lucide_icons(view):
+    v, _ = view
+    assert not v._check_btn.icon().isNull()
+    assert not v._record_btn.icon().isNull()
+
+
+def test_stage_chip_sits_after_the_status_pill(view):
+    v, _ = view
+    parent = v._status_pill.parent()
+    layout = parent.layout()
+    indexes = [layout.indexOf(w) for w in (v._status_pill, v._stage_pill, v._curation_pill)]
+    assert indexes == sorted(indexes), indexes
+    assert v._stage_pill.text() == "Submitted for Review"
+
+
+def test_check_finished_feeds_the_status_widget(view, monkeypatch):
+    v, _ = view
+    v._show_status_complete("All checks complete", "12 passed · 2 warnings")
+    assert v._status_widget.isVisible()
+    assert v._status_widget._detail.text() == "12 passed · 2 warnings"

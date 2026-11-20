@@ -414,6 +414,10 @@ class ActionsSection(DetailState):
         self._check_btn.setEnabled(self._dl_mgr.files_dir(self._pid).exists())
         self._check_btn.setToolTip(t("detail.header.run_checks_tip_staged"))
         self._set_status(t("detail.status.downloaded_to", path=staged), tone="success")
+        self._show_status_complete(
+            t("detail.header.verify_files"),
+            t("detail.status.inventory_count", count=int(getattr(self, "_staged_total", 0) or 0)),
+        )
         self._log_action(
             "downloaded",
             t("detail.status.staged_to", path=staged),
@@ -439,6 +443,7 @@ class ActionsSection(DetailState):
         self._dl_btn.setEnabled(True)
         self._set_status("")
         headline, details = dialogs.describe_error(msg)
+        self._show_status_error(t("detail.statuswidget.error"), headline)
         dialogs.show_critical(
             self, t("detail.download.title"), headline, details=details, retry=self._on_download
         )
@@ -449,6 +454,9 @@ class ActionsSection(DetailState):
             return
         self._dl_cancel_btn.setEnabled(False)
         self._set_status(t("detail.status.cancelling"))
+        widget = getattr(self, "_status_widget", None)
+        if widget is not None and widget.isVisible():
+            widget.set_running(t("detail.statuswidget.cancelling"), "", None, cancelling=True)
         try:
             self._dl_worker.cancel()
         except Exception:

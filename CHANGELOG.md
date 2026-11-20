@@ -8,6 +8,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed (UI)
 
+- **Dataset header rebuilt in three bands from the approved mockups** (dv-cv3) — the chips/actions, identity/status and navigation bands replace the stacked action rows. The new compact status widget shows running (Lucide spinner + count + bar + Cancel), complete (check + full bar + Dismiss) and error (alert + retry) in the space beside the title instead of three dedicated rows. The stage chip, Lucide icons on actions and rail tabs, and nav result pills all come from the kit and theme roles; the header stays at 196px idle.
+
 - **Dataset header actions and rail reworked** (dv-gs5) — the rail is now three plain buttons (Dataset Checks / File Checks / Response) that only navigate; the DOI chip is the external Dataverse link, with the curation-label chip beside the publication status. Load/Reload Metadata moved into the Dataset checks section header, Download Dataset / Verify Files into the File checks header, and Export reports was removed. The primary button is state-aware (Run Automatic Checks → Run File Checks → Re-run Automatic Checks) and stages the dataset first when nothing is staged. The frozen app was rebuilt.
 
 ### Changed (tooling)

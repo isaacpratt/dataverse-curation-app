@@ -778,7 +778,8 @@
       "reload_metadata_tip": "Re-fetch the dataset's file list and metadata fields from Dataverse",
       "run_automatic_checks": "Run Automatic Checks",
       "run_file_checks": "Run File Checks",
-      "rerun_automatic_checks": "Re-run Automatic Checks"
+      "rerun_automatic_checks": "Re-run Automatic Checks",
+      "stage_submitted": "Submitted for Review"
     },
     "sidebar": {
       "collapse_tip": "Hide the sidebar — the main column gets the whole width",
@@ -1168,7 +1169,20 @@
       "dataset_checks": "Dataset Checks",
       "file_checks": "File Checks",
       "response": "Response",
-      "tip": "Jump to a section — navigation only, never runs an action"
+      "tip": "Jump to a section — navigation only, never runs an action",
+      "passed": "{count} passed",
+      "warnings": "{count} warnings",
+      "errors": "{count} errors"
+    },
+    "statuswidget": {
+      "cancel": "Cancel the running pass",
+      "dismiss": "Dismiss this status",
+      "retry": "Retry the checks",
+      "running": "Running checks…",
+      "downloading": "Downloading dataset…",
+      "complete": "All checks complete",
+      "error": "Check error",
+      "cancelling": "Cancelling…"
     }
   },
   "workflow": {

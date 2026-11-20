@@ -92,6 +92,8 @@ from ui.theme import (
     PRIMARY_FIXED,
     RADIUS_LG,
     RADIUS_SM,
+    STATE_ERROR_GRAPHIC,
+    STATE_SUCCESS_GRAPHIC,
     SURFACE_CARD,
     SURFACE_PAGE,
     SURFACE_RAISED,
@@ -130,6 +132,7 @@ __all__ = [
     "PaneFooter",
     "RingProgress",
     "SortArrowHeaderView",
+    "StatusWidget",
     "WorkflowRail",
     "add_info_tip",
     "fit_tree_height",
@@ -2484,6 +2487,25 @@ class WorkflowRail(QWidget):
                     btn.setToolTip(t("detail.rail.tip"))
                     btn.setAccessibleName(label)
                     btn.setStyleSheet(self._style_for("available"))
+                    try:
+                        from ui.icons import role_icon as _nav_icon
+
+                        glyph = {
+                            "dataset_checks": "section_checks",
+                            "file_checks": "folder",
+                            "response": "section_response",
+                        }.get(key)
+                        if glyph:
+                            btn.setIcon(_nav_icon(glyph, size=14))
+                            btn.setIconSize(QSize(14, 14))
+                    except Exception:
+                        pass
+            self.hint.setObjectName("CaptionSM")
+            self.hint.setText("")
+            # Reserve a lane for the result pills so the expanding buttons
+            # cannot squeeze them to nothing (the mockup's nav-hint pills).
+            self.hint.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+            self.hint.setMinimumWidth(180)
         else:
             layout.addWidget(self.hint)
             layout.addWidget(self._toggle)
@@ -2540,6 +2562,22 @@ class WorkflowRail(QWidget):
         lay.addWidget(self.hint)
         lay.addWidget(self._toggle)
 
+    def set_nav_counts(self, passed: int = 0, warnings: int = 0, errors: int = 0) -> None:
+        """Show the mockup's compact result pills in the fixed rail's hint."""
+        if not self._nav_steps:
+            return
+        bits = []
+        if passed:
+            bits.append(t("detail.rail.passed", count=passed))
+        if warnings:
+            bits.append(t("detail.rail.warnings", count=warnings))
+        if errors:
+            bits.append(t("detail.rail.errors", count=errors))
+        text = " · ".join(bits)
+        self.hint.setText(text)
+        self.hint.setToolTip(text)
+        self.hint.show()
+
     def set_toggle_label(self, text: str) -> None:
         """Show the name of the view the toggle switches TO."""
         self._toggle.setText(text)
@@ -2588,6 +2626,119 @@ class WorkflowRail(QWidget):
             btn.setAccessibleDescription(step.hint)
         self.hint.setText(workflow.hint)
         self.hint.setToolTip(workflow.hint)
+
+
+class StatusWidget(QFrame):
+    """One compact inline status strip: icon + words + bar + action (dv-cv3).
+
+    Replaces the old three-row stack (message strip, progress bar, ring)
+    with a single line that sits beside the dataset identity. Three faces:
+
+    * ``set_running`` — spinner, title, "n/N" detail, determinate/indeterminate
+      bar and a Cancel (x) action;
+    * ``set_complete`` — check, "All checks complete", counts, full bar and
+      a Dismiss action;
+    * ``set_error`` — alert, short reason, full bar in the error role and a
+      Retry action.
+
+    The widget is hidden until there is something to report, so an idle
+    header reserves no vertical space for it. Every glyph is a bundled
+    Lucide icon; every colour comes from a theme role.
+    """
+
+    actionClicked = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("StatusWidget")
+        self.setVisible(False)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(10, 6, 8, 6)
+        lay.setSpacing(8)
+        self._icon = QLabel()
+        self._icon.setFixedSize(18, 18)
+        self._icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._title = make_small_body_label("")
+        self._detail = QLabel("")
+        self._detail.setObjectName("CaptionSM")
+        self._bar = make_progress_bar(height=6)
+        self._bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._action = make_icon_button(
+            "x",
+            tip=t("detail.statuswidget.dismiss"),
+            accessible_name=t("detail.statuswidget.dismiss"),
+            kind="ghost",
+            size="sm",
+        )
+        self._action.clicked.connect(lambda _c=False: self.actionClicked.emit())
+        lay.addWidget(self._icon)
+        lay.addWidget(self._title)
+        lay.addWidget(self._detail)
+        lay.addWidget(self._bar, 1)
+        lay.addWidget(self._action)
+        self.setStyleSheet(
+            f"QFrame#StatusWidget {{ background: {SURFACE_SUBTLE}; "
+            f"border: 1px solid {BORDER_SUBTLE}; border-radius: {RADIUS_LG}; }}"
+        )
+
+    def _paint_icon(self, name: str, color: str) -> None:
+        from ui.icons import icon as _icon
+
+        self._icon.setPixmap(_icon(name, color=color, size=16).pixmap(QSize(16, 16)))
+
+    def _set_action(self, name: str, tip: str) -> None:
+        from ui.icons import icon as _icon
+
+        self._action.setIcon(_icon(name, size=14))
+        self._action.setToolTip(tip)
+        self._action.setAccessibleName(tip)
+
+    def set_running(
+        self,
+        title: str,
+        detail: str = "",
+        fraction: float | None = None,
+        *,
+        cancelling: bool = False,
+    ) -> None:
+        """Spinner + progress + Cancel (or a muted spinner while cancelling)."""
+        self._paint_icon("loader-circle", ACCENT_PRIMARY)
+        self._title.setText(title)
+        self._detail.setText(detail)
+        self._bar.setRange(0, 100 if fraction is not None else 0)
+        if fraction is not None:
+            self._bar.setValue(int(max(0.0, min(1.0, fraction)) * 100))
+        self._set_action("x", t("detail.statuswidget.cancel"))
+        self._action.setEnabled(not cancelling)
+        self.show()
+
+    def set_complete(self, title: str, detail: str = "") -> None:
+        """Check + full success bar + Dismiss."""
+        self._paint_icon("circle-check", STATE_SUCCESS_GRAPHIC)
+        self._title.setText(title)
+        self._detail.setText(detail)
+        self._bar.setRange(0, 100)
+        self._bar.setValue(100)
+        self._set_action("x", t("detail.statuswidget.dismiss"))
+        self._action.setEnabled(True)
+        self.show()
+
+    def set_error(self, title: str, detail: str = "") -> None:
+        """Alert + full error bar + Retry."""
+        self._paint_icon("circle-alert", STATE_ERROR_GRAPHIC)
+        self._title.setText(title)
+        self._detail.setText(detail)
+        self._bar.setRange(0, 100)
+        self._bar.setValue(100)
+        self._set_action("rotate-ccw", t("detail.statuswidget.retry"))
+        self._action.setEnabled(True)
+        self.show()
+
+    def clear(self) -> None:
+        """Hide the strip and reset it for the next pass."""
+        self.hide()
+        self._title.setText("")
+        self._detail.setText("")
 
 
 def fit_tree_height(tree: QTreeView, row_height: int = 40, floor: int = 80) -> None:

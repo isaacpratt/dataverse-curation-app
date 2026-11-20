@@ -57,6 +57,7 @@ from ui.theme import (
 from ui.widgets import (
     AppButton,
     RingProgress,
+    StatusWidget,
     WorkflowRail,
     make_action_button,
     make_badge,
@@ -218,7 +219,7 @@ class DatasetDetailView(
         top = QWidget()
         top.setObjectName("DetailTopBar")
         top_lay = QVBoxLayout(top)
-        top_lay.setContentsMargins(24, 24, 24, 12)
+        top_lay.setContentsMargins(24, 16, 24, 8)
         top_lay.setSpacing(8)
         root.addWidget(top)
 
@@ -266,11 +267,13 @@ class DatasetDetailView(
         self._sidebar_user_collapsed: bool | None = None
         self._sidebar_collapsed = False
 
-        # ---- Page header (ID badge + status, title, depositor, actions) ----
+        # ---- Page header, three bands (dv-cv3) --------------------------
+        # 1) top band: status chips on the left, actions on the right;
+        # 2) middle band: dataset identity on the left, compact status widget
+        #    on the right (it reserves no height while idle);
+        # 3) bottom band: the three-button navigation rail.
         header_row = QHBoxLayout()
         header_row.setSpacing(16)
-        header_left = QVBoxLayout()
-        header_left.setSpacing(6)
         badge_row = QHBoxLayout()
         badge_row.setSpacing(8)
         badge_row.setContentsMargins(0, 0, 0, 0)
@@ -296,39 +299,25 @@ class DatasetDetailView(
         self._status_pill = make_badge(t("detail.header.loading"), label="loading")
         self._status_pill.setObjectName("PillInReview")
         badge_row.addWidget(self._status_pill)
+        self._stage_pill = make_badge(t("detail.header.stage_submitted"), label="info")
+        badge_row.addWidget(self._stage_pill)
         self._curation_pill = make_badge("", label="draft")
         self._curation_pill.setObjectName("PillDraft")
         self._curation_pill.setVisible(False)
         self._curation_pill.setToolTip(t("detail.header.curation_label_tooltip"))
         badge_row.addWidget(self._curation_pill)
         badge_row.addStretch()
-        header_left.addLayout(badge_row)
-
-        # Same page-heading contract as Settings / Review configuration /
-        # Log / About (HeadlineLG theme token). The DOI chip above carries
-        # the Dataverse link, so the title stands alone on its own row.
-        self._title_lbl, _subtitle = make_page_heading(self._title)
-        self._title_lbl.setWordWrap(True)
-        header_left.addWidget(self._title_lbl)
-
-        self._depositor_lbl = make_body_label(t("detail.header.loading_metadata"), wrap=False)
-        header_left.addWidget(self._depositor_lbl)
-        # Called last: needs _depositor_lbl/_title_lbl to exist, and cached
-        # metadata makes `meta` truthy immediately.
-        self._update_header_link(None)
-
-        header_row.addLayout(header_left, 1)
+        header_row.addLayout(badge_row, 1)
 
         # Actions that stay in the fixed header: the in-flight cancels, the
         # curation record export, the sidebar toggle and the primary button.
         # Download/Verify and Load/Reload metadata live in the File checks and
         # Dataset checks section headers below (user decision 2026-11-20); the
         # Export reports button is gone.
-        actions_col = QVBoxLayout()
-        actions_col.setSpacing(8)
-        actions_col.setAlignment(Qt.AlignmentFlag.AlignTop)
+        # One row, as in the mockup: Run Checks (primary) + Export record +
+        # sidebar toggle, with the in-flight cancels revealed in place.
         actions_row = QHBoxLayout()
-        actions_row.setSpacing(8)
+        actions_row.setSpacing(6)
         # Mid-download Cancel — hidden until a worker starts.
         self._dl_cancel_btn = make_action_button(t("common.cancel"), kind="secondary", size="md")
         self._dl_cancel_btn.setToolTip(t("detail.header.download_cancel_tip"))
@@ -341,6 +330,12 @@ class DatasetDetailView(
         )
         self._record_btn.setToolTip(t("detail.header.export_record_tip"))
         self._record_btn.clicked.connect(self._on_export_record)
+        try:
+            from ui.icons import role_icon as _export_icon
+
+            self._record_btn.setIcon(_export_icon("export", size=14))
+        except Exception:
+            pass
         actions_row.addWidget(self._record_btn)
         # Sidebar show/hide toggle — the one layout control for the sidebar;
         # the rail is navigation, this is chrome (dv-6wb).
@@ -355,12 +350,17 @@ class DatasetDetailView(
         self._sidebar_toggle_btn.setAccessibleName(t("detail.sidebar.collapse_a11y"))
         self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
         actions_row.addWidget(self._sidebar_toggle_btn)
-        actions_col.addLayout(actions_row)
         # Primary action, label follows the run state (dv-gs5).
         self._check_btn = make_action_button(self._check_button_text(), kind="primary", size="lg")
         self._check_btn.setToolTip(t("detail.header.run_checks_tip"))
         self._check_btn.clicked.connect(self._on_run_checks)
-        actions_col.addWidget(self._check_btn)
+        try:
+            from ui.icons import role_icon as _run_icon
+
+            self._check_btn.setIcon(_run_icon("run", size=14))
+        except Exception:
+            pass
+        actions_row.addWidget(self._check_btn)
         # Cancel checks - hidden until a run starts, so the idle header
         # keeps its layout. A check pass over a large dataset can run for
         # minutes; without a way out the only option is to wait.
@@ -371,14 +371,34 @@ class DatasetDetailView(
         self._checks_cancel_btn.setAccessibleName(t("detail.header.cancel_checks_a11y"))
         self._checks_cancel_btn.clicked.connect(self._on_cancel_checks_click)
         self._checks_cancel_btn.setVisible(False)
-        actions_col.addWidget(self._checks_cancel_btn)
-        header_row.addLayout(actions_col, 0)
+        actions_row.addWidget(self._checks_cancel_btn)
+        header_row.addLayout(actions_row, 0)
         top_lay.addLayout(header_row)
 
-        # Status + progress: a composed strip (icon slot + message) so a
-        # confirmation reads as unmissable success at a glance (dv-3wc).
-        # Info messages keep a quiet face; success/error wear the body-size
-        # high-contrast text and an icon.
+        # Middle band: identity left, compact status widget right. The widget
+        # is hidden while idle, so this band costs the same as the old title
+        # row; running/complete/error states use the space that was empty.
+        middle_row = QHBoxLayout()
+        middle_row.setSpacing(16)
+        middle_row.setContentsMargins(0, 2, 0, 0)
+        identity_col = QVBoxLayout()
+        identity_col.setSpacing(2)
+        self._title_lbl, _subtitle = make_page_heading(self._title)
+        self._title_lbl.setWordWrap(True)
+        identity_col.addWidget(self._title_lbl)
+        self._depositor_lbl = make_body_label(t("detail.header.loading_metadata"), wrap=False)
+        identity_col.addWidget(self._depositor_lbl)
+        middle_row.addLayout(identity_col, 1)
+        self._status_widget = StatusWidget()
+        self._status_widget.actionClicked.connect(self._on_status_action)
+        middle_row.addWidget(self._status_widget, 0)
+        top_lay.addLayout(middle_row)
+        # Called last: needs _depositor_lbl/_title_lbl to exist, and cached
+        # metadata makes `meta` truthy immediately.
+        self._update_header_link(None)
+
+        # General message strip (one row, only while a message is present).
+        # Progress uses the StatusWidget above; this carries plain feedback.
         self._status_row = QWidget()
         self._status_row.setObjectName("StatusStrip")
         self._status_row.setStyleSheet(transparent_surface_qss("StatusStrip"))
@@ -397,16 +417,13 @@ class DatasetDetailView(
         _status_lay.addWidget(self._status, 1)
         self._status_row.hide()
         top_lay.addWidget(self._status_row)
+        # The thin bar and the ring are kept as objects for the existing
+        # worker callbacks, but no longer occupy header rows — the compact
+        # StatusWidget above owns progress now (dv-cv3).
         self._progress = make_progress_bar(height=6)
         self._progress.setVisible(False)
-        top_lay.addWidget(self._progress)
-        # Circular ring for download/check progress (W-12): a determinate
-        # arc beside the linear bar, since the bar is indeterminate for
-        # streamed bundles.
         self._ring = RingProgress(diameter=28)
         self._ring.hide()
-        top_lay.addWidget(self._ring)
-        top_lay.setAlignment(self._ring, Qt.AlignmentFlag.AlignVCenter)
 
         # Three-button navigation rail (dv-gs5): Dataset Checks, File Checks,
         # Response. Fixed buttons — navigation only, never an action.
@@ -546,6 +563,7 @@ class DatasetDetailView(
             self._update_header_link(self._metadata)
             self._update_curation_pill()
             self._refresh_header_actions()
+            self._refresh_rail_counts()
             self._raw_view.setPlainText(_format_metadata(self._metadata))
             self._populate_completeness(self._metadata)
             self._populate_version_diff()
