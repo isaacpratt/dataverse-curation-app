@@ -694,7 +694,7 @@ def flush_list_style(last: bool = True) -> str:
     )
 
 
-def tree_style(*, flush: bool = True, row_height: int | None = 30) -> str:
+def tree_style(*, flush: bool = True, row_height: int | None = 30, hover: bool = True) -> str:
     """Build the standard tree chrome (file manifest, metadata field list).
 
     flush=True: square corners and no frame — the tree sits flush inside
@@ -703,6 +703,9 @@ def tree_style(*, flush: bool = True, row_height: int | None = 30) -> str:
 
     row_height=None leaves the row height to the tree (rows that host
     their own widgets, e.g. the per-field status combo).
+
+    hover=False drops the ``::item:hover`` band for a form-like tree where
+    a pointer passing over a row must not look like a selection (dv-ud0).
 
     The header rules and scrollbar lanes come from the theme mixins, so
     every tree in the app wears the same header.
@@ -720,7 +723,7 @@ def tree_style(*, flush: bool = True, row_height: int | None = 30) -> str:
         f"QTreeView {{ background: {SURFACE_CARD}; {frame} "
         f"font-size: {FONT_SMALL}px; color: {TEXT_PRIMARY}; }} "
         + item
-        + selection_qss("QTreeView")
+        + selection_qss("QTreeView", hover=hover)
         + header_section_qss(flush=flush)
         + scrollbar_lane_qss("QTreeView")
     )
@@ -897,6 +900,7 @@ class AppTreeWidget(_BranchPainting, QTreeWidget):
         *,
         row_height: int | None = None,
         flush: bool = False,
+        hover_tint: bool = True,
     ) -> None:
         super().__init__(parent)
         self.setHeader(SortArrowHeaderView(Qt.Orientation.Horizontal, self))
@@ -906,7 +910,7 @@ class AppTreeWidget(_BranchPainting, QTreeWidget):
         self.setIndentation(18)
         self.setRootIsDecorated(True)
         self.setFrameStyle(QFrame.Shape.NoFrame)
-        self.setStyleSheet(tree_style(flush=flush, row_height=row_height))
+        self.setStyleSheet(tree_style(flush=flush, row_height=row_height, hover=hover_tint))
         # One selection face app-wide, and no dotted focus box (dv-coj).
         self.setItemDelegate(SelectionDelegate(self))
         self._fitting = False

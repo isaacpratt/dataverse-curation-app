@@ -17,7 +17,7 @@ import copy
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -240,6 +240,7 @@ class ReviewConfigView(QWidget):
         self._sel_kind: str = "field"  # field | content | header | footer
         self._sel_key: str = ""
         self._loading = False
+        self._selecting = False  # a programmatic setCurrentItem, not a user act
         # Unsaved-chip: any in-memory ruleset edit sets it, Save/Revert clear
         # it. Guards against losing edits by navigating away unnoticed.
         self._dirty = False
@@ -449,7 +450,7 @@ class ReviewConfigView(QWidget):
         # native expand/collapse, one child row per field rule with its level
         # and check dropdowns. Sorting stays OFF on purpose - children are
         # cell *widgets*, which Qt does not move when rows sort.
-        self._field_tree = AppTreeWidget(row_height=40, flush=True)
+        self._field_tree = AppTreeWidget(row_height=40, flush=True, hover_tint=False)
         self._field_tree.setColumnCount(3)
         # The three labels stay (a screen reader and any future re-show use
         # them) but the band is not painted: the two dropdown columns say
@@ -478,7 +479,13 @@ class ReviewConfigView(QWidget):
         _fld_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         self._field_tree.setColumnWidth(1, self._column_width(self._level_items(), 110))
         self._field_tree.setColumnWidth(2, self._column_width(self._handler_column_items(), 180))
-        self._field_tree.itemSelectionChanged.connect(self._on_field_selected)
+        self._field_tree.itemPressed.connect(self._on_row_pressed)
+        # Keyboard navigation is a deliberate act: arrow keys move the current
+        # row and the Response pane follows. A mere pointer move never does.
+        self._field_tree.currentItemChanged.connect(self._on_current_item_changed)
+        # Cell widgets swallow presses before the tree sees them, so the
+        # combos and their hosts have to route a press to the same helper.
+        self._field_tree.viewport().installEventFilter(self)
 
         # The Collapse/Expand button follows manual expand/collapse too:
         # without these, collapsing one block left the button reading
@@ -1140,8 +1147,14 @@ class ReviewConfigView(QWidget):
                     check.currentIndexChanged.connect(self._on_handler_changed)
                     target = parent_item if parent_item is not None else block_item
                     target.addChild(child)
-                    tree.setItemWidget(child, 1, make_cell_control(level, v_margin=_CELL_V_MARGIN))
-                    tree.setItemWidget(child, 2, make_cell_control(check, v_margin=_CELL_V_MARGIN))
+                    level_host = make_cell_control(level, v_margin=_CELL_V_MARGIN)
+                    check_host = make_cell_control(check, v_margin=_CELL_V_MARGIN)
+                    tree.setItemWidget(child, 1, level_host)
+                    tree.setItemWidget(child, 2, check_host)
+                    # A press on a cell widget never reaches the tree: route
+                    # it through the view's filter to the row helper (dv-ud0).
+                    for widget in (level, check, level_host, check_host):
+                        widget.installEventFilter(self)
                     return child
 
                 groups_by_prefix: dict[str, list] = {}
@@ -1379,23 +1392,63 @@ class ReviewConfigView(QWidget):
         self._dirty = False
         self._footer.set_dirty(False)
 
-    def _on_field_selected(self) -> None:
-        """Point the template editor at the selected field row."""
-        if self._loading:
+    # -- selecting a row is a deliberate act (dv-ud0) ------------------------
+
+    def eventFilter(self, obj, event) -> bool:
+        """Route a press on a cell widget to the row it belongs to.
+
+        QComboBox (and the transparent cell host) eat the press before the
+        tree sees it, so a click on a dropdown used to leave the Response
+        pane pointing at whichever row was edited before. Hover is never a
+        selection: only ``MouseButtonPress`` is handled here.
+        """
+        if event.type() == QEvent.Type.MouseButtonPress:
+            item = None
+            if obj is self._field_tree.viewport():
+                try:
+                    pos = event.position().toPoint()
+                except Exception:
+                    pos = event.pos()
+                item = self._field_tree.itemAt(pos)
+            elif isinstance(obj, QComboBox):
+                item = self._row_for_combo(obj)
+            elif getattr(obj, "objectName", lambda: "")() == "CellControlHost":
+                combo = obj.findChild(QComboBox)
+                if combo is not None:
+                    item = self._row_for_combo(combo)
+            if item is not None and self._row_data(item):
+                self._select_row(item)
+        return super().eventFilter(obj, event)
+
+    def _on_row_pressed(self, item, _column: int = 0) -> None:
+        """Make a press on any part of a field row choose it for editing."""
+        self._select_row(item)
+
+    def _on_current_item_changed(self, current, _previous) -> None:
+        """Arrow keys move the current row; the pane follows. Hover does not."""
+        if self._loading or self._selecting or current is None:
             return
+        self._select_row(current)
+
+    def _select_row(self, item) -> None:
+        """Make one field row the edited rule and retarget the Response pane."""
+        data = self._row_data(item)
+        if not data or data.get("kind") != "field":
+            return
+        self._selecting = True
         try:
-            data = self._row_data(self._selected_field_row())
-            if not data:
-                return
-            self._sel_kind = "field"
-            self._sel_key = self._rule_sel_key(
-                str(data.get("block") or ""),
-                str(data.get("field") or ""),
-                str(data.get("handler") or "nonempty"),
-            )
-            self._show_template_for_selection()
-        except Exception:
-            pass
+            tree = self._field_tree
+            tree.setCurrentItem(item)
+            item.setSelected(True)
+        finally:
+            self._selecting = False
+        self._sel_kind = "field"
+        self._sel_key = self._rule_sel_key(
+            str(data.get("block") or ""),
+            str(data.get("field") or ""),
+            str(data.get("handler") or "nonempty"),
+        )
+        self._show_template_for_selection()
 
     def _on_field_level_changed(self, _i: int) -> None:
         if self._loading:

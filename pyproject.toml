@@ -474,4 +474,7 @@ ignore_imports = [
     "tools.probes.probe_queue_columns -> ui.main_window",
     "tools.probes.probe_rail_nav -> ui.dataset",
     "tools.probes.probe_review_table -> ui.review_config",
+    "tools.probes.probe_review_selection -> ui.review_config",
+    "tools.probes.probe_review_selection -> ui.theme",
+    "tools.probes.probe_review_selection -> ui.widgets",
 ]

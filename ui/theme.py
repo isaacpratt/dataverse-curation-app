@@ -721,7 +721,7 @@ def header_section_qss(*, flush: bool = False) -> str:
     )
 
 
-def selection_qss(scope: str = "") -> str:
+def selection_qss(scope: str = "", *, hover: bool = True) -> str:
     """Row selection and hover for an item view — one source of truth.
 
     Every table and tree wears the same face: a quiet full-row tint on
@@ -732,6 +732,11 @@ def selection_qss(scope: str = "") -> str:
 
     scope is the view selector ("QTableWidget", "QTreeView"). Leave it
     empty when embedding in a rule that already carries the selector.
+
+    hover=False is for a view whose rows are a *form* rather than a list
+    of documents (the Review configuration field tree): a pointer passing
+    over a row must not paint a band that reads as "this is the one" while
+    the Response pane still targets a different rule (dv-ud0).
     """
     # No space between the scope and ``::item``: a descendant selector
     # (``QTreeView ::item``) matches a *child widget*, so the rules were
@@ -744,10 +749,10 @@ def selection_qss(scope: str = "") -> str:
     # catalogue guard reads every prose-shaped literal in this module, and
     # a bare ":selected { " fragment reads as prose.
     return (
-        f"{prefix}:hover {{ background: {SURFACE_SUBTLE}; }} "
+        (f"{prefix}:hover {{ background: {SURFACE_SUBTLE}; }} " if hover else "")
         # Keep the selected face when the view loses focus: the inactive
         # palette would otherwise drop the row back to an unstyled white.
-        f"{prefix}:selected {{ background: {SECONDARY_CONTAINER}; "
+        + f"{prefix}:selected {{ background: {SECONDARY_CONTAINER}; "
         f"color: {TEXT_PRIMARY}; }} "
         f"{prefix}:selected:!active {{ background: {SECONDARY_CONTAINER}; "
         f"color: {TEXT_PRIMARY}; }} "

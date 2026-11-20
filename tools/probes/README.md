@@ -25,6 +25,7 @@ python tools/probes/probe_qt_warnings.py      # a Qt message is a gate: a broken
 python tools/probes/probe_review_table.py     # the review rules table: Field | Level | Check rows, no header band, no h-scroll
 python tools/probes/probe_gallery_inputs.py   # the gallery's number field and value list: whole steppers, whole chips, no h-scroll
 python tools/probes/probe_icon_sheet.py       # every mark is a bundled Lucide glyph, painted at 16 and 20px
+python tools/probes/probe_review_selection.py # hover never paints a chosen-row band; a click chooses the row
 ```
 
 `run_all.py` runs each `probe_*.py` in turn and exits non-zero when any
@@ -134,6 +135,7 @@ unsubstituted.
 | `probe_review_table.py` | The review rules table keeps one row shape at 1440x900 and 960x720: three columns (Field, Level, Check) with no header band, both 32px dropdowns centred 4px above and below in their 40px rows, no elided dropdown text, no reset control or saved column layout, and no horizontal scrollbar. |
 | `probe_gallery_inputs.py` | The gallery's new input controls render whole at 1440px: every number-field stepper is a 32px button fully inside its field with a non-null Lucide icon, every value-list chip sits fully inside its wrapping flow with its own delete button, and the gallery never grows a horizontal scrollbar. |
 | `probe_icon_sheet.py` | Every role glyph has a tile on the gallery's icon sheet and paints real ink at both 16 and 20px, the re-pointed controls carry their glyph (refresh = rotate-ccw plus label, sidebar toggle = panel-right-close/open, ring = the Lucide check), and a screenshot of the sheet is saved. |
+| `probe_review_selection.py` | Hovering another field row leaves the Response pane on the clicked rule and paints no selected band under the pointer; the clicked row keeps the selected face and a real click retargets the pane. A screenshot with the other row hovered is saved. |
 
 ## The same contracts in pytest
 

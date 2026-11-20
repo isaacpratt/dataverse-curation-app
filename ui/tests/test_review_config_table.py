@@ -209,8 +209,7 @@ def test_a_block_heading_can_never_become_the_edited_rule(win, qapp):
     block_item = tree.topLevelItem(0)
     assert block_item is not None
     tree.clearSelection()
-    block_item.setSelected(True)
-    rc._on_field_selected()
+    rc._select_row(block_item)
     assert rc._row_data(block_item).get("kind") == "block"
     assert rc._sel_key == "", "a block heading is not a rule"
     # Nor is there a dropdown to hijack: the heading has no cell widget.
