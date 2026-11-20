@@ -1,28 +1,100 @@
 # Dataverse Docent
 
-Desktop curation assistant for Alliance Dataverse instances. It pulls datasets submitted for review, lets the curator approve a download, runs automated format-specific checks on the files, checks metadata completeness, and presents per-file and dataset-level findings in a desktop GUI with an exportable curation report.
+A desktop curation assistant for Alliance Dataverse instances. It pulls in datasets submitted for review, gates downloads behind curator approval, runs automated format checks on the files, checks metadata completeness against a configurable ruleset, and turns the findings into an exportable curation report and a ready-to-send response draft.
 
-## Download & install (Windows)
+![Review configuration: field rules grouped by metadata block, each with a Level and a Check dropdown](docs/assets/review-rules.png)
 
-Get the latest from the [GitHub releases](https://github.com/isaacpratt/dataverse-curation-app/releases):
+> **Windows-first.** The released build is **unsigned**: Windows SmartScreen warns on first run. Choose **More info → Run anyway** only after verifying the download with the published checksums.
 
-- **`DataverseDocent-win-Setup.exe`** — one click, installs per-user (no admin prompt); Start menu and desktop shortcuts, uninstall via Apps & Features.
-- **`DataverseDocent-win-Portable.zip`** — unzip and run, nothing to install.
-- **`SHA256SUMS.txt`** — verify the download with `Get-FileHash -Algorithm SHA256` (PowerShell) or `certutil -hashfile <file> SHA256`.
+## Contents
 
-The build is unsigned, so Windows SmartScreen will warn on first run: **More info → Run anyway**. Install and updates are also delta-sized (usually a few MB after the first install).
+- [What it does](#what-it-does)
+- [Install (Windows)](#install-windows)
+- [Develop from source](#develop-from-source)
+- [Configure](#configure)
+- [Documentation](#documentation)
+- [Contributing, support and security](#contributing-support-and-security)
+- [Roadmap](#roadmap)
+- [Context](#context)
+- [License](#license)
 
-Source & developers: see [docs/html/development.html](docs/html/development.html) (setup, tests, packaging) and [docs/html/user-guide.html](docs/html/user-guide.html) (using the app).
+## What it does
+
+- **Curation queue** — searches and filters datasets from the configured Dataverse, with saved column layouts and per-dataset curation labels.
+- **Approval-gated downloads** — shows file counts, sizes and access conditions first; the originals are staged locally and verified, with guestbook support and a cancellable progress view.
+- **Automated checks** — 22 format checkers (CSV/XLSX/SPSS/SAS/Stata, JSON/XML, images, PDF, tabular and geospatial formats, archives, secrets, FASTQ and more) plus dataset-level inventory/access checks. Optional libraries degrade to warnings rather than failures.
+- **Metadata completeness** — McMaster and Minimal profiles (and custom rulesets) with per-field required/optional rules, entry-correctness checks, and a per-dataset response draft.
+- **Dataset detail** — version diffs, a file manifest, findings by file and by dataset, a request log, and JSON/Markdown report export.
+
+## Install (Windows)
+
+Get the latest release from [GitHub Releases](https://github.com/isaacpratt/dataverse-curation-app/releases):
+
+| Asset | Use |
+| --- | --- |
+| `DataverseDocent-win-Setup.exe` | One-click per-user install (no admin prompt); Start menu and desktop shortcuts, uninstall via Apps & Features. |
+| `DataverseDocent-win-Portable.zip` | Unzip and run; nothing is installed. |
+| `SHA256SUMS.txt` | Verify the download before running it. |
+
+Verify with PowerShell:
+
+```powershell
+Get-FileHash -Algorithm SHA256 .\DataverseDocent-win-Setup.exe
+```
+
+Compare the hash with the corresponding line in `SHA256SUMS.txt`. The build is unsigned until signing ships, so expect the SmartScreen click-through described above. Updates after the first install are delta-sized (usually a few MB).
+
+## Develop from source
+
+Prerequisites: **Python 3.11+** on Windows and [uv](https://docs.astral.sh/uv/). R is only needed to verify parity with the original scripts, not to run the app.
+
+```powershell
+uv sync                       # creates .venv with the locked dependencies (incl. dev tools)
+uv run python main.py         # launch the desktop app; pick your Dataverse in Settings
+uv run python main.py --gallery  # the component gallery: every kit component on one page
+uv run pytest -q              # the full test suite
+uv run poe typecheck          # mypy
+uv run poe contracts          # import-linter: engine/core must not import the UI
+python tools/probes/run_all.py  # offscreen UI and geometry probes
+uv run poe build              # PyInstaller onedir build -> dist/DataverseDocent/
+uv run poe pack               # Velopack installer + portable zip (needs .NET 10 SDK)
+```
+
+Headless check of a staged directory (no GUI, no Dataverse required):
+
+```powershell
+uv run python main.py --headless <staged_dir> --out report.json --format json --persistent-id doi:10.5072/FK2/EXAMPLE
+```
+
+Exit codes: `0` clean, `1` error-level findings, `2` usage/IO failure.
+
+## Configure
+
+Copy `config.example.json` to `config.json` and set your instance URL and API token, or open the app and use the Settings page (a Borealis demo preset is included). The token is read from your environment/credential store where possible and `config.json` is gitignored — never commit it. Rulesets live in `requirements_profiles.json` v2 beside the config.
+
+## Documentation
+
+- [User guide](docs/html/user-guide.html) — the dashboard, dataset detail, metadata check, response draft and log.
+- [Development guide](docs/html/development.html) — setup, tests, adding checks, UI conventions, packaging and release.
+- [Architecture](docs/html/architecture.html) — components, threading, storage, the UI/table contracts, decisions.
+- [Checks reference](docs/html/checks-reference.html) — what each check examines and what its findings mean.
+- [Engine port matrix](docs/html/engine-port.html) — R-to-Python parity and go/no-go criteria.
+- [Report contract](docs/html/report-contract.html) — the JSON report shared by the engine and the GUI.
+- [Dataverse integration](docs/html/dataverse-integration.html) — endpoints, auth, discovery and downloads.
+- [Documentation index](docs/html/index.html).
+
+## Contributing, support and security
+
+The plan and open work live in [beads](https://github.com/gastownhall/beads): `bd ready` for what is unblocked, `bd list` for the full queue, `bd show <id>` for detail. Issues and support requests belong in the repository's issue tracker. **Security:** see [SECURITY.md](SECURITY.md) for the signing policy, checksum verification and how to report a vulnerability — please do not open a public issue for a security problem.
 
 ## Roadmap
 
-The remaining plan lives in **beads** (`bd ready` for next work, `bd list` for the full queue, `bd show <id>` for detail). The docs in `docs/html/` mirror it; beads win on disagreement.
+Remaining work is tracked in beads (`bd ready` / `bd list`); completed decisions are recorded in `docs/html/architecture.html` and `docs/adr/`.
 
 ## Context
 
-The app is built on two existing projects:
+The check engine ports the inspection scripts from **CUR_Res_CurationTools** (Curation Services Team, Digital Research Alliance of Canada). The Dataverse interaction and review-workflow patterns were informed by **rdm-review-dashboard**. Both are separate upstream projects; this repository does not vendor them.
 
-| Project | Role in this app |
-| --- | --- |
-| [CUR_Res_CurationTools](../CUR_Res_CurationTools) | R inspection scripts and functions ported into the Python check engine |
-| [rdm-review-dashboard](../rdm-review-dashboard) | Reference for Dataverse interaction, review workflow state, and reviewer/admin access patterns |
+## License
+
+MIT — see [LICENSE](LICENSE). The engine checks are ported from the MIT-licensed `CUR_Res_CurationTools`; bundled Lucide icons are ISC-licensed. Released builds ship a generated `NOTICE` and a licence inventory of the locked dependency set (`uv run poe release-artefacts`).
