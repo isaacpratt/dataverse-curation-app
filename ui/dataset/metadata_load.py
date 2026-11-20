@@ -101,6 +101,7 @@ class MetadataLoadSection(DetailState):
         self._in_review = bool(extra.get("in_review", False))
         self._update_header_link(metadata)
         self._update_curation_pill()
+        self._refresh_header_actions()
         self._populate_version_diff()
         self._refresh_decision_options()
         self._refresh_sensitivity_card()

@@ -88,12 +88,8 @@ def _view(qapp: Any, tmp_path: Any):
 
 def _headings(view: Any):
     return [
-        label.text()
-        for layout in (view._main_wrap,)
-        for i in range(layout.count())
-        if (label := layout.itemAt(i).widget()) is not None
-        and isinstance(label, QLabel)
-        and label.objectName() == "HeadlineMD"
+        view._dataset_checks_heading.text(),
+        view._file_checks_heading.text(),
     ]
 
 
@@ -130,9 +126,9 @@ def test_two_headings_in_order(qapp, tmp_path):
         assert _headings(view) == ["Dataset checks", "File checks"]
         # The cards sit under their heading, in the same order.
         widgets = [view._main_wrap.itemAt(i).widget() for i in range(view._main_wrap.count())]
-        assert widgets.index(view._dataset_checks_heading) < widgets.index(view._meta_card)
+        assert widgets.index(view._dataset_checks_header) < widgets.index(view._meta_card)
         assert widgets.index(view._meta_card) < widgets.index(view._auto_card)
-        assert widgets.index(view._file_checks_heading) < widgets.index(view._file_card)
+        assert widgets.index(view._file_checks_header) < widgets.index(view._file_card)
     finally:
         view.deleteLater()
 

@@ -266,12 +266,11 @@ class FilesSection(DetailState):
             self._all_file_rows.append((rel, size, ext, rel))
         self._staged_files = files
         self._apply_file_filter_internal()
-        # Staged fallback: every listed file is on disk by construction.
-        # Header grammar: major actions are text-only in every state —
-        # "Downloaded (N)" already carries the meaning (2026-10-02 minor).
+        # Staged fallback: every listed file is on disk by construction, so
+        # the File checks action reads "Verify Files" (dv-gs5).
         try:
-            self._dl_btn.setText(t("detail.files.downloaded", count=len(files)))
-            self._dl_btn.setToolTip(t("detail.files.downloaded_tip"))
+            self._dl_btn.setText(t("detail.header.verify_files"))
+            self._dl_btn.setToolTip(t("detail.header.verify_files_tip"))
         except Exception:
             pass
 
@@ -343,13 +342,12 @@ class FilesSection(DetailState):
         except Exception:
             return False
 
-    def _refresh_download_state(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-        """Reflect staged state on the Download button so it never surprises.
+    def _refresh_download_state(self) -> None:
+        """Reflect staged state on the File checks action button (dv-gs5).
 
-        Fully-staged inventories read "Downloaded (N)" with a check icon
-        and a tooltip saying the approval dialog will be skipped; partial
-        stages show "Download All (k/N staged)". No inventory → plain
-        "Download All".
+        Nothing (or only part of the inventory) staged → "Download Dataset";
+        every file staged → "Verify Files". The count stays in the tooltip
+        so the button label never changes width with the inventory size.
         """
         # Rail inputs: counts are captured here (the single place that
         # already walks the staged folder) so _refresh_workflow never stats.
@@ -363,7 +361,7 @@ class FilesSection(DetailState):
             rows = getattr(self, "_all_file_rows", []) or []
             if not rows:
                 btn.setText(t("detail.header.download_all"))
-                btn.setToolTip(t("detail.files.download_tip"))
+                btn.setToolTip(t("detail.header.download_dataset_tip"))
                 self._refresh_workflow()
                 return
             root = self._dl_mgr.files_dir(self._pid)
@@ -400,26 +398,19 @@ class FilesSection(DetailState):
             # Header grammar: text-only major action in every state; the
             # count in the label ("Downloaded (N)") is the status cue.
             if total and n_staged >= total:
-                btn.setText(t("detail.files.downloaded", count=total))
-                btn.setToolTip(t("detail.files.all_staged_tip"))
-            elif n_staged:
-                btn.setText(
-                    t(
-                        "detail.files.download_all_staged",
-                        staged=n_staged,
-                        total=total,
-                    )
-                )
+                btn.setText(t("detail.header.verify_files"))
+                btn.setToolTip(t("detail.header.verify_files_tip"))
+            else:
+                btn.setText(t("detail.header.download_all"))
                 btn.setToolTip(
                     t(
                         "detail.files.staged_tip",
                         staged=n_staged,
                         total=total,
                     )
+                    if n_staged
+                    else t("detail.header.download_dataset_tip")
                 )
-            else:
-                btn.setText(t("detail.header.download_all"))
-                btn.setToolTip(t("detail.files.download_tip"))
         except Exception:
             pass
         self._refresh_workflow()

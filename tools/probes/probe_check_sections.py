@@ -98,10 +98,8 @@ def main() -> int:
         app.processEvents()
 
     headings = [
-        view._main_wrap.itemAt(i).widget().text()
-        for i in range(view._main_wrap.count())
-        if isinstance(view._main_wrap.itemAt(i).widget(), QLabel)
-        and view._main_wrap.itemAt(i).widget().objectName() == "HeadlineMD"
+        view._dataset_checks_heading.text(),
+        view._file_checks_heading.text(),
     ]
     report.check(
         headings == ["Dataset checks", "File checks"],

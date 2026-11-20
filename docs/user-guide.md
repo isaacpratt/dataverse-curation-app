@@ -55,23 +55,48 @@ Every section header carries a Lucide (i) button: hover or click it for that sec
 
 Automated checks lists what the run found: the dataset checks with their full messages, then every per-file failure and skip — per-file passes live in the File checks tree (expand a file to see them). Its filter combo narrows the card to All / Errors / Warnings; the header counts always describe the whole run, not the filtered view, and All brings every row back. The same check skipped on many files (an optional library that is not installed, say) collapses into a single row carrying the count — hover it for the files it did not run on.
 
-1Review metadataAuto-loads on open (QTimer.singleShot(100) via MetadataWorker); Load metadata re-fetches fields + inventory without downloading. Change the profile (McMaster/Minimal/custom) to re-evaluate instantly.
-→
-2Review changesVersion log: all versions + Previous vX → New Draft field diffs + added/removed/replaced files. First submissions show “Initial draft”.
-→
-3DownloadDownload All quotes count + size first (original size for tabular); fully-staged skips verified; approval dialog guards large sets. If the dataset declares a guestbook, the same window renders its fields (name/email/institution/position plus custom questions, prefilled from your account) and submits them with the download. Progress shows X.Y MB; tabular originals replace .tab. While streaming, a Cancel button appears: stop takes effect at the next chunk, staged files are kept, the truncated bundle part is removed (logged as Cancelled by user).
-→
-4Run checksRun checks dispatches every file (CheckWorker, indeterminate progress + per-file label, Cancel while running). Without staged files it asks you to download first.
-→
-5InspectManifest tree folder › file › check (Clean / Warning / Error / Skipped / No automated check); files with issues auto-expand; filter by text + status combo; click a file for aggregate counts or a check for full message + details in the status bar. The Dataset checks card shows inventory.* results with aggregate counts (per-file rows live only in the tree).
-→
-6ExportExport reports… writes *_report.json + *_report.md side-by-side (JSON canonical, Markdown human-readable). Without a report it asks you to run checks first.
-→
-7RespondResponse page assembles standard text per incomplete rule + failed check: uncheck to drop, edit freely (autosaved to response_draft.md), Regenerate / Copy / Export (logged as response_exported).
+1. **Review metadata** — auto-loads on open; **Reload Metadata** in the
+   Dataset checks header re-fetches fields and the file inventory without
+   downloading. Change the profile (McMaster/Minimal/custom) to re-evaluate.
+2. **Download** — **Download Dataset** in the File checks header quotes the
+   count and size first (original size for tabular); approval guards large
+   sets and a declared guestbook is rendered in the same window. Progress
+   shows X.Y MB; tabular originals replace `.tab`. Cancel keeps staged files
+   and removes the truncated bundle part.
+3. **Run Automatic Checks** — stages the dataset first if needed, then runs
+   every applicable check (per-file label, Cancel while running). Afterwards
+   the button reads **Run File Checks** for a dataset-only pass or **Re-run
+   Automatic Checks** for a full one.
+4. **Inspect** — the File checks tree is folder › file › check (Clean /
+   Warning / Error / Skipped / No automated check); files with issues
+   auto-expand, and filters narrow by text and status. Per-file findings live
+   only there; the Dataset checks card holds the dataset-level results.
+5. **Respond** — the Response page assembles standard text per incomplete rule
+   and failed check: uncheck to drop, edit freely (autosaved), then
+   Regenerate / Copy / Export.
 
-The dataset header carries a six-step workflow rail — Metadata → Changes → Download → Checks → Export → Respond — that replaces the old Review/Response tabs. Each step shows its state (green check = done, filled pill = current, outline = available, muted = blocked until its prerequisite) plus a short next-step hint; the current step is also bold with an accessible name, so colour is never the only cue. The rail is guidance, not a gate: every step stays clickable. Steps 1–5 jump the Review page to the matching section (Metadata check, Version log, File checks, Automated checks, or the header's Export reports… button); Respond switches to the Response page. Navigating from the rail never starts a download or opens a save dialog — it only focuses the relevant control.
+The dataset header keeps the three things a curator navigates to in a
+**three-button rail — Dataset Checks → File Checks → Response**. The buttons
+are plain navigation: they jump the Review page to that section's heading or
+switch to the Response page, and never start a download, a check pass or a
+save dialog. The old six-step rail, its CURATE(D) toggle and the separate
+"Open in Dataverse" link under the title are gone.
 
-The rail's toggle also offers a CURATE(D) practice view — Check → Understand → Request → Augment → Transform → Evaluate → Document (the DCN's shared curation vocabulary) — with live open-item counts (“R: 4 required metadata fields missing”, “E: 3 findings outstanding”). The choice persists per workspace; both views navigate only.
+Header actions are now placed where they belong:
+
+- The **DOI chip is the Dataverse link**. Click it to open the dataset's
+  landing page in your browser (the DRAFT version opens when the dataset is a
+  draft). The publication-status chip sits beside it, followed by the
+  curation-label chip when Dataverse has assigned one.
+- **Dataset checks** section header: **Reload Metadata** (or **Load metadata**
+  before the first load) re-fetches the file inventory and metadata fields.
+- **File checks** section header: **Download Dataset** stages every file for
+  checking; once everything is staged the same button reads **Verify Files**.
+- The primary button is **Run Automatic Checks** on a fresh dataset. Press it
+  with nothing staged and it stages the dataset first (approval dialog
+  included), then runs the checks. After a dataset-only pass it reads
+  **Run File Checks**; after a full pass it reads **Re-run Automatic Checks**.
+- **Export reports** is gone; **Export record** remains in the fixed header.
 
 ## Notes on checks
 

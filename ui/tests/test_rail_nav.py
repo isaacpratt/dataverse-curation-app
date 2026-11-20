@@ -1,31 +1,19 @@
-"""Workflow-rail navigation (dv-6wb): the rail is the sole jump map.
+"""Workflow-rail navigation (dv-6wb, dv-gs5): three section buttons.
 
-The sidebar Sections card and the top-bar Sections button are gone; the
-rail (mechanical or CURATE(D)) navigates to its owning card and logs a
-``nav_jump`` action per click.
+The rail is the sole jump map: Dataset Checks, File Checks and Response.
+Each button is a real QPushButton that only navigates; clicking one logs a
+``nav_jump`` action and never runs a download, check or export.
 """
 
 from pathlib import Path
 
 import pytest
 
-# mechanical step -> owning card it jumps to (or the response page)
-MECHANICAL = {
-    "metadata": "_meta_card",
-    "changes": "_version_card",
-    "download": "_file_card",
-    "checks": "_dataset_checks_heading",
-    "respond": "respond",
-}
-# curated step -> owning card (or the response page)
-CURATED = {
-    "check": "_file_card",
-    "understand": "_auto_card",
-    "request": "_meta_card",
-    "augment": "_meta_card",
-    "transform": "_auto_card",
-    "evaluate": "_auto_card",
-    "document": "respond",
+# three-button rail -> owning section (or the response page)
+NAV = {
+    "dataset_checks": "_dataset_checks_heading",
+    "file_checks": "_file_checks_heading",
+    "response": "respond",
 }
 
 
@@ -46,7 +34,6 @@ def view(qapp, tmp_path):
     v._report = None
     v._dl_btn = None  # type: ignore[assignment]
     v._check_btn = None  # type: ignore[assignment]
-    v._history_btn = None  # type: ignore[assignment]
     v._jumps = []
     v._responses = []
     v._statuses = []
@@ -60,8 +47,8 @@ def view(qapp, tmp_path):
 
 
 class TestRailNavigation:
-    def test_mechanical_steps_jump_to_their_cards(self, view):
-        for key, expected in MECHANICAL.items():
+    def test_three_steps_jump_to_their_sections(self, view):
+        for key, expected in NAV.items():
             view._jumps.clear()
             view._responses.clear()
             view._on_workflow_step(key)
@@ -71,35 +58,14 @@ class TestRailNavigation:
             else:
                 assert view._jumps == [expected], f"{key}: {view._jumps}"
 
-    def test_curated_steps_jump_to_their_cards(self, view, tmp_path):
-        from curation.storage import write_ui_pref
-
-        write_ui_pref(tmp_path, "rail_view", "curated")
-        for key, expected in CURATED.items():
-            view._jumps.clear()
-            view._responses.clear()
-            view._on_workflow_step(key)
-            if expected == "respond":
-                assert view._responses, f"{key}: no response-page jump"
-                assert view._jumps == []
-            else:
-                assert view._jumps == [expected], f"{key}: {view._jumps}"
-
-    def test_export_step_never_crashes_without_a_report(self, view):
-        view._on_workflow_step("export")
-        assert view._statuses, "export without a report must hint, not crash"
-
-    def test_nav_jump_is_logged_with_step_and_view(self, view):
-        view._on_workflow_step("checks")
+    def test_nav_jump_is_logged_with_the_step(self, view):
+        view._on_workflow_step("dataset_checks")
         assert view._logged[-1][0] == "nav_jump"
-        assert view._logged[-1][2] == {"step": "checks", "view": "mechanical"}
+        assert view._logged[-1][2] == {"step": "dataset_checks"}
 
-    def test_nav_jump_records_curated_view(self, view, tmp_path):
-        from curation.storage import write_ui_pref
-
-        write_ui_pref(tmp_path, "rail_view", "curated")
-        view._on_workflow_step("evaluate")
-        assert view._logged[-1][2] == {"step": "evaluate", "view": "curated"}
+    def test_unknown_key_is_harmless(self, view):
+        view._on_workflow_step("not_a_button")
+        assert view._jumps == ["_dataset_checks_heading"]
 
 
 class TestNavModelsRemoved:
@@ -123,5 +89,10 @@ class TestNavModelsRemoved:
 
     def test_rail_is_always_present_and_single(self):
         src = self._dataset_package_source()
-        assert "self._rail = WorkflowRail()" in src
+        assert "self._rail = WorkflowRail(" in src
         assert "rail" in src  # the rail is created unconditionally
+
+    def test_export_reports_button_is_gone(self):
+        src = self._dataset_package_source()
+        assert "_history_btn" not in src
+        assert "export_reports" not in src

@@ -2441,9 +2441,14 @@ class WorkflowRail(QWidget):
     # choice and re-derives the steps; the rail just re-renders.
     viewToggled = Signal()
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        nav_steps: list[tuple[str, str]] | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("WorkflowRail")
+        self._nav_steps = nav_steps
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(4)
@@ -2466,9 +2471,22 @@ class WorkflowRail(QWidget):
         self._toggle.setToolTip(t("workflow.curated.toggle_tip"))
         self._toggle.setAccessibleName(t("workflow.curated.toggle_tip"))
         self._toggle.clicked.connect(lambda _c: self.viewToggled.emit())
-        self._rebuild_steps(list(STEP_ORDER))
-        layout.addWidget(self.hint)
-        layout.addWidget(self._toggle)
+        self._rebuild_steps([key for key, _label in nav_steps] if nav_steps else list(STEP_ORDER))
+        if nav_steps:
+            # Fixed navigation mode (the dataset page's three section buttons):
+            # no state badge, no hint and no curated toggle — just the buttons.
+            self.hint.hide()
+            self._toggle.hide()
+            for key, label in nav_steps:
+                btn = self.buttons.get(key)
+                if btn is not None:
+                    btn.setText(label)
+                    btn.setToolTip(t("detail.rail.tip"))
+                    btn.setAccessibleName(label)
+                    btn.setStyleSheet(self._style_for("available"))
+        else:
+            layout.addWidget(self.hint)
+            layout.addWidget(self._toggle)
 
     def minimumSizeHint(self) -> QSize:
         """Keep the window free to stay at the 960px floor.
@@ -2532,7 +2550,13 @@ class WorkflowRail(QWidget):
         return workflow_step_qss(state)
 
     def set_workflow(self, workflow: Workflow) -> None:
-        """Paint each step and the next-step hint; never disables a step."""
+        """Paint each step and the next-step hint; never disables a step.
+
+        In fixed-navigation mode the rail is just the three section buttons:
+        it ignores workflow derivation so its buttons stay stable.
+        """
+        if self._nav_steps:
+            return
         self._rebuild_steps([step.key for step in workflow.steps])
         for step in workflow.steps:
             btn = self.buttons.get(step.key)

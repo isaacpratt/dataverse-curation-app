@@ -751,18 +751,15 @@
       "loading": "Loading…",
       "curation_label_tooltip": "Curation label assigned in Dataverse",
       "loading_metadata": "Loading metadata…",
-      "download_all": "Download All",
+      "download_all": "Download Dataset",
       "download_cancel_tip": "Stop the download — files already staged stay on disk",
       "download_cancel_a11y": "Cancel download",
-      "export_reports": "Export reports…",
-      "export_reports_tip": "Save the DatasetReport JSON + Markdown (runs after checks complete)",
       "export_record": "Export record",
       "export_record_tip": "Write one dated curation-record folder: report, response letter, timeline, dispositions, sensitivity answers, decision, and a SHA-256 manifest.",
       "load_metadata": "Load metadata",
       "load_metadata_tip": "Fetch the dataset's file list and all metadata fields from the Dataverse (no download)",
-      "run_checks": "Run checks",
-      "run_checks_tip": "Download the dataset first — checks run on the staged files\n\nShortcuts: Ctrl+Enter — run checks (commits on the Response page) · Ctrl+D — download all · Ctrl+Shift+O — open the staged folder",
-      "run_checks_tip_staged": "Run the automated curation checks on the staged files\n\nShortcuts: Ctrl+Enter — run checks (commits on the Response page) · Ctrl+D — download all · Ctrl+Shift+O — open the staged folder",
+      "run_checks_tip": "Stage the dataset first if needed, then run the checks on the staged files\n\nShortcuts: Ctrl+Enter — run checks (commits on the Response page) · Ctrl+D — download all · Ctrl+Shift+O — open the staged folder",
+      "run_checks_tip_staged": "Run the automatic checks on the staged files\n\nShortcuts: Ctrl+Enter — run checks (commits on the Response page) · Ctrl+D — download all · Ctrl+Shift+O — open the staged folder",
       "cancel_checks": "Cancel checks",
       "cancel_checks_tip": "Stop the running checks — the report is not written",
       "cancel_checks_a11y": "Cancel the running checks",
@@ -773,17 +770,22 @@
       "depositor_date": "  •  {date}",
       "open_link": "Open in Dataverse ↗",
       "open_link_draft": "Open in Dataverse — DRAFT ↗",
-      "curation_label_set_by": "{label}\nSet {when} by {who}"
+      "curation_label_set_by": "{label}\nSet {when} by {who}",
+      "verify_files": "Verify Files",
+      "download_dataset_tip": "Stage every file in this dataset for checking",
+      "verify_files_tip": "Re-check the already-staged files against the Dataverse inventory",
+      "reload_metadata": "Reload Metadata",
+      "reload_metadata_tip": "Re-fetch the dataset's file list and metadata fields from Dataverse",
+      "run_automatic_checks": "Run Automatic Checks",
+      "run_file_checks": "Run File Checks",
+      "rerun_automatic_checks": "Re-run Automatic Checks"
     },
     "sidebar": {
       "collapse_tip": "Hide the sidebar — the main column gets the whole width",
       "collapse_a11y": "Hide the sidebar",
       "show_action": "Show sidebar"
     },
-    "workflow": {
-      "run_checks_first": "Run checks first — then Export reports… becomes available.",
-      "export_hint": "Use Export reports… in the header to save the JSON + Markdown."
-    },
+    "workflow": {},
     "sections": {
       "dataset_checks": "Dataset checks",
       "auto_checks": "Automated checks",
@@ -829,7 +831,7 @@
       "record_failed": "Could not write the curation record:\n{exc}",
       "report_auto_saved": "Report auto-saved to {name}",
       "report_auto_save_failed": "Could not auto-save the report (see log).",
-      "use_export_for_markdown": " Use Export reports… for Markdown.",
+      "use_export_for_markdown": " Export the curation record for Markdown.",
       "report_summary": "{findings} finding(s) across {files} files",
       "auto_saved_to": "Auto-saved to {folder}/{name}",
       "path_not_in_report": "{path}: not in report",
@@ -1097,11 +1099,6 @@
       "no_files_in_dataverse": "This dataset contains no files.",
       "showing": "Showing {shown} of {total} files",
       "total_size": "Total Size: {size}",
-      "downloaded": "Downloaded ({count})",
-      "downloaded_tip": "All staged files are on disk — clicking verifies instead of re-downloading",
-      "download_tip": "Download the dataset bundle for local checks",
-      "all_staged_tip": "All files are already staged locally — clicking verifies and skips the download instead of re-prompting",
-      "download_all_staged": "Download All ({staged}/{total} staged)",
       "staged_tip": "{staged} of {total} file(s) already staged — only missing files will be fetched after approval",
       "open_folder_nothing": "Nothing downloaded yet — download the dataset first.",
       "could_not_open": "Could not open {path}:\n{exc}",
@@ -1156,7 +1153,6 @@
     },
     "checks": {
       "title": "Checks",
-      "download_first": "Download the dataset first.",
       "result_detail": "{path}: [{level}] {check_id}: {message} — {details}"
     },
     "export": {
@@ -1167,6 +1163,12 @@
       "save_dialog_failed": "Could not open the save dialog:\n{exc}",
       "write_failed": "Could not write the report:\n{exc}",
       "saved_log": "Reports saved to {markdown} + {json}"
+    },
+    "rail": {
+      "dataset_checks": "Dataset Checks",
+      "file_checks": "File Checks",
+      "response": "Response",
+      "tip": "Jump to a section — navigation only, never runs an action"
     }
   },
   "workflow": {
@@ -1205,8 +1207,6 @@
     },
     "curated": {
       "toggle_tip": "Switch the rail between app steps and the CURATE(D) curation steps",
-      "toggle_curated": "CURATE(D)",
-      "toggle_steps": "Steps",
       "label_check": "Check",
       "label_understand": "Understand",
       "label_request": "Request",

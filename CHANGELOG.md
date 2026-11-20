@@ -6,6 +6,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed (UI)
+
+- **Dataset header actions and rail reworked** (dv-gs5) — the rail is now three plain buttons (Dataset Checks / File Checks / Response) that only navigate; the DOI chip is the external Dataverse link, with the curation-label chip beside the publication status. Load/Reload Metadata moved into the Dataset checks section header, Download Dataset / Verify Files into the File checks header, and Export reports was removed. The primary button is state-aware (Run Automatic Checks → Run File Checks → Re-run Automatic Checks) and stages the dataset first when nothing is staged. The frozen app was rebuilt.
+
 ### Changed (tooling)
 
 - **Documentation is built from Markdown by Zensical (dv-l1f, ADR 0009)** — the hand-authored HTML pages are replaced as the published source by a Markdown tree in `docs/` built with a native `zensical.toml` (explicit nav mirroring the 10 live page names, two frozen proposal snapshots out of nav and marked historical, Mermaid diagrams and theme-derived CSS). `zensical` is a dev dependency; `poe docs` builds strictly and `poe docs-serve` previews. CI builds the site on every PR and publishes to GitHub Pages at `isaacpratt.github.io/dataverse-curation-app` on master pushes only. README, AGENTS.md, SECURITY.md and the package metadata now point at the Pages URL. The old `docs/html/` tree stays as a frozen reference until the planned Diátaxis rewrite (dv-uq6); edit Markdown from now on.

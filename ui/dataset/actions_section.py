@@ -425,8 +425,14 @@ class ActionsSection(DetailState):
                 self._populate_completeness(self._metadata)
         except Exception:
             pass
+        # A primary-button press with nothing staged becomes a download; once
+        # the staged set is ready, continue straight into the check pass.
+        if getattr(self, "_run_after_download", False):
+            self._run_after_download = False
+            self._start_checks()
 
     def _on_download_error(self, msg: str) -> None:
+        self._run_after_download = False
         self._dl_worker = None
         self._progress.setVisible(False)
         self._hide_ring()
@@ -450,6 +456,7 @@ class ActionsSection(DetailState):
 
     def _on_download_cancelled(self) -> None:
         """Worker acknowledged the cancel: reset the action row quietly."""
+        self._run_after_download = False
         self._dl_worker = None
         self._progress.setVisible(False)
         self._hide_ring()

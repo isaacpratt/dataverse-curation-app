@@ -305,15 +305,19 @@ class ChecksSection(DetailState):
         return None
 
     def _on_run_checks(self) -> None:
+        """Stage the dataset first if needed, then run the checks (dv-gs5)."""
         staged = self._dl_mgr.files_dir(self._pid)
         if not staged.exists():
-            dialogs.show_warning(
-                self,
-                t("detail.checks.title"),
-                t("detail.checks.download_first"),
-            )
-            self._check_btn.setEnabled(True)
+            # Download first — the approval dialog runs in _on_download. When
+            # it finishes, _on_download_finished resumes the check pass.
+            self._run_after_download = True
+            self._on_download()
             return
+        self._start_checks()
+
+    def _start_checks(self) -> None:
+        """Start the check worker against the staged files."""
+        staged = self._dl_mgr.files_dir(self._pid)
         self._check_btn.setEnabled(False)
         self._checks_cancel_btn.setVisible(True)
         self._set_status(t("detail.status.running_checks"))
@@ -382,7 +386,8 @@ class ChecksSection(DetailState):
         self._check_btn.setEnabled(True)
         self._checks_cancel_btn.setVisible(False)
         self._checks_cancel_btn.setEnabled(True)
-        self._history_btn.setEnabled(True)
+        self._refresh_check_button()
+        self._refresh_metadata_button()
         # Update dataset-checks card + manifest tree
         self._refresh_curation_preview()
         self._apply_file_filter_internal()

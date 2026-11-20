@@ -110,19 +110,61 @@ class HeaderSection(DetailState):
         url = f"{self._config.dataverse.base_url}/dataset.xhtml?persistentId={self._pid}" + (
             "&version=DRAFT" if version_state == "DRAFT" else ""
         )
-        header_link = getattr(self, "_header_link", None)
-        if header_link is not None:
-            link_text = (
-                t("detail.header.open_link_draft")
-                if version_state == "DRAFT"
-                else t("detail.header.open_link")
+        id_badge = getattr(self, "_id_badge", None)
+        if id_badge is not None:
+            id_badge.setText(
+                f"<a href='{url}' style='color:{ACCENT_PRIMARY}; text-decoration:none;'>"
+                f"{self._pid}</a>"
             )
-            header_link.setText(
-                f"<a href='{url}' style='color:{ACCENT_PRIMARY}; text-decoration:none;'>{link_text}</a>"
+            id_badge.setToolTip(
+                (
+                    t("detail.header.open_link_draft")
+                    if version_state == "DRAFT"
+                    else t("detail.header.open_link")
+                )
+                + f"\n{url}"
             )
         title_lbl = getattr(self, "_title_lbl", None)
         if title_lbl is not None:
             title_lbl.setText(self._title)
+
+    def _refresh_metadata_button(self) -> None:
+        """Load vs Reload Metadata — cached metadata means a re-fetch is possible."""
+        btn = getattr(self, "_load_meta_btn", None)
+        if btn is None:
+            return
+        if self._metadata is not None or getattr(self, "_changes_loaded", False):
+            btn.setText(t("detail.header.reload_metadata"))
+            btn.setToolTip(t("detail.header.reload_metadata_tip"))
+        else:
+            btn.setText(t("detail.header.load_metadata"))
+            btn.setToolTip(t("detail.header.load_metadata_tip"))
+
+    def _check_button_text(self) -> str:
+        """Primary action label — driven by how far the check run has got (dv-gs5).
+
+        fresh: stage the dataset and run everything; dataset-only: the file
+        pass is still missing; both: the whole run can be repeated.
+        """
+        report = getattr(self, "_report", None)
+        if report is None:
+            return t("detail.header.run_automatic_checks")
+        dataset_results = list(getattr(report, "dataset_checks", []) or [])
+        file_results = [c for f in (getattr(report, "files", []) or []) for c in (f.checks or [])]
+        if dataset_results and not file_results:
+            return t("detail.header.run_file_checks")
+        return t("detail.header.rerun_automatic_checks")
+
+    def _refresh_check_button(self) -> None:
+        """Keep the primary button's label in step with the current report."""
+        btn = getattr(self, "_check_btn", None)
+        if btn is not None:
+            btn.setText(self._check_button_text())
+
+    def _refresh_header_actions(self) -> None:
+        """Repaint both section-header buttons and the primary label (dv-gs5)."""
+        self._refresh_metadata_button()
+        self._refresh_check_button()
 
     def _update_curation_pill(self) -> None:
         """Show the Dataverse curation label (if any) next to the status pill."""

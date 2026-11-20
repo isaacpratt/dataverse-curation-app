@@ -168,60 +168,50 @@ def detail(qapp, tmp_path):
     view.deleteLater()
 
 
-def test_rail_renders_six_steps_in_order(detail):
+def test_rail_renders_three_section_buttons_in_order(detail):
     rail = detail._rail
-    assert list(rail.buttons.keys()) == list(STEP_ORDER)
-    assert all(rail.buttons[key].text() for key in STEP_ORDER)
-    assert rail.buttons["metadata"].accessibleName() == "Metadata, done step"
-    assert rail.buttons["changes"].accessibleName() == "Changes, current step"
+    assert list(rail.buttons.keys()) == ["dataset_checks", "file_checks", "response"]
+    assert rail.buttons["dataset_checks"].text() == "Dataset Checks"
+    assert rail.buttons["file_checks"].text() == "File Checks"
+    assert rail.buttons["response"].text() == "Response"
+    assert rail.hint.isHidden()
+    assert rail._toggle.isHidden()
 
 
 def test_rail_steps_scroll_the_review_page_without_running_actions(detail, monkeypatch):
     anchors = []
     monkeypatch.setattr(detail, "_goto_section", lambda attr: anchors.append(attr))
+    called = []
+    monkeypatch.setattr(detail, "_on_download", lambda: called.append("download"))
+    monkeypatch.setattr(detail, "_on_run_checks", lambda: called.append("checks"))
 
-    detail._rail.buttons["checks"].click()
+    detail._rail.buttons["dataset_checks"].click()
     assert detail._pages.currentIndex() == 0
     assert anchors[-1] == "_dataset_checks_heading"
 
-    detail._rail.buttons["changes"].click()
-    assert anchors[-1] == "_version_card"
+    detail._rail.buttons["file_checks"].click()
+    assert anchors[-1] == "_file_checks_heading"
 
-
-def test_rail_download_and_export_only_focus_their_buttons(detail, monkeypatch):
-    called = []
-    monkeypatch.setattr(detail, "_on_download", lambda: called.append("download"))
-    monkeypatch.setattr(detail, "_on_export", lambda: called.append("export"))
-    focused = []
-    monkeypatch.setattr(detail._dl_btn, "setFocus", lambda *a, **k: focused.append("download"))
-    monkeypatch.setattr(detail._history_btn, "setFocus", lambda *a, **k: focused.append("export"))
-    monkeypatch.setattr(detail, "_goto_section", lambda attr: None)
-
-    detail._rail.buttons["download"].click()
-    detail._rail.buttons["export"].click()
-
-    assert called == [], "rail steps must never start a download or export"
-    assert focused == ["download", "export"]
+    assert called == [], "rail buttons must never start a download or a check"
 
 
 def test_rail_respond_switches_to_the_response_page(detail):
-    detail._rail.buttons["respond"].click()
+    detail._rail.buttons["response"].click()
     assert detail._pages.currentIndex() == 1
-    detail._rail.buttons["metadata"].click()
+    detail._rail.buttons["dataset_checks"].click()
     assert detail._pages.currentIndex() == 0
 
 
-def test_rail_repaints_when_report_and_staging_change(detail):
+def test_rail_stays_fixed_when_report_and_staging_change(detail):
     detail._changes_loaded = True
     detail._staged_n = 1
     detail._staged_total = 1
     detail._report = object()
     detail._refresh_workflow()
 
-    assert detail._rail.buttons["download"].accessibleName() == "Download, done step"
-    assert detail._rail.buttons["checks"].accessibleName() == "Checks, done step"
-    assert detail._rail.buttons["export"].accessibleName() == "Export, current step"
+    assert list(detail._rail.buttons) == ["dataset_checks", "file_checks", "response"]
+    assert detail._check_button_text() == "Re-run Automatic Checks"
 
     detail._report = None
     detail._refresh_workflow()
-    assert detail._rail.buttons["export"].accessibleName() == "Export, blocked step"
+    assert detail._check_button_text() == "Run Automatic Checks"

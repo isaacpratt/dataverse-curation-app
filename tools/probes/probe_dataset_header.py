@@ -66,7 +66,7 @@ def main() -> int:
         rail = view._rail
         steps = [rail.buttons[key] for key in rail.buttons]
         action_width = max(
-            btn.width() for btn in (view._dl_btn, view._history_btn, view._record_btn)
+            btn.width() for btn in (view._dl_btn, view._record_btn, view._load_meta_btn)
         )
         print(
             f"  [note] {width}: top_bar={top.height()}px canvas={view._canvas.height()}px "

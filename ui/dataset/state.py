@@ -145,14 +145,13 @@ class DetailState(QWidget):
     _id_badge: QLabel
     _status_pill: QLabel
     _curation_pill: QLabel
-    _header_link: QLabel
     _depositor_lbl: QLabel
     _title_lbl: Any
     _status: QLabel
     _dl_btn: AppButton
     _dl_cancel_btn: AppButton
-    _history_btn: AppButton
     _load_meta_btn: AppButton
+    _run_after_download: bool
     _check_btn: AppButton
     _checks_cancel_btn: AppButton
     _progress: QProgressBar
@@ -414,7 +413,19 @@ class DetailState(QWidget):
         raise NotImplementedError
 
     def _on_run_checks(self) -> None:
-        """Run the auto-check suite for this dataset."""
+        """Stage the dataset if needed, then run the auto-check suite."""
+        raise NotImplementedError
+
+    def _start_checks(self) -> None:
+        """Start the check worker against the already-staged files."""
+        raise NotImplementedError
+
+    def _on_download(self) -> None:
+        """Open the approval gate and stage the dataset bundle."""
+        raise NotImplementedError
+
+    def _refresh_metadata_button(self) -> None:
+        """Load vs Reload Metadata on the Dataset checks section header."""
         raise NotImplementedError
 
     def _apply_auto_filter(self, *args: Any) -> None:
@@ -455,7 +466,19 @@ class DetailState(QWidget):
 
     # -- the header (ui/dataset/header_section.py) -------------------------
     def _update_header_link(self, metadata: dict[str, Any] | None = None) -> None:
-        """Point the title link at the dataset's landing page."""
+        """Point the DOI chip at the dataset's Dataverse landing page."""
+        raise NotImplementedError
+
+    def _check_button_text(self) -> str:
+        """Primary action label — Run / Run file / Re-run Automatic Checks."""
+        raise NotImplementedError
+
+    def _refresh_check_button(self) -> None:
+        """Keep the primary button's label in step with the current report."""
+        raise NotImplementedError
+
+    def _refresh_header_actions(self) -> None:
+        """Repaint the section-header buttons and the primary label."""
         raise NotImplementedError
 
     def _update_curation_pill(self) -> None:

@@ -55,6 +55,7 @@ from ui.theme import (
     transparent_surface_qss,
 )
 from ui.widgets import (
+    AppButton,
     RingProgress,
     WorkflowRail,
     make_action_button,
@@ -70,6 +71,20 @@ from ui.workers import (
     DownloadWorker,
     MetadataWorker,
 )
+
+
+def _section_header_with_action(title: str, action: AppButton) -> tuple[QLabel, QWidget]:
+    """Build a section heading with one contextual action on its right."""
+    row = QWidget()
+    row.setObjectName("SectionHeaderRow")
+    lay = QHBoxLayout(row)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.setSpacing(8)
+    heading = make_section_heading(title)
+    lay.addWidget(heading)
+    lay.addStretch(1)
+    lay.addWidget(action)
+    return heading, row
 
 
 class DatasetDetailView(
@@ -148,6 +163,9 @@ class DatasetDetailView(
         self._check_worker: CheckWorker | None = None
         self._dl_worker: DownloadWorker | None = None
         self._meta_worker: MetadataWorker | None = None
+        # Pressing Run checks with nothing staged starts a download first;
+        # this flag resumes the check pass when that download finishes.
+        self._run_after_download: bool = False
         # Response pane state: full rule results (with rule_id/level/pending),
         # assembled sections, and whether the draft has manual edits.
         self._completeness_full: list[Any] = []
@@ -267,6 +285,12 @@ class DatasetDetailView(
             font_size=FONT_CAPTION,
             padding="2px 8px",
         )
+        # The DOI chip IS the Dataverse link now: rich text with an external
+        # anchor, opened by the system browser. _update_header_link rewrites
+        # the href (and adds &version=DRAFT) on every metadata load.
+        self._id_badge.setTextFormat(Qt.TextFormat.RichText)
+        self._id_badge.setOpenExternalLinks(True)
+        self._id_badge.setCursor(Qt.CursorShape.PointingHandCursor)
         self._id_badge.setToolTip(self._pid)
         badge_row.addWidget(self._id_badge)
         self._status_pill = make_badge(t("detail.header.loading"), label="loading")
@@ -281,69 +305,43 @@ class DatasetDetailView(
         header_left.addLayout(badge_row)
 
         # Same page-heading contract as Settings / Review configuration /
-        # Log / About (HeadlineLG theme token).
+        # Log / About (HeadlineLG theme token). The DOI chip above carries
+        # the Dataverse link, so the title stands alone on its own row.
         self._title_lbl, _subtitle = make_page_heading(self._title)
         self._title_lbl.setWordWrap(True)
-
-        # Clickable Dataverse link sits next to the title
-        self._header_link = QLabel()
-        self._header_link.setObjectName("BodySM")
-        self._header_link.setTextFormat(Qt.TextFormat.RichText)
-        self._header_link.setOpenExternalLinks(True)
-        title_row = QHBoxLayout()
-        title_row.setSpacing(12)
-        title_row.setContentsMargins(0, 0, 0, 0)
-        title_row.addWidget(self._title_lbl, 1)
-        title_row.addWidget(self._header_link, 0, Qt.AlignmentFlag.AlignBottom)
-        header_left.addLayout(title_row)
+        header_left.addWidget(self._title_lbl)
 
         self._depositor_lbl = make_body_label(t("detail.header.loading_metadata"), wrap=False)
         header_left.addWidget(self._depositor_lbl)
-        # Called last: needs _depositor_lbl/_title_lbl/_header_link to exist,
-        # and cached metadata makes `meta` truthy immediately.
+        # Called last: needs _depositor_lbl/_title_lbl to exist, and cached
+        # metadata makes `meta` truthy immediately.
         self._update_header_link(None)
 
         header_row.addLayout(header_left, 1)
 
-        # Actions: Download, Export, Load metadata (aligned row), then Run checks
+        # Actions that stay in the fixed header: the in-flight cancels, the
+        # curation record export, the sidebar toggle and the primary button.
+        # Download/Verify and Load/Reload metadata live in the File checks and
+        # Dataset checks section headers below (user decision 2026-11-20); the
+        # Export reports button is gone.
         actions_col = QVBoxLayout()
         actions_col.setSpacing(8)
         actions_col.setAlignment(Qt.AlignmentFlag.AlignTop)
         actions_row = QHBoxLayout()
         actions_row.setSpacing(8)
-        self._dl_btn = make_action_button(
-            t("detail.header.download_all"), kind="secondary", size="md"
-        )
-        # Inline button style: app-level QSS fails to paint button faces inside
-        # some main-window subtrees, so critical actions carry their own CSS.
-        self._dl_btn.clicked.connect(self._on_download)
-        actions_row.addWidget(self._dl_btn)
-        # Mid-download Cancel — hidden until a worker starts, so the action
-        # row keeps its idle layout (critique P3: no silent 15-min wait).
+        # Mid-download Cancel — hidden until a worker starts.
         self._dl_cancel_btn = make_action_button(t("common.cancel"), kind="secondary", size="md")
         self._dl_cancel_btn.setToolTip(t("detail.header.download_cancel_tip"))
         self._dl_cancel_btn.setAccessibleName(t("detail.header.download_cancel_a11y"))
         self._dl_cancel_btn.clicked.connect(self._on_download_cancel_click)
         self._dl_cancel_btn.setVisible(False)
         actions_row.addWidget(self._dl_cancel_btn)
-        self._history_btn = make_action_button(
-            t("detail.header.export_reports"), kind="secondary", size="md"
-        )
-        self._history_btn.setToolTip(t("detail.header.export_reports_tip"))
-        self._history_btn.clicked.connect(self._on_export)
-        actions_row.addWidget(self._history_btn)
         self._record_btn = make_action_button(
             t("detail.header.export_record"), kind="secondary", size="md"
         )
         self._record_btn.setToolTip(t("detail.header.export_record_tip"))
         self._record_btn.clicked.connect(self._on_export_record)
         actions_row.addWidget(self._record_btn)
-        self._load_meta_btn = make_action_button(
-            t("detail.header.load_metadata"), kind="secondary", size="md"
-        )
-        self._load_meta_btn.setToolTip(t("detail.header.load_metadata_tip"))
-        self._load_meta_btn.clicked.connect(self._on_load_metadata)
-        actions_row.addWidget(self._load_meta_btn)
         # Sidebar show/hide toggle — the one layout control for the sidebar;
         # the rail is navigation, this is chrome (dv-6wb).
         self._sidebar_toggle_btn = make_action_button("", kind="secondary", size="md")
@@ -358,10 +356,8 @@ class DatasetDetailView(
         self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
         actions_row.addWidget(self._sidebar_toggle_btn)
         actions_col.addLayout(actions_row)
-        # Run checks as primary (always enabled; warns when nothing is staged)
-        self._check_btn = make_action_button(
-            t("detail.header.run_checks"), kind="primary", size="lg"
-        )
+        # Primary action, label follows the run state (dv-gs5).
+        self._check_btn = make_action_button(self._check_button_text(), kind="primary", size="lg")
         self._check_btn.setToolTip(t("detail.header.run_checks_tip"))
         self._check_btn.clicked.connect(self._on_run_checks)
         actions_col.addWidget(self._check_btn)
@@ -412,11 +408,16 @@ class DatasetDetailView(
         top_lay.addWidget(self._ring)
         top_lay.setAlignment(self._ring, Qt.AlignmentFlag.AlignVCenter)
 
-        # Workflow step rail (replaces the old Review/Response tab row):
-        # six steps, each navigates only — no step ever runs an action.
-        self._rail = WorkflowRail()
+        # Three-button navigation rail (dv-gs5): Dataset Checks, File Checks,
+        # Response. Fixed buttons — navigation only, never an action.
+        self._rail = WorkflowRail(
+            nav_steps=[
+                ("dataset_checks", t("detail.rail.dataset_checks")),
+                ("file_checks", t("detail.rail.file_checks")),
+                ("response", t("detail.rail.response")),
+            ]
+        )
         self._rail.stepClicked.connect(self._on_workflow_step)
-        self._rail.viewToggled.connect(self._on_rail_view_toggled)
         top_lay.addWidget(self._rail)
 
         # ---- Main column content (inside main_scroll canvas) ----
@@ -436,16 +437,32 @@ class DatasetDetailView(
         self._verdict_card = self._build_verdict_card()
         main_wrap.addWidget(self._verdict_card)
 
-        self._dataset_checks_heading = make_section_heading(t("detail.sections.dataset_checks"))
-        main_wrap.addWidget(self._dataset_checks_heading)
+        # Dataset checks section — Load/Reload Metadata lives in its header.
+        self._load_meta_btn = make_action_button(
+            t("detail.header.load_metadata"), kind="secondary", size="sm"
+        )
+        self._load_meta_btn.setToolTip(t("detail.header.load_metadata_tip"))
+        self._load_meta_btn.clicked.connect(self._on_load_metadata)
+        self._dataset_checks_heading, self._dataset_checks_header = _section_header_with_action(
+            t("detail.sections.dataset_checks"), self._load_meta_btn
+        )
+        main_wrap.addWidget(self._dataset_checks_header)
         self._meta_card = self._build_metadata_card()
         main_wrap.addWidget(self._meta_card)
 
         self._auto_card = self._build_auto_checks_card()
         main_wrap.addWidget(self._auto_card)
 
-        self._file_checks_heading = make_section_heading(t("detail.sections.file_checks"))
-        main_wrap.addWidget(self._file_checks_heading)
+        # File checks section — Download Dataset / Verify Files lives here.
+        self._dl_btn = make_action_button(
+            t("detail.header.download_all"), kind="secondary", size="sm"
+        )
+        self._dl_btn.setToolTip(t("detail.header.download_dataset_tip"))
+        self._dl_btn.clicked.connect(self._on_download)
+        self._file_checks_heading, self._file_checks_header = _section_header_with_action(
+            t("detail.sections.file_checks"), self._dl_btn
+        )
+        main_wrap.addWidget(self._file_checks_header)
         self._file_card = self._build_file_manifest_card()
         main_wrap.addWidget(self._file_card, 1)
 
@@ -527,6 +544,8 @@ class DatasetDetailView(
                 from_disk = True
         if self._metadata is not None:
             self._update_header_link(self._metadata)
+            self._update_curation_pill()
+            self._refresh_header_actions()
             self._raw_view.setPlainText(_format_metadata(self._metadata))
             self._populate_completeness(self._metadata)
             self._populate_version_diff()
@@ -567,25 +586,20 @@ class DatasetDetailView(
             self._refresh_dataset_log()
             self._auto_load_timer.start(100)
 
-        if self._report is not None:
+        if self._report is not None and not self._status.isVisible():
             # Cached checks report (auto-saved on every run): results are
-            # already rendered by the refresh calls above; keep Export
-            # available and say where the results came from.
+            # already rendered by the refresh calls above; keep the primary
+            # label in step with what was restored.
             try:
-                self._history_btn.setEnabled(True)
+                stamp = str(getattr(self._report, "timestamp", "") or "")[:19].replace("T", " ")
+                self._set_status(
+                    t(
+                        "detail.status.saved_checks_report",
+                        stamp=stamp,
+                    )
+                )
             except Exception:
                 pass
-            if not self._status.isVisible():
-                try:
-                    stamp = str(getattr(self._report, "timestamp", "") or "")[:19].replace("T", " ")
-                    self._set_status(
-                        t(
-                            "detail.status.saved_checks_report",
-                            stamp=stamp,
-                        )
-                    )
-                except Exception:
-                    pass
 
         # Text selection + table copy support
         enable_list_copy(self._dataset_log)
