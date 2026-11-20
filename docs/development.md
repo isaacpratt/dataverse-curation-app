@@ -167,7 +167,7 @@ uv run poe smoke         # size report + headless --help check (DOCENT_SMOKE_EXE
 
 ## Releasing
 
-A release is a tag push or a workflow dispatch, never a local upload. .github/workflows/release.yml runs the full CI gate first, refuses a tag that disagrees with engine.__version__ (tools/build/check_version.py), builds, packs (pack_app.py, the same entry point you run locally) and publishes with vpk upload github --publish; the delta is computed from the previous release, downloaded in the same job. Pushing the same tag twice is not possible, and re-running a failed job re-uses the same inputs.
+A release is a tag push or a workflow dispatch, never a local upload. .github/workflows/release.yml runs the full CI gate first, refuses a tag that disagrees with engine.__version__ (tools/build/check_version.py), builds, packs (pack_app.py, the same entry point you run locally) and publishes with vpk upload github --publish; the delta is computed from the previous release, downloaded in the same job. Pushing the same tag twice is not possible, and re-running a failed job reuses the same inputs.
 
 1. Make sure CI is green on master.
 
@@ -296,7 +296,7 @@ The reason it is now possible at all is the role layer. A dark theme is not a se
 What a dark theme needs, in order:
 
 1. A second role table. (done — dv-zds) The roles are a mapping rather than a flat set of aliases: TEXT_PRIMARY points at the light surface's ink in one theme and the dark surface's ink in the other. ui/theme.py now declares LIGHT_ROLE_TABLE and DARK_ROLE_TABLE (the same 94 role names in both), a ROLE_TABLES registry, and the resolver theme.role(name, theme=None); theme.set_active_theme(name) points the theme's own rules at another table. The light table is exactly what the app paints today — ui/tests/test_theme_role_tables.py proves the light mappings did not move, that both tables declare the same roles, and that the dark table clears the same contrast floors on its own surfaces.
-1. A second contrast contract. The floors do not change (text 4.5:1, graphics 3:1), but the pairs do: every role pair in CONTRAST_PAIRS is re-declared for the dark theme and checked by the same test. A dark palette that fails legibility fails the build exactly as a light one does. (Step 1 already checks the dark table against those floors; the contract itself is still the light one.)
+1. A second contrast contract. The floors do not change (text 4.5:1, graphics 3:1), but the pairs do: every role pair in CONTRAST_PAIRS is redeclared for the dark theme and checked by the same test. A dark palette that fails legibility fails the build exactly as a light one does. (Step 1 already checks the dark table against those floors; the contract itself is still the light one.)
 1. The app stylesheet, per theme. theme.global_qss() becomes global_qss(theme), and the kit's component chrome follows. The QSS that hardcodes a surface (the card faces, the scrollbar lanes, the table rows) is the part that has to be re-pointed at roles first.
 1. The painted assets. The icons are tinted from a role, which already works; the app mark and the taskbar icon are the exception and need a dark variant.
 1. The gallery, showing both. The gallery is where a theme is reviewed, so it should be able to show the light theme and the dark theme side by side. Every contrast decision becomes a glance instead of a judgement call.
