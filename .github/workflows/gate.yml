@@ -27,7 +27,7 @@ jobs:
       # checkout v5 and setup-python v6 run on Node 24; earlier pairs
       # targeted Node 20, which GitHub now forces onto a newer runtime and
       # reports as a deprecation warning on every run.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
@@ -85,7 +85,7 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
@@ -128,7 +128,7 @@ jobs:
       QT_QPA_PLATFORM: offscreen
     steps:
       # Same pinned actions as the test job (Node 24).
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
