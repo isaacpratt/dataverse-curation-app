@@ -29,6 +29,7 @@ python tools/probes/probe_review_selection.py # hover never paints a chosen-row 
 python tools/probes/probe_review_cards.py     # the two Review configuration rule cards fit at 1440 and 960
 python tools/probes/probe_review_params.py    # entry-check params: one-line labels, whole stepper, aligned chips
 python tools/probes/probe_check_sections.py   # Dataset checks above File checks, each finding listed once
+python tools/probes/probe_dataset_header.py   # measure the fixed header at 960 / 1280 / 1440 (dv-cv3 baseline)
 ```
 
 `run_all.py` runs each `probe_*.py` in turn and exits non-zero when any
@@ -142,6 +143,7 @@ unsubstituted.
 | `probe_review_cards.py` | The left Review configuration pane holds two titled sibling cards (Metadata Field Rules, Content-based Rules) 16px apart, with one scrollbar, an unclipped field table and no horizontal scroll at 1440x900 or 960x720; screenshots of the pane at both widths are saved. |
 | `probe_review_params.py` | The entry-check params form has one-line labels, a whole Lucide min-length stepper, chip-phrase fields with aligned rows, no raw spin box and no horizontal scrollbar or clipping at 1440x900 or 960x720; screenshots of both widths are saved. |
 | `probe_check_sections.py` | The dataset page shows Dataset checks above File checks, a dataset finding appears only in the former and a per-file finding only in the latter, both files are painted in the tree and no card clips at 1440x900 or 960x720. |
+| `probe_dataset_header.py` | Measures and screenshots the fixed dataset header at 960/1280/1440 — top-bar and canvas heights, row count, action-row width, Run checks geometry and rail widths — the before/after instrument for the header revamp. |
 
 ## The same contracts in pytest
 
