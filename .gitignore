@@ -62,6 +62,7 @@ Thumbs.db
 .opencode/
 # Session scratch from design/critique tooling: untracked by design, the
 # durable decisions they carry live in docs/adr/ (see dv-hcg.32).
+.scratch/
 .impeccable/
 .lavish/
 # Agent screenshots/scratch (browser captures, verification images).
