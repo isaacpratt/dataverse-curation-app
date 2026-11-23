@@ -76,13 +76,13 @@ def test_dataset_log_runs_edge_to_edge(qapp, tmp_path):
     """The log list is the card's content, not a box inside it (dv-gfx.17)."""
     view = _view(qapp, tmp_path)
     try:
-        card = view._dataset_log_card
         body = view._dataset_log.parentWidget()
         assert body is not None
         layout = body.layout()
         assert layout is not None
         margins = layout.contentsMargins()
-        assert margins.left() == 0 and margins.right() == 0
+        assert margins.left() == 0
+        assert margins.right() == 0
         # The list paints the card's bottom corners (flush list face).
         sheet = view._dataset_log.styleSheet()
         assert "border-bottom-left-radius" in sheet

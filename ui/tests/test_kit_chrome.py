@@ -11,7 +11,7 @@ Four contracts, one per critique item:
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect
+from PySide6.QtWidgets import QGraphicsDropShadowEffect
 
 from ui import theme
 from ui.widgets import (
@@ -59,8 +59,9 @@ def test_a_chip_is_elevated_like_a_card(qapp):
 
 def test_in_row_badge_keeps_its_own_metrics(qapp):
     """A check verdict sets its own height; it is not a header chip."""
-    verdict = make_badge("PASS", background=theme.ACCENT_PRIMARY, foreground=theme.SURFACE_CARD,
-                         chip=False)
+    verdict = make_badge(
+        "PASS", background=theme.ACCENT_PRIMARY, foreground=theme.SURFACE_CARD, chip=False
+    )
     assert verdict.maximumHeight() == 16777215  # QWIDGETSIZE_MAX
     assert verdict.graphicsEffect() is None
 

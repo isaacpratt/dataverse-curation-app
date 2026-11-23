@@ -170,9 +170,9 @@ __all__ = [
     "make_search_field",
     "make_section_heading",
     "make_small_body_label",
-    "set_chip_room_limited",
     "make_split_chip",
     "make_value_list",
+    "set_chip_room_limited",
     "tree_style",
 ]
 
@@ -1465,7 +1465,7 @@ def make_split_chip(
     lay.addWidget(close_btn)
     # The label half is how the owner decides whether the bar is full, and
     # how it switches eliding on; keep both on the chip.
-    setattr(chip, "_label_half", open_btn)
+    chip.label_half = open_btn  # type: ignore[attr-defined]
     apply_elevation(
         chip,
         blur=CHIP_SHADOW_BLUR,
@@ -1511,7 +1511,7 @@ def set_chip_room_limited(chip: QWidget, limited: bool) -> None:
     more room than the row has. Until then the full title is shown, so a
     short title in an empty bar is never truncated.
     """
-    label = getattr(chip, "_label_half", None)
+    label = getattr(chip, "label_half", None)
     if isinstance(label, _ElidedChipButton):
         label.room_limited = bool(limited)
         label._apply_elide()

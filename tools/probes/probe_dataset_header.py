@@ -62,7 +62,8 @@ def main() -> int:
     rail = view._rail
     badge = view._status_pill
     report.check(
-        rail.mapTo(view, rail.rect().topLeft()).y() <= badge.mapTo(view, badge.rect().topLeft()).y(),
+        rail.mapTo(view, rail.rect().topLeft()).y()
+        <= badge.mapTo(view, badge.rect().topLeft()).y(),
         "the rail sits above the header chips",
         f"rail_y={rail.mapTo(view, rail.rect().topLeft()).y()} chip_y={badge.mapTo(view, badge.rect().topLeft()).y()}",
     )

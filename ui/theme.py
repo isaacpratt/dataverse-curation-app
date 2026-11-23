@@ -575,6 +575,7 @@ def apply_elevation(
     except Exception:
         pass
 
+
 # --- Contrast contract ---------------------------------------------------
 # Every colour pairing the app actually paints, with the ratio it must
 # clear. `ui/tests/test_contrast.py` reads this table, so a palette
@@ -1123,7 +1124,7 @@ def workflow_step_qss(state: str = "todo", *, active: bool = False) -> str:
 
 
 def workflow_rail_qss() -> str:
-    """The section rail's band: nav-bar hairlines, full width (dv-gfx.4).
+    """Build the section rail's band: nav-bar hairlines, full width (dv-gfx.4).
 
     The rail sits directly under the app nav bar and above the header
     chips, so it takes the nav bar's own separator rule and reads as part

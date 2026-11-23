@@ -120,7 +120,7 @@ class HeaderSection(DetailState):
                     else t("detail.header.date_created", date=created)
                     if created
                     else ""
-            )
+                )
             if date_text:
                 depositor_lbl.setText(depositor_lbl.text() + date_text)
         url = f"{self._config.dataverse.base_url}/dataset.xhtml?persistentId={self._pid}" + (
@@ -141,9 +141,9 @@ class HeaderSection(DetailState):
             )
             try:
                 from PySide6.QtCore import QUrl
-                from PySide6.QtGui import QDesktopServices
 
                 _u = QUrl(url)
+                self._doi_url_value = url
                 if getattr(self, "_doi_url", None) != url:
                     # Rewire the handler only when the target actually
                     # changed. Qt warns when a bare disconnect() finds
@@ -156,14 +156,23 @@ class HeaderSection(DetailState):
                             id_badge.clicked.disconnect(old)
                     except (RuntimeError, TypeError):
                         pass
-                    handler = lambda _checked=False, _u=_u: QDesktopServices.openUrl(_u)
-                    self._doi_open = handler
-                    id_badge.clicked.connect(handler)
+                    self._doi_open = self._open_doi_url
+                    id_badge.clicked.connect(self._open_doi_url)
             except Exception:
                 pass
         title_lbl = getattr(self, "_title_lbl", None)
         if title_lbl is not None:
             title_lbl.setText(self._title)
+
+    def _open_doi_url(self, _checked: bool = False) -> None:
+        """Open the DOI chip's target in the system browser (dv-gfx.2)."""
+        try:
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+
+            QDesktopServices.openUrl(QUrl(getattr(self, "_doi_url_value", "")))
+        except Exception:
+            pass
 
     def _refresh_metadata_button(self) -> None:
         """Load vs Reload Metadata — cached metadata means a re-fetch is possible."""

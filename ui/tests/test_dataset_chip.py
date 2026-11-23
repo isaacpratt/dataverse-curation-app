@@ -1,5 +1,7 @@
 """Top-nav dataset chips: full titles, centred Lucide close (dv-dvu, dv-ap7)."""
 
+from typing import Any, cast
+
 from PySide6.QtWidgets import QPushButton
 
 
@@ -18,11 +20,11 @@ def test_chip_label_asks_for_its_full_title(qapp):
 
 def test_a_chip_only_elides_once_the_bar_is_full(qapp):
     """Short titles stay whole until the nav bar is genuinely out of room (dv-gfx.19)."""
-    from ui.widgets import _ElidedChipButton, set_chip_room_limited, make_split_chip
+    from ui.widgets import make_split_chip, set_chip_room_limited
 
     chip = make_split_chip("A dataset title")
     set_chip_room_limited(chip, False)
-    label = getattr(chip, "_label_half")
+    label = cast(Any, chip).label_half
     assert label.text() == "A dataset title"
 
     # Once the owner says the bar is full, the same chip is allowed to cut.

@@ -5,7 +5,6 @@ from typing import Any
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame,
-    QHBoxLayout,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,

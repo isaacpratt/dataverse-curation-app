@@ -85,7 +85,7 @@ def _view(qapp: Any, tmp_path: Any):
 
 
 def _headings(view: Any) -> list[str]:
-    """The two section titles, taken from the cards' own header labels."""
+    """Return the two section titles from the cards' own header labels."""
     return [
         view._meta_card.findChildren(type(view._title_lbl))[0].text(),
         view._file_checks_heading.text(),
