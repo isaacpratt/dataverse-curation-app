@@ -35,7 +35,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QPlainTextEdit,
-    QProgressBar,
     QScrollArea,
     QStackedWidget,
     QTextEdit,
@@ -47,7 +46,7 @@ from curation.client import DataverseClient
 from curation.config import Config
 from curation.download_manager import DownloadManager
 from ui.table_layout import TableLayout
-from ui.widgets import AppButton, AppTree, ElidedLabel, RingProgress, WorkflowRail
+from ui.widgets import AppButton, AppTree, ElidedLabel, WorkflowRail
 from ui.workers import CheckWorker, DownloadWorker, MetadataWorker
 
 if TYPE_CHECKING:
@@ -142,9 +141,8 @@ class DetailState(QWidget):
     _table_layouts: dict[Any, Any]
 
     # -- the header ---------------------------------------------------------
-    _id_badge: QLabel
+    _id_badge: Any
     _status_pill: QLabel
-    _stage_pill: QLabel
     _curation_pill: QLabel
     _depositor_lbl: QLabel
     _title_lbl: Any
@@ -154,9 +152,9 @@ class DetailState(QWidget):
     _load_meta_btn: AppButton
     _run_after_download: bool
     _check_btn: AppButton
+    #: True while the checks run and the primary button reads "Cancel".
+    _checks_running: bool
     _checks_cancel_btn: AppButton
-    _progress: QProgressBar
-    _ring: RingProgress
     _status_widget: Any
     _in_response: bool
     #: The row that carries the status line (an icon plus the message).
@@ -446,10 +444,6 @@ class DetailState(QWidget):
         """Pop the right-click disposition menu for a finding."""
         raise NotImplementedError
 
-    def _finding_overflow_button(self, text: str) -> Any:
-        """Return the copy/overflow button for a finding."""
-        raise NotImplementedError
-
     def _refresh_finding_summary(self) -> None:
         """Repaint the finding summary row on the Auto-Checks card."""
         raise NotImplementedError
@@ -511,6 +505,12 @@ class DetailState(QWidget):
         """Feed the rail's result pills from a check-run summary."""
         raise NotImplementedError
 
+    def _show_status_running(
+        self, title: str, detail: str = "", fraction: float | None = None
+    ) -> None:
+        """Show the compact status widget mid-work (dv-gfx.3)."""
+        raise NotImplementedError
+
     def _show_status_complete(self, title: str, detail: str = "") -> None:
         """Show the success face of the compact status widget."""
         raise NotImplementedError
@@ -520,9 +520,9 @@ class DetailState(QWidget):
         raise NotImplementedError
 
     def _on_ring_fraction(self, fraction: float) -> None:
-        """Move the progress ring to the given fraction."""
+        """Drive the compact status widget's progress bar."""
         raise NotImplementedError
 
     def _hide_ring(self) -> None:
-        """Hide the progress ring."""
+        """Clear the compact status widget when its work is done."""
         raise NotImplementedError

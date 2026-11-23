@@ -19,7 +19,6 @@ from ui.dataset.helpers import _pill_state
 from ui.dataset.state import DetailState
 from ui.i18n import t
 from ui.theme import (
-    ACCENT_PRIMARY,
     BORDER_SUBTLE,
     FONT_BODY,
     STATE_ERROR_BG,
@@ -102,20 +101,36 @@ class HeaderSection(DetailState):
                 if depositor
                 else f"{self._pid}"
             )
-            date = (latest.get("createTime") or latest.get("lastUpdateTime") or "")[:10]
-            if date:
-                depositor_lbl.setText(
-                    depositor_lbl.text() + t("detail.header.depositor_date", date=date)
-                )
+            # Say which date it is: the version state picks the phrase, so
+            # the line never shows a bare date (dv-gfx.2).
+            created = str(latest.get("createTime") or "")[:10]
+            published = str(latest.get("publicationDate") or "")[:10]
+            updated = str(latest.get("lastUpdateTime") or "")[:10]
+            if version_state == "DRAFT" or published:
+                if version_state == "DRAFT" and created:
+                    date_text = t("detail.header.date_created", date=created)
+                elif published:
+                    date_text = t("detail.header.date_published", date=published)
+                else:
+                    date_text = ""
+            else:
+                date_text = (
+                    t("detail.header.date_updated", date=updated)
+                    if updated
+                    else t("detail.header.date_created", date=created)
+                    if created
+                    else ""
+            )
+            if date_text:
+                depositor_lbl.setText(depositor_lbl.text() + date_text)
         url = f"{self._config.dataverse.base_url}/dataset.xhtml?persistentId={self._pid}" + (
             "&version=DRAFT" if version_state == "DRAFT" else ""
         )
         id_badge = getattr(self, "_id_badge", None)
         if id_badge is not None:
-            id_badge.setText(
-                f"<a href='{url}' style='color:{ACCENT_PRIMARY}; text-decoration:none;'>"
-                f"{self._pid}</a>"
-            )
+            # The DOI chip is a button, not rich text: its click opens the
+            # dataset in the system browser (dv-gfx.2).
+            id_badge.setText(self._pid)
             id_badge.setToolTip(
                 (
                     t("detail.header.open_link_draft")
@@ -124,6 +139,28 @@ class HeaderSection(DetailState):
                 )
                 + f"\n{url}"
             )
+            try:
+                from PySide6.QtCore import QUrl
+                from PySide6.QtGui import QDesktopServices
+
+                _u = QUrl(url)
+                if getattr(self, "_doi_url", None) != url:
+                    # Rewire the handler only when the target actually
+                    # changed. Qt warns when a bare disconnect() finds
+                    # nothing connected, so drop the old slot through its
+                    # stored handle instead.
+                    self._doi_url = url
+                    try:
+                        old = getattr(self, "_doi_open", None)
+                        if old is not None:
+                            id_badge.clicked.disconnect(old)
+                    except (RuntimeError, TypeError):
+                        pass
+                    handler = lambda _checked=False, _u=_u: QDesktopServices.openUrl(_u)
+                    self._doi_open = handler
+                    id_badge.clicked.connect(handler)
+            except Exception:
+                pass
         title_lbl = getattr(self, "_title_lbl", None)
         if title_lbl is not None:
             title_lbl.setText(self._title)
@@ -431,25 +468,47 @@ class HeaderSection(DetailState):
         return f"{staged}/{total}" if total else ""
 
     def _refresh_rail_counts(self, summary: Any = None) -> None:
-        """Feed the rail's result pills from a check-run summary."""
+        """Feed the rail's result pills from every check family (dv-gfx.14).
+
+        Metadata, dataset-level and per-file results all count towards the
+        dataset's passed/warning totals — a check is a check, whichever
+        section it was printed in. This also runs after a metadata load, so
+        the pills are never zero while completeness is already known.
+        """
         rail = getattr(self, "_rail", None)
         if rail is None:
             return
-        if summary is None:
-            report = getattr(self, "_report", None)
-            if report is None:
-                rail.set_nav_counts()
-                return
+        totals = {"passed": 0, "failed-warning": 0, "failed-error": 0}
+        report = getattr(self, "_report", None)
+        if report is not None:
             from engine.status import summarize
 
-            summary = summarize(
+            merged = summarize(
                 list(getattr(report, "dataset_checks", []) or [])
                 + [c for f in (getattr(report, "files", []) or []) for c in (f.checks or [])]
             )
+            for key in totals:
+                totals[key] += int(merged.get(key, 0) or 0)
+        # Metadata completeness: complete rows pass, incomplete rows warn.
+        for row in getattr(self, "_meta_results", []) or []:
+            if not isinstance(row, dict):
+                continue
+            if row.get("status") == "complete":
+                totals["passed"] += 1
+            elif row.get("status") == "incomplete":
+                totals["failed-warning"] += 1
+        if report is None and not totals["passed"] and not totals["failed-warning"]:
+            rail.set_nav_counts()
+            return
+        if summary is not None:
+            # An explicit summary is the authority when a caller passes one.
+            for key in totals:
+                if key in summary:
+                    totals[key] = int(summary.get(key, 0) or 0)
         rail.set_nav_counts(
-            passed=int(summary.get("passed", 0) or 0),
-            warnings=int(summary.get("failed-warning", 0) or 0),
-            errors=int(summary.get("failed-error", 0) or 0),
+            passed=totals["passed"],
+            warnings=totals["failed-warning"],
+            errors=totals["failed-error"],
         )
 
     def _on_status_action(self) -> None:
@@ -466,6 +525,19 @@ class HeaderSection(DetailState):
             elif getattr(self, "_dl_worker", None) is not None:
                 self._on_download_cancel_click()
         widget.clear()
+
+    def _show_status_running(
+        self, title: str, detail: str = "", fraction: float | None = None
+    ) -> None:
+        """Show the compact widget mid-work (dv-gfx.3).
+
+        The general message strip stays quiet while this is up: the widget
+        already carries the words, and showing both doubled the header.
+        """
+        widget = getattr(self, "_status_widget", None)
+        if widget is not None:
+            widget.set_running(title, detail, fraction)
+            self._status_row.setVisible(False)
 
     def _show_status_complete(self, title: str, detail: str = "") -> None:
         widget = getattr(self, "_status_widget", None)
@@ -489,22 +561,12 @@ class HeaderSection(DetailState):
                 title = t("detail.statuswidget.downloading")
             widget.set_running(title, self._status_context(), fraction)
             self._status_row.setVisible(False)
-        # Keep the retired ring object coherent for any caller that still
-        # reaches for it, but it no longer occupies a row.
-        try:
-            self._ring.setFraction(fraction)
-        except Exception:
-            pass
 
     def _hide_ring(self) -> None:
         """Clear the compact status widget when the work it tracked is done."""
         widget = getattr(self, "_status_widget", None)
         if widget is not None:
             widget.clear()
-        try:
-            self._ring.hide()
-        except Exception:
-            pass
 
     def _build_verdict_card(self) -> QFrame:
         """Readiness banner (dv-6nv): one synthesized answer, top of page."""

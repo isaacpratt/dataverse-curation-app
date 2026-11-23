@@ -133,7 +133,7 @@ def test_card_headings_are_not_clipped(small_window, detail, qapp):
     _pump(qapp)
     for card, title in (
         (detail._file_card, t("detail.sections.file_manifest")),
-        (detail._meta_card, t("detail.sections.metadata_check")),
+        (detail._meta_card, t("detail.sections.dataset_checks")),
         (detail._auto_card, t("detail.sections.auto_checks")),
     ):
         labels = [
@@ -141,6 +141,12 @@ def test_card_headings_are_not_clipped(small_window, detail, qapp):
             for lbl in card.findChildren(type(card))
             if hasattr(lbl, "text") and lbl.text() == title
         ]
+        # The automated checks are a section inside the metadata card now
+        # (dv-gfx.5, item 9): they share its title line, so the separate
+        # "Automated checks" heading is gone by design.
+        if card is detail._auto_card:
+            # Merged card: the automated checks share the metadata title line.
+            continue
         assert labels, f"the {title} heading is missing"
         lbl = labels[0]
         assert lbl.width() >= lbl.sizeHint().width() or lbl.text() == lbl.text(), (

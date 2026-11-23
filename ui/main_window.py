@@ -72,7 +72,7 @@ from ui.theme import (
     surface_frame_qss,
     transparent_surface_qss,
 )
-from ui.widgets import AppButton, make_caption_label, make_split_chip
+from ui.widgets import AppButton, make_caption_label, make_split_chip, set_chip_room_limited
 
 if TYPE_CHECKING:
     from ui.settings_dialog import SettingsPane
@@ -1054,8 +1054,28 @@ class MainWindow(QMainWindow):
                 on_open=_open,
                 on_close=_close,
             )
+            chip = self._dress_chip(chip)
             self._chips_lay.addWidget(chip)
         self._chips_lay.addStretch()
+
+    def _dress_chip(self, chip: Any) -> Any:
+        """Show a chip's full title while the bar has room (dv-gfx.19).
+
+        Qt squeezes the chips proportionally the moment they are added, so
+        a short title in an empty nav bar still read "Selecti…". Each chip
+        is only allowed to elide once the chips together need more room
+        than the row has; the measurement uses each chip's full-title
+        request, which ``_ElidedChipButton.sizeHint`` keeps stable.
+        """
+        wanted = 0
+        for i in range(self._chips_lay.count()):
+            item = self._chips_lay.itemAt(i)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                wanted += widget.sizeHint().width() + self._chips_lay.spacing()
+        limited = wanted > max(0, self._chips_wrap.width() - 16)
+        set_chip_room_limited(chip, limited)
+        return chip
 
     def closeEvent(self, event: QCloseEvent) -> None:
         # Do not lose unsaved Settings edits on window close.

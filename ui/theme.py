@@ -531,6 +531,50 @@ FONT_CAPTION = 11
 # --- Shadows (simulated via border) ---
 CARD_BORDER = f"1px solid {OUTLINE_VARIANT}"
 
+# --- Elevation (a real, subtle drop shadow behind cards and chips) ---
+# QSS has no box-shadow, so elevation is a QGraphicsDropShadowEffect. The
+# numbers are deliberately small: the page already separates surfaces with
+# a border, and the shadow only says "this sits above the page".
+SHADOW_BLUR = 18
+SHADOW_DY = 2
+SHADOW_ALPHA = 22  # ~9% black at the darkest point
+SHADOW_COLOR = (16, 24, 40)  # a cool near-black, not pure #000
+
+# A chip is small and sits ON the card, so it gets a tighter shadow than a
+# card does: less blur, no offset, a touch lighter.
+CHIP_SHADOW_BLUR = 10
+CHIP_SHADOW_DY = 1
+CHIP_SHADOW_ALPHA = 16
+
+
+def apply_elevation(
+    widget: "QWidget",
+    *,
+    blur: int = SHADOW_BLUR,
+    dy: int = SHADOW_DY,
+    alpha: int = SHADOW_ALPHA,
+) -> None:
+    """Give a card or chip one subtle shadow (the app's elevation contract).
+
+    Reuses the widget's existing drop-shadow effect if it already has one,
+    so calling this twice never stacks two effects. Never raises: a widget
+    without a native graphics effect simply keeps its border.
+    """
+    try:
+        from PySide6.QtGui import QColor
+        from PySide6.QtWidgets import QGraphicsDropShadowEffect
+
+        effect = widget.graphicsEffect()
+        if not isinstance(effect, QGraphicsDropShadowEffect):
+            effect = QGraphicsDropShadowEffect(widget)
+        effect.setBlurRadius(blur)
+        effect.setOffset(0, dy)
+        r, g, b = SHADOW_COLOR
+        effect.setColor(QColor(r, g, b, alpha))
+        widget.setGraphicsEffect(effect)
+    except Exception:
+        pass
+
 # --- Contrast contract ---------------------------------------------------
 # Every colour pairing the app actually paints, with the ratio it must
 # clear. `ui/tests/test_contrast.py` reads this table, so a palette
@@ -1030,14 +1074,26 @@ def status_strip_qss(
     )
 
 
-def workflow_step_qss(state: str = "todo") -> str:
+def workflow_step_qss(state: str = "todo", *, active: bool = False) -> str:
     """Build the face of one step in the dataset step rail.
 
     The rail is guidance, not a gate: every step is clickable in every
     state, so the state shows in the colour and the weight, never in
     whether the step can be pressed.
+
+    ``active=True`` is the section rail's "current view" face (dv-gfx.4):
+    the step on screen carries a shaded block, not only coloured text.
     """
     hover = f"QPushButton#WorkflowStep:hover {{ background: {SURFACE_TINT}; border-radius: 8px; }}"
+    if active:
+        return (
+            f"QPushButton#WorkflowStep {{ color: {ACCENT_PRIMARY}; font-size: 12px; "
+            f"font-weight: 700; background: {ACCENT_TINT}; "
+            f"border: 1px solid {ACCENT_FOCUS_TINT}; border-radius: {RADIUS_MD}; "
+            f"padding: 3px 10px; }} "
+            f"QPushButton#WorkflowStep:hover {{ background: {ACCENT_TINT}; "
+            f"border: 1px solid {ACCENT_PRIMARY}; }}"
+        )
     if state == "done":
         return (
             f"QPushButton#WorkflowStep {{ color: {TEXT_SUCCESS}; font-size: 12px; "
@@ -1063,6 +1119,19 @@ def workflow_step_qss(state: str = "todo") -> str:
     return (
         f"QPushButton#WorkflowStep {{ color: {TEXT_MUTED}; font-size: 12px; "
         f"background: transparent; border: none; padding: 3px 6px; }} {hover}"
+    )
+
+
+def workflow_rail_qss() -> str:
+    """The section rail's band: nav-bar hairlines, full width (dv-gfx.4).
+
+    The rail sits directly under the app nav bar and above the header
+    chips, so it takes the nav bar's own separator rule and reads as part
+    of that stack rather than as another card.
+    """
+    return (
+        f"QWidget#WorkflowRail {{ background: {SURFACE_PAGE}; "
+        f"border-bottom: 1px solid {OUTLINE_VARIANT}; }}"
     )
 
 
@@ -1539,15 +1608,17 @@ QScrollBar:vertical {{
     background: {SURFACE_CONTAINER_LOWEST};
     width: 8px;
     margin: 0;
+    border-radius: {RADIUS_SM};
 }}
 QScrollBar::handle:vertical {{
     background: {OUTLINE_VARIANT};
-    border-radius: {RADIUS_LG};
+    border-radius: {RADIUS_SM};
     min-height: 24px;
 }}
 QScrollBar::groove:vertical {{
-    background: {SURFACE_CONTAINER_LOWEST};
+    background: transparent;
     border: none;
+    border-radius: {RADIUS_SM};
     margin: 0px;
 }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
@@ -1555,15 +1626,17 @@ QScrollBar:horizontal {{
     background: {SURFACE_CONTAINER_LOWEST};
     height: 8px;
     margin: 0;
+    border-radius: {RADIUS_SM};
 }}
 QScrollBar::groove:horizontal {{
-    background: {SURFACE_CONTAINER_LOWEST};
+    background: transparent;
     border: none;
+    border-radius: {RADIUS_SM};
     margin: 0px;
 }}
 QScrollBar::handle:horizontal {{
     background: {OUTLINE_VARIANT};
-    border-radius: {RADIUS_LG};
+    border-radius: {RADIUS_SM};
     min-width: 24px;
 }}
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}

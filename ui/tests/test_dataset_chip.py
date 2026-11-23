@@ -9,12 +9,27 @@ def test_chip_label_asks_for_its_full_title(qapp):
 
     title = "Longitudinal Survey of Arctic Sea Ice 2008-2020"
     btn = _ElidedChipButton(title)
-    btn.resize(120, 32)  # narrower than the title: elides the paint...
+    btn.resize(120, 32)  # narrower than the title
     full_hint = btn.sizeHint().width()
     assert full_hint > 120, "the hint keeps asking for the full title"
     assert btn._full_text == title, "the original title is kept for widening"
-    btn.resize(600, 32)  # ...and widening restores it
-    assert btn.text() == title
+    assert btn.text() == title, "an empty nav bar shows the whole title"
+
+
+def test_a_chip_only_elides_once_the_bar_is_full(qapp):
+    """Short titles stay whole until the nav bar is genuinely out of room (dv-gfx.19)."""
+    from ui.widgets import _ElidedChipButton, set_chip_room_limited, make_split_chip
+
+    chip = make_split_chip("A dataset title")
+    set_chip_room_limited(chip, False)
+    label = getattr(chip, "_label_half")
+    assert label.text() == "A dataset title"
+
+    # Once the owner says the bar is full, the same chip is allowed to cut.
+    set_chip_room_limited(chip, True)
+    label.resize(60, 32)
+    label._apply_elide()
+    assert label.text() != "A dataset title"
 
 
 def test_chip_label_half_stays_left_aligned(qapp):

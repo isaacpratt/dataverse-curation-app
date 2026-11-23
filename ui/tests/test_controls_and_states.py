@@ -129,16 +129,13 @@ def test_checks_cancel_is_hidden_until_a_run_starts(det):
 
 
 def test_cancelling_a_check_run_resets_the_header(det):
+    det._start_checks()
     det._check_btn.setEnabled(False)
-    det._checks_cancel_btn.setVisible(True)
-    det._checks_cancel_btn.setEnabled(True)
-    det._progress.setVisible(True)
     try:
         det._on_checks_cancelled()
         assert det._check_btn.isEnabled(), "Run checks must come back"
-        assert det._checks_cancel_btn.isHidden(), "Cancel must fold away"
-        assert det._checks_cancel_btn.isEnabled(), "Cancel must be armed again"
-        assert det._progress.isHidden(), "the progress bar must fold away"
+        assert det._check_btn.text() != "Cancel checks", "the button stops offering Cancel"
+        assert det._status_widget.isHidden(), "the progress face must fold away"
         assert "cancelled" in det._status.text().lower()
     finally:
         det._set_status("")
@@ -152,8 +149,35 @@ def test_a_failed_check_run_stays_failed_on_the_page(det, monkeypatch):
         assert det._status_widget.isVisible(), "the failure must stay on the page"
         assert "failed" in det._status.text().lower()
         assert det._check_btn.isEnabled(), "the curator must be able to retry"
-        assert det._checks_cancel_btn.isHidden()
+        assert det._check_btn.text() != "Cancel checks"
     finally:
+        det._set_status("")
+
+
+def test_the_primary_button_becomes_cancel_while_checks_run(det):
+    """One button, two labels: Cancel during a run (dv-gfx.3)."""
+    det._start_checks()
+    try:
+        assert det._check_btn.text() == "Cancel checks"
+        assert det._check_btn.isEnabled()
+        assert det._status_widget.isVisible()
+        assert det._status_widget._bar.isVisible()
+    finally:
+        det._hide_ring()
+        det._restore_check_button()
+        det._set_status("")
+
+
+def test_the_status_widget_bar_sits_under_its_text(det):
+    """The bar is a second row, below the words (dv-gfx.3)."""
+    det._show_status_running("Running checks…", "14/21", 14 / 21)
+    try:
+        widget = det._status_widget
+        title = widget._title.mapTo(widget, widget._title.rect().center())
+        bar = widget._bar.mapTo(widget, widget._bar.rect().center())
+        assert bar.y() > title.y()
+    finally:
+        det._hide_ring()
         det._set_status("")
 
 

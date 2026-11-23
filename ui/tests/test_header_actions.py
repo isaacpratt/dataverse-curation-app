@@ -79,14 +79,14 @@ def test_rail_buttons_are_real_buttons(view):
     assert rail.buttons["response"].text() == "Response"
 
 
-def test_doi_chip_is_the_dataverse_link(view):
+def test_doi_chip_is_a_link_button(view):
     v, _ = view
-    text = v._id_badge.text()
-    assert "<a href=" in text
-    assert PID in text
-    assert "https://demo.borealisdata.ca/dataset.xhtml?persistentId=" in text
-    assert "version=DRAFT" in text
-    assert v._id_badge.openExternalLinks()
+    assert v._id_badge.text() == PID
+    # A button, not rich text: the whole chip is the click target, and it
+    # carries the Lucide external-link glyph (dv-gfx.2).
+    assert not v._id_badge.icon().isNull()
+    assert "DRAFT" in v._id_badge.toolTip()
+    assert "dataset.xhtml?persistentId=" in v._id_badge.toolTip()
 
 
 def test_curation_pill_sits_beside_the_status_pill(view):
@@ -184,15 +184,37 @@ def test_action_buttons_carry_lucide_icons(view):
     v, _ = view
     assert not v._check_btn.icon().isNull()
     assert not v._record_btn.icon().isNull()
+    assert not v._sidebar_toggle_btn.icon().isNull()
 
 
-def test_stage_chip_sits_after_the_status_pill(view):
+def test_sidebar_toggle_is_the_last_action(view):
     v, _ = view
-    parent = v._status_pill.parent()
-    layout = parent.layout()
-    indexes = [layout.indexOf(w) for w in (v._status_pill, v._stage_pill, v._curation_pill)]
-    assert indexes == sorted(indexes), indexes
-    assert v._stage_pill.text() == "Submitted for Review"
+    # The toggle must sit to the right of every other action control.
+    toggle = v._sidebar_toggle_btn.mapToGlobal(v._sidebar_toggle_btn.rect().center())
+    for name in ("_record_btn", "_check_btn", "_checks_cancel_btn", "_dl_cancel_btn"):
+        other = getattr(v, name, None)
+        if other is None or not other.isVisible():
+            continue
+        centre = other.mapToGlobal(other.rect().center())
+        assert centre.x() < toggle.x(), name
+
+
+def test_primary_button_is_a_standard_button(view):
+    from ui.widgets import BUTTON_HEIGHTS, make_action_button
+
+    v, _ = view
+    standard = make_action_button("x", kind="primary", size="md")
+    assert v._check_btn.height() == standard.height() == BUTTON_HEIGHTS["md"]
+
+
+def test_there_is_no_separate_stage_pill(view):
+    """`Submitted for Review` duplicated the curation label chip (dv-gfx.2)."""
+    v, _ = view
+    from PySide6.QtWidgets import QLabel
+
+    texts = [w.text() for w in v.findChildren(QLabel)]
+    assert not any("Submitted for Review" in text for text in texts)
+    assert not hasattr(v, "_stage_pill")
 
 
 def test_check_finished_feeds_the_status_widget(view, monkeypatch):

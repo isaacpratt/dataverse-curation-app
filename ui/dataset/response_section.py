@@ -141,6 +141,7 @@ class ResponseSection(DetailState):
         try:
             self._pages.setCurrentIndex(0)
             self._in_response = False
+            self._rail.set_active_step("dataset_checks")
         except Exception:
             pass
         self._refresh_workflow()
@@ -150,6 +151,10 @@ class ResponseSection(DetailState):
             self._pages.setCurrentIndex(1)
             self._in_response = True
             self._refresh_response()
+        except Exception:
+            pass
+        try:
+            self._rail.set_active_step("response")
         except Exception:
             pass
         self._refresh_workflow()

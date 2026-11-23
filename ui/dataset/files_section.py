@@ -70,6 +70,10 @@ class FilesSection(DetailState):
         )
         self._expand_btn.setToolTip(t("detail.files.expand_tip"))
         self._expand_btn.clicked.connect(self._on_toggle_expand_all)
+        # The rail jumps to this label, which lives on the card's own
+        # header line: one header per card, no duplicate heading above it
+        # (dv-gfx.5 / dv-gfx.7).
+        self._file_checks_heading = _title
         lay = QVBoxLayout()
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -123,12 +127,19 @@ class FilesSection(DetailState):
         )
         self._file_reset_btn.clicked.connect(self._on_reset_file_view)
         tools_lay.addWidget(self._file_reset_btn)
-        tools_lay.addWidget(self._open_folder_btn)
-        tools_lay.addWidget(self._expand_btn)
+        # Download / Open folder / Expand all sit in the card's title bar
+        # (dv-gfx.5, item 8); the tools row keeps the filters and the reset.
+        tools_lay.addStretch(1)
         lay.addWidget(tools)
         # NOTE: tree + footer live in a flush sub-layout so the header keeps
         # its top radius and the footer keeps its bottom radius.
         cast(QVBoxLayout, card.layout()).addLayout(lay)
+        # The section's action buttons ride in the title bar so there is
+        # one header line per card (dv-gfx.5, item 8). They are added here
+        # (not by the page) so the order is visible in one place.
+        header_lay.addStretch(1)
+        header_lay.addWidget(self._open_folder_btn)
+        header_lay.addWidget(self._expand_btn)
 
         # Tree: folder > file > check hierarchy (Carbon-inspired, native QTreeView).
         # Column 0 carries the tree (caret + indent + icons); Size/Format/Scan

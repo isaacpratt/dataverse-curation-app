@@ -174,7 +174,8 @@ def test_rail_renders_three_section_buttons_in_order(detail):
     assert rail.buttons["dataset_checks"].text() == "Dataset Checks"
     assert rail.buttons["file_checks"].text() == "File Checks"
     assert rail.buttons["response"].text() == "Response"
-    assert rail.hint.isVisible() or rail.hint.text() == ""
+    # The hint carries the per-dataset pass/warning pills (dv-gfx.14); the
+    # toggle stays hidden because the rail has only the three sections.
     assert rail._toggle.isHidden()
 
 

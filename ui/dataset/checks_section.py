@@ -48,7 +48,6 @@ from ui.widgets import (
     make_combo,
     make_disposition_combo,
     make_field_label,
-    make_icon_button,
     make_small_body_label,
 )
 from ui.workers import CheckWorker
@@ -276,16 +275,12 @@ class ChecksSection(DetailState):
             background=badge_bg,
             foreground=badge_fg,
             border=BORDER_SUBTLE,
+            chip=False,
         )
         badge_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         badge_lbl.setFixedHeight(20)
         badge_lbl.setMinimumWidth(56)
         lay.addWidget(badge_lbl)
-        lay.addWidget(
-            self._finding_overflow_button(
-                t("detail.auto_checks.file_result_format", path=title, message=desc)
-            )
-        )
         return frame
 
     def _cached_report_path(self) -> Path:
@@ -318,11 +313,21 @@ class ChecksSection(DetailState):
     def _start_checks(self) -> None:
         """Start the check worker against the staged files."""
         staged = self._dl_mgr.files_dir(self._pid)
-        self._check_btn.setEnabled(False)
-        self._checks_cancel_btn.setVisible(True)
+        # During a run the primary button IS Cancel (dv-gfx.3): one control
+        # in one place, and the label never lies about what a press does.
+        self._checks_running = True
+        self._check_btn.setEnabled(True)
+        self._check_btn.setText(t("detail.header.cancel_checks"))
+        self._check_btn.setToolTip(t("detail.header.cancel_checks_tip"))
+        self._check_btn.setAccessibleName(t("detail.header.cancel_checks_a11y"))
+        try:
+            self._check_btn.clicked.disconnect()
+        except Exception:
+            pass
+        self._check_btn.clicked.connect(self._on_cancel_checks_click)
+        self._checks_cancel_btn.setVisible(False)
         self._set_status(t("detail.status.running_checks"))
-        self._progress.setVisible(True)
-        self._progress.setRange(0, 0)
+        self._show_status_running(t("detail.statuswidget.running"))
         self._check_worker = CheckWorker(
             staged,
             self._pid,
@@ -343,6 +348,26 @@ class ChecksSection(DetailState):
         self._check_worker.cancelled.connect(self._check_worker.deleteLater)
         self._check_worker.start()
 
+    def _restore_check_button(self) -> None:
+        """Put the primary button back after a run (dv-gfx.3).
+
+        The button swaps to Cancel while the checks run, so the restore is
+        one place that undoes both the label and the reconnection.
+        """
+        self._checks_running = False
+        btn = getattr(self, "_check_btn", None)
+        if btn is None:
+            return
+        try:
+            btn.clicked.disconnect()
+        except Exception:
+            pass
+        btn.clicked.connect(self._on_run_checks)
+        self._refresh_check_button()
+        btn.setToolTip(t("detail.header.run_checks_tip"))
+        btn.setAccessibleName("")
+        btn.setEnabled(True)
+
     def _on_cancel_checks_click(self) -> None:
         """Ask the running check pass to stop at the next checkpoint."""
         worker = self._check_worker
@@ -359,14 +384,12 @@ class ChecksSection(DetailState):
         widget = getattr(self, "_status_widget", None)
         if widget is not None and widget.isVisible():
             widget.set_running(t("detail.statuswidget.cancelling"), "", None, cancelling=True)
-        self._checks_cancel_btn.setEnabled(False)
+        self._check_btn.setEnabled(False)
 
     def _on_checks_cancelled(self) -> None:
         """Reset the header after a cancelled check pass (no report)."""
-        self._progress.setVisible(False)
         self._hide_ring()
-        self._check_btn.setEnabled(True)
-        self._checks_cancel_btn.setVisible(False)
+        self._restore_check_button()
         self._checks_cancel_btn.setEnabled(True)
         self._set_status(t("detail.status.checks_cancelled"))
 
@@ -384,10 +407,8 @@ class ChecksSection(DetailState):
             report.save(cache_path)
         except Exception:
             cache_path = None
-        self._progress.setVisible(False)
         self._hide_ring()
-        self._check_btn.setEnabled(True)
-        self._checks_cancel_btn.setVisible(False)
+        self._restore_check_button()
         self._checks_cancel_btn.setEnabled(True)
         self._refresh_check_button()
         self._refresh_metadata_button()
@@ -426,28 +447,24 @@ class ChecksSection(DetailState):
             + t("detail.status.use_export_for_markdown"),
             tone="success",
         )
-        self._log_action(
-            "checks_run",
-            t(
-                "detail.status.report_summary",
-                findings=findings,
-                files=len(report.files),
-            ),
-            {"findings": findings, "files": len(report.files)},
+        # One log line per pass (dv-gfx.7): the save is part of running the
+        # checks, so the saved folder rides in the same entry.
+        notes = t(
+            "detail.status.report_summary",
+            findings=findings,
+            files=len(report.files),
         )
         if cache_path is not None:
-            try:
-                self._log_action(
-                    "checks_saved",
-                    t(
-                        "detail.status.auto_saved_to",
-                        folder=cache_path.parent.name,
-                        name=cache_path.name,
-                    ),
-                    {"path": str(cache_path)},
-                )
-            except Exception:
-                pass
+            notes += " — " + t(
+                "detail.status.auto_saved_to",
+                folder=cache_path.parent.name,
+                name=cache_path.name,
+            )
+        self._log_action(
+            "checks_run",
+            notes,
+            {"findings": findings, "files": len(report.files), "saved": str(cache_path or "")},
+        )
         # File-check findings feed the Response draft — rebuild it.
         try:
             self._refresh_response()
@@ -457,10 +474,8 @@ class ChecksSection(DetailState):
 
     def _on_checks_error(self, msg: str) -> None:
         self._check_worker = None
-        self._progress.setVisible(False)
         self._hide_ring()
-        self._check_btn.setEnabled(True)
-        self._checks_cancel_btn.setVisible(False)
+        self._restore_check_button()
         self._checks_cancel_btn.setEnabled(True)
         headline, details = dialogs.describe_error(msg)
         self._show_status_error(t("detail.statuswidget.error"), headline)
@@ -536,40 +551,6 @@ class ChecksSection(DetailState):
                 )
         else:
             return
-
-    def _build_copy_menu(self, text: str) -> QMenu:
-        """Build the one-item copy menu for a finding row (dv-18z)."""
-        from PySide6.QtWidgets import QApplication, QMenu
-
-        menu = QMenu(self)
-        action = menu.addAction(t("detail.copy_finding.action"))
-
-        def _copy() -> None:
-            QApplication.clipboard().setText(text)
-            try:
-                self._set_status(t("detail.copy_finding.copied"), tone="success")
-            except Exception:
-                pass
-
-        action.triggered.connect(_copy)
-        return menu
-
-    def _show_copy_menu(self, btn: QWidget, text: str) -> None:
-        self._build_copy_menu(text).exec(btn.mapToGlobal(btn.rect().bottomLeft()))
-
-    def _finding_overflow_button(self, text: str) -> QWidget:
-        """⋯ ghost button opening the copy-this-finding menu (dv-18z).
-
-        One item, one job: copy a single line a curator can paste into a
-        comment or the depositor letter. No state, no log entry.
-        """
-        btn = make_icon_button(
-            "ellipsis",
-            tip=t("detail.copy_finding.action"),
-            accessible_name=t("detail.copy_finding.action"),
-        )
-        btn.clicked.connect(lambda _c=False, b=btn, s=text: self._show_copy_menu(b, s))
-        return cast(QWidget, btn)
 
     def _dispositions_map(self) -> dict[str, Any]:
         """{finding_key: {disposition, note}} for this dataset (cached)."""

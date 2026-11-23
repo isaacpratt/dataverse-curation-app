@@ -23,10 +23,10 @@ from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ui.i18n import t
-from ui.theme import FONT_CAPTION
+from ui.theme import FONT_CAPTION, transparent_surface_qss
 from ui.widgets import (
     add_info_tip,
     make_action_button,
@@ -515,6 +515,10 @@ class PreviewCard(QFrame):
             _header, t("detail.preview.tip"), name=t("detail.preview.title"), group="Queue"
         )
         lay.addWidget(card)
+        # Edge to edge (dv-gfx.16): the preview fills the card's width
+        # instead of sitting in an inset box.
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
 
         self._placeholder = make_caption_label(t("detail.preview.select_file"))
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -535,7 +539,15 @@ class PreviewCard(QFrame):
 
         self._note = make_caption_label("")
         self._note.setVisible(False)
-        body.addWidget(self._note)
+        # The note keeps a text inset so its words line up with the card's
+        # other labels even though the preview above runs edge to edge.
+        note_row = QWidget()
+        note_row.setObjectName("PreviewNote")
+        note_row.setStyleSheet(transparent_surface_qss("PreviewNote"))
+        note_lay = QHBoxLayout(note_row)
+        note_lay.setContentsMargins(16, 8, 16, 8)
+        note_lay.addWidget(self._note)
+        body.addWidget(note_row)
 
         self._open_btn = make_action_button(
             t("detail.preview.open_folder"), kind="secondary", size="md"
@@ -544,7 +556,17 @@ class PreviewCard(QFrame):
         self._open_btn.clicked.connect(
             lambda: self._on_open_folder() if self._on_open_folder else None
         )
-        body.addWidget(self._open_btn)
+        # The button keeps its inset in a padded strip so it stays flush
+        # with the card's text margin while the preview above runs edge to
+        # edge (dv-gfx.16).
+        tools = QWidget()
+        tools.setObjectName("PreviewTools")
+        tools.setStyleSheet(transparent_surface_qss("PreviewTools"))
+        tools_lay = QHBoxLayout(tools)
+        tools_lay.setContentsMargins(16, 12, 16, 12)
+        tools_lay.addWidget(self._open_btn)
+        tools_lay.addStretch(1)
+        body.addWidget(tools)
         self._rel = ""
 
     # -- public API ---------------------------------------------------------

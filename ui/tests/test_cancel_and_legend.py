@@ -63,14 +63,14 @@ def test_cancelled_handler_resets_action_row(det, monkeypatch):
 
     monkeypatch.setattr(det, "_log_action", _record)
     det._dl_worker = _FakeWorker()
-    det._progress.setVisible(True)
+    det._show_status_running("Downloading dataset…")
     det._dl_btn.setEnabled(False)
     det._dl_cancel_btn.setEnabled(False)
     det._dl_cancel_btn.setVisible(True)
     try:
         det._on_download_cancelled()
         assert det._dl_worker is None
-        assert det._progress.isHidden()
+        assert det._status_widget.isHidden()
         assert det._dl_btn.isEnabled()
         assert det._dl_cancel_btn.isHidden()
         assert det._dl_cancel_btn.isEnabled()

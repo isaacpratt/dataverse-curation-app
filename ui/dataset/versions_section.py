@@ -1,6 +1,6 @@
 """The Version log card: the version list and the compare view."""
 
-from typing import Any, cast
+from typing import Any
 
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -23,7 +23,6 @@ from ui.theme import (
     TEXT_SUBTLE,
     TEXT_SUCCESS,
     enable_list_copy,
-    transparent_surface_qss,
 )
 from ui.widgets import (
     AppTable,
@@ -57,14 +56,8 @@ class VersionsSection(DetailState):
         # Named not-loaded state, never "—" (2026-10-02 P2).
         self._version_summary = make_field_label(t("detail.version_log.not_loaded"))
         header_lay.addWidget(self._version_summary)
-        # The reset is a table tool, so it lives on the tools row under the
-        # title bar; the title row keeps title + (i) + summary only.
-        self._version_tools = QWidget()
-        self._version_tools.setObjectName("VersionLogTools")
-        self._version_tools.setStyleSheet(transparent_surface_qss("VersionLogTools"))
-        _version_tools_lay = QHBoxLayout(self._version_tools)
-        _version_tools_lay.setContentsMargins(16, 8, 16, 8)
-        _version_tools_lay.setSpacing(8)
+        # The reset is a table tool: it rides on the card's title bar so
+        # there is one header line per card (dv-gfx.5, item 8).
         self._version_reset_btn = make_reset_columns_button(
             "",
             tip=t("detail.version_log.reset_columns_tip"),
@@ -72,11 +65,8 @@ class VersionsSection(DetailState):
             fallback_text=t("common.reset"),
         )
         self._version_reset_btn.clicked.connect(self._on_reset_version_view)
-        _version_tools_lay.addWidget(self._version_reset_btn)
-        _version_tools_lay.addStretch()
-        # Sibling of the body (not inside it): _populate_version_diff clears
-        # the body on every refresh and must not take the tools with it.
-        cast(QVBoxLayout, card.layout()).insertWidget(1, self._version_tools)
+        header_lay.addStretch(1)
+        header_lay.addWidget(self._version_reset_btn)
         self._version_body = _body_host
         return card
 

@@ -82,6 +82,9 @@ from ui.theme import (
     BORDER_CONTROL,
     BORDER_SUBTLE,
     BUTTON_OBJECTS,
+    CHIP_SHADOW_ALPHA,
+    CHIP_SHADOW_BLUR,
+    CHIP_SHADOW_DY,
     FONT_BODY,
     FONT_CAPTION,
     FONT_MICRO,
@@ -107,6 +110,7 @@ from ui.theme import (
     TEXT_PLACEHOLDER,
     TEXT_PRIMARY,
     TEXT_SUCCESS,
+    apply_elevation,
     badge_qss,
     button_qss,
     enable_table_copy,
@@ -117,6 +121,7 @@ from ui.theme import (
     selection_qss,
     transparent_qss,
     transparent_surface_qss,
+    workflow_rail_qss,
     workflow_step_qss,
 )
 from ui.workflow import STEP_ORDER, Workflow
@@ -165,6 +170,7 @@ __all__ = [
     "make_search_field",
     "make_section_heading",
     "make_small_body_label",
+    "set_chip_room_limited",
     "make_split_chip",
     "make_value_list",
     "tree_style",
@@ -175,6 +181,11 @@ __all__ = [
 # platform's own menus and toolbars land on 32, and a 28px chip is easy
 # to miss with a mouse or a stylus. Every button in the app clears 32.
 BUTTON_HEIGHTS: dict[str, int] = {"sm": 32, "md": 36, "lg": 40}
+
+# A chip is a status pill in the header: it sits on the same line as the
+# action buttons, so it takes the standard button height instead of being
+# stretched to whatever the tallest control in its row happens to be.
+CHIP_HEIGHT: int = BUTTON_HEIGHTS["md"]
 
 
 def human_size(n: int) -> str:
@@ -1241,6 +1252,7 @@ def set_badge_label(
     mono: bool = False,
     font_size: int = FONT_MICRO,
     padding: str = "0 6px",
+    chip: bool = True,
 ) -> QLabel:
     """Re-dress a live badge: new text, new face, same kit rule.
 
@@ -1249,6 +1261,11 @@ def set_badge_label(
     kit owns that, so a view never reaches into the theme for the
     badge's colours - and the badge cannot end up wearing a different
     face from the one the kit built.
+
+    ``chip=True`` (the default) is the header/status-pill contract: the
+    badge takes the standard button height and a tighter shadow. Pass
+    ``chip=False`` for a small in-row badge (a check verdict) that sets
+    its own metrics.
     """
     badge.setText(text)
     if background and foreground:
@@ -1265,6 +1282,21 @@ def set_badge_label(
         badge.setStyleSheet(label_badge_style(label or text))
     if mono:
         badge.setStyleSheet(badge.styleSheet() + f" QLabel {{ font-family: {MONO_FAMILY}; }}")
+    if chip:
+        # A chip is the header's counterpart to a button: it takes the
+        # standard button height (centring its text inside) and must not be
+        # stretched to whatever the tallest control in its row is.
+        if badge.sizePolicy().verticalPolicy() == QSizePolicy.Policy.Expanding:
+            badge.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        badge.setMinimumHeight(CHIP_HEIGHT)
+        badge.setMaximumHeight(CHIP_HEIGHT)
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        apply_elevation(
+            badge,
+            blur=CHIP_SHADOW_BLUR,
+            dy=CHIP_SHADOW_DY,
+            alpha=CHIP_SHADOW_ALPHA,
+        )
     return badge
 
 
@@ -1278,6 +1310,7 @@ def make_badge(
     mono: bool = False,
     font_size: int = FONT_MICRO,
     padding: str = "0 6px",
+    chip: bool = True,
     parent: QWidget | None = None,
 ) -> QLabel:
     """Build a status badge wearing the role colours of its label.
@@ -1286,6 +1319,10 @@ def make_badge(
     badges of the same family never drift apart. A caller that already
     knows its role (a check result: PASS / FAIL / SKIP) may pass the
     three role colours explicitly.
+
+    ``chip=True`` (the default) gives the header pill: standard button
+    height plus a tight elevation shadow. A small in-row badge (a check
+    verdict) passes ``chip=False`` and sets its own metrics.
     """
     return set_badge_label(
         QLabel("", parent),
@@ -1297,6 +1334,7 @@ def make_badge(
         mono=mono,
         font_size=font_size,
         padding=padding,
+        chip=chip,
     )
 
 
@@ -1317,6 +1355,24 @@ class _ElidedChipButton(QPushButton):
         self._full_text = text
         self._shown_text = text
 
+    # A dataset title is only cut once the nav bar is genuinely out of
+    # room (dv-gfx.19). The flag is set by the owner, which measures the
+    # chips together against the space the row actually has; until then the
+    # full title is both asked for and shown.
+    _room_limited = False
+
+    @property
+    def room_limited(self) -> bool:
+        return self._room_limited
+
+    @room_limited.setter
+    def room_limited(self, value: bool) -> None:
+        if bool(value) == self._room_limited:
+            return
+        self._room_limited = bool(value)
+        self._apply_elide()
+        self.updateGeometry()
+
     def sizeHint(self) -> QSize:
         """Ask for the room the FULL title needs.
 
@@ -1324,9 +1380,9 @@ class _ElidedChipButton(QPushButton):
         ``_apply_elide`` replaces that text with the elided string — so
         the hint shrank after every elide and the chip ratcheted down to
         "Selecti…" even with the nav bar nearly empty (dv-dvu). Measuring
-        the full text keeps the request stable; the layout still shrinks
-        the chip toward its minimum when the row is genuinely full, and
-        the elided paint keeps the title readable with an ellipsis.
+        the full text keeps the request stable: the owner can then compare
+        the chips' combined request with the row width and only allow
+        eliding when the bar is genuinely full (dv-gfx.19).
         """
         hint = super().sizeHint()
         metrics = self.fontMetrics()
@@ -1339,8 +1395,14 @@ class _ElidedChipButton(QPushButton):
         self._apply_elide()
 
     def _apply_elide(self) -> None:
-        width = max(0, self.width() - self._TEXT_INSET)
-        shown = self.fontMetrics().elidedText(self._full_text, Qt.TextElideMode.ElideRight, width)
+        if not self.room_limited:
+            # Room to spare: show the title in full (dv-gfx.19).
+            shown = self._full_text
+        else:
+            width = max(0, self.width() - self._TEXT_INSET)
+            shown = self.fontMetrics().elidedText(
+                self._full_text, Qt.TextElideMode.ElideRight, width
+            )
         if shown != self._shown_text:
             self._shown_text = shown
             self.setText(shown)
@@ -1401,6 +1463,15 @@ def make_split_chip(
     if on_close is not None:
         close_btn.clicked.connect(on_close)
     lay.addWidget(close_btn)
+    # The label half is how the owner decides whether the bar is full, and
+    # how it switches eliding on; keep both on the chip.
+    setattr(chip, "_label_half", open_btn)
+    apply_elevation(
+        chip,
+        blur=CHIP_SHADOW_BLUR,
+        dy=CHIP_SHADOW_DY,
+        alpha=CHIP_SHADOW_ALPHA,
+    )
     return chip
 
 
@@ -1431,6 +1502,19 @@ def _split_chip_qss(active: bool, part: str) -> str:
         f"border: 1px solid {border}; {edges} {padding} "
         f"font-size: {FONT_CAPTION}px; font-weight: 700; }}" + hover
     )
+
+
+def set_chip_room_limited(chip: QWidget, limited: bool) -> None:
+    """Let a dataset chip's title elide (or not) — the nav bar's call (dv-gfx.19).
+
+    A chip is only allowed to cut its title once the chips together need
+    more room than the row has. Until then the full title is shown, so a
+    short title in an empty bar is never truncated.
+    """
+    label = getattr(chip, "_label_half", None)
+    if isinstance(label, _ElidedChipButton):
+        label.room_limited = bool(limited)
+        label._apply_elide()
 
 
 def make_page_heading(title: str, subtitle: str = "") -> tuple[QLabel, QLabel | None]:
@@ -1771,6 +1855,7 @@ def make_card(
     wrap.setObjectName("CardBodyWrap")
     wrap.setStyleSheet(transparent_surface_qss("CardBodyWrap"))
     outer.addWidget(wrap)
+    apply_elevation(card)
     return card, body, title_lbl, top_lay
 
 
@@ -2352,7 +2437,10 @@ def make_disposition_combo(
     combo = make_combo(
         [(disposition_label(token), token) for token in DISPOSITION_TOKENS],
         parent,
-        height=28,
+        # 30, not 36: the combo's own QSS pads the text box 7px top and
+        # bottom (12px type + 14px padding = 26px of text box), so 28px
+        # clipped the descenders; 30 leaves room and the row still fits.
+        height=30,
         min_width=118,
         tip=t("detail.disposition.combo_tip"),
     )
@@ -2453,10 +2541,13 @@ class WorkflowRail(QWidget):
         self.setObjectName("WorkflowRail")
         self._nav_steps = nav_steps
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 4, 0, 0)
+        layout.setContentsMargins(24, 6, 24, 6)
         layout.setSpacing(4)
         self.buttons: dict[str, QPushButton] = {}
         self._indexes: dict[str, int] = {}
+        # The step whose section is on screen (dv-gfx.4): it wears a shaded
+        # block instead of only coloured text.
+        self._active_key = ""
         self.hint = QLabel("")
         self.hint.setObjectName("CaptionSM")
         self.hint.setWordWrap(False)
@@ -2583,9 +2674,25 @@ class WorkflowRail(QWidget):
         self._toggle.setText(text)
 
     @staticmethod
-    def _style_for(state: str) -> str:
+    def _style_for(state: str, *, active: bool = False) -> str:
         """Return the step's face for its state - the theme owns the rule."""
-        return workflow_step_qss(state)
+        return workflow_step_qss(state, active=active)
+
+    def set_active_step(self, key: str) -> None:
+        """Shade the step whose section is on screen (dv-gfx.4).
+
+        The section rail replaces "which step of the workflow" with "which
+        card am I looking at", so the current view is carried by a shaded
+        block behind its button rather than by a workflow state.
+        """
+        key = str(key or "")
+        if key == self._active_key:
+            return
+        self._active_key = key
+        for step_key, btn in self.buttons.items():
+            state = "current" if step_key == key else "available"
+            btn.setStyleSheet(self._style_for(state, active=step_key == key))
+        self.setStyleSheet(workflow_rail_qss())
 
     def set_workflow(self, workflow: Workflow) -> None:
         """Paint each step and the next-step hint; never disables a step.
@@ -2652,16 +2759,16 @@ class StatusWidget(QFrame):
         super().__init__(parent)
         self.setObjectName("StatusWidget")
         self.setVisible(False)
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(10, 6, 8, 6)
-        lay.setSpacing(8)
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(10, 6, 8, 6)
+        outer.setSpacing(0)
         self._icon = QLabel()
         self._icon.setFixedSize(18, 18)
         self._icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._title = make_small_body_label("")
         self._detail = QLabel("")
         self._detail.setObjectName("CaptionSM")
-        self._bar = make_progress_bar(height=6)
+        self._bar = make_progress_bar(height=4)
         self._bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._action = make_icon_button(
             "x",
@@ -2671,11 +2778,23 @@ class StatusWidget(QFrame):
             size="sm",
         )
         self._action.clicked.connect(lambda _c=False: self.actionClicked.emit())
-        lay.addWidget(self._icon)
-        lay.addWidget(self._title)
-        lay.addWidget(self._detail)
-        lay.addWidget(self._bar, 1)
-        lay.addWidget(self._action)
+        # Two rows: the words, then the bar directly under them (dv-gfx.3).
+        # The bar never shares the text's line, so it reads as the status's
+        # own progress rather than a stray rule between the labels.
+        self._rows = QVBoxLayout()
+        self._rows.setContentsMargins(0, 0, 0, 0)
+        self._rows.setSpacing(2)
+        line = QHBoxLayout()
+        line.setContentsMargins(0, 0, 0, 0)
+        line.setSpacing(8)
+        line.addWidget(self._icon)
+        line.addWidget(self._title)
+        line.addWidget(self._detail, 1)
+        line.addWidget(self._action)
+        self._rows.addLayout(line)
+        self._rows.addWidget(self._bar)
+        self._bar.hide()
+        outer.addLayout(self._rows, 1)
         self.setStyleSheet(
             f"QFrame#StatusWidget {{ background: {SURFACE_SUBTLE}; "
             f"border: 1px solid {BORDER_SUBTLE}; border-radius: {RADIUS_LG}; }}"
@@ -2701,13 +2820,14 @@ class StatusWidget(QFrame):
         *,
         cancelling: bool = False,
     ) -> None:
-        """Spinner + progress + Cancel (or a muted spinner while cancelling)."""
+        """Spinner + a bar under the words + Cancel (or a muted spinner)."""
         self._paint_icon("loader-circle", ACCENT_PRIMARY)
         self._title.setText(title)
         self._detail.setText(detail)
         self._bar.setRange(0, 100 if fraction is not None else 0)
         if fraction is not None:
             self._bar.setValue(int(max(0.0, min(1.0, fraction)) * 100))
+        self._bar.show()
         self._set_action("x", t("detail.statuswidget.cancel"))
         self._action.setEnabled(not cancelling)
         self.show()
@@ -2719,6 +2839,7 @@ class StatusWidget(QFrame):
         self._detail.setText(detail)
         self._bar.setRange(0, 100)
         self._bar.setValue(100)
+        self._bar.show()
         self._set_action("x", t("detail.statuswidget.dismiss"))
         self._action.setEnabled(True)
         self.show()
@@ -2730,6 +2851,7 @@ class StatusWidget(QFrame):
         self._detail.setText(detail)
         self._bar.setRange(0, 100)
         self._bar.setValue(100)
+        self._bar.show()
         self._set_action("rotate-ccw", t("detail.statuswidget.retry"))
         self._action.setEnabled(True)
         self.show()
@@ -2739,6 +2861,7 @@ class StatusWidget(QFrame):
         self.hide()
         self._title.setText("")
         self._detail.setText("")
+        self._bar.hide()
 
 
 def fit_tree_height(tree: QTreeView, row_height: int = 40, floor: int = 80) -> None:

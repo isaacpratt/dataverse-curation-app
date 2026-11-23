@@ -70,16 +70,13 @@ class MetadataSection(DetailState):
     )
 
     def _build_metadata_card(self) -> QFrame:
-        card, body, _title, header_lay = make_card(t("detail.sections.metadata_check"))
+        card, body, _title, header_lay = make_card(t("detail.sections.dataset_checks"))
         add_info_tip(
             header_lay,
             t("detail.metadata_check.tip"),
-            name=t("detail.sections.metadata_check"),
+            name=t("detail.sections.dataset_checks"),
             group="Checks",
         )
-        # Rows read like the Auto-Checks card; its horizontal inset matches.
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(0)
         # x/xx summary lives in the header, right next to the title (the
         # old in-body summary line was removed).
         self._meta_summary = QLabel(t("detail.metadata_check.not_loaded"))
@@ -134,6 +131,9 @@ class MetadataSection(DetailState):
         self._meta_row_widgets: list[tuple[QFrame, int]] = []
         self._meta_body_lay.addWidget(self._meta_pending_row())
         body.addWidget(self._meta_body)
+        # The rail jumps to this label on the card's own header line; there
+        # is no second heading above the card (dv-gfx.5).
+        self._dataset_checks_heading = _title
         return card
 
     def _apply_meta_filter(self) -> None:
@@ -378,6 +378,12 @@ class MetadataSection(DetailState):
         self._meta_results = results
         # Apply the active filter; it rebuilds the rows (no inner scroll).
         self._apply_meta_filter()
+        # The rail's passed/warning pills include metadata completeness, and
+        # they must move as soon as it is known (dv-gfx.14).
+        try:
+            self._refresh_rail_counts()
+        except Exception:
+            pass
         # Keep the Response draft in sync (preserves manual edits).
         try:
             self._refresh_response()
@@ -625,13 +631,10 @@ class MetadataSection(DetailState):
             background=badge_bg,
             foreground=badge_fg,
             border=BORDER_SUBTLE,
+            chip=False,
         )
         badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(badge)
-        copy_text = f"{label} — {value_text}"
-        if requirement:
-            copy_text += f"  ({requirement})"
-        lay.addWidget(self._finding_overflow_button(copy_text))
 
         if requirement:
             frame.setToolTip(

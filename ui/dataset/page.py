@@ -46,7 +46,6 @@ from ui.theme import (
     FONT_BODY,
     FONT_CAPTION,
     SURFACE_CARD,
-    SURFACE_TINT,
     TEXT_MUTED,
     enable_list_copy,
     page_background_qss,
@@ -56,7 +55,6 @@ from ui.theme import (
 )
 from ui.widgets import (
     AppButton,
-    RingProgress,
     StatusWidget,
     WorkflowRail,
     make_action_button,
@@ -64,7 +62,6 @@ from ui.widgets import (
     make_body_label,
     make_multiline_input,
     make_page_heading,
-    make_progress_bar,
     make_section_heading,
 )
 from ui.workers import (
@@ -267,40 +264,51 @@ class DatasetDetailView(
         self._sidebar_user_collapsed: bool | None = None
         self._sidebar_collapsed = False
 
-        # ---- Page header, three bands (dv-cv3) --------------------------
-        # 1) top band: status chips on the left, actions on the right;
-        # 2) middle band: dataset identity on the left, compact status widget
-        #    on the right (it reserves no height while idle);
-        # 3) bottom band: the three-button navigation rail.
+        # ---- Page header (dv-cv3, reordered by dv-gfx.4) -----------------
+        # 1) the three-button section rail, directly under the app nav bar
+        #    and above everything else in the page;
+        # 2) the chips row (DOI link, status, curation label) with the
+        #    actions on its right, the sidebar toggle last;
+        # 3) the identity row: title + labelled date on the left, the
+        #    compact status widget on the right (it reserves no height
+        #    while idle).
+        #
+        # The rail is the first band because it is navigation: it reads as
+        # part of the app's own nav stack, and it stays put while the page
+        # scrolls under it.
+        self._rail = WorkflowRail(
+            nav_steps=[
+                ("dataset_checks", t("detail.rail.dataset_checks")),
+                ("file_checks", t("detail.rail.file_checks")),
+                ("response", t("detail.rail.response")),
+            ]
+        )
+        self._rail.stepClicked.connect(self._on_workflow_step)
+        top_lay.addWidget(self._rail)
+
         header_row = QHBoxLayout()
         header_row.setSpacing(16)
         badge_row = QHBoxLayout()
         badge_row.setSpacing(8)
         badge_row.setContentsMargins(0, 0, 0, 0)
         # Full persistent ID, never truncated (DOIs run well past 18 chars).
-        # Same sans face and badge metrics as the status pills beside it —
-        # the old mono face made the ID read like code instead of a chip.
-        self._id_badge = make_badge(
-            self._pid,
-            background=SURFACE_TINT,
-            foreground=TEXT_MUTED,
-            border=BORDER_SUBTLE,
-            font_size=FONT_CAPTION,
-            padding="2px 8px",
-        )
-        # The DOI chip IS the Dataverse link now: rich text with an external
-        # anchor, opened by the system browser. _update_header_link rewrites
-        # the href (and adds &version=DRAFT) on every metadata load.
-        self._id_badge.setTextFormat(Qt.TextFormat.RichText)
-        self._id_badge.setOpenExternalLinks(True)
+        # The DOI chip IS the Dataverse link: a chip-faced button with an
+        # external-link glyph to the left of the ID, opened by the system
+        # browser (dv-gfx.2). _update_header_link rewrites the URL (adding
+        # &version=DRAFT) on every metadata load.
+        self._id_badge = AppButton(self._pid, kind="chip", size="md")
         self._id_badge.setCursor(Qt.CursorShape.PointingHandCursor)
         self._id_badge.setToolTip(self._pid)
+        try:
+            from ui.icons import role_icon as _link_icon
+
+            self._id_badge.setIcon(_link_icon("open_external", size=14))
+        except Exception:
+            pass
         badge_row.addWidget(self._id_badge)
         self._status_pill = make_badge(t("detail.header.loading"), label="loading")
         self._status_pill.setObjectName("PillInReview")
         badge_row.addWidget(self._status_pill)
-        self._stage_pill = make_badge(t("detail.header.stage_submitted"), label="info")
-        badge_row.addWidget(self._stage_pill)
         self._curation_pill = make_badge("", label="draft")
         self._curation_pill.setObjectName("PillDraft")
         self._curation_pill.setVisible(False)
@@ -310,12 +318,12 @@ class DatasetDetailView(
         header_row.addLayout(badge_row, 1)
 
         # Actions that stay in the fixed header: the in-flight cancels, the
-        # curation record export, the sidebar toggle and the primary button.
+        # curation record export and the primary button, with the sidebar
+        # toggle LAST so the whole set reads left-to-right and the layout
+        # control sits at the far right (dv-gfx.2).
         # Download/Verify and Load/Reload metadata live in the File checks and
         # Dataset checks section headers below (user decision 2026-11-20); the
         # Export reports button is gone.
-        # One row, as in the mockup: Run Checks (primary) + Export record +
-        # sidebar toggle, with the in-flight cancels revealed in place.
         actions_row = QHBoxLayout()
         actions_row.setSpacing(6)
         # Mid-download Cancel — hidden until a worker starts.
@@ -337,21 +345,9 @@ class DatasetDetailView(
         except Exception:
             pass
         actions_row.addWidget(self._record_btn)
-        # Sidebar show/hide toggle — the one layout control for the sidebar;
-        # the rail is navigation, this is chrome (dv-6wb).
-        self._sidebar_toggle_btn = make_action_button("", kind="secondary", size="md")
-        try:
-            from ui.icons import role_icon as _side_icon
-
-            self._sidebar_toggle_btn.setIcon(_side_icon("sidebar_show"))
-        except Exception:
-            self._sidebar_toggle_btn.setText(t("detail.sidebar.collapse_a11y"))
-        self._sidebar_toggle_btn.setToolTip(t("detail.sidebar.collapse_tip"))
-        self._sidebar_toggle_btn.setAccessibleName(t("detail.sidebar.collapse_a11y"))
-        self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
-        actions_row.addWidget(self._sidebar_toggle_btn)
-        # Primary action, label follows the run state (dv-gs5).
-        self._check_btn = make_action_button(self._check_button_text(), kind="primary", size="lg")
+        # Primary action, label follows the run state (dv-gs5). Standard
+        # button size: it is the row's primary action, not a bigger one.
+        self._check_btn = make_action_button(self._check_button_text(), kind="primary", size="md")
         self._check_btn.setToolTip(t("detail.header.run_checks_tip"))
         self._check_btn.clicked.connect(self._on_run_checks)
         try:
@@ -372,6 +368,19 @@ class DatasetDetailView(
         self._checks_cancel_btn.clicked.connect(self._on_cancel_checks_click)
         self._checks_cancel_btn.setVisible(False)
         actions_row.addWidget(self._checks_cancel_btn)
+        # Sidebar show/hide toggle - the rightmost control in the row; the
+        # rail is navigation, this is chrome (dv-6wb).
+        self._sidebar_toggle_btn = make_action_button("", kind="secondary", size="md")
+        try:
+            from ui.icons import role_icon as _side_icon
+
+            self._sidebar_toggle_btn.setIcon(_side_icon("sidebar_show"))
+        except Exception:
+            self._sidebar_toggle_btn.setText(t("detail.sidebar.collapse_a11y"))
+        self._sidebar_toggle_btn.setToolTip(t("detail.sidebar.collapse_tip"))
+        self._sidebar_toggle_btn.setAccessibleName(t("detail.sidebar.collapse_a11y"))
+        self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
+        actions_row.addWidget(self._sidebar_toggle_btn)
         header_row.addLayout(actions_row, 0)
         top_lay.addLayout(header_row)
 
@@ -417,25 +426,17 @@ class DatasetDetailView(
         _status_lay.addWidget(self._status, 1)
         self._status_row.hide()
         top_lay.addWidget(self._status_row)
-        # The thin bar and the ring are kept as objects for the existing
-        # worker callbacks, but no longer occupy header rows — the compact
-        # StatusWidget above owns progress now (dv-cv3).
-        self._progress = make_progress_bar(height=6)
-        self._progress.setVisible(False)
-        self._ring = RingProgress(diameter=28)
-        self._ring.hide()
-
-        # Three-button navigation rail (dv-gs5): Dataset Checks, File Checks,
-        # Response. Fixed buttons — navigation only, never an action.
-        self._rail = WorkflowRail(
-            nav_steps=[
-                ("dataset_checks", t("detail.rail.dataset_checks")),
-                ("file_checks", t("detail.rail.file_checks")),
-                ("response", t("detail.rail.response")),
-            ]
-        )
-        self._rail.stepClicked.connect(self._on_workflow_step)
-        top_lay.addWidget(self._rail)
+        # Progress lives inside the StatusWidget now (dv-gfx.3): there is
+        # no parentless bar or ring left to pop up as a stray window.
+        self._checks_running = False
+        # The rail shades the view on screen (dv-gfx.4) and takes a shadow
+        # once the column scrolls under it (dv-gfx.15).
+        self._rail.set_active_step("dataset_checks")
+        self._rail_scrolled = False
+        try:
+            self._scroll.verticalScrollBar().valueChanged.connect(self._sync_rail_shadow)
+        except Exception:
+            pass
 
         # ---- Main column content (inside main_scroll canvas) ----
         # Two top-level sections (dv-yg6): Dataset checks (metadata
@@ -454,37 +455,45 @@ class DatasetDetailView(
         self._verdict_card = self._build_verdict_card()
         main_wrap.addWidget(self._verdict_card)
 
-        # Dataset checks section — Load/Reload Metadata lives in its header.
+        # Dataset checks section: Load/Reload Metadata sits on the card's
+        # own header line, and the metadata checklist and the automated
+        # checks share one card (dv-gfx.5, item 9).
         self._load_meta_btn = make_action_button(
             t("detail.header.load_metadata"), kind="secondary", size="sm"
         )
         self._load_meta_btn.setToolTip(t("detail.header.load_metadata_tip"))
         self._load_meta_btn.clicked.connect(self._on_load_metadata)
-        self._dataset_checks_heading, self._dataset_checks_header = _section_header_with_action(
-            t("detail.sections.dataset_checks"), self._load_meta_btn
-        )
-        main_wrap.addWidget(self._dataset_checks_header)
         self._meta_card = self._build_metadata_card()
+        _meta_lay = self._meta_card.layout()
+        _meta_bar = _meta_lay.itemAt(0) if _meta_lay is not None else None
+        _meta_bar_w = _meta_bar.widget() if _meta_bar is not None else None
+        _meta_header = _meta_bar_w.layout() if _meta_bar_w is not None else None
+        if isinstance(_meta_header, QHBoxLayout):
+            _meta_header.addWidget(self._load_meta_btn)
         main_wrap.addWidget(self._meta_card)
 
         self._auto_card = self._build_auto_checks_card()
-        main_wrap.addWidget(self._auto_card)
+        # The automated checks are a section of the card above, not a
+        # second card: same title bar, same filters row, one edge.
+        cast(QVBoxLayout, self._meta_card.layout()).insertWidget(1, self._auto_card)
 
-        # File checks section — Download Dataset / Verify Files lives here.
+        # File checks section — Download Dataset / Verify Files sits on the
+        # card's own header line, next to the title (dv-gfx.5, item 8).
         self._dl_btn = make_action_button(
-            t("detail.header.download_all"), kind="secondary", size="sm"
+            t("detail.header.download_all"), kind="secondary", size="md"
         )
         self._dl_btn.setToolTip(t("detail.header.download_dataset_tip"))
         self._dl_btn.clicked.connect(self._on_download)
-        self._file_checks_heading, self._file_checks_header = _section_header_with_action(
-            t("detail.sections.file_checks"), self._dl_btn
-        )
-        main_wrap.addWidget(self._file_checks_header)
         self._file_card = self._build_file_manifest_card()
+        _file_lay = self._file_card.layout()
+        _file_bar = _file_lay.itemAt(0) if _file_lay is not None else None
+        _file_bar_w = _file_bar.widget() if _file_bar is not None else None
+        _file_header = _file_bar_w.layout() if _file_bar_w is not None else None
+        if isinstance(_file_header, QHBoxLayout):
+            _file_header.addWidget(self._dl_btn)
         main_wrap.addWidget(self._file_card, 1)
 
-        self._version_card = self._build_version_card()
-        main_wrap.addWidget(self._version_card)
+        # The version card lives in the sidebar now (dv-gfx.6).
 
         # Raw metadata expandable (minimal)
         self._raw_btn = make_action_button(
@@ -526,6 +535,11 @@ class DatasetDetailView(
         # notices or an Open-folder fallback when it can't render.
         self._preview_card = self._build_preview_card()
         side_wrap.addWidget(self._preview_card)
+
+        # Version log between the preview and the dataset log (dv-gfx.6):
+        # the sidebar reads preview → versions → log, most context first.
+        self._version_card = self._build_version_card()
+        side_wrap.addWidget(self._version_card)
 
         self._dataset_log_card = self._build_dataset_log_card()
         # Stretch factor 1: the log owns the sidebar's free vertical space
@@ -640,6 +654,34 @@ class DatasetDetailView(
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._sync_sidebar()
+        self._sync_rail_shadow()
+
+    def _sync_rail_shadow(self) -> None:
+        """Shadow under the rail once the column has scrolled (dv-gfx.15).
+
+        The rail sits above the scrolling canvas, so it never moves; the
+        shadow is the cue that the page has slid under it.
+        """
+        rail = getattr(self, "_rail", None)
+        scroll = getattr(self, "_scroll", None)
+        if rail is None or scroll is None:
+            return
+        try:
+            scrolled = scroll.verticalScrollBar().value() > 0
+        except Exception:
+            scrolled = False
+        if scrolled == bool(getattr(self, "_rail_scrolled", False)):
+            return
+        self._rail_scrolled = scrolled
+        try:
+            from ui.theme import apply_elevation
+
+            if scrolled:
+                apply_elevation(rail, blur=12, dy=3, alpha=26)
+            else:
+                rail.setGraphicsEffect(None)
+        except Exception:
+            pass
 
     def _layout_for(self, name: str, header: QHeaderView) -> "TableLayout":
         """Return the persisted-layout controller for a header (one per header).

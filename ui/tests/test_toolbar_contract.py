@@ -129,8 +129,6 @@ def test_file_manifest_actions_live_on_the_tools_row(detail):
     card = detail._file_card
     tools = _tools_row(card, "FileManifestTools")
     for widget in (
-        detail._open_folder_btn,
-        detail._expand_btn,
         detail._file_filter,
         detail._scan_filter,
         detail._file_reset_btn,
@@ -138,34 +136,36 @@ def test_file_manifest_actions_live_on_the_tools_row(detail):
         assert _layout_holds(tools.layout(), widget), (
             f"{type(widget).__name__} must live on the File Manifest tools row"
         )
-    actions = _buttons_in(_title_row(card))
-    # Only the (i) info toolbutton may be a button in a title row.
-    assert [b.objectName() for b in actions] == ["InfoTip"], (
-        "File Manifest title row must hold no action buttons"
-    )
+    # One header line per card (dv-gfx.5, item 8): the actions sit beside
+    # the title instead of under it.
+    title_row = _title_row(card)
+    for widget in (
+        detail._open_folder_btn,
+        detail._expand_btn,
+        detail._dl_btn,
+    ):
+        assert _layout_holds(title_row, widget), (
+            f"{type(widget).__name__} belongs on the card's title row"
+        )
 
 
 def test_metadata_title_row_keeps_title_tip_and_summary(detail):
     card = detail._meta_card
     title_row = _title_row(card)
-    actions = _buttons_in(title_row)
-    assert [b.objectName() for b in actions] == ["InfoTip"]
     assert _layout_holds(title_row, detail._meta_summary), (
         "the completeness summary belongs in the metadata title row"
+    )
+    assert _layout_holds(title_row, detail._load_meta_btn), (
+        "Load metadata belongs on the card's title row"
     )
     tools = _tools_row(card, "MetadataCheckTools")
     for widget in (detail._meta_filter, detail._profile_combo):
         assert _layout_holds(tools.layout(), widget)
 
 
-def test_version_reset_lives_on_the_tools_row(detail):
+def test_version_reset_lives_on_the_title_row(detail):
     card = detail._version_card
-    tools = _tools_row(card, "VersionLogTools")
-    assert _layout_holds(tools.layout(), detail._version_reset_btn)
-    actions = _buttons_in(_title_row(card))
-    assert [b.objectName() for b in actions] == ["InfoTip"], (
-        "Version log title row must hold no action buttons"
-    )
+    assert _layout_holds(_title_row(card), detail._version_reset_btn)
 
 
 def test_auto_checks_title_row_keeps_the_summary(detail):

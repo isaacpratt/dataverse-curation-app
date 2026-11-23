@@ -11,10 +11,16 @@ class WorkflowSection(DetailState):
 
         The rail has exactly three buttons (dv-gs5): Dataset Checks, File
         Checks and Response. The first two jump the Review page to their
-        heading; Response switches to the Response page.
+        heading; Response switches to the Response page. Whichever view is
+        now on screen is shaded in the rail (dv-gfx.4).
         """
         try:
             self._log_action("nav_jump", key, {"step": str(key)})
+        except Exception:
+            pass
+        # Shade the step being navigated to (dv-gfx.4), whatever happens.
+        try:
+            self._rail.set_active_step(str(key))
         except Exception:
             pass
         try:

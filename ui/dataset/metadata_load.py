@@ -14,7 +14,7 @@ class MetadataLoadSection(DetailState):
 
     def _on_metadata_error(self, msg: str) -> None:
         self._meta_worker = None
-        self._progress.setVisible(False)
+        self._hide_ring()
         self._load_meta_btn.setEnabled(True)
         self._set_status("")
         headline, details = dialogs.describe_error(msg)
@@ -41,8 +41,8 @@ class MetadataLoadSection(DetailState):
                 self._meta_worker = None
         self._load_meta_btn.setEnabled(False)
         self._set_status(t("detail.status.loading_metadata"))
-        self._progress.setVisible(True)
-        self._progress.setRange(0, 0)
+        # Progress rides in the status widget (dv-gfx.3), not a stray bar.
+        self._show_status_running(t("detail.header.loading_metadata"))
         try:
             _collection = (
                 getattr(self._config.dataverse, "collection", "")
@@ -77,7 +77,7 @@ class MetadataLoadSection(DetailState):
         # reference made the next Load metadata click crash with
         # "Internal C++ object (MetadataWorker) already deleted".
         self._meta_worker = None
-        self._progress.setVisible(False)
+        self._hide_ring()
         self._load_meta_btn.setEnabled(True)
         self._inventory = inventory if isinstance(inventory, list) else []
         self._metadata = metadata

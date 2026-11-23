@@ -368,8 +368,9 @@ class ActionsSection(DetailState):
         guestbook_response = dlg.guestbook_response() if guestbook else None
         self._dl_btn.setEnabled(False)
         self._set_status(t("detail.download.downloading"))
-        self._progress.setVisible(True)
-        self._progress.setRange(0, 0)
+        # Progress belongs to the status widget now (dv-gfx.3): the widget
+        # starts on the first fraction signal, and the byte counter rides
+        # in its detail slot.
         self._dl_worker = DownloadWorker(
             self._client,
             self._config.app.workspace,
@@ -378,7 +379,9 @@ class ActionsSection(DetailState):
             guestbook_response=guestbook_response,
         )
         self._dl_worker.progress.connect(
-            lambda n: self._progress.setFormat(f"{n / 1024**2:.1f} MB")
+            lambda n: self._show_status_running(
+                t("detail.statuswidget.downloading"), f"{n / 1024**2:.1f} MB"
+            )
         )
         self._dl_worker.progressFraction.connect(self._on_ring_fraction)
         self._dl_worker.finished.connect(self._on_download_finished)
@@ -393,7 +396,6 @@ class ActionsSection(DetailState):
 
     def _on_download_finished(self, staged: Path) -> None:
         self._dl_worker = None
-        self._progress.setVisible(False)
         self._hide_ring()
         self._dl_btn.setEnabled(True)
         ok, problems, warnings = self._dl_mgr.verify(self._pid)
@@ -438,7 +440,6 @@ class ActionsSection(DetailState):
     def _on_download_error(self, msg: str) -> None:
         self._run_after_download = False
         self._dl_worker = None
-        self._progress.setVisible(False)
         self._hide_ring()
         self._dl_btn.setEnabled(True)
         self._set_status("")
@@ -466,7 +467,6 @@ class ActionsSection(DetailState):
         """Worker acknowledged the cancel: reset the action row quietly."""
         self._run_after_download = False
         self._dl_worker = None
-        self._progress.setVisible(False)
         self._hide_ring()
         self._dl_btn.setEnabled(True)
         self._dl_cancel_btn.setEnabled(True)

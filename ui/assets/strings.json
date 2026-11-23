@@ -767,7 +767,6 @@
       "show_raw_metadata": "Show all metadata fields",
       "hide_raw_metadata": "Hide raw metadata",
       "submitted_by": "Submitted by {depositor}",
-      "depositor_date": "  •  {date}",
       "open_link": "Open in Dataverse ↗",
       "open_link_draft": "Open in Dataverse — DRAFT ↗",
       "curation_label_set_by": "{label}\nSet {when} by {who}",
@@ -779,7 +778,9 @@
       "run_automatic_checks": "Run Automatic Checks",
       "run_file_checks": "Run File Checks",
       "rerun_automatic_checks": "Re-run Automatic Checks",
-      "stage_submitted": "Submitted for Review"
+      "date_created": "  ·  draft created {date}",
+      "date_published": "  ·  last published {date}",
+      "date_updated": "  ·  last updated {date}"
     },
     "sidebar": {
       "collapse_tip": "Hide the sidebar — the main column gets the whole width",
@@ -790,12 +791,10 @@
     "sections": {
       "dataset_checks": "Dataset checks",
       "auto_checks": "Automated checks",
-      "metadata_check": "Metadata check",
       "assessment_action": "Assessment Action",
       "dataset_log": "Dataset log",
       "version_log": "Version log",
-      "file_manifest": "File checks",
-      "file_checks": "File checks"
+      "file_manifest": "File checks"
     },
     "status": {
       "saved_metadata_refreshing": "Loaded saved metadata ({count} file(s)) — refreshing… ",
@@ -848,7 +847,6 @@
       "no_file_checks": "No file checks",
       "no_files_in_dataverse": "This dataset contains no files in Dataverse",
       "summary_counts": "{passed} passed · {warnings} warn · {errors} errors · {skipped} skipped",
-      "file_result_format": "{path} — {message}",
       "all_passed": "All checks passed — no findings.",
       "will_run": "{count} check(s) will run",
       "no_matching_checks": "No automated checks match the files in this dataset.",
@@ -945,10 +943,6 @@
       "summary_suffix": " · {resolved} of {total} findings resolved",
       "tree_note": "Disposition: {label}"
     },
-    "copy_finding": {
-      "action": "Copy this finding's text",
-      "copied": "Finding copied to clipboard"
-    },
     "dictionary": {
       "action": "Draft dictionary",
       "tip": "Write a CSV variable-dictionary draft (name, label, type) for a tabular file from its Dataverse variable metadata, for the depositor to complete.",
@@ -1033,7 +1027,6 @@
       "curation_label_assigned": "Curation label '{label}' assigned",
       "action_downloaded": "Dataset downloaded for curation",
       "action_checks_run": "Automated checks run",
-      "action_checks_saved": "Checks report auto-saved",
       "action_decision": "Decision recorded",
       "action_exported": "Curation report exported",
       "action_response_exported": "Response draft exported",
@@ -1042,8 +1035,6 @@
       "action_dictionary": "Variable-dictionary draft exported",
       "action_follow_up_opened": "Follow-up opened (revisions requested)",
       "action_follow_up_closed": "Follow-up closed",
-      "action_preview": "File preview opened",
-      "action_nav": "Jumped in the workflow rail",
       "action_record": "Curation record exported",
       "action_notes": ": {notes}",
       "unnamed_file": "(unnamed file)",

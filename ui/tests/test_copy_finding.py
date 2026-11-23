@@ -1,4 +1,10 @@
-"""Per-row overflow copy (dv-18z): the ellipsis glyph on each finding row copies it."""
+"""Per-row overflow copy was removed (dv-gfx.8).
+
+The old ellipsis button on a finding row opened a one-item copy menu. The
+revamp drops it: finding rows show their verdict, message, disposition and
+note affordances only, and copying a finding is no longer an offer the page
+makes.
+"""
 
 from pathlib import Path
 from typing import Any
@@ -24,29 +30,15 @@ def _metadata() -> dict[str, Any]:
                                 {
                                     "authorName": _fv("Ada Lovelace"),
                                     "authorAffiliation": _fv("Lab"),
-                                    "authorIdentifierScheme": _fv("ORCID"),
-                                    "authorIdentifier": _fv("0000-0002-1825-0097"),
                                 },
                             ],
                         },
                         {
                             "typeName": "datasetContact",
-                            "value": [
-                                {"datasetContactName": _fv("Ada Lovelace")},
-                            ],
-                        },
-                        {
-                            "typeName": "dsDescription",
-                            "value": [
-                                {
-                                    "dsDescriptionValue": _fv("Desc."),
-                                    "dsDescriptionDate": _fv("2026-01-01"),
-                                },
-                            ],
+                            "value": [{"datasetContactName": _fv("Ada Lovelace")}],
                         },
                         {"typeName": "subject", "value": ["Computer and Information Science"]},
                         {"typeName": "depositor", "value": "Ada Lovelace"},
-                        {"typeName": "dateOfDeposit", "value": "2026-01-02"},
                     ]
                 }
             },
@@ -74,78 +66,25 @@ def view(qapp, tmp_path):
     v.deleteLater()
 
 
-def _overflow_button(row: Any):
-    """Return the row's overflow button: the ellipsis glyph, named for the action."""
+def test_no_finding_row_offers_a_copy_button(view):
     from PySide6.QtWidgets import QPushButton
 
-    from ui.i18n import t
+    for btn in view.findChildren(QPushButton):
+        # The dataset's own DOI legitimately contains "FK2/COPY"; the
+        # affordance's name was "Copy this finding's text".
+        assert (btn.toolTip() or "") != "Copy this finding's text"
+        assert (btn.accessibleName() or "") != "Copy this finding's text"
 
-    wanted = t("detail.copy_finding.action")
+
+def test_the_overflow_button_helper_is_gone(view):
+    assert not hasattr(view, "_finding_overflow_button")
+    assert not hasattr(view, "_build_copy_menu")
+    assert not hasattr(view, "_show_copy_menu")
+
+
+def test_an_auto_check_row_has_no_overflow_button(view):
+    from PySide6.QtWidgets import QPushButton
+
+    row = view._auto_row("format.csv.pii", "PII found in sample", False, "warning")
     for btn in row.findChildren(QPushButton):
-        if btn.accessibleName() == wanted:
-            return btn
-    return None
-
-
-def _meta_row(view, label: str):
-    lay = view._meta_body_lay
-    for i in range(lay.count()):
-        widget = lay.itemAt(i).widget()
-        if widget is not None and widget.property("meta_field") == label:
-            return widget
-    raise AssertionError(f"row {label!r} not found")
-
-
-def test_meta_row_overflow_button_invokes_copy_menu(view):
-    """Clicking the row's ellipsis must ask the view to show the menu."""
-    opened = []
-    view._show_copy_menu = lambda btn, text: opened.append((btn, text))
-
-    row = _meta_row(view, "Title")
-    btn = _overflow_button(row)
-    assert btn is not None, "the row must offer an overflow copy action"
-
-    btn.click()
-    assert len(opened) == 1
-    text = opened[0][1]
-    assert "Title" in text
-    assert "A study" in text
-
-
-def test_meta_row_copy_menu_copies_single_line(view):
-    from PySide6.QtWidgets import QApplication
-
-    menu = view._build_copy_menu("Title — A study  (McMaster — Required)")
-    actions = menu.actions()
-    assert len(actions) == 1
-    actions[0].trigger()
-    assert QApplication.clipboard().text() == "Title — A study  (McMaster — Required)"
-
-
-def test_auto_row_overflow_button_invokes_copy_menu(view):
-    row = view._auto_row(
-        "format.csv.pii",
-        "PII found in sample",
-        False,
-        "warning",
-    )
-    btn = _overflow_button(row)
-    assert btn is not None, "an auto-check row must offer an overflow copy action"
-
-    opened = []
-    view._show_copy_menu = lambda b, text: opened.append((b, text))
-    btn.click()
-    assert len(opened) == 1
-    text = opened[0][1]
-    assert "format.csv.pii" in text
-    assert "PII found in sample" in text
-
-
-def test_auto_row_copy_menu_copies_single_line(view):
-    from PySide6.QtWidgets import QApplication
-
-    menu = view._build_copy_menu("format.csv.pii — PII found in sample")
-    actions = menu.actions()
-    assert len(actions) == 1
-    actions[0].trigger()
-    assert QApplication.clipboard().text() == "format.csv.pii — PII found in sample"
+        assert (btn.toolTip() or "") != "Copy this finding's text"

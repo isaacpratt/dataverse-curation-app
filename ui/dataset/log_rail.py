@@ -31,7 +31,7 @@ class LogRail(DetailState):
             name=t("detail.sections.dataset_log"),
             group="Queue",
         )
-        self._dataset_log = make_list()
+        self._dataset_log = make_list(flush=True)
         # Tall timeline: minimum keeps it readable on short screens, the
         # higher maximum + Expanding policy lets it claim the sidebar's
         # free space (the card carries stretch 1 in the sidebar layout).
@@ -43,6 +43,10 @@ class LogRail(DetailState):
         self._dataset_log.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self._dataset_log.setWordWrap(True)
         self._dataset_log.setToolTip(t("detail.dataset_log.tip"))
+        # Edge to edge (dv-gfx.17): the list is the card's content, not a
+        # box inside a box, so the card's own padding would inset it twice.
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
         body.addWidget(self._dataset_log)
         return card
 
@@ -269,7 +273,6 @@ class LogRail(DetailState):
         _local_text = {
             "downloaded": t("detail.dataset_log.action_downloaded"),
             "checks_run": t("detail.dataset_log.action_checks_run"),
-            "checks_saved": t("detail.dataset_log.action_checks_saved"),
             "decision": t("detail.dataset_log.action_decision"),
             "exported": t("detail.dataset_log.action_exported"),
             "response_exported": t("detail.dataset_log.action_response_exported"),
@@ -279,8 +282,6 @@ class LogRail(DetailState):
             "dictionary_drafted": t("detail.dataset_log.action_dictionary"),
             "follow_up_opened": t("detail.dataset_log.action_follow_up_opened"),
             "follow_up_closed": t("detail.dataset_log.action_follow_up_closed"),
-            "preview_rendered": t("detail.dataset_log.action_preview"),
-            "nav_jump": t("detail.dataset_log.action_nav"),
         }
         for a in actions:
             act = a.get("action") or ""
