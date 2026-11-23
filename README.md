@@ -76,28 +76,31 @@ Copy `config.example.json` to `config.json` and set your instance URL and API to
 
 The documentation is built with [Zensical](https://zensical.org/) from the
 Markdown tree in `docs/` and published to GitHub Pages at
-**https://isaacpratt.github.io/dataverse-curation-app/**. The hand-authored
-HTML pages remain in `docs/html/` as a frozen pre-migration reference until
-the planned Diátaxis rewrite; the published site is the source of truth.
+**https://isaacpratt.github.io/dataverse-curation-app/**. It follows
+[Diátaxis](https://diataxis.fr) — one page, one purpose — with page structures
+from [The Good Docs Project](https://thegooddocsproject.dev/). Documentation is
+code: the Markdown is the only source of truth, reviewed in pull requests and
+verified by automated checks.
 
-- [User guide](https://isaacpratt.github.io/dataverse-curation-app/user-guide/) — the dashboard, dataset detail, metadata check, response draft and log.
-- [Development guide](https://isaacpratt.github.io/dataverse-curation-app/development/) — setup, tests, adding checks, UI conventions, packaging and release.
-- [Architecture](https://isaacpratt.github.io/dataverse-curation-app/architecture/) — components, threading, storage, the UI/table contracts, decisions.
-- [Checks reference](https://isaacpratt.github.io/dataverse-curation-app/checks-reference/) — what each check examines and what its findings mean.
-- [Engine port matrix](https://isaacpratt.github.io/dataverse-curation-app/engine-port/) — R-to-Python parity and go/no-go criteria.
-- [Report contract](https://isaacpratt.github.io/dataverse-curation-app/report-contract/) — the JSON report shared by the engine and the GUI.
-- [Dataverse integration](https://isaacpratt.github.io/dataverse-curation-app/dataverse-integration/) — endpoints, auth, discovery and downloads.
-- [Documentation index](https://isaacpratt.github.io/dataverse-curation-app/).
+- [Start here](https://isaacpratt.github.io/dataverse-curation-app/) — the site home and quadrant map.
+- [Tutorial: your first review](https://isaacpratt.github.io/dataverse-curation-app/tutorials/first-review/) — learn by doing, end to end.
+- [How-to guides](https://isaacpratt.github.io/dataverse-curation-app/how-to/install/) — install, configure, download, respond, run headless, add a check, build and release.
+- [Reference](https://isaacpratt.github.io/dataverse-curation-app/reference/checks/) — checks, report contract, configuration, CLI, API, glossary.
+- [Explanation](https://isaacpratt.github.io/dataverse-curation-app/explanation/architecture/) — architecture, discovery design, entry correctness, the R-to-Python port and UI conventions.
+- [Troubleshooting](https://isaacpratt.github.io/dataverse-curation-app/troubleshooting/) — symptoms and fixes.
+- [Documentation style guide](https://isaacpratt.github.io/dataverse-curation-app/style-guide/) — the rules every docs pull request follows.
 
-Build or preview locally with `uv run poe docs` or `uv run poe docs-serve`.
+Build or preview locally with `uv run poe docs` or `uv run poe docs-serve`;
+run the full docs gate with `uv run poe docs-check`. Contributors: see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Contributing, support and security
 
-The plan and open work live in [beads](https://github.com/gastownhall/beads): `bd ready` for what is unblocked, `bd list` for the full queue, `bd show <id>` for detail. Issues and support requests belong in the repository's issue tracker. **Security:** see [SECURITY.md](SECURITY.md) for the signing policy, checksum verification and how to report a vulnerability — please do not open a public issue for a security problem.
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the quality gates and the documentation rules. The plan and open work live in [beads](https://github.com/gastownhall/beads): `bd ready` for what is unblocked, `bd list` for the full queue, `bd show <id>` for detail. Issues and support requests belong in the repository's issue tracker. **Security:** see [SECURITY.md](SECURITY.md) for the signing policy, checksum verification and how to report a vulnerability — please do not open a public issue for a security problem.
 
 ## Roadmap
 
-Remaining work is tracked in beads (`bd ready` / `bd list`); completed decisions are recorded in [Architecture](https://isaacpratt.github.io/dataverse-curation-app/architecture/) and `docs/adr/`.
+Remaining work is tracked in beads (`bd ready` / `bd list`); completed decisions are recorded in [Architecture](https://isaacpratt.github.io/dataverse-curation-app/explanation/architecture/) and `docs/adr/`.
 
 ## Context
 

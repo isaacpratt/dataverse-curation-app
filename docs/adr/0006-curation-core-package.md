@@ -90,6 +90,6 @@ Three constraints shaped the answer:
 - `pyproject.toml` — import-linter contracts, mypy scope, coverage
   source.
 - `curation/__init__.py` — the package docstring and the layer map.
-- `docs/html/architecture.html` — component map.
-- `docs/html/development.html` — the layout table.
+- `docs/explanation/architecture.md` — component map.
+- `docs/reference/project-layout.md` — the layout table.
 - ADR 0002 — no `src/` layout; ADR 0004 — the app is not a package.

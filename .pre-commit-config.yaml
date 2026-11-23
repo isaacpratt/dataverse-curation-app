@@ -77,3 +77,11 @@ repos:
         entry: uv run --group dev poe format-check
         language: system
         pass_filenames: false
+      # Markdown lint for the docs-as-code gate. Uses the lockfile's pymarkdown
+      # (no Node toolchain); codespell above covers prose spelling.
+      - id: markdown-lint
+        name: pymarkdown docs lint
+        entry: uv run --group dev pymarkdown --strict-config --config .pymarkdown.json scan -r
+        language: system
+        types: [markdown]
+        files: "^(docs/.*\\.md|CONTRIBUTING\\.md|README\\.md)$"

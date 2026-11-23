@@ -54,5 +54,5 @@ must run identically from `cmd.exe`, PowerShell and bash.
 
 - Beads: `dv-hcg` (audit), `dv-hcg.4` (CI hardening), `dv-hcg.6` (poe tasks),
   `dv-hcg.8` (config.json guard).
-- `docs/html/development.html` — setup, quality gates, adding a dependency.
+- `docs/reference/project-layout.md` — setup, quality gates, adding a dependency.
 - `pyproject.toml` — the tool configuration itself.

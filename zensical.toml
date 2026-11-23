@@ -1,9 +1,8 @@
 # Zensical configuration for the Dataverse Docent documentation.
 # Native Zensical format (not mkdocs.yml compatibility mode) — decision
-#dv-l1f, 2026-11-20. The Markdown tree mirrors the retired HTML page names;
-# the two frozen proposal snapshots are deliberately out of the nav. The docs
-# set is scheduled for a Diátaxis rewrite (dv-uq6), so this is a faithful build
-# of today's content rather than a new information architecture.
+# dv-l1f, 2026-11-20; information architecture rewritten to Diátaxis in dv-uq6.
+# The nav is grouped by quadrant, and every page declares its page_type and
+# TGDP template in YAML front matter (checked by tools/tests/test_docs_consistency.py).
 
 [project]
 site_name = "Dataverse Docent"
@@ -13,28 +12,55 @@ repo_url = "https://github.com/isaacpratt/dataverse-curation-app"
 repo_name = "isaacpratt/dataverse-curation-app"
 docs_dir = "docs"
 site_dir = "site"
+# Historical design records and reports are kept in the repo but not published.
 exclude_docs = """
-/html/
 /reports/
 /adr/
 """
-# Frozen proposal snapshots: built and searchable, but not in the navigation.
+# Frozen proposal snapshots: built and searchable, but deliberately out of the nav.
 not_in_nav = """
 /proposals/
 """
 
-# Explicit nav mirrors the 12 retired page names (10 live + 2 historical).
+# One page, one quadrant. Home, troubleshooting, release notes and the style
+# guide are TGDP/governance page types rather than quadrants; they sit after
+# the four quadrants so the nav reads as a Diátaxis map.
 nav = [
   { "Home" = "index.md" },
-  { "Architecture" = "architecture.md" },
-  { "Checks reference" = "checks-reference.md" },
-  { "Entry correctness" = "entry-correctness.md" },
-  { "Dataverse integration" = "dataverse-integration.md" },
-  { "Report contract" = "report-contract.md" },
-  { "Engine port" = "engine-port.md" },
-  { "User guide" = "user-guide.md" },
-  { "Development" = "development.md" },
-  { "Proposals" = "proposals.md" },
+  { "Tutorials" = [
+      { "Your first review" = "tutorials/first-review.md" },
+  ]},
+  { "How-to guides" = [
+      { "Install the app" = "how-to/install.md" },
+      { "Configure an instance" = "how-to/configure-instance.md" },
+      { "Run checks on a dataset" = "how-to/run-checks.md" },
+      { "Respond and export" = "how-to/respond-and-export.md" },
+      { "Run headless" = "how-to/run-headless.md" },
+      { "Add a check" = "how-to/add-a-check.md" },
+      { "Run the gates" = "how-to/run-the-gates.md" },
+      { "Package and release" = "how-to/package-and-release.md" },
+  ]},
+  { "Reference" = [
+      { "Checks" = "reference/checks.md" },
+      { "Report contract" = "reference/report-contract.md" },
+      { "Configuration" = "reference/configuration.md" },
+      { "Dataverse API" = "reference/dataverse-api.md" },
+      { "CLI" = "reference/cli.md" },
+      { "Entry checks" = "reference/entry-checks.md" },
+      { "Project layout" = "reference/project-layout.md" },
+      { "Glossary" = "reference/glossary.md" },
+  ]},
+  { "Explanation" = [
+      { "Architecture" = "explanation/architecture.md" },
+      { "Discovery flow" = "explanation/discovery-flow.md" },
+      { "Entry correctness" = "explanation/entry-correctness.md" },
+      { "Engine port" = "explanation/engine-port.md" },
+      { "UI conventions" = "explanation/ui-conventions.md" },
+      { "Design records" = "explanation/design-records/index.md" },
+  ]},
+  { "Troubleshooting" = "troubleshooting.md" },
+  { "Release notes" = "release-notes.md" },
+  { "Documentation style guide" = "style-guide.md" },
 ]
 
 extra_css = ["assets/extra.css"]

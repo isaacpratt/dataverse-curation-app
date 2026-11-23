@@ -4,7 +4,7 @@ Owns the HTTP session, pagination/discovery plumbing and error handling.
 Payload parsing lives in client.parsers; identity/labels/metadatablock
 caching in client.caches; download/guestbook/streaming orchestration in
 client.downloads (mixed into DataverseClient below). See
-docs/html/dataverse-integration.html for endpoints and auth.
+docs/reference/dataverse-api.md for endpoints and auth.
 """
 
 import time

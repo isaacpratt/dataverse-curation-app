@@ -5,7 +5,7 @@ Copy this structure into every new `bd create --description`. A bead is the unit
 ## Before you create
 
 1. **Dedup check:** `bd list --json`, then `bd search "<keywords>"`. If a near-duplicate exists, link to it (`discovered-from:<id>`) instead of creating a new one.
-2. **All-open check:** confirm the item is still planned and not already closed/shipped. Closed items live in `docs/html/proposals.html` (Shipped record) — never re-create them.
+2. **All-open check:** confirm the item is still planned and not already closed/shipped. Closed items live in beads and the changelog — never re-create them.
 3. **Type + priority:** `bug` (broken), `feature` (new capability), `task` (tests/docs/refactor), `epic` (large feature with children), `chore` (maintenance). Priority `0` critical → `4` backlog. Default `2`.
 4. **Dependencies:** an epic's children use `bd dep add <child> <epic>` (parent) and `bd dep add <later> <earlier>` (ordering) so `bv` shows the work order. Discovered follow-ups use `--deps discovered-from:<parent-id>`.
 
@@ -31,7 +31,7 @@ Copy this structure into every new `bd create --description`. A bead is the unit
 - **Future-self check:** could a new agent pick this up in 6 months with only the bead plus the repo? If not, add the missing context.
 - **One bead, one outcome.** If it needs sequencing, split it and order with `bd dep add`.
 - **Don't close the loop in the title.** Titles state the work (`Fix X`), not the result (`X fixed`).
-- **Docs are part of the bead.** If it changes behavior, the hooks include the docs page that documents it (`docs/html/*.html`, `README.md`, `AGENTS.md`).
-- **Decision records:** if the bead settles a repository-level question (toolchain, layout, packaging, security), write an ADR in `docs/adr/` with the format in `docs/adr/README.md` and link it from the bead's Hooks. UI-level choices go in the decision log in `docs/html/architecture.html` instead.
+- **Docs are part of the bead.** If it changes behavior, the hooks include the docs page that documents it (`docs/reference/`, `docs/how-to/`, `docs/tutorials/`, `docs/explanation/`, `README.md`, `AGENTS.md`); follow `docs/style-guide.md`.
+- **Decision records:** if the bead settles a repository-level question (toolchain, layout, packaging, security), write an ADR in `docs/adr/` with the format in `docs/adr/README.md` and link it from the bead's Hooks. UI-level choices go in the decision log in `docs/explanation/architecture.md` instead.
 - **Changelog:** if the change is user-visible, add a bullet to CHANGELOG.md's Unreleased section in the same commit.
 - After creating, run `bd show <id>` and read it back. Fix anything you have to make up from memory.

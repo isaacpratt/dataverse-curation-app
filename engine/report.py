@@ -1,7 +1,7 @@
 """Structured curation report for a dataset.
 
 A DatasetReport holds dataset-level check findings plus per-file entries with
-their own check results. Serializes to JSON - see docs/html/report-contract.html.
+their own check results. Serializes to JSON - see docs/reference/report-contract.md.
 """
 
 import json
