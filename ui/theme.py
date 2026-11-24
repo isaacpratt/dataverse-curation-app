@@ -11,6 +11,7 @@ theme - so switching theme is a table swap, not a re-skin.
 
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
+import os
 
 if TYPE_CHECKING:
     from PySide6.QtCore import QEvent, QObject
@@ -605,6 +606,68 @@ CONTRAST_PAIRS: tuple[tuple[str, str, str, str, float], ...] = (
     ("focus ring on a card", ACCENT_FOCUS_RING, SURFACE_CARD, "graphic", 3.0),
 )
 
+# Dark theme contrast pairs: same semantic pairings, dark role table.
+# The pairings are identical in structure; the dark role table provides
+# the dark colours. The test checks both tables so a dark palette that
+# fails legibility fails the build exactly like a light one.
+CONTRAST_PAIRS_DARK: tuple[tuple[str, str, str, str, float], ...] = (
+    # label, foreground, background, kind, minimum ratio
+    ("body text on a card", "TEXT_PRIMARY", "SURFACE_CARD", "text", 4.5),
+    ("body text on the page", "TEXT_PRIMARY", "SURFACE_PAGE", "text", 4.5),
+    ("muted text on a card", "TEXT_MUTED", "SURFACE_CARD", "text", 4.5),
+    ("muted text on the page", "TEXT_MUTED", "SURFACE_PAGE", "text", 4.5),
+    ("muted text on a tinted panel", "TEXT_MUTED", "SURFACE_TINT", "text", 4.5),
+    ("subtle hint text on a card", "TEXT_SUBTLE", "SURFACE_CARD", "text", 4.5),
+    ("text on the brand fill", "TEXT_ON_ACCENT", "ACCENT_PRIMARY", "text", 4.5),
+    ("text on a tint", "TEXT_ON_TINT", "SURFACE_TINT", "text", 4.5),
+    ("error text on a card", "TEXT_DANGER", "SURFACE_CARD", "text", 4.5),
+    ("error text on the error surface", "STATE_ERROR_TEXT", "STATE_ERROR_SURFACE", "text", 4.5),
+    ("success text on a card", "TEXT_SUCCESS", "SURFACE_CARD", "text", 4.5),
+    ("warning text on a card", "TEXT_WARNING", "SURFACE_CARD", "text", 4.5),
+    ("brand text on a card", "ACCENT_PRIMARY", "SURFACE_CARD", "text", 4.5),
+    ("brand text on the page", "ACCENT_PRIMARY", "SURFACE_PAGE", "text", 4.5),
+    ("muted text on a raised panel", "TEXT_MUTED", "SURFACE_RAISED", "text", 4.5),
+    ("subtle hint text on the page", "TEXT_SUBTLE", "SURFACE_PAGE", "text", 4.5),
+    ("subtle hint text on a card", "TEXT_SUBTLE", "SURFACE_CARD", "text", 4.5),
+    ("subtle hint text on a raised panel", "TEXT_SUBTLE", "SURFACE_RAISED", "text", 4.5),
+    ("text on the secondary fill", "TEXT_ON_SECONDARY", "ACCENT_SECONDARY", "text", 4.5),
+    ("text on the error fill", "TEXT_ON_ERROR", "STATE_ERROR_GRAPHIC", "text", 4.5),
+    ("amber text on a card", "TEXT_AMBER", "SURFACE_CARD", "text", 4.5),
+    ("blocked step text on a card", "TEXT_BLOCKED", "SURFACE_CARD", "text", 4.5),
+    ("blocked step text on the page", "TEXT_BLOCKED", "SURFACE_PAGE", "text", 4.5),
+    ("disabled text on a card", "TEXT_DISABLED", "SURFACE_CARD", "disabled", 3.0),
+    ("disabled text on the page", "TEXT_DISABLED", "SURFACE_PAGE", "disabled", 3.0),
+    ("disabled primary label", "TEXT_PRIMARY", "ACCENT_PRIMARY_DISABLED", "disabled", 3.0),
+    ("success icon on a card", "STATE_SUCCESS_GRAPHIC", "SURFACE_CARD", "graphic", 3.0),
+    ("warning icon on a card", "STATE_WARNING_GRAPHIC", "SURFACE_CARD", "graphic", 3.0),
+    ("error icon on a card", "STATE_ERROR_GRAPHIC", "SURFACE_CARD", "graphic", 3.0),
+    ("brand icon on a card", "ACCENT_PRIMARY", "SURFACE_CARD", "graphic", 3.0),
+    ("tertiary icon on a card", "ACCENT_TERTIARY", "SURFACE_CARD", "graphic", 3.0),
+    ("control edge on a card", "BORDER_CONTROL", "SURFACE_CARD", "graphic", 3.0),
+    ("control edge on the page", "BORDER_CONTROL", "SURFACE_PAGE", "graphic", 3.0),
+    ("placeholder text on a field", "TEXT_PLACEHOLDER", "SURFACE_CARD", "text", 4.5),
+    ("focus ring on a card", "ACCENT_FOCUS_RING", "SURFACE_CARD", "graphic", 3.0),
+)
+
+BADGE_CONTRAST_PAIRS_DARK: tuple[tuple[str, str, str], ...] = (
+    ("neutral badge", "BADGE_NEUTRAL_TEXT", "BADGE_NEUTRAL_BG"),
+    ("blue badge", "BADGE_BLUE_TEXT", "BADGE_BLUE_BG"),
+    ("green badge", "BADGE_GREEN_TEXT", "BADGE_GREEN_BG"),
+    ("red badge", "BADGE_RED_TEXT", "BADGE_RED_BG"),
+    ("soft red badge", "BADGE_RED_SOFT_TEXT", "BADGE_RED_SOFT_BG"),
+    ("grey badge", "BADGE_GREY_TEXT", "BADGE_GREY_BG"),
+    ("soft green badge", "BADGE_GREEN_SOFT_TEXT", "BADGE_GREEN_SOFT_BG"),
+    ("indigo badge", "BADGE_INDIGO_TEXT", "BADGE_INDIGO_BG"),
+    ("orange badge", "BADGE_ORANGE_TEXT", "BADGE_ORANGE_BG"),
+    ("violet badge", "BADGE_VIOLET_TEXT", "BADGE_VIOLET_BG"),
+    ("amber badge", "BADGE_AMBER_TEXT", "BADGE_AMBER_BG"),
+    ("teal badge", "BADGE_TEAL_TEXT", "BADGE_TEAL_BG"),
+    ("pink badge", "BADGE_PINK_TEXT", "BADGE_PINK_BG"),
+    ("lime badge", "BADGE_LIME_TEXT", "BADGE_LIME_BG"),
+    ("sky badge", "BADGE_SKY_TEXT", "BADGE_SKY_BG"),
+    ("sand badge", "BADGE_SAND_TEXT", "BADGE_SAND_BG"),
+)
+
 
 def _relative_luminance(hex_color: str) -> float:
     """WCAG 2.1 relative luminance of a #rrggbb colour."""
@@ -647,8 +710,29 @@ BADGE_CONTRAST_PAIRS: tuple[tuple[str, str, str], ...] = (
 )
 
 
-def asset_path(name: str) -> str:
-    """Absolute path to a bundled ui/asset (works frozen via sys._MEIPASS)."""
+def asset_path(name: str, theme: str | None = None) -> str:
+    """Absolute path to a bundled ui/asset (works frozen via sys._MEIPASS).
+
+    If theme is provided and a dark variant exists (name with -dark suffix),
+    it will be preferred when theme="dark".
+    """
+    import sys
+    from pathlib import Path
+
+    # If dark theme requested, try dark variant first
+    if theme == "dark":
+        base, ext = os.path.splitext(name)
+        dark_name = f"{base}-dark{ext}"
+        # Try dark variant first
+        result = _find_asset(dark_name)
+        if result:
+            return result
+
+    return _find_asset(name)
+
+
+def _find_asset(name: str) -> str:
+    """Internal helper to find an asset by name."""
     import sys
     from pathlib import Path
 
@@ -667,23 +751,25 @@ def asset_path(name: str) -> str:
     return ""
 
 
-def app_icon_path() -> str:
+def app_icon_path(theme: str | None = None) -> str:
     """Absolute path to the app icon (ui/assets/docent.png).
 
     The About page keeps this mark. asset_path resolves the bundled
     copy both in dev and frozen (the exe ships --add-data "ui/assets;ui/assets").
+    If theme is provided, a dark variant will be used when available.
     """
-    return asset_path("docent.png")
+    return asset_path("docent.png", theme)
 
 
-def mark_icon_path() -> str:
+def mark_icon_path(theme: str | None = None) -> str:
     """Absolute path to the 16x16.png mark (ui/assets/16x16.png).
 
     The dashboard status pill's mark and the window icon the Windows
     taskbar draws use this; the About page keeps docent.png
     (app_icon_path). Resolved by asset_path (dev + frozen).
+    If theme is provided, a dark variant will be used when available.
     """
-    return asset_path("16x16.png")
+    return asset_path("16x16.png", theme)
 
 
 def _chevron_qss() -> str:
@@ -927,7 +1013,7 @@ def button_qss(
     return (
         f"{sel} {{ background: transparent; color: {ON_SURFACE_VARIANT}; "
         f"border: none; border-radius: {RADIUS_LG}; padding: 6px 12px; "
-        f"font-weight: 500; font-size: {FONT_SMALL}px; }} "
+        f"font-weight: 600; font-size: {FONT_SMALL}px; }} "
         f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
         f"color: {ON_SURFACE}; }} "
         f"{sel}:hover {{ background: {SURFACE_CONTAINER_HIGH}; color: {ON_SURFACE}; }}"
@@ -1055,8 +1141,27 @@ def workflow_step_qss(state: str = "todo", *, active: bool = False) -> str:
 
     ``active=True`` is the section rail's "current view" face (dv-gfx.4):
     the step on screen carries a shaded block, not only coloured text.
+
+    ``state="nav"`` is the dataset page's section tab face (dv-3d0.2):
+    fixed 36px height, left-aligned, no expanding, hairline separators.
     """
     hover = f"QPushButton#WorkflowStep:hover {{ background: {SURFACE_TINT}; border-radius: 8px; }}"
+    if state == "nav":
+        # Tab face: 36px fixed height, padding for text, no border by default
+        # Active tab gets a shaded background
+        if active:
+            return (
+                f"QPushButton#WorkflowStep {{ color: {ACCENT_PRIMARY}; font-size: 12px; "
+                f"font-weight: 700; background: {ACCENT_TINT}; "
+                f"border: none; border-radius: {RADIUS_MD}; "
+                f"padding: 0 12px; min-width: 0; height: 36px; }} "
+                f"QPushButton#WorkflowStep:hover {{ background: {ACCENT_TINT}; }}"
+            )
+        return (
+            f"QPushButton#WorkflowStep {{ color: {TEXT_MUTED}; font-size: 12px; "
+            f"font-weight: 500; background: transparent; border: none; "
+            f"padding: 0 12px; min-width: 0; height: 36px; }} {hover}"
+        )
     if active:
         return (
             f"QPushButton#WorkflowStep {{ color: {ACCENT_PRIMARY}; font-size: 12px; "
@@ -1099,11 +1204,12 @@ def workflow_rail_qss() -> str:
 
     The rail sits directly under the app nav bar and above the header
     chips, so it takes the nav bar's own separator rule and reads as part
-    of that stack rather than as another card.
+    of that stack rather than as another card. In nav mode (dv-3d0.2) the
+    rail is a row of tabs with a bottom hairline spanning the page width.
     """
     return (
         f"QWidget#WorkflowRail {{ background: {SURFACE_PAGE}; "
-        f"border-bottom: 1px solid {OUTLINE_VARIANT}; }}"
+        f"border-bottom: 1px solid {BORDER_SUBTLE}; }}"
     )
 
 

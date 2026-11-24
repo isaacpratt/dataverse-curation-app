@@ -34,10 +34,18 @@ updates:
     open-pull-requests-limit: 6
 
   # The .NET SDK used only to run vpk at pack time. global.json pins it so
-  # Dependabot can raise it instead of the floor drifting silently.
+  # Dependabot can raise it within the 10 LTS line instead of the floor
+  # drifting silently. Major bumps are ignored on purpose: vpk 1.2.161 has no
+  # net11.0 build (verified in dv-bjp; recorded in docs/architecture.md), so
+  # .NET 11 alone cannot run the pack step - it would need
+  # DOTNET_ROLL_FORWARD=Major. When a vpk version with a net11.0 build ships,
+  # remove this ignore and move the SDK together with the vpk pin.
   - package-ecosystem: "dotnet-sdk"
     directory: "/"
     schedule:
       interval: weekly
       day: monday
     open-pull-requests-limit: 4
+    ignore:
+      - dependency-name: "dotnet-sdk"
+        update-types: ["version-update:semver-major"]

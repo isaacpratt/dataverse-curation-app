@@ -327,7 +327,7 @@ def test_unchecked_filter_shows_ghost_rows(detail):
             "name": "title",
         }
     ]
-    detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("unchecked"))
+    detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("skipped"))
     rows = _rows(detail)
     assert [w.property("meta_field") for w in rows] == ["Title"]
     assert "Not checked" in _labels_in(rows[0])

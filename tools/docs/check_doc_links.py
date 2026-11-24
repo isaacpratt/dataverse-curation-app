@@ -1,75 +1,105 @@
-"""Offline link/anchor checker for docs/html/*.html.
+"""Offline link checker for the Markdown documentation tree.
 
-No network: only local files and in-page anchors are verified. External
-URLs, mailto/tel/data/javascript are skipped. Exit 1 when a broken
-internal link or missing anchor is found.
+Documentation as code means a broken link fails the build. Zensical's strict
+build already catches broken links in published pages; this checker is the
+offline, dependency-free companion used by ``poe docs-links``. It resolves
+relative ``.md`` links and heading fragments without touching the network.
+External URLs, mailto/tel/data links and code blocks are skipped.
+
+Exit 0 when every internal link resolves, 1 when one is broken, 2 on a usage
+error (the docs tree is missing).
 """
 
 from __future__ import annotations
 
 import re
 import sys
-from html.parser import HTMLParser
 from pathlib import Path
 
-DOCS = Path(__file__).resolve().parents[2] / "docs" / "html"
-ATTRS = ("href", "src")
+DOCS = Path(__file__).resolve().parents[2] / "docs"
 SKIP = re.compile(r"^(?:https?://|mailto:|tel:|data:|javascript:|about:)", re.IGNORECASE)
-ID_RE = re.compile(r"""\bid\s*=\s*[\"']([^\"']+)[\"']|\bname\s*=\s*[\"']([^\"']+)[\"']""")
+LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+FENCE_RE = re.compile(r"^(```|~~~)")
+HEADING_RE = re.compile(r"^#{1,6}\s+(.*?)\s*#*\s*$")
+INLINE_CODE_RE = re.compile(r"`[^`]*`")
 
 
-class LinkParser(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__()
-        self.refs: list[tuple[str, str]] = []
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        for name, value in attrs:
-            if name in ATTRS and value:
-                self.refs.append((name, value.strip()))
+def slugify(heading: str) -> str:
+    """Return the anchor Python-Markdown gives a heading: lower-case, hyphenated."""
+    heading = INLINE_CODE_RE.sub("", heading)
+    heading = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", heading)
+    heading = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", heading)
+    heading = re.sub(r"<[^>]+>", "", heading)
+    heading = heading.strip().lower()
+    heading = re.sub(r"[^\w\s-]", "", heading, flags=re.UNICODE)
+    return re.sub(r"\s+", "-", heading)
 
 
 def anchors_in(path: Path) -> set[str]:
-    """All `id`/`name` anchor values in one HTML file."""
-    text = path.read_text(encoding="utf-8", errors="ignore")
+    """Heading anchors of one Markdown page, with ``-1``/``-2`` duplicates."""
     found: set[str] = set()
-    for m in ID_RE.finditer(text):
-        found.add(m.group(1) or m.group(2))
+    counts: dict[str, int] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = HEADING_RE.match(line)
+        if not match:
+            continue
+        base = slugify(match.group(1))
+        if not base:
+            continue
+        counts[base] = counts.get(base, 0) + 1
+        found.add(base if counts[base] == 1 else f"{base}-{counts[base] - 1}")
     return found
 
 
-def main() -> int:
-    """Check every href/src anchor in docs/html/*.html; exit 1 on any broken."""
-    if not DOCS.is_dir():
-        print(f"docs-links: {DOCS} not found", file=sys.stderr)
-        return 2
+def links_in(path: Path) -> list[str]:
+    """Relative link targets in one Markdown page, ignoring code fences."""
+    refs: list[str] = []
+    in_fence = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if FENCE_RE.match(line.strip()):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        line = INLINE_CODE_RE.sub("", line)
+        refs.extend(LINK_RE.findall(line))
+    return refs
 
+
+def check_docs(docs: Path = DOCS) -> list[str]:
+    """Return one message per broken internal link or missing anchor."""
     broken: list[str] = []
-    pages = sorted(DOCS.glob("*.html"))
+    pages = sorted(docs.rglob("*.md"))
     for page in pages:
-        parser = LinkParser()
-        parser.feed(page.read_text(encoding="utf-8", errors="ignore"))
-        for _attr, ref in parser.refs:
+        for ref in links_in(page):
             if SKIP.match(ref):
                 continue
             target_part, _, fragment = ref.partition("#")
-            target = (page.parent / target_part).resolve() if target_part else page
-            if target_part and not target.exists():
-                broken.append(f"{page.name}: missing file: {ref}")
-                continue
-            if fragment:
-                try:
-                    if fragment not in anchors_in(target):
-                        broken.append(f"{page.name}: missing anchor: {ref}")
-                except OSError:
-                    broken.append(f"{page.name}: unreadable target: {ref}")
+            if not target_part:
+                target = page
+            else:
+                target = (page.parent / target_part).resolve()
+                if not target.exists():
+                    broken.append(f"{page.relative_to(docs)}: missing file: {ref}")
+                    continue
+            if fragment and fragment not in anchors_in(target):
+                broken.append(f"{page.relative_to(docs)}: missing anchor: {ref}")
+    return broken
 
+
+def main() -> int:
+    """Check every Markdown page under docs/; exit 1 on any broken link."""
+    if not DOCS.is_dir():
+        print(f"docs-links: {DOCS} not found", file=sys.stderr)
+        return 2
+    broken = check_docs()
     if broken:
         print("docs-links: BROKEN links:")
         for line in broken:
             print(f"  {line}")
         return 1
-    print(f"docs-links: OK ({len(pages)} pages checked)")
+    pages = len(list(DOCS.rglob("*.md")))
+    print(f"docs-links: OK ({pages} Markdown files checked)")
     return 0
 
 

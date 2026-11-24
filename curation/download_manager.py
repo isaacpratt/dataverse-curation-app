@@ -3,7 +3,7 @@
 Flow: quote (file count + total bytes from the inventory, no download) ->
 curator approval -> zip bundle download with progress -> safe unzip ->
 checksum verification against the Dataverse inventory. Network work runs on
-Qt worker threads; see docs/html/architecture.html.
+Qt worker threads; see docs/explanation/architecture.md.
 """
 
 import os
@@ -66,6 +66,9 @@ class DownloadManager:
 
     def metadata_path(self, persistent_id: str) -> Path:
         return self.dataset_dir(persistent_id) / "metadata.json"
+
+    def curation_path(self, persistent_id: str) -> Path:
+        return self.dataset_dir(persistent_id) / "curation.json"
 
     def manifest_path(self, persistent_id: str) -> Path:
         return self.dataset_dir(persistent_id) / "file-manifest.json"
@@ -219,9 +222,10 @@ class DownloadManager:
     # -- on-disk metadata / manifest / reports --------------------------------
 
     def save_metadata(
-        self, persistent_id: str, metadata: dict[str, Any], inventory: list[Any]
+        self, persistent_id: str, metadata: dict[str, Any], inventory: list[Any],
+        curation: dict[str, Any] | None = None
     ) -> None:
-        """Cache dataset metadata + file manifest beside the downloads."""
+        """Cache dataset metadata + file manifest + curation label beside the downloads."""
         try:
             import json as _json
             import os
@@ -247,27 +251,38 @@ class DownloadManager:
             base.mkdir(parents=True, exist_ok=True)
             _atomic_write(self.metadata_path(persistent_id), metadata or {})
             _atomic_write(self.manifest_path(persistent_id), inventory or [])
+            if curation is not None:
+                _atomic_write(self.curation_path(persistent_id), curation)
         except Exception as exc:
             from curation.applog import get_app_log
 
             get_app_log().error(f"save_metadata({persistent_id}): {exc}")
 
-    def load_metadata(self, persistent_id: str) -> tuple[dict[str, Any] | None, list[Any] | None]:
-        """Load cached (metadata, inventory) or (None, None) — never raises."""
+    def load_metadata(self, persistent_id: str) -> tuple[dict[str, Any] | None, list[Any] | None, dict[str, Any] | None]:
+        """Load cached (metadata, inventory, curation) or (None, None, None) — never raises."""
         try:
             import json as _json
 
             meta_path = self.metadata_path(persistent_id)
             mani_path = self.manifest_path(persistent_id)
             if not meta_path.exists() or not mani_path.exists():
-                return None, None
+                return None, None, None
             metadata = _json.loads(meta_path.read_text(encoding="utf-8"))
             inventory = _json.loads(mani_path.read_text(encoding="utf-8"))
             if not isinstance(metadata, dict) or not isinstance(inventory, list):
-                return None, None
-            return metadata, inventory
+                return None, None, None
+            curation = None
+            cur_path = self.curation_path(persistent_id)
+            if cur_path.exists():
+                try:
+                    curation = _json.loads(cur_path.read_text(encoding="utf-8"))
+                    if not isinstance(curation, dict):
+                        curation = None
+                except Exception:
+                    curation = None
+            return metadata, inventory, curation
         except Exception:
-            return None, None
+            return None, None, None
 
     def approve_and_download(
         self,
@@ -475,7 +490,7 @@ class DownloadManager:
         `.tab` mismatches are warnings, not errors: tabular files are
         server-regenerated ingest products whose stored checksum can predate
         the download — the message carries hashes, size and the file's UNF
-        for manual comparison (see docs/html/user-guide.html "Checksum problems").
+        for manual comparison (see docs/troubleshooting.md "Checksum problems").
         """
         if inventory is None:
             inventory = self._client.get_file_inventory(persistent_id)

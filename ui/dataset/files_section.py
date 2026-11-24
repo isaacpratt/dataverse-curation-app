@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QInputDialog,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -38,7 +39,6 @@ from ui.widgets import (
     make_card,
     make_combo,
     make_elided_label,
-    make_reset_columns_button,
     make_search_field,
     make_small_body_label,
 )
@@ -47,7 +47,7 @@ from ui.widgets import (
 class FilesSection(DetailState):
     """The File Manifest card: the files, the tree, the filters and the download state."""
 
-    def _build_file_manifest_card(self) -> QFrame:
+    def _build_file_manifest_card(self, download_button: QPushButton | None = None) -> QFrame:
         card, _body_unused, _title, header_lay = make_card(t("detail.sections.file_manifest"))
         add_info_tip(
             header_lay,
@@ -57,8 +57,8 @@ class FilesSection(DetailState):
         )
         _body_unused.setContentsMargins(0, 0, 0, 0)
         _body_unused.setSpacing(0)
-        # Actions are tools: they live on the tools row under the title bar,
-        # never in the title bar (title + tooltip + summary only).
+        # All tools live on one row under the title bar (dv-3d0.5): search,
+        # status filter, Verify files, Open folder, Collapse all, Draft dict, Reset.
         self._open_folder_btn = make_action_button(
             t("detail.files.open_folder"), kind="secondary", size="md"
         )
@@ -66,7 +66,7 @@ class FilesSection(DetailState):
         self._open_folder_btn.clicked.connect(self._on_open_folder)
         # Expand/Collapse all toggle for the folder > file > check tree.
         self._expand_btn = make_action_button(
-            t("detail.files.expand_all"), kind="secondary", size="md"
+            t("detail.files.collapse_all"), kind="secondary", size="md"
         )
         self._expand_btn.setToolTip(t("detail.files.expand_tip"))
         self._expand_btn.clicked.connect(self._on_toggle_expand_all)
@@ -78,8 +78,7 @@ class FilesSection(DetailState):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
-        # The title bar carries title + (i) only; every tool - search,
-        # status filter, reset, Open folder, Expand all - sits on this row.
+        # The title bar carries title + (i) only; every tool sits on this row.
         tools = QWidget()
         tools.setObjectName("FileManifestTools")
         tools.setStyleSheet(transparent_surface_qss("FileManifestTools"))
@@ -87,7 +86,7 @@ class FilesSection(DetailState):
         tools_lay.setContentsMargins(16, 8, 16, 8)
         tools_lay.setSpacing(8)
         self._file_filter = make_search_field(
-            t("detail.files.filter_placeholder"), height=36, min_width=140
+            t("detail.files.filter_placeholder"), height=36, min_width=120
         )
         self._file_filter.setAccessibleName(t("detail.files.filter_placeholder"))
         self._file_filter.textChanged.connect(self._on_file_filter)
@@ -110,6 +109,12 @@ class FilesSection(DetailState):
         )
         self._scan_filter.currentIndexChanged.connect(lambda _i: self._apply_file_filter_internal())
         tools_lay.addWidget(self._scan_filter)
+        # Verify files button (created by the page, passed in)
+        if download_button is not None:
+            tools_lay.addWidget(download_button)
+        # Open folder / Collapse all
+        tools_lay.addWidget(self._open_folder_btn)
+        tools_lay.addWidget(self._expand_btn)
         # Variable-dictionary draft (dv-tfy): one CSV per tabular file from
         # the variable metadata the coverage check fetched.
         self._dictionary_btn = make_action_button(
@@ -118,28 +123,22 @@ class FilesSection(DetailState):
         self._dictionary_btn.setToolTip(t("detail.dictionary.tip"))
         self._dictionary_btn.clicked.connect(self._on_draft_dictionary)
         tools_lay.addWidget(self._dictionary_btn)
-        # Reset columns button - restores default widths/order
-        self._file_reset_btn = make_reset_columns_button(
-            "",
-            tip=t("detail.files.reset_columns_tip"),
-            accessible_name=t("detail.files.reset_columns_a11y"),
-            fallback_text=t("common.reset"),
+        # Reset button - standard action button (dv-3d0.5), not a ghost icon.
+        self._file_reset_btn = make_action_button(
+            t("common.reset"), kind="secondary", size="md"
         )
+        self._file_reset_btn.setToolTip(t("detail.files.reset_columns_tip"))
+        self._file_reset_btn.setAccessibleName(t("detail.files.reset_columns_a11y"))
         self._file_reset_btn.clicked.connect(self._on_reset_file_view)
         tools_lay.addWidget(self._file_reset_btn)
-        # Download / Open folder / Expand all sit in the card's title bar
-        # (dv-gfx.5, item 8); the tools row keeps the filters and the reset.
         tools_lay.addStretch(1)
         lay.addWidget(tools)
         # NOTE: tree + footer live in a flush sub-layout so the header keeps
         # its top radius and the footer keeps its bottom radius.
         cast(QVBoxLayout, card.layout()).addLayout(lay)
-        # The section's action buttons ride in the title bar so there is
-        # one header line per card (dv-gfx.5, item 8). They are added here
-        # (not by the page) so the order is visible in one place.
+        # The section's action buttons are now on the tools row; header has
+        # only title + (i) + stretch.
         header_lay.addStretch(1)
-        header_lay.addWidget(self._open_folder_btn)
-        header_lay.addWidget(self._expand_btn)
 
         # Tree: folder > file > check hierarchy (Carbon-inspired, native QTreeView).
         # Column 0 carries the tree (caret + indent + icons); Size/Format/Scan

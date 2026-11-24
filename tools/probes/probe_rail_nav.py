@@ -52,7 +52,8 @@ def main() -> int:
         return report.finish()
     report.check(not toggle.isHidden(), "the sidebar toggle is visible")
 
-    # Fold the sidebar: the log moves to the page foot; the rail stays.
+    # Fold the sidebar: the log stays in the sidebar (hidden with it);
+    # the rail stays.
     report.check(not view._side_scroll.isHidden(), "the sidebar starts unfolded")
     view._toggle_sidebar()
     for _ in range(8):
@@ -64,7 +65,13 @@ def main() -> int:
         found_in_main = any(
             view._main_wrap.itemAt(i).widget() is log_card for i in range(view._main_wrap.count())
         )
-        report.check(found_in_main, "the dataset log moved to the page foot when folded")
+        found_in_side = any(
+            view._side_wrap.itemAt(i).widget() is log_card for i in range(view._side_wrap.count())
+        )
+        report.check(
+            not found_in_main and found_in_side,
+            "the dataset log stays in the sidebar when folded (hidden with it)",
+        )
 
     # Unfold: the sidebar returns; the rail stays.
     view._toggle_sidebar()

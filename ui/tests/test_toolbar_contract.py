@@ -131,22 +131,21 @@ def test_file_manifest_actions_live_on_the_tools_row(detail):
     for widget in (
         detail._file_filter,
         detail._scan_filter,
+        detail._dl_btn,
+        detail._open_folder_btn,
+        detail._expand_btn,
+        detail._dictionary_btn,
         detail._file_reset_btn,
     ):
         assert _layout_holds(tools.layout(), widget), (
             f"{type(widget).__name__} must live on the File Manifest tools row"
         )
-    # One header line per card (dv-gfx.5, item 8): the actions sit beside
-    # the title instead of under it.
+    # One header line per card (dv-gfx.5): only title + (i) + stretch.
     title_row = _title_row(card)
-    for widget in (
-        detail._open_folder_btn,
-        detail._expand_btn,
-        detail._dl_btn,
-    ):
-        assert _layout_holds(title_row, widget), (
-            f"{type(widget).__name__} belongs on the card's title row"
-        )
+    actions = _buttons_in(title_row)
+    assert [b.objectName() for b in actions] == ["InfoTip"], (
+        "File Manifest title row must hold no action buttons"
+    )
 
 
 def test_metadata_title_row_keeps_title_tip_and_summary(detail):
@@ -169,11 +168,14 @@ def test_version_reset_lives_on_the_title_row(detail):
 
 
 def test_auto_checks_title_row_keeps_the_summary(detail):
-    title_row = _title_row(detail._auto_card)
-    assert _buttons_in(title_row) == [] or [b.objectName() for b in _buttons_in(title_row)] == [
-        "InfoTip"
-    ]
-    assert _layout_holds(title_row, detail._auto_summary)
+    # The automated checks are now a section inside the Dataset checks card,
+    # not a separate card. The section has its own head with title and summary.
+    head = detail._auto_card.findChild(QWidget, "AutoChecksHead")
+    assert head is not None, "AutoChecksSection has no head"
+    head_lay = head.layout()
+    assert isinstance(head_lay, QHBoxLayout)
+    # Only title and info tip on the head row; summary is also there.
+    assert _layout_holds(head_lay, detail._auto_summary)
 
 
 # -- review configuration --------------------------------------------------

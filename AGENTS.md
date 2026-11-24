@@ -1,15 +1,19 @@
 # Agent Instructions
 
-Design decisions: native PySide6 desktop app (single process), API-token authentication against the Dataverse Native/Search API, SQLite for local state, PyInstaller packaging. See `docs/html/architecture.html`.
+Design decisions: native PySide6 desktop app (single process), API-token authentication against the Dataverse Native/Search API, SQLite for local state, PyInstaller packaging. See `docs/explanation/architecture.md`.
 
 ## Repository layout
 
 ```
 dataverse-curation-app/
 ├── docs/                 # Zensical Markdown docs (published source of truth): zensical.toml at repo root
-│   ├── *.md              # 10 live pages mirroring the retired HTML names + proposals/ snapshots (out of nav)
-│   ├── html/             # frozen pre-Zensical HTML reference (retired after the Diátaxis rewrite)
-│   ├── reports/          # tracked historical reports (proposal snapshots, link checker)
+│   ├── index.md          # home: quadrant map; one page, one quadrant everywhere
+│   ├── tutorials/        # learning-oriented (TGDP Tutorial)
+│   ├── how-to/           # task-oriented (TGDP How-to / Installation guide)
+│   ├── reference/        # lookup-only (TGDP Reference / Glossary)
+│   ├── explanation/      # understanding-oriented (TGDP Concept)
+│   ├── proposals/        # frozen historical design records (out of nav)
+│   ├── reports/          # tracked historical reports (audit, proposal snapshots)
 │   └── adr/              # architecture decision records
 ├── engine/               # Python check engine (ports of the R inspectors)
 │   ├── checks/           # one module per format (22), plus base.py/_util.py
@@ -27,7 +31,7 @@ dataverse-curation-app/
 ├── tools/                  # operational helpers, grouped by function (run outside the app; see tools/README.md)
 │   ├── build/              # PyInstaller build, Velopack pack/check, version tag, frozen smoke, clean
 │   ├── audit/              # OSV scan, SBOM, license inventory, NOTICE, complexity report
-│   ├── docs/               # docs/html link and anchor check
+│   ├── docs/               # offline Markdown link check + scheduled external-link check
 │   ├── perf/               # benchmarks for measured performance constants
 │   ├── probes/             # offscreen UI probes (queue columns, manifest columns, page headings, card corner, buttons, gallery)
 │   └── tests/              # tool-script suites (pack checks, SBOM/NOTICE, complexity report)
@@ -51,7 +55,7 @@ dataverse-curation-app/
 ```bash
 uv sync                   # create .venv and install everything incl. dev group (from uv.lock; no pip needed)
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
-uv run pytest             # 1167 tests (19 samples deselected); run uv run pytest --collect-only for current count
+uv run pytest             # 1185 tests (19 samples deselected); run uv run pytest --collect-only for current count
 pre-commit run --all-files # optional local gate (CI runs it too); needs uv on PATH. core.hooksPath is beads-managed, so hooks are not auto-installed — run it manually or rely on CI
 uv run python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
 uv run python main.py --gallery      # the component gallery: every kit component on one page
@@ -79,19 +83,24 @@ Outputs: `dist/DataverseDocent/DataverseDocent.exe` (onedir folder, fast launche
 ## Documentation
 
 Published at https://isaacpratt.github.io/dataverse-curation-app/, built from
-Markdown in `docs/` by Zensical (`zensical.toml`, native config, explicit nav).
-Edit the Markdown pages, not the frozen `docs/html/` reference. Build/preview
-with `uv run poe docs` / `uv run poe docs-serve`. The two proposal snapshots in
-`docs/proposals/` are historical and intentionally out of the nav.
+Markdown in `docs/` by Zensical (`zensical.toml`, native config, explicit nav
+grouped by quadrant). **Documentation as code:** the Markdown tree is the only
+source of truth; no HTML source remains. Every page declares its quadrant and
+TGDP template in front matter; `docs/style-guide.md` and root `CONTRIBUTING.md`
+are the rules for docs changes, and `docs/reports/diataxis-audit.md` records the
+quadrant audit. Build/preview with `uv run poe docs` / `uv run poe docs-serve`;
+the full docs gate is `uv run poe docs-check` (Markdown lint, offline links,
+strict build) and the doc-to-code pytest checks live in `tools/tests/`. The two
+proposal snapshots in `docs/proposals/` are frozen historical design records,
+intentionally out of the nav; the live plan is in beads (`bd ready`/`bd list`).
+External links are checked on a weekly schedule, not per PR.
 
-- `docs/architecture.md` — components, threading, storage, the UI layering contract (palette → role → component), the table component contract, packaging, decision log
-- `docs/engine-port.md` — R-to-Python port matrix and go/no-go criteria
-- `docs/checks-reference.md` — what each auto-check examines, PASS semantics, issue taxonomy
-- `docs/dataverse-integration.md` — Native/Search API endpoints, auth, discovery + download flow
-- `docs/report-contract.md` — the JSON report format shared by engine and GUI
-- `docs/development.md` — setup, testing, adding checks, UI conventions, the component gallery, Qt pitfalls, probes, the planned dark-mode step, packaging
-- `docs/user-guide.md` — how a curator uses the app (dashboard, detail, metadata, log)
-- `docs/proposals.md` — pointer stub; plan lives in beads (`bd ready` / `bd list`)
+- `docs/index.md` — home and quadrant map
+- `docs/tutorials/first-review.md` — guided first review (TGDP Tutorial)
+- `docs/how-to/` — install, configure, run checks, respond/export, headless, add-a-check, gates, package/release
+- `docs/reference/` — checks, report contract, configuration, CLI, Dataverse API, entry checks, project layout, glossary
+- `docs/explanation/` — architecture, discovery flow, entry correctness, engine port, UI conventions, design records
+- `docs/troubleshooting.md`, `docs/release-notes.md`, `docs/style-guide.md` — TGDP troubleshooting/release-notes and the docs style guide
 
 This project uses **bd** (beads) for issue tracking and project plan. Run `bd prime` for full workflow context.
 
@@ -294,7 +303,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Bead creation
 
-Use `.beads/templates/bead-creation.md` for every new bead. Before creating: `bd list` + `bd search` for dedup, confirm the item is still open (closed items are in beads, not `docs/html/proposals.html` — never re-create them), set type/priority, and order children with `bd dep add` so `bv` shows the work order. Descriptions are self-contained markdown: Outcome → Context (with file/section anchors) → Hooks → Tests (unit + e2e/probe, with what passing looks like). One bead, one outcome — split sequencing into separate beads. After creating, `bd show <id>` and fix anything that needs context you had to remember.
+Use `.beads/templates/bead-creation.md` for every new bead. Before creating: `bd list` + `bd search` for dedup, confirm the item is still open (closed items are in beads, not `docs/explanation/design-records/index.md` — never re-create them), set type/priority, and order children with `bd dep add` so `bv` shows the work order. Descriptions are self-contained markdown: Outcome → Context (with file/section anchors) → Hooks → Tests (unit + e2e/probe, with what passing looks like). One bead, one outcome — split sequencing into separate beads. After creating, `bd show <id>` and fix anything that needs context you had to remember.
 
 ## License
 

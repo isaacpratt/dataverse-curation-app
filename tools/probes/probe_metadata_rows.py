@@ -155,7 +155,7 @@ def main() -> int:
             report.check(drawer.isHidden(), "the drawer collapses")
         report.check(hidden_before, "the drawer starts closed")
 
-    # Not-checked filter: ghost rows appear, tagged Not checked.
+    # Skipped filter: ghost rows appear, tagged Not checked.
     view._unchecked_results = [
         {
             "rule_id": "field:citation.title",
@@ -171,16 +171,16 @@ def main() -> int:
             "name": "title",
         }
     ]
-    unchecked_idx = view._meta_filter.findData("unchecked")
-    report.check(unchecked_idx >= 0, "the filter offers Not checked")
-    if unchecked_idx >= 0:
-        view._meta_filter.setCurrentIndex(unchecked_idx)
+    skipped_idx = view._meta_filter.findData("skipped")
+    report.check(skipped_idx >= 0, "the filter offers Skipped")
+    if skipped_idx >= 0:
+        view._meta_filter.setCurrentIndex(skipped_idx)
         for _ in range(4):
             app.processEvents()
         ghost = _rows(view)
         labels = [str(w.property("meta_field")) for w in ghost]
         report.check(
-            labels == ["Title"], "the Not-checked filter renders the ghost row", f"rows={labels}"
+            labels == ["Title"], "the Skipped filter renders the ghost row", f"rows={labels}"
         )
         view._meta_filter.setCurrentIndex(view._meta_filter.findData("all"))
         for _ in range(4):

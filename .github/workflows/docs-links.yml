@@ -1,0 +1,35 @@
+name: Docs external links
+
+# External links are checked on a schedule and on demand, never per PR: a
+# third-party site being down must not fail a documentation change. Internal
+# links and anchors are checked offline on every PR by `poe docs-links`.
+on:
+  schedule:
+    # Mondays at 07:00 UTC.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-links
+  cancel-in-progress: true
+
+jobs:
+  external-links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install
+        run: uv sync --locked --group dev
+      - name: Check external links
+        run: uv run --group dev python tools/docs/check_external_links.py

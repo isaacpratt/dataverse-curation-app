@@ -60,12 +60,23 @@ def _stepper_problems(numbers) -> list:
 
 
 def _check_fit(report, window, controls) -> None:
-    """No horizontal scrollbar, and every control inside its section."""
+    """No horizontal scrollbar on the main gallery scroll area, and every control inside its section.
+
+    The dual-theme gallery has inner scroll areas for each theme column;
+    those may have horizontal scrollbars if content is wider than the column.
+    Only the main (outer) scroll area must not have a horizontal scrollbar.
+    """
+    # Find the main gallery scroll area (the one that's a direct child of the window's layout)
+    main_scroll = None
     for scroll in window.findChildren(QScrollArea):
+        if scroll.widget() and scroll.widget().objectName() == "GalleryContent":
+            main_scroll = scroll
+            break
+    if main_scroll:
         report.check(
-            scroll.horizontalScrollBar().maximum() == 0,
+            main_scroll.horizontalScrollBar().maximum() == 0,
             "the gallery never needs a horizontal scrollbar",
-            f"need={scroll.horizontalScrollBar().maximum()}px",
+            f"need={main_scroll.horizontalScrollBar().maximum()}px",
         )
     for field in controls:
         host = field.parentWidget()
@@ -90,10 +101,11 @@ def main() -> int:
 
     report = Report("gallery input controls")
 
+    # Find controls in both theme columns (dual-theme gallery)
     numbers = window.findChildren(AppNumberField)
     lists = window.findChildren(AppValueList)
-    report.check(len(numbers) >= 3, "the gallery shows number fields", f"fields={len(numbers)}")
-    report.check(len(lists) >= 2, "the gallery shows value lists", f"lists={len(lists)}")
+    report.check(len(numbers) >= 6, "the gallery shows number fields (both themes)", f"fields={len(numbers)}")
+    report.check(len(lists) >= 4, "the gallery shows value lists (both themes)", f"lists={len(lists)}")
 
     # No clipped stepper: each ghost button is a whole 32px square inside
     # its field, and the spin box between them is inside too.

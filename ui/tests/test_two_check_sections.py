@@ -108,13 +108,15 @@ def test_two_headings_in_order(qapp, tmp_path):
         assert _headings(view) == ["Dataset checks", "File checks"]
         widgets = [view._main_wrap.itemAt(i).widget() for i in range(view._main_wrap.count())]
         assert widgets.index(view._meta_card) < widgets.index(view._file_card)
-        # Metadata checks and automated checks share one card (item 9).
-        meta_layout = view._meta_card.layout()
-        assert meta_layout is not None
-        children = [meta_layout.itemAt(i).widget() for i in range(meta_layout.count())]
+        # Metadata checks and automated checks share one card (item 9):
+        # the automated section is a plain widget inside the meta card's body.
+        meta_body = view._meta_card_body
+        assert meta_body is not None
+        children = [meta_body.itemAt(i).widget() for i in range(meta_body.count())]
         children = [w for w in children if w is not None]
         assert view._auto_card in children
-        assert view._auto_card.parent() is view._meta_card
+        # The auto section is inside the meta card's body (not a separate card).
+        assert view._auto_card.objectName() == "AutoChecksSection"
     finally:
         view.deleteLater()
 

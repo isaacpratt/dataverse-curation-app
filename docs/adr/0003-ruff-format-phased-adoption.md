@@ -52,4 +52,4 @@ mechanical change with real change, and reviewers stop reading.
 - Beads: `dv-hcg` (audit), `dv-hcg.2` (formatter), `dv-hcg.3` (lint rules),
   `dv-hcg.44` (docstring rules), `dv-hcg.45` (complexity report).
 - `pyproject.toml` — `[tool.ruff]` configuration.
-- `docs/html/development.html` — quality gates.
+- `docs/reference/project-layout.md` — quality gates.

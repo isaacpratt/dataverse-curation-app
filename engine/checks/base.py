@@ -2,7 +2,7 @@
 
 Checks are pure functions of local files - no network I/O. Each Check
 returns one or more CheckResult objects, aggregated into a DatasetReport by
-engine.report. See docs/html/report-contract.html for the JSON contract.
+engine.report. See docs/reference/report-contract.md for the JSON contract.
 """
 
 from collections.abc import Set as AbstractSet

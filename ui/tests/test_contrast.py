@@ -1,9 +1,11 @@
 """Contract: every colour pairing the app paints is legible.
 
-The theme owns the contrast contract (``theme.CONTRAST_PAIRS`` and
-``theme.BADGE_CONTRAST_PAIRS``): the role pairs the app actually paints,
-with the ratio each must clear. This test reads that table, so a palette
-change that breaks legibility fails the build instead of shipping.
+The theme owns the contrast contract (``theme.CONTRAST_PAIRS``,
+``theme.CONTRAST_PAIRS_DARK``, ``theme.BADGE_CONTRAST_PAIRS``,
+``theme.BADGE_CONTRAST_PAIRS_DARK``): the role pairs the app actually
+paints, with the ratio each must clear. This test reads that table, so a
+palette change that breaks legibility fails the build instead of
+shipping.
 
 The floors:
 
@@ -19,8 +21,11 @@ therefore checked here), not left implicit in a call site.
 from ui.theme import (
     _BADGE_ROLES,
     BADGE_CONTRAST_PAIRS,
+    BADGE_CONTRAST_PAIRS_DARK,
     CONTRAST_PAIRS,
+    CONTRAST_PAIRS_DARK,
     contrast_ratio,
+    role,
 )
 
 _KIND_FLOORS = {
@@ -30,13 +35,38 @@ _KIND_FLOORS = {
 }
 
 
+def _resolve_pair(fg: str, bg: str, theme: str) -> tuple[str, str]:
+    """Resolve role names to actual colours for a theme."""
+    return role(fg, theme), role(bg, theme)
+
+
+def _check_pairs(pairs, theme: str, kind_floors: dict[str, float]):
+    """Check a set of contrast pairs for a theme."""
+    failures = []
+    if theme == "light":
+        # Light pairs already have actual colour values
+        for label, fg, bg, kind, minimum in pairs:
+            ratio = contrast_ratio(fg, bg)
+            floor = max(minimum, kind_floors.get(kind, 4.5))
+            if ratio < floor:
+                failures.append(f"[light] {label}: {ratio:.2f}:1 ({fg} on {bg}), needs {floor}:1")
+    else:
+        # Dark pairs use role names that need resolving
+        for label, fg, bg, kind, minimum in pairs:
+            fg_colour, bg_colour = _resolve_pair(fg, bg, theme)
+            ratio = contrast_ratio(fg_colour, bg_colour)
+            floor = max(minimum, kind_floors.get(kind, 4.5))
+            if ratio < floor:
+                failures.append(f"[{theme}] {label}: {ratio:.2f}:1 ({fg_colour} on {bg_colour}), needs {floor}:1")
+    return failures
+
+
 def test_every_declared_pair_clears_its_floor():
     failures = []
-    for label, fg, bg, kind, minimum in CONTRAST_PAIRS:
-        ratio = contrast_ratio(fg, bg)
-        floor = max(minimum, _KIND_FLOORS.get(kind, 4.5))
-        if ratio < floor:
-            failures.append(f"{label}: {ratio:.2f}:1 ({fg} on {bg}), needs {floor}:1")
+    # Check light theme
+    failures.extend(_check_pairs(CONTRAST_PAIRS, "light", _KIND_FLOORS))
+    # Check dark theme
+    failures.extend(_check_pairs(CONTRAST_PAIRS_DARK, "dark", _KIND_FLOORS))
     assert not failures, "contrast failures:\n  " + "\n  ".join(failures)
 
 
@@ -51,12 +81,20 @@ def test_every_badge_role_clears_its_floor():
 
 def test_every_badge_role_is_in_the_contract():
     """A role nobody checks is a role that can rot."""
+    # Check light theme
     checked = {label for label, _fg, _bg in BADGE_CONTRAST_PAIRS}
     missing = []
-    for role in _BADGE_ROLES:
-        if not any(role.replace("-soft", "") in name for name in checked):
-            missing.append(role)
-    assert not missing, f"badge roles with no contrast check: {missing}"
+    for role_name in _BADGE_ROLES:
+        if not any(role_name.replace("-soft", "") in name for name in checked):
+            missing.append(role_name)
+    assert not missing, f"badge roles with no contrast check (light): {missing}"
+    # Check dark theme (same role names)
+    checked_dark = {label for label, _fg, _bg in BADGE_CONTRAST_PAIRS_DARK}
+    missing_dark = []
+    for role_name in _BADGE_ROLES:
+        if not any(role_name.replace("-soft", "") in name for name in checked_dark):
+            missing_dark.append(role_name)
+    assert not missing_dark, f"badge roles with no contrast check (dark): {missing_dark}"
 
 
 def test_the_roles_resolve_to_real_colours():
@@ -64,18 +102,34 @@ def test_the_roles_resolve_to_real_colours():
     import re
 
     bad = []
+    # Check light theme pairs (already have actual colour values)
     for label, fg, bg, _kind, _min in CONTRAST_PAIRS:
         for value in (fg, bg):
             if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
-                bad.append(f"{label}: {value!r}")
+                bad.append(f"[light] {label}: {value!r}")
+    # Check dark theme pairs (resolve role names)
+    for label, fg, bg, _kind, _min in CONTRAST_PAIRS_DARK:
+        fg_colour, bg_colour = _resolve_pair(fg, bg, "dark")
+        for value in (fg_colour, bg_colour):
+            if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+                bad.append(f"[dark] {label}: {value!r}")
+    # Check badge light (actual colour values)
     for label, fg, bg in BADGE_CONTRAST_PAIRS:
         for value in (fg, bg):
             if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
-                bad.append(f"{label}: {value!r}")
+                bad.append(f"[light] {label}: {value!r}")
+    # Check badge dark (resolve role names)
+    for label, fg, bg in BADGE_CONTRAST_PAIRS_DARK:
+        fg_colour, bg_colour = _resolve_pair(fg, bg, "dark")
+        for value in (fg_colour, bg_colour):
+            if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+                bad.append(f"[dark] {label}: {value!r}")
     assert not bad, f"roles that are not colours: {bad}"
 
 
 def test_the_contract_is_not_empty():
     """An empty contract would pass every check it makes."""
     assert len(CONTRAST_PAIRS) >= 15
+    assert len(CONTRAST_PAIRS_DARK) >= 15
     assert len(BADGE_CONTRAST_PAIRS) >= 10
+    assert len(BADGE_CONTRAST_PAIRS_DARK) >= 10

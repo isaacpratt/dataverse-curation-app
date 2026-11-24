@@ -378,12 +378,12 @@ class ActionsSection(DetailState):
             self,
             guestbook_response=guestbook_response,
         )
-        self._dl_worker.progress.connect(
-            lambda n: self._show_status_running(
-                t("detail.statuswidget.downloading"), f"{n / 1024**2:.1f} MB"
+        # Progress fraction goes to the status chip (dv-3d0.4).
+        self._dl_worker.progressFraction.connect(
+            lambda f: self._show_status_running(
+                t("detail.statuswidget.downloading"), self._status_context(), f
             )
         )
-        self._dl_worker.progressFraction.connect(self._on_ring_fraction)
         self._dl_worker.finished.connect(self._on_download_finished)
         self._dl_worker.error.connect(self._on_download_error)
         self._dl_worker.cancelled.connect(self._on_download_cancelled)
@@ -396,7 +396,6 @@ class ActionsSection(DetailState):
 
     def _on_download_finished(self, staged: Path) -> None:
         self._dl_worker = None
-        self._hide_ring()
         self._dl_btn.setEnabled(True)
         ok, problems, warnings = self._dl_mgr.verify(self._pid)
         if problems:
@@ -440,7 +439,6 @@ class ActionsSection(DetailState):
     def _on_download_error(self, msg: str) -> None:
         self._run_after_download = False
         self._dl_worker = None
-        self._hide_ring()
         self._dl_btn.setEnabled(True)
         self._set_status("")
         headline, details = dialogs.describe_error(msg)
@@ -467,7 +465,6 @@ class ActionsSection(DetailState):
         """Worker acknowledged the cancel: reset the action row quietly."""
         self._run_after_download = False
         self._dl_worker = None
-        self._hide_ring()
         self._dl_btn.setEnabled(True)
         self._dl_cancel_btn.setEnabled(True)
         self._dl_cancel_btn.setVisible(False)

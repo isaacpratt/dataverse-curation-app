@@ -362,6 +362,8 @@ class AppConfig:
     workspace: Path = field(default_factory=default_workspace)
     tesseract: str = ""
     exiftool: str = ""
+    # Theme mode: "light", "dark", or "auto" (follow OS)
+    theme_mode: str = "light"
 
 
 @dataclass
@@ -438,6 +440,7 @@ class Config:
                 ),
                 tesseract=str(engine_raw.get("tesseract", app_raw.get("tesseract", "")) or ""),
                 exiftool=str(engine_raw.get("exiftool", app_raw.get("exiftool", "")) or ""),
+                theme_mode=str(app_raw.get("theme_mode", "light") or "light"),
             ),
         )
         # Keyring holds the token when the config says so (or when a stale
@@ -527,7 +530,10 @@ class Config:
                 "api_token_source": source,
                 "collection": self.dataverse.collection,
             },
-            "app": {"workspace": str(self.app.workspace)},
+            "app": {
+                "workspace": str(self.app.workspace),
+                "theme_mode": self.app.theme_mode,
+            },
             "engine": {
                 "optional_tools": {
                     "tesseract": self.app.tesseract,

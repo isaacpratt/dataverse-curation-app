@@ -1,4 +1,4 @@
-"""The page header: the title link, the status pill, the ring and the curation preview."""
+"""The page header: the title link, the status pill, and the curation preview."""
 
 from pathlib import Path
 from typing import Any
@@ -19,10 +19,12 @@ from ui.dataset.helpers import _pill_state
 from ui.dataset.state import DetailState
 from ui.i18n import t
 from ui.theme import (
+    ACCENT_PRIMARY,
     BORDER_SUBTLE,
     FONT_BODY,
     STATE_ERROR_BG,
     STATE_ERROR_BORDER,
+    STATE_ERROR_GRAPHIC,
     STATE_SUCCESS_GRAPHIC,
     STATE_WARNING_GRAPHIC,
     SURFACE_CARD,
@@ -33,7 +35,6 @@ from ui.theme import (
     TEXT_MUTED,
     TEXT_SUCCESS,
     selectable_labels,
-    status_strip_qss,
     surface_frame_qss,
 )
 from ui.widgets import (
@@ -420,45 +421,29 @@ class HeaderSection(DetailState):
             pass
 
     def _set_status(self, msg: str, tone: str = "info") -> None:
-        """Set the status strip. tone: info (quiet) | success | error.
+        """Route status messages to the compact StatusWidget (dv-3d0.4).
 
-        Success/error wear body-size high-contrast text and an icon so a
-        confirmation reads at a glance (dv-3wc); the message persists
-        until the next _set_status call (no timers).
+        The old general message strip is gone; the chip now carries all
+        feedback. tone: info (quiet) | success | error.
         """
         text = str(msg or "")
-        visible = bool(text)
-        self._status.setText(text)
-        try:
-            from ui.icons import icon as _icon
+        if not text:
+            widget = getattr(self, "_status_widget", None)
+            if widget is not None:
+                widget.clear()
+            return
 
-            if tone == "success":
-                color, name = TEXT_SUCCESS, "check"
-            elif tone == "error":
-                color, name = TEXT_DANGER, "x"
-            else:
-                color, name = None, None
-            if name is not None:
-                self._status_icon.setPixmap(_icon(name, color=color, size=16).pixmap(16, 16))
-                self._status_icon.show()
-            else:
-                self._status_icon.hide()
-            self._status.setStyleSheet(
-                status_strip_qss(
-                    SURFACE_CARD,
-                    BORDER_SUBTLE,
-                    color or TEXT_MUTED,
-                    font_size=FONT_BODY,
-                    weight=600 if name is not None else None,
-                )
-            )
-        except Exception:
-            pass
-        self._status.setVisible(visible)
-        # While the compact widget owns progress, its own line is enough —
-        # the general message strip would duplicate it (dv-cv3).
         widget = getattr(self, "_status_widget", None)
-        self._status_row.setVisible(visible and not (widget is not None and widget.isVisible()))
+        if widget is None:
+            return
+
+        if tone == "success":
+            widget.set_complete(text, self._status_context())
+        elif tone == "error":
+            widget.set_error(text, self._status_context())
+        else:
+            # Info tone: show as a running/informational state without a bar
+            widget.set_running(text, self._status_context(), fraction=None)
 
     @staticmethod
     def _dress_pill(pill: QLabel, text: str, label: str) -> None:
@@ -520,62 +505,23 @@ class HeaderSection(DetailState):
             errors=totals["failed-error"],
         )
 
-    def _on_status_action(self) -> None:
-        """Route the widget's action to the right cancel/retry/dismiss path."""
-        widget = getattr(self, "_status_widget", None)
-        if widget is None or not widget.isVisible():
-            return
-        tip = widget._action.toolTip().lower()
-        if "retry" in tip:
-            self._on_run_checks()
-        elif "cancel" in tip:
-            if getattr(self, "_check_worker", None) is not None:
-                self._on_cancel_checks_click()
-            elif getattr(self, "_dl_worker", None) is not None:
-                self._on_download_cancel_click()
-        widget.clear()
-
     def _show_status_running(
         self, title: str, detail: str = "", fraction: float | None = None
     ) -> None:
-        """Show the compact widget mid-work (dv-gfx.3).
-
-        The general message strip stays quiet while this is up: the widget
-        already carries the words, and showing both doubled the header.
-        """
+        """Show the compact widget mid-work (dv-gfx.3)."""
         widget = getattr(self, "_status_widget", None)
         if widget is not None:
             widget.set_running(title, detail, fraction)
-            self._status_row.setVisible(False)
 
     def _show_status_complete(self, title: str, detail: str = "") -> None:
         widget = getattr(self, "_status_widget", None)
         if widget is not None:
             widget.set_complete(title, detail or self._status_context())
-        self._status_row.setVisible(False)
 
     def _show_status_error(self, title: str, detail: str = "") -> None:
         widget = getattr(self, "_status_widget", None)
         if widget is not None:
             widget.set_error(title, detail)
-        self._status_row.setVisible(False)
-
-    def _on_ring_fraction(self, fraction: float) -> None:
-        """Drive the compact status widget's progress bar (download / checks)."""
-        widget = getattr(self, "_status_widget", None)
-        if widget is not None:
-            if getattr(self, "_check_worker", None) is not None:
-                title = t("detail.statuswidget.running")
-            else:
-                title = t("detail.statuswidget.downloading")
-            widget.set_running(title, self._status_context(), fraction)
-            self._status_row.setVisible(False)
-
-    def _hide_ring(self) -> None:
-        """Clear the compact status widget when the work it tracked is done."""
-        widget = getattr(self, "_status_widget", None)
-        if widget is not None:
-            widget.clear()
 
     def _build_verdict_card(self) -> QFrame:
         """Readiness banner (dv-6nv): one synthesized answer, top of page."""

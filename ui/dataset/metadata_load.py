@@ -14,7 +14,6 @@ class MetadataLoadSection(DetailState):
 
     def _on_metadata_error(self, msg: str) -> None:
         self._meta_worker = None
-        self._hide_ring()
         self._load_meta_btn.setEnabled(True)
         self._set_status("")
         headline, details = dialogs.describe_error(msg)
@@ -77,7 +76,6 @@ class MetadataLoadSection(DetailState):
         # reference made the next Load metadata click crash with
         # "Internal C++ object (MetadataWorker) already deleted".
         self._meta_worker = None
-        self._hide_ring()
         self._load_meta_btn.setEnabled(True)
         self._inventory = inventory if isinstance(inventory, list) else []
         self._metadata = metadata
@@ -133,10 +131,10 @@ class MetadataLoadSection(DetailState):
                 )
             except Exception:
                 pass
-            # Persist metadata + manifest beside the downloads for next launch.
+            # Persist metadata + manifest + curation beside the downloads for next launch.
             # Skipped on inventory failure so a good cache is never clobbered.
             try:
-                self._dl_mgr.save_metadata(self._pid, metadata, self._inventory)
+                self._dl_mgr.save_metadata(self._pid, metadata, self._inventory, self._curation)
             except Exception:
                 pass
         self._log_action(

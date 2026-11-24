@@ -35,11 +35,37 @@ def format_log_timestamp(raw: str) -> str:
     return s[:10]
 
 
+def parse_log_timestamp(raw: str) -> float:
+    """Parse a timestamp to epoch milliseconds for sorting.
+
+    Handles ISO 8601 (T or space separator, Z or offset), date-only and
+    common display formats. Returns 0 on failure or when absent.
+    """
+    s = (raw or "").strip()
+    if not s:
+        return 0.0
+    try:
+        from datetime import UTC, datetime
+
+        normalized = s.replace("Z", "+00:00")
+        if "T" not in normalized and " " in normalized and len(normalized) > 10:
+            normalized = normalized.replace(" ", "T", 1)
+        if "." in normalized:
+            base, frac = normalized.split(".", 1)
+            normalized = base + "." + (frac + "000000")[:6]
+        dt = datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.timestamp() * 1000.0
+    except Exception:
+        return 0.0
+
+
 class _LogEvents:
     """Collect (sort_key, display text) pairs for the timeline."""
 
     def __init__(self) -> None:
-        self.items: list[tuple[str, str]] = []
+        self.items: list[tuple[float, str]] = []
         self.dated_creations: list[str] = []
         self.published_days: set[str] = set()
 
@@ -49,14 +75,14 @@ class _LogEvents:
     def add(self, ts: Any, text: str) -> None:
         raw = str(ts or "").strip()
         if raw:
-            self.items.append((raw, self._line(raw, text)))
+            self.items.append((parse_log_timestamp(raw), self._line(raw, text)))
         else:
-            self.items.append(("0000", t("common.em_dash") + " " + text))
+            self.items.append((0.0, t("common.em_dash") + " " + text))
 
     def dated(self, ts: str, text: str) -> None:
         """Add a line that is always timestamped (never a dash placeholder)."""
         if ts:
-            self.items.append((ts, self._line(ts, text)))
+            self.items.append((parse_log_timestamp(ts), self._line(ts, text)))
 
 
 class LogRail(DetailState):
@@ -142,7 +168,9 @@ class LogRail(DetailState):
                 if ct and ct[:10] != (rt or "")[:10]:
                     events.add(ct, t("detail.dataset_log.version_created", num=num))
         if events.dated_creations:
-            events.dated(sorted(events.dated_creations)[0], t("detail.dataset_log.first_created"))
+            events.dated(
+                sorted(events.dated_creations)[0], t("detail.dataset_log.first_created")
+            )
 
     def _timestamp_events(self, events: _LogEvents) -> None:
         """Dataset-level record dates from the timestamps endpoint."""
@@ -258,7 +286,7 @@ class LogRail(DetailState):
             if not events.items:
                 self._dataset_log.addItem(t("detail.dataset_log.no_history"))
                 return
-            events.items.sort(key=lambda e: e[0], reverse=True)
+            events.items.sort(key=lambda e: e[0], reverse=True)  # epoch_ms
             for _key, text in events.items[:100]:
                 item = QListWidgetItem(text)
                 item.setToolTip(text)
