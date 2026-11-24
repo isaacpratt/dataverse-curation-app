@@ -67,7 +67,7 @@ The palette in `ui/theme.py` says what a colour is — `PRIMARY`, `SURFACE_CONTA
 
 Only `ui/theme.py` and `ui/widgets.py` may name a palette entry. A view names a role, the kit builds the component, and the theme owns the rules. This is checked, not reviewed: `ui/tests/test_theme_conformance.py` fails the build when a view paints for itself, names a raw colour, builds a raw input widget or writes a button sheet by hand. The guards parse source with `ast`, so they are cheap, exact and need no window.
 
-The role names are stable; what they resolve to is not. `ui/theme.py` holds one table per theme — `LIGHT_ROLE_TABLE` and `DARK_ROLE_TABLE` over the same 94 role names — plus a resolver and a switch. The light table is what the app paints today; dark mode is not shipped. The role groups give an idea of the vocabulary:
+The role names are stable; what they resolve to is not. `ui/theme.py` holds one table per theme — `LIGHT_ROLE_TABLE` and `DARK_ROLE_TABLE` over the same 94 role names — plus a resolver and `set_active_theme()`. **Settings → Appearance** selects Light, Dark or Auto (follow system), so a theme change swaps tables instead of repainting views. The role groups give an idea of the vocabulary:
 
 | Group | Purpose |
 | --- | --- |
