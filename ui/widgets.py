@@ -2437,10 +2437,10 @@ def make_disposition_combo(
     combo = make_combo(
         [(disposition_label(token), token) for token in DISPOSITION_TOKENS],
         parent,
-        # 30, not 36: the combo's own QSS pads the text box 7px top and
-        # bottom (12px type + 14px padding = 26px of text box), so 28px
-        # clipped the descenders; 30 leaves room and the row still fits.
-        height=30,
+        # Standard 36px field, like every other combo in the app (dv-3d0.3):
+        # the QSS pads the text box 7px top and bottom, so a shorter frame
+        # clipped the descenders ("text cut off at the bottom").
+        height=36,
         min_width=118,
         tip=t("detail.disposition.combo_tip"),
     )
@@ -2541,19 +2541,16 @@ class WorkflowRail(QWidget):
         self.setObjectName("WorkflowRail")
         self._nav_steps = nav_steps
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(24, 6, 24, 6)
-        layout.setSpacing(4)
+        # Left margin aligns with the main column's content margin (16px card
+        # inset + 8px = 24px from page edge). Buttons are fixed-width tabs.
+        layout.setContentsMargins(24, 0, 24, 0)
+        layout.setSpacing(0)
         self.buttons: dict[str, QPushButton] = {}
         self._indexes: dict[str, int] = {}
-        # The step whose section is on screen (dv-gfx.4): it wears a shaded
-        # block instead of only coloured text.
         self._active_key = ""
         self.hint = QLabel("")
         self.hint.setObjectName("CaptionSM")
         self.hint.setWordWrap(False)
-        # Ignored horizontally but with a floor: the layout may squeeze the
-        # hint at narrow widths (never to zero) without the rail's
-        # minimumSizeHint blowing past the app's 960px floor.
         self.hint.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.hint.setMinimumWidth(80)
         self._toggle = QPushButton("")
@@ -2577,7 +2574,7 @@ class WorkflowRail(QWidget):
                     btn.setText(label)
                     btn.setToolTip(t("detail.rail.tip"))
                     btn.setAccessibleName(label)
-                    btn.setStyleSheet(self._style_for("available"))
+                    btn.setStyleSheet(self._style_for("nav", active=False))
                     try:
                         from ui.icons import role_icon as _nav_icon
 
@@ -2591,10 +2588,8 @@ class WorkflowRail(QWidget):
                             btn.setIconSize(QSize(14, 14))
                     except Exception:
                         pass
-            self.hint.setObjectName("CaptionSM")
-            self.hint.setText("")
-            # Reserve a lane for the result pills so the expanding buttons
-            # cannot squeeze them to nothing (the mockup's nav-hint pills).
+            # Reserve space for the result pills in the full workflow mode.
+            # In nav mode this is a no-op; the hint is hidden.
             self.hint.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
             self.hint.setMinimumWidth(180)
         else:
@@ -2638,36 +2633,37 @@ class WorkflowRail(QWidget):
             btn.setFlat(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setMinimumWidth(0)
-            # MinimumExpanding ensures buttons take available space but don't
-            # force the window wider than 960px.
-            btn.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
+            if self._nav_steps:
+                # Nav mode: fixed-height tabs, no expanding (dv-3d0.2)
+                btn.setFixedHeight(36)
+                btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            else:
+                # Workflow mode: buttons expand to fill available space
+                btn.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
             btn.clicked.connect(lambda _c, k=key: self.stepClicked.emit(k))
             lay.addWidget(btn)
             self.buttons[key] = btn
-            if i < len(keys) - 1:
-                connector = QLabel("\u203a")
-                connector.setObjectName("WorkflowSeparator")
-                lay.addWidget(connector)
+            if i < len(keys) - 1 and self._nav_steps:
+                # Hairline separator between nav tabs (dv-3d0.2)
+                sep = QFrame()
+                sep.setFrameShape(QFrame.Shape.VLine)
+                sep.setFixedWidth(1)
+                sep.setStyleSheet(f"QFrame {{ background: {BORDER_SUBTLE}; border: none; }}")
+                lay.addWidget(sep)
         # The buttons and hint should share space; we remove the hard stretch
         # to allow the MinimumExpanding buttons to actually expand.
         lay.addWidget(self.hint)
         lay.addWidget(self._toggle)
 
     def set_nav_counts(self, passed: int = 0, warnings: int = 0, errors: int = 0) -> None:
-        """Show the mockup's compact result pills in the fixed rail's hint."""
+        """Show the mockup's compact result pills in the fixed rail's hint.
+
+        In nav mode (dataset page section tabs) this is a no-op — the rail
+        shows no counts (dv-3d0.2).
+        """
         if not self._nav_steps:
             return
-        bits = []
-        if passed:
-            bits.append(t("detail.rail.passed", count=passed))
-        if warnings:
-            bits.append(t("detail.rail.warnings", count=warnings))
-        if errors:
-            bits.append(t("detail.rail.errors", count=errors))
-        text = " · ".join(bits)
-        self.hint.setText(text)
-        self.hint.setToolTip(text)
-        self.hint.show()
+        # Nav mode: no counts shown on the rail
 
     def set_toggle_label(self, text: str) -> None:
         """Show the name of the view the toggle switches TO."""
@@ -2676,6 +2672,8 @@ class WorkflowRail(QWidget):
     @staticmethod
     def _style_for(state: str, *, active: bool = False) -> str:
         """Return the step's face for its state - the theme owns the rule."""
+        if state == "nav":
+            return workflow_step_qss("nav", active=active)
         return workflow_step_qss(state, active=active)
 
     def set_active_step(self, key: str) -> None:
@@ -2736,31 +2734,29 @@ class WorkflowRail(QWidget):
 
 
 class StatusWidget(QFrame):
-    """One compact inline status strip: icon + words + bar + action (dv-cv3).
+    """One compact inline status chip: icon + words + bar (dv-3d0.4).
 
     Replaces the old three-row stack (message strip, progress bar, ring)
     with a single line that sits beside the dataset identity. Three faces:
 
     * ``set_running`` — spinner, title, "n/N" detail, determinate/indeterminate
-      bar and a Cancel (x) action;
-    * ``set_complete`` — check, "All checks complete", counts, full bar and
-      a Dismiss action;
-    * ``set_error`` — alert, short reason, full bar in the error role and a
-      Retry action.
+      bar;
+    * ``set_complete`` — check, "All checks complete", counts, full bar;
+    * ``set_error`` — alert, short reason, full bar in the error role.
 
     The widget is hidden until there is something to report, so an idle
     header reserves no vertical space for it. Every glyph is a bundled
-    Lucide icon; every colour comes from a theme role.
+    Lucide icon; every colour comes from a theme role. The chip is wide
+    enough for its text to stay on one line; there is no close/retry/cancel
+    action button.
     """
-
-    actionClicked = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("StatusWidget")
         self.setVisible(False)
         outer = QHBoxLayout(self)
-        outer.setContentsMargins(10, 6, 8, 6)
+        outer.setContentsMargins(12, 6, 12, 6)
         outer.setSpacing(0)
         self._icon = QLabel()
         self._icon.setFixedSize(18, 18)
@@ -2768,16 +2764,11 @@ class StatusWidget(QFrame):
         self._title = make_small_body_label("")
         self._detail = QLabel("")
         self._detail.setObjectName("CaptionSM")
+        # Prevent eliding/wrapping: the chip must be wide enough for one line.
+        self._detail.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._detail.setMinimumWidth(200)
         self._bar = make_progress_bar(height=4)
         self._bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._action = make_icon_button(
-            "x",
-            tip=t("detail.statuswidget.dismiss"),
-            accessible_name=t("detail.statuswidget.dismiss"),
-            kind="ghost",
-            size="sm",
-        )
-        self._action.clicked.connect(lambda _c=False: self.actionClicked.emit())
         # Two rows: the words, then the bar directly under them (dv-gfx.3).
         # The bar never shares the text's line, so it reads as the status's
         # own progress rather than a stray rule between the labels.
@@ -2790,7 +2781,7 @@ class StatusWidget(QFrame):
         line.addWidget(self._icon)
         line.addWidget(self._title)
         line.addWidget(self._detail, 1)
-        line.addWidget(self._action)
+        # No action button (x/retry/cancel) — the chip is informational only.
         self._rows.addLayout(line)
         self._rows.addWidget(self._bar)
         self._bar.hide()
@@ -2806,11 +2797,8 @@ class StatusWidget(QFrame):
         self._icon.setPixmap(_icon(name, color=color, size=16).pixmap(QSize(16, 16)))
 
     def _set_action(self, name: str, tip: str) -> None:
-        from ui.icons import icon as _icon
-
-        self._action.setIcon(_icon(name, size=14))
-        self._action.setToolTip(tip)
-        self._action.setAccessibleName(tip)
+        """Deprecated (dv-3d0.4): no action button on the status chip."""
+        pass
 
     def set_running(
         self,
@@ -2820,7 +2808,7 @@ class StatusWidget(QFrame):
         *,
         cancelling: bool = False,
     ) -> None:
-        """Spinner + a bar under the words + Cancel (or a muted spinner)."""
+        """Spinner + a bar under the words (no action button)."""
         self._paint_icon("loader-circle", ACCENT_PRIMARY)
         self._title.setText(title)
         self._detail.setText(detail)
@@ -2828,32 +2816,26 @@ class StatusWidget(QFrame):
         if fraction is not None:
             self._bar.setValue(int(max(0.0, min(1.0, fraction)) * 100))
         self._bar.show()
-        self._set_action("x", t("detail.statuswidget.cancel"))
-        self._action.setEnabled(not cancelling)
         self.show()
 
     def set_complete(self, title: str, detail: str = "") -> None:
-        """Check + full success bar + Dismiss."""
+        """Check + full success bar (no action button)."""
         self._paint_icon("circle-check", STATE_SUCCESS_GRAPHIC)
         self._title.setText(title)
         self._detail.setText(detail)
         self._bar.setRange(0, 100)
         self._bar.setValue(100)
         self._bar.show()
-        self._set_action("x", t("detail.statuswidget.dismiss"))
-        self._action.setEnabled(True)
         self.show()
 
     def set_error(self, title: str, detail: str = "") -> None:
-        """Alert + full error bar + Retry."""
+        """Alert + full error bar (no action button)."""
         self._paint_icon("circle-alert", STATE_ERROR_GRAPHIC)
         self._title.setText(title)
         self._detail.setText(detail)
         self._bar.setRange(0, 100)
         self._bar.setValue(100)
         self._bar.show()
-        self._set_action("rotate-ccw", t("detail.statuswidget.retry"))
-        self._action.setEnabled(True)
         self.show()
 
     def clear(self) -> None:

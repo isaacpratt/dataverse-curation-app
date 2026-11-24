@@ -956,7 +956,7 @@ def button_qss(
     return (
         f"{sel} {{ background: transparent; color: {ON_SURFACE_VARIANT}; "
         f"border: none; border-radius: {RADIUS_LG}; padding: 6px 12px; "
-        f"font-weight: 500; font-size: {FONT_SMALL}px; }} "
+        f"font-weight: 600; font-size: {FONT_SMALL}px; }} "
         f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
         f"color: {ON_SURFACE}; }} "
         f"{sel}:hover {{ background: {SURFACE_CONTAINER_HIGH}; color: {ON_SURFACE}; }}"
@@ -1084,8 +1084,27 @@ def workflow_step_qss(state: str = "todo", *, active: bool = False) -> str:
 
     ``active=True`` is the section rail's "current view" face (dv-gfx.4):
     the step on screen carries a shaded block, not only coloured text.
+
+    ``state="nav"`` is the dataset page's section tab face (dv-3d0.2):
+    fixed 36px height, left-aligned, no expanding, hairline separators.
     """
     hover = f"QPushButton#WorkflowStep:hover {{ background: {SURFACE_TINT}; border-radius: 8px; }}"
+    if state == "nav":
+        # Tab face: 36px fixed height, padding for text, no border by default
+        # Active tab gets a shaded background
+        if active:
+            return (
+                f"QPushButton#WorkflowStep {{ color: {ACCENT_PRIMARY}; font-size: 12px; "
+                f"font-weight: 700; background: {ACCENT_TINT}; "
+                f"border: none; border-radius: {RADIUS_MD}; "
+                f"padding: 0 12px; min-width: 0; height: 36px; }} "
+                f"QPushButton#WorkflowStep:hover {{ background: {ACCENT_TINT}; }}"
+            )
+        return (
+            f"QPushButton#WorkflowStep {{ color: {TEXT_MUTED}; font-size: 12px; "
+            f"font-weight: 500; background: transparent; border: none; "
+            f"padding: 0 12px; min-width: 0; height: 36px; }} {hover}"
+        )
     if active:
         return (
             f"QPushButton#WorkflowStep {{ color: {ACCENT_PRIMARY}; font-size: 12px; "
@@ -1128,11 +1147,12 @@ def workflow_rail_qss() -> str:
 
     The rail sits directly under the app nav bar and above the header
     chips, so it takes the nav bar's own separator rule and reads as part
-    of that stack rather than as another card.
+    of that stack rather than as another card. In nav mode (dv-3d0.2) the
+    rail is a row of tabs with a bottom hairline spanning the page width.
     """
     return (
         f"QWidget#WorkflowRail {{ background: {SURFACE_PAGE}; "
-        f"border-bottom: 1px solid {OUTLINE_VARIANT}; }}"
+        f"border-bottom: 1px solid {BORDER_SUBTLE}; }}"
     )
 
 

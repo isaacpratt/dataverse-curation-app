@@ -211,8 +211,8 @@ class DetailState(QWidget):
     #: The card that previews a file's contents.
     _preview_card: PreviewCard | None
 
-    # -- the auto-checks card -----------------------------------------------
-    _auto_card: QFrame
+    # -- the auto-checks section (inside the Dataset checks card) -------------
+    _auto_card: QWidget
     _auto_summary: QLabel
     _auto_body: Any
     _auto_placeholder: QLabel
@@ -489,14 +489,6 @@ class DetailState(QWidget):
         """Show a message in the page's status line."""
         raise NotImplementedError
 
-    def _on_status_action(self) -> None:
-        """Handle the compact status widget's cancel, retry or dismiss action."""
-        raise NotImplementedError
-
-    def _on_download_cancel_click(self) -> None:
-        """Ask the staged download worker to stop at the next chunk."""
-        raise NotImplementedError
-
     def _on_cancel_checks_click(self) -> None:
         """Ask the running check pass to stop at the next checkpoint."""
         raise NotImplementedError
@@ -519,10 +511,6 @@ class DetailState(QWidget):
         """Show the error face of the compact status widget."""
         raise NotImplementedError
 
-    def _on_ring_fraction(self, fraction: float) -> None:
-        """Drive the compact status widget's progress bar."""
-        raise NotImplementedError
-
-    def _hide_ring(self) -> None:
-        """Clear the compact status widget when its work is done."""
+    def _status_context(self) -> str:
+        """Short count detail for the compact widget, from state in memory."""
         raise NotImplementedError

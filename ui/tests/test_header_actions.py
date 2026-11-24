@@ -147,27 +147,25 @@ def test_export_reports_button_is_gone(view):
     assert not any("Export reports" in label for label in labels)
 
 
-def test_status_widget_starts_hidden_and_shows_three_faces(view):
+def test_status_widget_shows_three_faces(view):
     v, _ = view
     w = v._status_widget
-    assert not w.isVisible()
+    # Cached metadata load shows the status chip (dv-3d0.4)
+    assert w.isVisible()
 
     w.set_running("Running checks…", "14/21", 14 / 21)
     assert w.isVisible()
     assert w._title.text() == "Running checks…"
     assert w._detail.text() == "14/21"
     assert w._bar.value() == 66
-    assert "cancel" in w._action.toolTip().lower()
 
     w.set_complete("All checks complete", "21/21")
     assert w._title.text() == "All checks complete"
     assert w._bar.value() == 100
-    assert "dismiss" in w._action.toolTip().lower()
 
     w.set_error("Check error", "Checksum mismatch")
     assert w._title.text() == "Check error"
     assert w._detail.text() == "Checksum mismatch"
-    assert "retry" in w._action.toolTip().lower()
 
     w.clear()
     assert not w.isVisible()

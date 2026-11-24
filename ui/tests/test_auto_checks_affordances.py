@@ -145,11 +145,17 @@ def test_findings_filter_narrows_and_restores(qapp, tmp_path):
 
     assert sorted(_shown_kinds(view)) == ["failed-error", "failed-warning", "passed"]
 
-    view._auto_filter.setCurrentIndex(1)  # Errors
+    view._auto_filter.setCurrentIndex(4)  # Error
     assert sorted(_shown_kinds(view)) == ["failed-error"]
 
-    view._auto_filter.setCurrentIndex(2)  # Warnings
+    view._auto_filter.setCurrentIndex(3)  # Warning
     assert sorted(_shown_kinds(view)) == ["failed-warning"]
+
+    view._auto_filter.setCurrentIndex(1)  # Complete
+    assert sorted(_shown_kinds(view)) == ["passed"]
+
+    view._auto_filter.setCurrentIndex(2)  # Incomplete
+    assert sorted(_shown_kinds(view)) == ["failed-error", "failed-warning"]
 
     view._auto_filter.setCurrentIndex(0)  # All
     assert sorted(_shown_kinds(view)) == ["failed-error", "failed-warning", "passed"]
@@ -164,7 +170,7 @@ def test_filter_keeps_the_card_rows_intact(qapp, tmp_path):
         qapp.processEvents()
     view._refresh_curation_preview()
     before = len(_rows(view))
-    view._auto_filter.setCurrentIndex(1)  # Errors
+    view._auto_filter.setCurrentIndex(4)  # Error
     assert len(_rows(view)) == before
     view._auto_filter.setCurrentIndex(0)  # All
     assert len(_rows(view)) == before
@@ -197,7 +203,8 @@ def test_planned_rows_are_hidden_by_a_severity_filter(qapp, tmp_path):
         qapp.processEvents()
     view._refresh_curation_preview()
     assert "planned" in _shown_kinds(view)
-    view._auto_filter.setCurrentIndex(1)  # Errors
+    assert view._auto_filter is not None
+    view._auto_filter.setCurrentIndex(4)  # Error
     assert "planned" not in _shown_kinds(view)
     view._auto_filter.setCurrentIndex(0)  # All
     assert "planned" in _shown_kinds(view)
@@ -210,9 +217,14 @@ def test_filter_combo_is_labelled(qapp, tmp_path):
 
     view = _view(qapp, tmp_path)
     combo = view._auto_filter
-    assert combo.count() == 3
-    assert combo.itemText(0) == t("detail.auto_checks.filter_all")
-    assert combo.itemData(1) == "error"
-    assert combo.itemData(2) == "warning"
-    assert combo.toolTip(), "the filter explains itself"
+    # Unified filter (dv-3d0.3): 6 entries including All issues, Complete,
+    # Incomplete, Warning, Error, Skipped.
+    assert combo.count() == 6
+    assert combo.itemText(0) == t("detail.checks.filter_all")
+    assert combo.itemData(1) == "complete"
+    assert combo.itemData(2) == "incomplete"
+    assert combo.itemData(3) == "warning"
+    assert combo.itemData(4) == "error"
+    assert combo.itemData(5) == "skipped"
+    assert combo.toolTip() == t("detail.checks.filter_tip")
     view.deleteLater()

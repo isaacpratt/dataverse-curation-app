@@ -4,6 +4,9 @@ The detail status strip, the settings connection verdict and the dashboard
 counter used to render confirmations at caption size in a muted ink. They now
 wear body-size high-contrast text (SuccessMD/DangerMD) and an icon prefix for
 success/error tones; the message persists until the next action.
+
+The old status strip is gone (dv-3d0.4); all messages now route through the
+compact StatusWidget chip.
 """
 
 from pathlib import Path
@@ -45,20 +48,14 @@ def view(qapp, tmp_path):
     v.deleteLater()
 
 
-def test_success_strip_is_loud_and_persists(view):
+def test_status_widget_shows_success_face(view):
     view._set_status("Reports saved", tone="success")
-    assert view._status.isVisible()
-    assert view._status_row.isVisible()
-    assert not view._status_icon.isHidden(), "success wears a check icon"
-    # Persistence: stays until the next action overwrites it.
-    for _ in range(5):
-        QApplication_process()
-    assert view._status.isVisible()
-    assert "Reports saved" in view._status.text()
-    # Empty message hides the strip again.
+    w = view._status_widget
+    assert w.isVisible(), "status chip should be visible on success"
+    assert "Reports saved" in w._title.text()
+    # Empty message hides the chip again.
     view._set_status("")
-    assert not view._status.isVisible()
-    assert not view._status_row.isVisible()
+    assert not w.isVisible()
 
 
 def QApplication_process() -> None:
@@ -67,21 +64,19 @@ def QApplication_process() -> None:
     QApplication.processEvents()
 
 
-def test_error_strip_is_distinct_from_success(view):
+def test_status_widget_shows_error_face(view):
     view._set_status("Failed", tone="error")
-    err_sheet = view._status.styleSheet()
-    view._set_status("Done", tone="success")
-    ok_sheet = view._status.styleSheet()
-    assert err_sheet != ok_sheet, "error and success must not share a face"
-    assert "font-weight: 600" in err_sheet
-    assert "font-weight: 600" in ok_sheet
-    assert not view._status_icon.isHidden()
+    w = view._status_widget
+    assert w.isVisible(), "status chip should be visible on error"
+    assert "Failed" in w._title.text()
 
 
-def test_info_strip_stays_quiet(view):
-    view._set_status("loading…")
-    assert view._status_icon.isHidden(), "info tone carries no icon"
-    assert "font-weight: 600" not in view._status.styleSheet()
+def test_status_widget_shows_info_face(view):
+    # Cached metadata load shows the status chip (dv-3d0.4)
+    w = view._status_widget
+    assert w.isVisible(), "status chip should be visible on cached metadata load"
+    # The message should be in the title (set_running puts msg in title for info tone)
+    assert "cached" in w._title.text().lower() or "metadata" in w._title.text().lower()
 
 
 @pytest.fixture

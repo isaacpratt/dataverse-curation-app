@@ -163,11 +163,12 @@ def test_sidebar_folds_away_on_a_narrow_window(small_window, detail, qapp):
     assert not detail._rail.isHidden(), "the rail must stay visible (dv-6wb)"
     # The single slim toggle restores the sidebar.
     assert not detail._sidebar_toggle_btn.isHidden(), "the sidebar toggle must stay visible"
-    # The dataset log does not disappear with the sidebar.
-    assert _layout_holds(detail._main_wrap, detail._dataset_log_card), (
-        "the dataset log must move to the main column when the sidebar folds"
+    # The dataset log stays in the sidebar (hidden with it) - it does not
+    # move to the main column (dv-3d0.1).
+    assert _layout_holds(detail._side_wrap, detail._dataset_log_card), (
+        "the dataset log must stay in the sidebar when the sidebar folds"
     )
-    assert not _layout_holds(detail._side_wrap, detail._dataset_log_card)
+    assert not _layout_holds(detail._main_wrap, detail._dataset_log_card)
 
 
 def test_sidebar_toggle_restores_on_a_narrow_window(small_window, detail, qapp):

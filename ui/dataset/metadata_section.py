@@ -71,6 +71,12 @@ class MetadataSection(DetailState):
 
     def _build_metadata_card(self) -> QFrame:
         card, body, _title, header_lay = make_card(t("detail.sections.dataset_checks"))
+        # The card body adds no padding of its own (dv-3d0.3): the tools
+        # row, the metadata rows and the automated section each supply
+        # their own 16px inset, so the single card keeps one left edge.
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        self._meta_card_body = body
         add_info_tip(
             header_lay,
             t("detail.metadata_check.tip"),
@@ -94,19 +100,25 @@ class MetadataSection(DetailState):
         meta_tools_lay = QHBoxLayout(meta_tools)
         meta_tools_lay.setContentsMargins(16, 8, 16, 8)
         meta_tools_lay.setSpacing(8)
-        # Complete/incomplete filter for the checklist.
-        self._meta_filter = make_combo(
+        # One filter for the whole card (dv-3d0.3): the metadata rows and
+        # the automated results below share this set of status names, so
+        # the card can never show two contradictory filter vocabularies.
+        self._check_filter = make_combo(
             [
-                (t("detail.metadata_check.filter_all"), "all"),
-                (t("detail.metadata_check.filter_complete"), "complete"),
-                (t("detail.metadata_check.filter_incomplete"), "incomplete"),
-                (t("detail.metadata_check.filter_unchecked"), "unchecked"),
+                (t("detail.checks.filter_all"), "all"),
+                (t("detail.checks.filter_complete"), "complete"),
+                (t("detail.checks.filter_incomplete"), "incomplete"),
+                (t("detail.checks.filter_warning"), "warning"),
+                (t("detail.checks.filter_error"), "error"),
+                (t("detail.checks.filter_skipped"), "skipped"),
             ],
-            min_width=110,
-            tip=t("detail.metadata_check.filter_tip"),
+            min_width=130,
+            tip=t("detail.checks.filter_tip"),
         )
-        self._meta_filter.currentIndexChanged.connect(lambda _i: self._apply_meta_filter())
-        meta_tools_lay.addWidget(self._meta_filter)
+        self._check_filter.currentIndexChanged.connect(self._on_check_filter_changed)
+        meta_tools_lay.addWidget(self._check_filter)
+        # Historical handle: tests and older callers reach for _meta_filter.
+        self._meta_filter = self._check_filter
         # Standard 36px field like every other combo (a shorter button here
         # made this menu's rows read differently-sized vs the rest).
         self._profile_combo = make_combo(
@@ -136,8 +148,16 @@ class MetadataSection(DetailState):
         self._dataset_checks_heading = _title
         return card
 
+    def _on_check_filter_changed(self, *_args: Any) -> None:
+        """Apply the card-wide status filter to both row families."""
+        self._apply_meta_filter()
+        try:
+            self._apply_auto_filter()
+        except Exception:
+            pass
+
     def _apply_meta_filter(self) -> None:
-        """Apply the filter by rebuilding the rows.
+        """Apply the card-wide status filter to the metadata rows.
 
         The result set is small, so rebuilding is simpler and safer than
         hiding rows. The page canvas scrolls — the card itself never grows
@@ -146,18 +166,35 @@ class MetadataSection(DetailState):
         if not hasattr(self, "_meta_body_lay"):
             return
         try:
-            mode = self._meta_filter.currentData() or "all"
+            mode = self._check_filter.currentData() or "all"
         except Exception:
             mode = "all"
         results = list(getattr(self, "_meta_results", []))
+        unchecked = list(getattr(self, "_unchecked_results", []))
         if mode == "complete":
             results = [r for r in results if r.get("status") == "complete"]
         elif mode == "incomplete":
             results = [r for r in results if r.get("status") == "incomplete"]
-        elif mode == "unchecked":
-            results = list(getattr(self, "_unchecked_results", []))
-        else:
-            results = [r for r in results if r.get("status") in ("complete", "incomplete")]
+        elif mode == "warning":
+            results = [
+                r
+                for r in results
+                if r.get("status") == "incomplete"
+                and not r.get("pending")
+                and str(r.get("level") or "required") != "required"
+            ]
+        elif mode == "error":
+            results = [
+                r
+                for r in results
+                if r.get("status") == "incomplete"
+                and not r.get("pending")
+                and str(r.get("level") or "required") == "required"
+            ]
+        elif mode == "skipped":
+            results = list(unchecked)
+        else:  # "all": every row, checked and not checked
+            results = results + unchecked
         self._build_meta_rows(results)
 
     def _pretty_meta_key(self, key: str) -> str:
@@ -633,7 +670,12 @@ class MetadataSection(DetailState):
             border=BORDER_SUBTLE,
             chip=False,
         )
+        # Same badge metrics as the automated rows (dv-3d0.3): one card,
+        # one verdict badge size, so the two families line up column to
+        # column instead of drifting by a pixel or two.
         badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        badge.setFixedHeight(20)
+        badge.setMinimumWidth(56)
         lay.addWidget(badge)
 
         if requirement:

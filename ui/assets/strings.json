@@ -61,17 +61,17 @@
     "clean": "Clean",
     "no_automated": "No automated check",
     "badges": {
-      "passed": "PASS",
-      "warning": "WARN",
-      "error": "FAIL",
-      "skipped": "SKIPPED"
+      "passed": "Complete",
+      "warning": "Warning",
+      "error": "Error",
+      "skipped": "Skipped"
     },
     "summary": {
-      "error": "Error · {errors} error(s), {passed} passed",
-      "warning": "Warning · {warnings} warning(s), {passed} passed",
+      "error": "Error · {errors} error(s), {passed} complete",
+      "warning": "Warning · {warnings} warning(s), {passed} complete",
       "skipped": "Skipped · {skipped} skipped",
-      "passed_skipped": "Clean · {passed} passed, {skipped} skipped",
-      "clean": "Clean · {passed} passed"
+      "passed_skipped": "Clean · {passed} complete, {skipped} skipped",
+      "clean": "Clean · {passed} complete"
     },
     "folder": {
       "label": "{label} · {errors} err, {warnings} warn, {skipped} skipped, {clean} clean ({total} files)",
@@ -836,40 +836,31 @@
       "auto_saved_to": "Auto-saved to {folder}/{name}",
       "path_not_in_report": "{path}: not in report",
       "path_no_check": "{path}: no automated check — manual review required",
-      "path_summary": "{path}: {passed} passed · {warnings} warn · {errors} errors · {skipped} skipped",
+      "path_summary": "{path}: {passed} complete · {warnings} warn · {errors} errors · {skipped} skipped",
       "reports_saved": "Reports saved: {markdown} + {json} (recorded in Dataset log)"
     },
     "auto_checks": {
       "intro": "Dataset-level results with their full messages: the file inventory, access conditions and other checks about the dataset as a whole. Per-file findings live under File checks.",
-      "legend": "✓ pass · ✕ issue · SKIPPED = a check that could not run.",
+      "legend": "✓ complete · ✕ issue · Skipped = a check that could not run.",
       "not_run": "Not run yet",
       "no_file_list": "No file list yet — load metadata to see which checks will run.",
       "no_file_checks": "No file checks",
       "no_files_in_dataverse": "This dataset contains no files in Dataverse",
-      "summary_counts": "{passed} passed · {warnings} warn · {errors} errors · {skipped} skipped",
-      "all_passed": "All checks passed — no findings.",
+      "summary_counts": "{passed} complete · {warnings} warnings · {errors} errors · {skipped} skipped",
+      "all_passed": "All checks complete — no findings.",
       "will_run": "{count} check(s) will run",
       "no_matching_checks": "No automated checks match the files in this dataset.",
       "will_run_badge": "Will run",
       "will_run_applies": "Applies to: {file_types}",
       "missing_detail": "{applies}\nOptional library not installed: {package}",
       "badge_missing": "MISSING",
-      "filter_all": "All",
-      "filter_errors": "Errors",
-      "filter_warnings": "Warnings",
-      "filter_tip": "Show everything, or only failed checks of one severity",
       "readme_section_found": "✓ {label}",
       "readme_section_missing": "○ {label}"
     },
     "metadata_check": {
-      "tip": "Metadata completeness for the active profile. Each row shows the field, its metadata block, the current value and a pass/issue status; incomplete rows are what is left to fill before publication. The requirement for a field lives in its tooltip.",
+      "tip": "Metadata completeness for the active profile. Each row shows the field, its metadata block, the current value and a complete/incomplete status; incomplete rows are what is left to fill before publication. The requirement for a field lives in its tooltip.",
       "not_loaded": "Not loaded yet",
       "not_loaded_tip": "Load metadata from Dataverse to evaluate completeness",
-      "filter_all": "All fields",
-      "filter_complete": "Complete",
-      "filter_incomplete": "Incomplete",
-      "filter_tip": "Show complete, incomplete, or not-checked rules",
-      "filter_unchecked": "Not checked",
       "status_unchecked": "Not checked",
       "status_pending": "Pending",
       "block_counts": "{complete} of {total} complete",
@@ -1145,7 +1136,14 @@
     },
     "checks": {
       "title": "Checks",
-      "result_detail": "{path}: [{level}] {check_id}: {message} — {details}"
+      "result_detail": "{path}: [{level}] {check_id}: {message} — {details}",
+      "filter_all": "All issues",
+      "filter_complete": "Complete",
+      "filter_incomplete": "Incomplete",
+      "filter_warning": "Warning",
+      "filter_error": "Error",
+      "filter_skipped": "Skipped",
+      "filter_tip": "Show every row, or only rows with one status"
     },
     "export": {
       "title": "Export",
@@ -1162,13 +1160,9 @@
       "response": "Response",
       "tip": "Jump to a section — navigation only, never runs an action",
       "passed": "{count} passed",
-      "warnings": "{count} warnings",
-      "errors": "{count} errors"
+      "warnings": "{count} warnings"
     },
     "statuswidget": {
-      "cancel": "Cancel the running pass",
-      "dismiss": "Dismiss this status",
-      "retry": "Retry the checks",
       "running": "Running checks…",
       "downloading": "Downloading dataset…",
       "complete": "All checks complete",
@@ -1272,8 +1266,8 @@
       "reject": "Rejected",
       "author_contacted": "Author Contacted",
       "deaccessioned": "Deaccessioned",
-      "pass": "PASS",
-      "fail": "FAIL",
+      "pass": "Complete",
+      "fail": "Error",
       "live": "LIVE",
       "identifier": "doi:10.5072/FK2/ABC123"
     },

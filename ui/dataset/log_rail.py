@@ -95,7 +95,39 @@ class LogRail(DetailState):
         """
         from PySide6.QtWidgets import QListWidgetItem
 
-        events: list[tuple[str, str]] = []  # (sort_key, display text)
+        events: list[tuple[float, str]] = []  # (epoch_ms, display text)
+
+        def _parse_ts(raw: str) -> float:
+            """Parse a timestamp string to epoch milliseconds for sorting.
+
+            Handles ISO 8601 (with T or space separator, Z or offset),
+            date-only, and common display formats. Returns 0 on failure.
+            """
+            s = (raw or "").strip()
+            if not s:
+                return 0.0
+            try:
+                from datetime import datetime, timezone
+
+                # Normalize common separators and suffixes
+                normalized = s.replace("Z", "+00:00")
+                if "T" in normalized:
+                    pass  # already ISO with T
+                elif " " in normalized and len(normalized) > 10:
+                    # Space-separated datetime: replace first space with T
+                    normalized = normalized.replace(" ", "T", 1)
+                # Truncate to seconds precision for fromisoformat compatibility
+                if "." in normalized:
+                    base, frac = normalized.split(".", 1)
+                    # Keep only up to 6 digits (microseconds)
+                    frac = (frac + "000000")[:6]
+                    normalized = base + "." + frac
+                dt = datetime.fromisoformat(normalized)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.timestamp() * 1000.0
+            except Exception:
+                return 0.0
 
         def _fmt_ts(raw: str) -> str:
             """Display timestamp as date + time when a time is present.
@@ -118,15 +150,16 @@ class LogRail(DetailState):
 
         def _add(ts: Any, text: str) -> None:
             raw = str(ts or "").strip()
+            sort_key = _parse_ts(raw)
             if raw:
                 events.append(
                     (
-                        raw,
+                        sort_key,
                         t("detail.dataset_log.timeline_format", stamp=_fmt_ts(raw), text=text),
                     )
                 )
             else:
-                events.append(("0000", t("common.em_dash") + " " + text))
+                events.append((0.0, t("common.em_dash") + " " + text))
 
         versions = self._versions if isinstance(self._versions, list) else []
         dated_creations: list[str] = []
@@ -151,32 +184,14 @@ class LogRail(DetailState):
                     _add(ct, t("detail.dataset_log.version_created", num=num))
         if dated_creations:
             first = sorted(dated_creations)[0]
-            events.append(
-                (
-                    first,
-                    t(
-                        "detail.dataset_log.timeline_format",
-                        stamp=_fmt_ts(first),
-                        text=t("detail.dataset_log.first_created"),
-                    ),
-                )
-            )
+            _add(first, t("detail.dataset_log.first_created"))
 
         # Lifecycle timestamps endpoint (dataset-level record dates).
         ts = self._timestamps if isinstance(self._timestamps, dict) else {}
         ts_created = str(ts.get("createTime") or "")
         if not dated_creations and ts_created:
             # No version dates at all — timestamps are the only source.
-            events.append(
-                (
-                    ts_created,
-                    t(
-                        "detail.dataset_log.timeline_format",
-                        stamp=_fmt_ts(ts_created),
-                        text=t("detail.dataset_log.first_created"),
-                    ),
-                )
-            )
+            _add(ts_created, t("detail.dataset_log.first_created"))
         ts_published = str(ts.get("publicationTime") or "")
         if (
             ts_published
@@ -185,40 +200,13 @@ class LogRail(DetailState):
         ):
             # Only shown when it differs from creation (per curator request)
             # and no version event already covers that day.
-            events.append(
-                (
-                    ts_published,
-                    t(
-                        "detail.dataset_log.timeline_format",
-                        stamp=_fmt_ts(ts_published),
-                        text=t("detail.dataset_log.first_published"),
-                    ),
-                )
-            )
+            _add(ts_published, t("detail.dataset_log.first_published"))
         ts_doi = str(ts.get("globalIdCreateTime") or "")
         if ts_doi:
-            events.append(
-                (
-                    ts_doi,
-                    t(
-                        "detail.dataset_log.timeline_format",
-                        stamp=_fmt_ts(ts_doi),
-                        text=t("detail.dataset_log.doi_minted"),
-                    ),
-                )
-            )
+            _add(ts_doi, t("detail.dataset_log.doi_minted"))
         ts_touched = str(ts.get("lastUpdateTime") or "")
         if ts_touched:
-            events.append(
-                (
-                    ts_touched,
-                    t(
-                        "detail.dataset_log.timeline_format",
-                        stamp=_fmt_ts(ts_touched),
-                        text=t("detail.dataset_log.draft_updated"),
-                    ),
-                )
-            )
+            _add(ts_touched, t("detail.dataset_log.draft_updated"))
 
         # Review submissions (SUBMITTEDDS inbox notes, PID-matched).
         for sub in self._review_submissions if isinstance(self._review_submissions, list) else []:
@@ -232,19 +220,7 @@ class LogRail(DetailState):
                 text += t("detail.dataset_log.publish_in", dataset=dv)
             if who:
                 text += t("detail.dataset_log.by", who=who)
-            if when:
-                events.append(
-                    (
-                        when,
-                        t(
-                            "detail.dataset_log.timeline_format",
-                            stamp=_fmt_ts(when),
-                            text=text,
-                        ),
-                    )
-                )
-            else:
-                events.append(("0000", t("common.em_dash") + " " + text))
+            _add(when, text)
 
         for h in (self._curation or {}).get("history") or []:
             if not isinstance(h, dict):
@@ -324,7 +300,7 @@ class LogRail(DetailState):
             if not events:
                 self._dataset_log.addItem(t("detail.dataset_log.no_history"))
                 return
-            events.sort(key=lambda e: e[0], reverse=True)
+            events.sort(key=lambda e: e[0], reverse=True)  # epoch_ms, newest first
             for _key, text in events[:100]:
                 item = QListWidgetItem(text)
                 item.setToolTip(text)

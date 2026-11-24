@@ -1,7 +1,7 @@
 """The Auto-Checks card: running the checks and reading the result tree."""
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QModelIndex, QPoint, Qt
 from PySide6.QtWidgets import (
@@ -44,8 +44,6 @@ from ui.widgets import (
     make_action_button,
     make_badge,
     make_caption_label,
-    make_card,
-    make_combo,
     make_disposition_combo,
     make_field_label,
     make_small_body_label,
@@ -57,12 +55,43 @@ if TYPE_CHECKING:
 
 
 class ChecksSection(DetailState):
-    """The Auto-Checks card: running the checks and reading the result tree."""
+    """The Auto-Checks section: running the checks and reading the results."""
 
-    def _build_auto_checks_card(self) -> QFrame:
-        card, _body_host, _title, header_lay = make_card(t("detail.sections.auto_checks"))
+    def _build_auto_checks_card(self) -> QWidget:
+        """Build the automated-checks section inside the Dataset checks card.
+
+        A section, never a card (dv-3d0.3): metadata completeness and the
+        automated results share one card edge, one tools row, one filter
+        and one status vocabulary, so the page never shows a card inside
+        a card. The caller appends the returned widget to the metadata
+        card's body layout.
+        """
+        section = QWidget()
+        section.setObjectName("AutoChecksSection")
+        section.setStyleSheet(transparent_surface_qss("AutoChecksSection"))
+        outer = QVBoxLayout(section)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # Hairline between the metadata rows and this section: the same
+        # edge the rail uses between tabs (one card, two families of rows).
+        rule = QFrame()
+        rule.setObjectName("ChecksDivider")
+        rule.setFixedHeight(1)
+        rule.setStyleSheet(
+            f"QFrame#ChecksDivider {{ background: {BORDER_SUBTLE}; border: none; }}"
+        )
+        outer.addWidget(rule)
+
+        head = QWidget()
+        head.setObjectName("AutoChecksHead")
+        head.setStyleSheet(transparent_surface_qss("AutoChecksHead"))
+        head_lay = QHBoxLayout(head)
+        head_lay.setContentsMargins(16, 12, 16, 4)
+        head_lay.setSpacing(8)
+        head_lay.addWidget(make_field_label(t("detail.sections.auto_checks")))
         add_info_tip(
-            header_lay,
+            head_lay,
             t("detail.auto_checks.intro"),
             t("detail.auto_checks.legend"),
             name=t("detail.sections.auto_checks"),
@@ -71,36 +100,24 @@ class ChecksSection(DetailState):
         # Named pre-run state, never "—" (2026-10-02 P2); refreshed to
         # "N check(s) will run"/counts/"No file checks" as data lands.
         self._auto_summary = make_field_label(t("detail.auto_checks.not_run"))
-        header_lay.addWidget(self._auto_summary)
-        # dv-bph (W2): a findings filter like the metadata card's, on its
-        # own tools row — narrows the card to one severity per click.
-        auto_tools = QWidget()
-        auto_tools.setObjectName("AutoChecksTools")
-        auto_tools.setStyleSheet(transparent_surface_qss("AutoChecksTools"))
-        tools_lay = QHBoxLayout(auto_tools)
-        tools_lay.setContentsMargins(16, 8, 16, 8)
-        tools_lay.setSpacing(8)
-        self._auto_filter = make_combo(
-            [
-                (t("detail.auto_checks.filter_all"), "all"),
-                (t("detail.auto_checks.filter_errors"), "error"),
-                (t("detail.auto_checks.filter_warnings"), "warning"),
-            ],
-            min_width=110,
-            tip=t("detail.auto_checks.filter_tip"),
-        )
-        self._auto_filter.currentIndexChanged.connect(self._apply_auto_filter)
-        tools_lay.addWidget(self._auto_filter)
-        tools_lay.addStretch(1)
-        cast(QVBoxLayout, card.layout()).insertWidget(1, auto_tools)
-        # Body: scroll of checks (factory body reused directly)
-        self._auto_body = _body_host
-        self._auto_body.setContentsMargins(16, 12, 16, 12)
+        head_lay.addWidget(self._auto_summary)
+        head_lay.addStretch(1)
+        outer.addWidget(head)
+
+        body = QWidget()
+        body.setObjectName("AutoChecksBody")
+        body.setStyleSheet(transparent_surface_qss("AutoChecksBody"))
+        self._auto_body = QVBoxLayout(body)
+        self._auto_body.setContentsMargins(16, 4, 16, 12)
         self._auto_body.setSpacing(8)
-        # Placeholder
         self._auto_placeholder = make_small_body_label(t("detail.auto_checks.no_file_list"))
         self._auto_body.addWidget(self._auto_placeholder)
-        return card
+        outer.addWidget(body)
+        self._auto_section = section
+        # One filter for the whole card, created by the metadata section.
+        # The alias keeps the historical handle working for callers/tests.
+        self._auto_filter = getattr(self, "_check_filter", None)
+        return section
 
     def _auto_rows(self) -> list[QFrame]:
         """Return the Auto-Checks rows, in card order.
@@ -120,16 +137,20 @@ class ChecksSection(DetailState):
         return rows
 
     def _apply_auto_filter(self, *_args: Any) -> None:
-        """Show only the rows of the chosen severity class (dv-bph, W2).
+        """Show only the rows of the chosen status class (dv-3d0.3).
 
         Every row carries an ``auto_class`` property when it is built
         (``passed`` / ``failed-error`` / ``failed-warning`` / ``skipped``
-        / ``planned``); the filter reads it and hides what does not
-        match. "Warnings" keeps the skipped rows — they are warnings the
-        curator still has to act on.
+        / ``planned``); the one card-wide filter reads it and hides what
+        does not match. "Incomplete" is both finding classes, "Warning"
+        and "Error" are one each, and "Skipped" is a check that could not
+        run. Planned rows only appear under "All issues".
         """
+        combo = self._auto_filter
+        if combo is None:
+            return
         try:
-            wanted = self._auto_filter.currentData() or "all"
+            wanted = combo.currentData() or "all"
         except Exception:
             wanted = "all"
         for row in self._auto_rows():
@@ -137,7 +158,13 @@ class ChecksSection(DetailState):
             if wanted == "error":
                 visible = cls == "failed-error"
             elif wanted == "warning":
-                visible = cls in ("failed-warning", "skipped")
+                visible = cls == "failed-warning"
+            elif wanted == "complete":
+                visible = cls == "passed"
+            elif wanted == "incomplete":
+                visible = cls in ("failed-error", "failed-warning")
+            elif wanted == "skipped":
+                visible = cls == "skipped"
             else:  # "all"
                 visible = True
             row.setVisible(visible)
@@ -339,7 +366,12 @@ class ChecksSection(DetailState):
             parent=self,
         )
         self._check_worker.progress.connect(lambda msg: self._set_status(msg))
-        self._check_worker.progressFraction.connect(self._on_ring_fraction)
+        # Progress fraction goes to the status chip (dv-3d0.4).
+        self._check_worker.progressFraction.connect(
+            lambda f: self._show_status_running(
+                t("detail.statuswidget.running"), self._status_context(), f
+            )
+        )
         self._check_worker.finished.connect(self._on_checks_finished)
         self._check_worker.error.connect(self._on_checks_error)
         self._check_worker.cancelled.connect(self._on_checks_cancelled)
@@ -388,7 +420,6 @@ class ChecksSection(DetailState):
 
     def _on_checks_cancelled(self) -> None:
         """Reset the header after a cancelled check pass (no report)."""
-        self._hide_ring()
         self._restore_check_button()
         self._checks_cancel_btn.setEnabled(True)
         self._set_status(t("detail.status.checks_cancelled"))
@@ -407,7 +438,6 @@ class ChecksSection(DetailState):
             report.save(cache_path)
         except Exception:
             cache_path = None
-        self._hide_ring()
         self._restore_check_button()
         self._checks_cancel_btn.setEnabled(True)
         self._refresh_check_button()
@@ -474,7 +504,6 @@ class ChecksSection(DetailState):
 
     def _on_checks_error(self, msg: str) -> None:
         self._check_worker = None
-        self._hide_ring()
         self._restore_check_button()
         self._checks_cancel_btn.setEnabled(True)
         headline, details = dialogs.describe_error(msg)

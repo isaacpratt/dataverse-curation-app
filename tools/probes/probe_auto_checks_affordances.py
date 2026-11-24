@@ -136,8 +136,8 @@ def main() -> int:
     report.check(combo is not None, "the card carries a findings filter")
     if combo is not None:
         report.check(
-            combo.count() == 3,
-            "the filter offers All / Errors / Warnings",
+            combo.count() == 6,
+            "the filter offers All / Complete / Incomplete / Warning / Error / Skipped",
             f"items={combo.count()}",
         )
         report.check(bool(combo.toolTip()), "the filter explains itself")

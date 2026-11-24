@@ -374,7 +374,9 @@ class DatasetDetailView(
         try:
             from ui.icons import role_icon as _side_icon
 
-            self._sidebar_toggle_btn.setIcon(_side_icon("sidebar_show"))
+            # Sidebar is open by default (_sidebar_collapsed = False), so the
+            # toggle shows the "collapse" icon (sidebar_hide = panel-right-close).
+            self._sidebar_toggle_btn.setIcon(_side_icon("sidebar_hide"))
         except Exception:
             self._sidebar_toggle_btn.setText(t("detail.sidebar.collapse_a11y"))
         self._sidebar_toggle_btn.setToolTip(t("detail.sidebar.collapse_tip"))
@@ -399,36 +401,12 @@ class DatasetDetailView(
         identity_col.addWidget(self._depositor_lbl)
         middle_row.addLayout(identity_col, 1)
         self._status_widget = StatusWidget()
-        self._status_widget.actionClicked.connect(self._on_status_action)
         middle_row.addWidget(self._status_widget, 0)
         top_lay.addLayout(middle_row)
         # Called last: needs _depositor_lbl/_title_lbl to exist, and cached
         # metadata makes `meta` truthy immediately.
         self._update_header_link(None)
 
-        # General message strip (one row, only while a message is present).
-        # Progress uses the StatusWidget above; this carries plain feedback.
-        self._status_row = QWidget()
-        self._status_row.setObjectName("StatusStrip")
-        self._status_row.setStyleSheet(transparent_surface_qss("StatusStrip"))
-        _status_lay = QHBoxLayout(self._status_row)
-        _status_lay.setContentsMargins(0, 0, 0, 0)
-        _status_lay.setSpacing(8)
-        self._status_icon = QLabel(self._status_row)
-        self._status_icon.hide()
-        _status_lay.addWidget(self._status_icon)
-        self._status = QLabel("")
-        self._status.setStyleSheet(
-            status_strip_qss(SURFACE_CARD, BORDER_SUBTLE, TEXT_MUTED, font_size=FONT_BODY)
-        )
-        self._status.setWordWrap(True)
-        self._status.setVisible(False)
-        _status_lay.addWidget(self._status, 1)
-        self._status_row.hide()
-        top_lay.addWidget(self._status_row)
-        # Progress lives inside the StatusWidget now (dv-gfx.3): there is
-        # no parentless bar or ring left to pop up as a stray window.
-        self._checks_running = False
         # The rail shades the view on screen (dv-gfx.4) and takes a shadow
         # once the column scrolls under it (dv-gfx.15).
         self._rail.set_active_step("dataset_checks")
@@ -474,23 +452,18 @@ class DatasetDetailView(
 
         self._auto_card = self._build_auto_checks_card()
         # The automated checks are a section of the card above, not a
-        # second card: same title bar, same filters row, one edge.
-        cast(QVBoxLayout, self._meta_card.layout()).insertWidget(1, self._auto_card)
+        # second card (dv-3d0.3): appending to the card body puts it under
+        # the metadata rows, inside the same edge and tools row.
+        self._meta_card_body.addWidget(self._auto_card)
 
-        # File checks section — Download Dataset / Verify Files sits on the
-        # card's own header line, next to the title (dv-gfx.5, item 8).
+        # File checks section — Verify Files sits on the tools row with
+        # the other controls (dv-3d0.5).
         self._dl_btn = make_action_button(
             t("detail.header.download_all"), kind="secondary", size="md"
         )
         self._dl_btn.setToolTip(t("detail.header.download_dataset_tip"))
         self._dl_btn.clicked.connect(self._on_download)
-        self._file_card = self._build_file_manifest_card()
-        _file_lay = self._file_card.layout()
-        _file_bar = _file_lay.itemAt(0) if _file_lay is not None else None
-        _file_bar_w = _file_bar.widget() if _file_bar is not None else None
-        _file_header = _file_bar_w.layout() if _file_bar_w is not None else None
-        if isinstance(_file_header, QHBoxLayout):
-            _file_header.addWidget(self._dl_btn)
+        self._file_card = self._build_file_manifest_card(download_button=self._dl_btn)
         main_wrap.addWidget(self._file_card, 1)
 
         # The version card lives in the sidebar now (dv-gfx.6).
@@ -566,12 +539,13 @@ class DatasetDetailView(
         from_disk = False
         if not session_cached:
             try:
-                disk_meta, disk_inv = self._dl_mgr.load_metadata(self._pid)
+                disk_meta, disk_inv, disk_curation = self._dl_mgr.load_metadata(self._pid)
             except Exception:
-                disk_meta, disk_inv = None, None
+                disk_meta, disk_inv, disk_curation = None, None, None
             if disk_meta is not None:
                 self._metadata = disk_meta
                 self._inventory = disk_inv or []
+                self._curation = disk_curation or {}
                 from_disk = True
         if self._metadata is not None:
             self._update_header_link(self._metadata)
@@ -742,17 +716,16 @@ class DatasetDetailView(
         """Fold the sticky sidebar away on a narrow window.
 
         The user can fold or unfold it by hand; until they do, the width
-        decides. The section links move into the top bar's Sections menu
-        and the dataset log moves to the bottom of the main column, so
-        nothing disappears.
+        decides. The section links move into the top bar's Sections menu.
+        The dataset log stays in the sidebar (it is simply hidden with it).
         """
         try:
             if self._sidebar_user_collapsed is None:
                 collapsed = self.width() < self._SIDEBAR_COLLAPSE_BELOW
             else:
                 collapsed = self._sidebar_user_collapsed
-            if collapsed == self._sidebar_collapsed:
-                return
+            # Always update the toggle icon/tooltip, even on first paint when
+            # the state hasn't changed (dv-3d0.1).
             self._sidebar_collapsed = collapsed
             self._side_scroll.setVisible(not collapsed)
             try:
@@ -773,7 +746,8 @@ class DatasetDetailView(
                 if not collapsed
                 else t("detail.sidebar.show_action")
             )
-            self._move_dataset_log(to_sidebar=not collapsed)
+            # The dataset log stays in the sidebar - it's hidden/shown with
+            # the sidebar scroll area, not moved to the main column.
         except Exception:
             pass
 
@@ -808,19 +782,12 @@ class DatasetDetailView(
             pass
 
     def _move_dataset_log(self, to_sidebar: bool) -> None:
-        """Park the dataset log in the sidebar, or at the page's foot."""
-        card = getattr(self, "_dataset_log_card", None)
-        if card is None:
-            return
-        try:
-            if to_sidebar:
-                self._main_wrap.removeWidget(card)
-                self._side_wrap.addWidget(card, 1)
-            else:
-                self._side_wrap.removeWidget(card)
-                self._main_wrap.addWidget(card)
-        except Exception:
-            pass
+        """Deprecated (dv-3d0.1): the dataset log now stays in the sidebar.
+
+        Kept as a no-op for any external callers; the log is hidden/shown
+        with the sidebar scroll area instead of being reparented.
+        """
+        pass
 
     def take_running_workers(self) -> list[Any]:
         """QThreads still running (for the owner to adopt before teardown)."""
