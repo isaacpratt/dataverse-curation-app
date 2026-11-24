@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from ui.help_index import GROUP_ORDER, grouped, help_entries
 from ui.i18n import t
 from ui.theme import (
+    ACTIVE_THEME,
     BORDER_SUBTLE,
     SURFACE_CARD,
     page_background_qss,
@@ -45,7 +46,7 @@ class HelpPane(QWidget):
         super().__init__(parent)
         # Scoped to self (same contract as the other stack pages).
         self.setObjectName("HelpPane")
-        self.setStyleSheet(page_background_qss("HelpPane"))
+        self.setStyleSheet(page_background_qss("HelpPane", theme=ACTIVE_THEME))
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 24, 24, 24)
@@ -65,7 +66,7 @@ class HelpPane(QWidget):
         self._scroll.setWidgetResizable(True)
         self._canvas = QWidget()
         self._canvas.setObjectName("HelpCanvas")
-        self._canvas.setStyleSheet(transparent_surface_qss("HelpCanvas"))
+        self._canvas.setStyleSheet(transparent_surface_qss("HelpCanvas", theme=ACTIVE_THEME))
         self._column = QVBoxLayout(self._canvas)
         self._column.setContentsMargins(0, 0, 0, 0)
         self._column.setSpacing(16)
@@ -89,7 +90,7 @@ class HelpPane(QWidget):
     def _entry_block(self, name: str, text: str) -> QFrame:
         block = QFrame()
         block.setObjectName("Card")
-        block.setStyleSheet(surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card"))
+        block.setStyleSheet(surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card", theme=ACTIVE_THEME))
         lay = QVBoxLayout(block)
         lay.setContentsMargins(14, 10, 14, 10)
         lay.setSpacing(4)

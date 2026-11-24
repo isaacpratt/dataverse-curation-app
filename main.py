@@ -237,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
             theme = theme_mode
 
         set_active_theme(theme)
-        apply_theme(app)
+        apply_theme(app, theme)
     except Exception:
         pass
     mark("theme applied")

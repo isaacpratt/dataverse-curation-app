@@ -41,6 +41,7 @@ from curation.dashboard_cache import (
 from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
+    ACTIVE_THEME,
     ACCENT_PRIMARY,
     ACCENT_TERTIARY,
     BORDER_SUBTLE,
@@ -539,7 +540,7 @@ class DashboardView(QWidget):
         # Scoped to self: a bare `background` rule acts subtree-wide and
         # would override app-level backgrounds (e.g. the queue table face).
         self.setObjectName("DashboardView")
-        self.setStyleSheet(page_background_qss("DashboardView"))
+        self.setStyleSheet(page_background_qss("DashboardView", theme=ACTIVE_THEME))
 
         # ---- Metrics cards (values always from real data; 0 when empty) ----
         self._metrics_row = QHBoxLayout()
@@ -574,7 +575,7 @@ class DashboardView(QWidget):
         queue_card = QFrame()
         queue_card.setObjectName("Card")
         queue_card.setStyleSheet(
-            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card")
+            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card", theme=ACTIVE_THEME)
         )
         queue_layout = QVBoxLayout(queue_card)
         queue_layout.setContentsMargins(0, 0, 0, 0)
@@ -583,7 +584,7 @@ class DashboardView(QWidget):
         header = QFrame()
         header.setObjectName("QueueHeaderBar")
         header.setStyleSheet(
-            band_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#QueueHeaderBar")
+            band_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#QueueHeaderBar", theme=ACTIVE_THEME)
         )
         # The queue header follows the card contract: the title row carries
         # the title (and only the title - no tools), and every tool lives
@@ -657,7 +658,7 @@ class DashboardView(QWidget):
 
         self._filter_wrap = QWidget()
         self._filter_wrap.setObjectName("QueueFilterWrap")
-        self._filter_wrap.setStyleSheet(transparent_surface_qss("QueueFilterWrap"))
+        self._filter_wrap.setStyleSheet(transparent_surface_qss("QueueFilterWrap", theme=ACTIVE_THEME))
         self._filter_wrap.setLayout(filter_row)
         hdr_layout.addWidget(self._filter_wrap)
 
@@ -717,7 +718,7 @@ class DashboardView(QWidget):
         # datasets arrive.
         queue_stack = QWidget()
         queue_stack.setObjectName("QueueStack")
-        queue_stack.setStyleSheet(transparent_surface_qss("QueueStack"))
+        queue_stack.setStyleSheet(transparent_surface_qss("QueueStack", theme=ACTIVE_THEME))
         stack_lay = QGridLayout(queue_stack)
         stack_lay.setContentsMargins(0, 0, 0, 0)
         stack_lay.setSpacing(0)
@@ -737,7 +738,7 @@ class DashboardView(QWidget):
         pill = QFrame()
         pill.setObjectName("StatusPill")
         pill.setStyleSheet(
-            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#StatusPill")
+            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#StatusPill", theme=ACTIVE_THEME)
         )
         pill_lay = QHBoxLayout(pill)
         pill_lay.setContentsMargins(14, 6, 14, 6)
@@ -793,7 +794,7 @@ class DashboardView(QWidget):
                 mark.setToolTip(t("app.name"))
         except Exception:
             pass
-        mark.setStyleSheet(transparent_surface_qss("DocentMark"))
+        mark.setStyleSheet(transparent_surface_qss("DocentMark", theme=ACTIVE_THEME))
         foot.addWidget(mark, 0, Qt.AlignmentFlag.AlignVCenter)
 
         outer.addLayout(foot)
@@ -1168,6 +1169,7 @@ class DashboardView(QWidget):
                 SURFACE_CARD,
                 BORDER_SUBTLE,
                 selector="QFrame#EmptyStateCard",
+                theme=ACTIVE_THEME,
                 border_style="dashed",
             )
         )

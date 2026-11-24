@@ -21,6 +21,7 @@ from ui.dataset.state import DetailState
 from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,
+    ACTIVE_THEME,
     BORDER_SUBTLE,
     STATE_ERROR_BG,
     STATE_ERROR_BORDER,
@@ -96,7 +97,7 @@ class MetadataSection(DetailState):
         # so the page scrolled sideways at the app's own minimum width.
         meta_tools = QWidget()
         meta_tools.setObjectName("MetadataCheckTools")
-        meta_tools.setStyleSheet(transparent_surface_qss("MetadataCheckTools"))
+        meta_tools.setStyleSheet(transparent_surface_qss("MetadataCheckTools", theme=ACTIVE_THEME))
         meta_tools_lay = QHBoxLayout(meta_tools)
         meta_tools_lay.setContentsMargins(16, 8, 16, 8)
         meta_tools_lay.setSpacing(8)
@@ -546,21 +547,21 @@ class MetadataSection(DetailState):
         if pending:
             # Pending = no data yet: muted row, neutral badge, no bar.
             frame.setStyleSheet(
-                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME)
             )
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = t("detail.metadata_check.status_pending")
             badge_bg, badge_fg = SURFACE_ALT, TEXT_MUTED
         elif status == "complete":
             frame.setStyleSheet(
-                surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+                surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME)
             )
             icon_name, icon_color = "check", ACCENT_PRIMARY
             badge_text = t("detail.metadata_check.status_complete")
             badge_bg, badge_fg = ACCENT_PRIMARY, TEXT_ON_ACCENT
         elif status == "skipped":
             frame.setStyleSheet(
-                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME)
             )
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = t("detail.metadata_check.status_unchecked")
@@ -568,7 +569,7 @@ class MetadataSection(DetailState):
         elif level_required:
             frame.setStyleSheet(
                 surface_frame_qss(
-                    STATE_ERROR_BG, STATE_ERROR_BORDER, selector="QFrame#AutoCheckRow"
+                    STATE_ERROR_BG, STATE_ERROR_BORDER, selector="QFrame#AutoCh", theme=ACTIVE_THEMEeckRow"
                 )
             )
             icon_name, icon_color = "octagon-x", STATE_ERROR_GRAPHIC
@@ -577,7 +578,7 @@ class MetadataSection(DetailState):
         else:
             frame.setStyleSheet(
                 surface_frame_qss(
-                    STATE_ERROR_SURFACE, STATE_ERROR_BORDER, selector="QFrame#AutoCheckRow"
+                    STATE_ERROR_SURFACE, STATE_ERROR_BORDER, selector="QFrame#A", theme=ACTIVE_THEMEutoCheckRow"
                 )
             )
             icon_name, icon_color = "octagon-alert", STATE_WARNING_GRAPHIC

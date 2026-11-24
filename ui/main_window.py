@@ -57,6 +57,7 @@ from ui.dialogs import show_warning
 from ui.i18n import t
 from ui.icons import icon as lucide_icon
 from ui.theme import (
+    ACTIVE_THEME,
     ACCENT_FOCUS_TINT,
     ACCENT_SECONDARY,
     BORDER_SUBTLE,
@@ -283,7 +284,7 @@ _WIN_CLOSE_QSS = (
 )
 
 # The nav's hairline separators: a 1px frame in the subtle border colour.
-_SEPARATOR_QSS = surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, radius="0px")
+_SEPARATOR_QSS = surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, radius="0px", theme=ACTIVE_THEME)
 
 # QStyle standard pixmaps: the exact glyphs Windows paints in a native
 # caption (text characters never matched them, especially restore).
@@ -546,7 +547,7 @@ class MainWindow(QMainWindow):
         # Open dataset chips — full titles, never DOI-truncated
         self._chips_wrap = QWidget()
         self._chips_wrap.setObjectName("ChipsWrap")
-        self._chips_wrap.setStyleSheet(transparent_surface_qss("ChipsWrap"))
+        self._chips_wrap.setStyleSheet(transparent_surface_qss("ChipsWrap", theme=ACTIVE_THEME))
         self._chips_wrap.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self._chips_lay = QHBoxLayout(self._chips_wrap)
         self._chips_lay.setContentsMargins(4, 0, 8, 0)
@@ -558,7 +559,7 @@ class MainWindow(QMainWindow):
         # top-right corner (nav layout right margin is 0 for this reason).
         self._win_controls = QWidget()
         self._win_controls.setObjectName("WinControls")
-        self._win_controls.setStyleSheet(transparent_surface_qss("WinControls"))
+        self._win_controls.setStyleSheet(transparent_surface_qss("WinControls", theme=ACTIVE_THEME))
         win_lay = QHBoxLayout(self._win_controls)
         win_lay.setContentsMargins(6, 0, 0, 0)
         win_lay.setSpacing(0)
@@ -672,7 +673,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet(page_background_qss())
+        scroll.setStyleSheet(page_background_qss(theme=ACTIVE_THEME))
         scroll.setWidget(pane)
         return scroll
 

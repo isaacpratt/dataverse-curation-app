@@ -46,7 +46,7 @@ except Exception:  # the built-in catalog is best-effort at import time
 
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.i18n import t
-from ui.theme import page_background_qss, selectable_labels, transparent_surface_qss
+from ui.theme import ACTIVE_THEME, page_background_qss, selectable_labels, transparent_surface_qss
 from ui.widgets import (
     AppTreeWidget,
     PaneFooter,
@@ -253,7 +253,7 @@ class ReviewConfigView(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds below this view.
         self.setObjectName("ReviewConfigView")
-        self.setStyleSheet(page_background_qss("ReviewConfigView"))
+        self.setStyleSheet(page_background_qss("ReviewConfigView", theme=ACTIVE_THEME))
 
         # Shared page-heading contract (HeadlineLG theme token) - same
         # title look as Settings, Log and About.
@@ -423,7 +423,7 @@ class ReviewConfigView(QWidget):
         # tools, so they sit on their own row under it (file-manifest pattern).
         tools = QWidget()
         tools.setObjectName("FieldRulesTools")
-        tools.setStyleSheet(transparent_surface_qss("FieldRulesTools"))
+        tools.setStyleSheet(transparent_surface_qss("FieldRulesTools", theme=ACTIVE_THEME))
         lay = QHBoxLayout(tools)
         lay.setContentsMargins(16, 8, 16, 8)
         lay.setSpacing(8)

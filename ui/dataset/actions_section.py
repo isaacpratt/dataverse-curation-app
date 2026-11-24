@@ -25,6 +25,7 @@ from ui.dataset.state import DetailState
 from ui.download_dialog import DownloadApprovalDialog
 from ui.i18n import t
 from ui.theme import (
+    ACTIVE_THEME,
     BORDER_SUBTLE,
     FONT_SMALL,
     STATE_WARNING_GRAPHIC,
@@ -618,6 +619,7 @@ class ActionsSection(DetailState):
                 SURFACE_TINT if updated else SURFACE_SUBTLE,
                 STATE_WARNING_GRAPHIC if updated else BORDER_SUBTLE,
                 selector="QFrame#FollowUpCard",
+                theme=ACTIVE_THEME,
             )
         )
         self._follow_up_label.setText(

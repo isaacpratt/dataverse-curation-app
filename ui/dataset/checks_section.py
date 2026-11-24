@@ -23,6 +23,7 @@ from ui.dataset.state import DetailState
 from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,
+    ACTIVE_THEME,
     BORDER_SUBTLE,
     STATE_ERROR_BG,
     STATE_ERROR_BORDER,
@@ -68,7 +69,7 @@ class ChecksSection(DetailState):
         """
         section = QWidget()
         section.setObjectName("AutoChecksSection")
-        section.setStyleSheet(transparent_surface_qss("AutoChecksSection"))
+        section.setStyleSheet(transparent_surface_qss("AutoChecksSection", theme=ACTIVE_THEME))
         outer = QVBoxLayout(section)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -85,7 +86,7 @@ class ChecksSection(DetailState):
 
         head = QWidget()
         head.setObjectName("AutoChecksHead")
-        head.setStyleSheet(transparent_surface_qss("AutoChecksHead"))
+        head.setStyleSheet(transparent_surface_qss("AutoChecksHead", theme=ACTIVE_THEME))
         head_lay = QHBoxLayout(head)
         head_lay.setContentsMargins(16, 12, 16, 4)
         head_lay.setSpacing(8)
@@ -106,7 +107,7 @@ class ChecksSection(DetailState):
 
         body = QWidget()
         body.setObjectName("AutoChecksBody")
-        body.setStyleSheet(transparent_surface_qss("AutoChecksBody"))
+        body.setStyleSheet(transparent_surface_qss("AutoChecksBody", theme=ACTIVE_THEME))
         self._auto_body = QVBoxLayout(body)
         self._auto_body.setContentsMargins(16, 4, 16, 12)
         self._auto_body.setSpacing(8)
@@ -199,7 +200,7 @@ class ChecksSection(DetailState):
             )
         ):
             frame.setStyleSheet(
-                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME)
             )
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = (
@@ -212,7 +213,7 @@ class ChecksSection(DetailState):
         elif not passed and level in ("error", "warning"):
             frame.setStyleSheet(
                 surface_frame_qss(
-                    STATE_ERROR_BG, STATE_ERROR_BORDER, selector="QFrame#AutoCheckRow"
+                    STATE_ERROR_BG, STATE_ERROR_BORDER, selector="QFrame#AutoCh", theme=ACTIVE_THEMEeckRow"
                 )
             )
             icon_name, icon_color = (
@@ -226,7 +227,7 @@ class ChecksSection(DetailState):
         elif passed and level == "warning" and "Missing" in (badge or desc):
             frame.setStyleSheet(
                 surface_frame_qss(
-                    STATE_ERROR_SURFACE, STATE_ERROR_BORDER, selector="QFrame#AutoCheckRow"
+                    STATE_ERROR_SURFACE, STATE_ERROR_BORDER, selector="QFrame#A", theme=ACTIVE_THEMEutoCheckRow"
                 )
             )
             icon_name, icon_color = "octagon-alert", STATE_WARNING_GRAPHIC
@@ -235,7 +236,7 @@ class ChecksSection(DetailState):
             badge_fg = STATE_ERROR_TEXT
         elif passed:
             frame.setStyleSheet(
-                surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+                surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME)
             )
             icon_name, icon_color = "check", ACCENT_PRIMARY
             badge_text = badge or t("status.badges.passed")
@@ -243,7 +244,7 @@ class ChecksSection(DetailState):
             badge_fg = TEXT_ON_ACCENT
         else:
             frame.setStyleSheet(
-                surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+                surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME)
             )
             icon_name, icon_color = "minus", TEXT_MUTED
             badge_text = badge or t("common.em_dash")

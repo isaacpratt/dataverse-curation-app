@@ -1510,4 +1510,4 @@ class SettingsPane(QWidget):
         set_active_theme(theme)
         app = QApplication.instance()
         if isinstance(app, QApplication):
-            apply_theme(app)
+            apply_theme(app, theme)

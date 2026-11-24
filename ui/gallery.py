@@ -591,7 +591,7 @@ class GalleryWindow(QWidget):
         # Build light theme sections
         light_content = QWidget()
         light_content.setObjectName("GalleryContentLight")
-        light_content.setStyleSheet(page_background_qss("GalleryContentLight"))
+        light_content.setStyleSheet(page_background_qss("GalleryContentLight", theme="light"))
         light_body = QVBoxLayout(light_content)
         light_body.setContentsMargins(0, 0, 0, 0)
         light_body.setSpacing(24)
@@ -599,7 +599,7 @@ class GalleryWindow(QWidget):
         # Build dark theme sections
         dark_content = QWidget()
         dark_content.setObjectName("GalleryContentDark")
-        dark_content.setStyleSheet(page_background_qss("GalleryContentDark"))
+        dark_content.setStyleSheet(page_background_qss("GalleryContentDark", theme="dark"))
         dark_body = QVBoxLayout(dark_content)
         dark_body.setContentsMargins(0, 0, 0, 0)
         dark_body.setSpacing(24)
@@ -609,7 +609,7 @@ class GalleryWindow(QWidget):
         from PySide6.QtWidgets import QApplication
         app_instance = QApplication.instance()
         assert isinstance(app_instance, QApplication)
-        apply_theme(app_instance)
+        apply_theme(app_instance, "light")
 
         # Add sections to light body
         for section in (
@@ -628,7 +628,7 @@ class GalleryWindow(QWidget):
         set_active_theme("dark")
         app_instance = QApplication.instance()
         assert isinstance(app_instance, QApplication)
-        apply_theme(app_instance)
+        apply_theme(app_instance, "dark")
 
         # Add sections to dark body
         for section in (
@@ -647,7 +647,7 @@ class GalleryWindow(QWidget):
         set_active_theme("light")
         app_instance = QApplication.instance()
         assert isinstance(app_instance, QApplication)
-        apply_theme(app_instance)
+        apply_theme(app_instance, "light")
 
         # Create side-by-side layout
         dual_host = QWidget()

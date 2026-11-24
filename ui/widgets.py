@@ -79,6 +79,7 @@ from ui.ring import RingProgress
 from ui.theme import (
     ACCENT_FOCUS_RING,
     ACCENT_PRIMARY,
+    ACTIVE_THEME,
     BORDER_CONTROL,
     BORDER_SUBTLE,
     BUTTON_OBJECTS,
@@ -325,7 +326,7 @@ class SortArrowHeaderView(QHeaderView):
         self._arrow.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self._arrow.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._arrow.setMouseTracking(False)
-        self._arrow.setStyleSheet(transparent_qss("QLabel"))
+        self._arrow.setStyleSheet(transparent_qss("QLabel", theme=ACTIVE_THEME))
         self._arrow.hide()
         self._painting = False
         # setSortIndicator / setSortIndicatorShown update the
@@ -712,9 +713,9 @@ def flush_table_style(
         "border-bottom-right-radius: "
         + bottom
         + "; } "
-        + header_section_qss(flush=True)
-        + selection_qss("QTableWidget")
-        + scrollbar_lane_qss("QTableWidget")
+        + header_section_qss(flush=True, theme=ACTIVE_THEME)
+        + selection_qss("QTableWidget", theme=ACTIVE_THEME)
+        + scrollbar_lane_qss("QTableWidget", theme=ACTIVE_THEME)
         + (f" QHeaderView {{ background: {header_background}; }}" if header_background else "")
         + (f" QTableWidget::item {{ padding: {item_padding}; }}" if item_padding else "")
     )
@@ -768,9 +769,9 @@ def tree_style(*, flush: bool = True, row_height: int | None = 30, hover: bool =
         f"QTreeView {{ background: {SURFACE_CARD}; {frame} "
         f"font-size: {FONT_SMALL}px; color: {TEXT_PRIMARY}; }} "
         + item
-        + selection_qss("QTreeView", hover=hover)
-        + header_section_qss(flush=flush)
-        + scrollbar_lane_qss("QTreeView")
+        + selection_qss("QTreeView", hover=hover, theme=ACTIVE_THEME)
+        + header_section_qss(flush=flush, theme=ACTIVE_THEME)
+        + scrollbar_lane_qss("QTreeView", theme=ACTIVE_THEME)
     )
 
 
@@ -1004,7 +1005,7 @@ def make_action_button(
     cannot drift - and a view never writes button CSS itself.
     """
     btn = AppButton(text, kind=kind, size=size, parent=parent, tip=tip)
-    btn.setStyleSheet(button_qss(kind, selector="QPushButton"))
+    btn.setStyleSheet(button_qss(kind, selector="QPushButton", theme=ACTIVE_THEME))
     return btn
 
 
@@ -1042,6 +1043,7 @@ def make_multiline_input(
             selector,
             font_size=font_size,
             family=MONO_FAMILY if mono else None,
+            theme=ACTIVE_THEME,
         )
     )
     return field
@@ -1057,7 +1059,7 @@ def make_plain_text_view(
     view = QPlainTextEdit(parent)
     view.setPlaceholderText(placeholder)
     view.setReadOnly(True)
-    view.setStyleSheet(input_qss("QPlainTextEdit", font_size=font_size, family=MONO_FAMILY))
+    view.setStyleSheet(input_qss("QPlainTextEdit", font_size=font_size, family=MONO_FAMILY, theme=ACTIVE_THEME))
     return view
 
 
@@ -1426,7 +1428,7 @@ def make_split_chip(
     """
     chip = QFrame(parent)
     chip.setObjectName("DatasetChip")
-    chip.setStyleSheet(transparent_surface_qss("DatasetChip"))
+    chip.setStyleSheet(transparent_surface_qss("DatasetChip", theme=ACTIVE_THEME))
     lay = QHBoxLayout(chip)
     lay.setContentsMargins(0, 0, 0, 0)
     lay.setSpacing(0)
@@ -1853,7 +1855,7 @@ def make_card(
     wrap = QWidget()
     wrap.setLayout(body)
     wrap.setObjectName("CardBodyWrap")
-    wrap.setStyleSheet(transparent_surface_qss("CardBodyWrap"))
+    wrap.setStyleSheet(transparent_surface_qss("CardBodyWrap", theme=ACTIVE_THEME))
     outer.addWidget(wrap)
     apply_elevation(card)
     return card, body, title_lbl, top_lay
@@ -2085,7 +2087,7 @@ def make_cell_control(
     """
     host = QWidget(parent)
     host.setObjectName(_CELL_HOST_NAME)
-    host.setStyleSheet(transparent_surface_qss(_CELL_HOST_NAME))
+    host.setStyleSheet(transparent_surface_qss(_CELL_HOST_NAME, theme=ACTIVE_THEME))
     lay = QHBoxLayout(host)
     lay.setContentsMargins(h_margin, v_margin, h_margin, v_margin)
     lay.setSpacing(0)
@@ -2673,8 +2675,8 @@ class WorkflowRail(QWidget):
     def _style_for(state: str, *, active: bool = False) -> str:
         """Return the step's face for its state - the theme owns the rule."""
         if state == "nav":
-            return workflow_step_qss("nav", active=active)
-        return workflow_step_qss(state, active=active)
+            return workflow_step_qss("nav", active=active, theme=ACTIVE_THEME)
+        return workflow_step_qss(state, active=active, theme=ACTIVE_THEME)
 
     def set_active_step(self, key: str) -> None:
         """Shade the step whose section is on screen (dv-gfx.4).
@@ -2690,7 +2692,7 @@ class WorkflowRail(QWidget):
         for step_key, btn in self.buttons.items():
             state = "current" if step_key == key else "available"
             btn.setStyleSheet(self._style_for(state, active=step_key == key))
-        self.setStyleSheet(workflow_rail_qss())
+        self.setStyleSheet(workflow_rail_qss(theme=ACTIVE_THEME))
 
     def set_workflow(self, workflow: Workflow) -> None:
         """Paint each step and the next-step hint; never disables a step.

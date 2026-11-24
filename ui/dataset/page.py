@@ -42,6 +42,7 @@ from ui.dataset.workflow_section import WorkflowSection
 from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
+    ACTIVE_THEME,
     FONT_CAPTION,
     enable_list_copy,
     page_background_qss,
@@ -199,6 +200,7 @@ class DatasetDetailView(
                 "DetailResponsePage",
                 "DetailResponseInner",
                 "Canvas",
+                theme=ACTIVE_THEME,
             )
         )
         self.setAutoFillBackground(False)
@@ -487,7 +489,7 @@ class DatasetDetailView(
         main_container = QWidget()
         main_container.setLayout(main_wrap)
         main_container.setObjectName("DetailMainContainer")
-        main_container.setStyleSheet(transparent_surface_qss("DetailMainContainer"))
+        main_container.setStyleSheet(transparent_surface_qss("DetailMainContainer", theme=ACTIVE_THEME))
         canvas_lay.addWidget(main_container)
 
         # SIDEBAR (right, sticky): the sticky rail is the navigation map;
@@ -517,7 +519,7 @@ class DatasetDetailView(
         side_container = QWidget()
         side_container.setLayout(side_wrap)
         side_container.setObjectName("DetailSideContainer")
-        side_container.setStyleSheet(transparent_surface_qss("DetailSideContainer"))
+        side_container.setStyleSheet(transparent_surface_qss("DetailSideContainer", theme=ACTIVE_THEME))
         side_scroll.setWidget(side_container)
 
         # Response page (second page per dataset) + register both pages.
