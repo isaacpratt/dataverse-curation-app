@@ -30,9 +30,9 @@ This tutorial walks you through one complete review in Dataverse Docent, a deskt
    uv run python main.py
    ```
 
-   With no `config.json` present, the Settings page opens automatically.
+   The app opens on the dashboard using the Borealis demo as its default target.
 
-2. Open Settings from the top nav, or press `Ctrl+,`. Under **Dataverse**, choose the **Borealis Demo** preset. This fills the **Base URL** with `https://demo.borealisdata.ca`.
+2. Open Settings from the top nav, or press `Ctrl+,`. On the **General** tab, set **Dataverse preset** to **Borealis Demo — demo.borealisdata.ca**. This fills the **Base URL** with `https://demo.borealisdata.ca`.
 
 3. Set the **Workspace** to a folder you can write to (for example `C:\Users\<you>\Documents\curation-workspace`), or use the default shown. Leave the API token blank and the [**collection alias**](../reference/glossary.md) empty. An empty collection alias means the whole repository; on the demo instance `dv` is the root alias, and `root` or `:root` are also treated as empty. For the meaning of each field, see the [configuration reference](../reference/configuration.md).
 

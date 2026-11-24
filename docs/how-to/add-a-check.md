@@ -6,7 +6,7 @@ audience: developer
 
 # Add a check
 
-Add a format or dataset check to the engine, register it, test it, and document its findings so the dispatcher, the runner, and the Auto-Checks card can discover it.
+Add a format or dataset check to the engine, register it, test it, and document its findings so the dispatcher, the runner, and the Automated checks card can discover it.
 
 ## Prerequisites
 

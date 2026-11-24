@@ -27,7 +27,7 @@ Run the local checks that CI enforces before you open a pull request. [The proje
    uv run poe check
    ```
 
-3. Run the pre-commit hooks (whitespace and EOF fixers, JSON/TOML/YAML validation, secret detection, codespell, `uv lock --check`, ruff, actionlint, and the `config.json` guard):
+3. Run the pre-commit hooks (whitespace and EOF fixers, JSON/TOML/YAML validation, secret detection, codespell, pymarkdown, `uv lock --check`, ruff, actionlint, and the `config.json` guard):
 
    ```powershell
    uv run poe hooks
@@ -35,7 +35,7 @@ Run the local checks that CI enforces before you open a pull request. [The proje
 
    This task runs `pre-commit run --all-files`. Because `core.hooksPath` is beads-managed, the hooks are not installed automatically; run this task yourself or rely on CI.
 
-4. Type-check the application under mypy `--strict`:
+4. Type-check the application with mypy. All application modules are checked under full `--strict`; only the four test packages relax three "you must annotate" rules:
 
    ```powershell
    uv run poe typecheck
@@ -78,7 +78,7 @@ Run the local checks that CI enforces before you open a pull request. [The proje
 | `poe probes` | `python tools/probes/run_all.py` | Offscreen UI probes |
 | `poe test` | `pytest -q` | Test suite |
 | `poe docs-check` | `docs-lint`, `docs-links`, `docs` | Full docs gate |
-| `poe docs-lint` | `pymarkdown --config .pymarkdown.json scan docs CONTRIBUTING.md README.md` | Markdown lint |
+| `poe docs-lint` | `pymarkdown --strict-config --config .pymarkdown.json scan -r docs CONTRIBUTING.md README.md` | Markdown lint |
 | `poe docs-links` | `python tools/docs/check_doc_links.py` | Offline internal link check |
 | `poe docs` | `zensical build --strict` | Strict docs build |
 | `poe cover` | `pytest -q --cov=engine --cov-report=term-missing` | Engine coverage against the configured floor |

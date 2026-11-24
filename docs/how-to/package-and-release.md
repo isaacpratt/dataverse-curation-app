@@ -18,7 +18,7 @@ Build the Windows artefacts, verify them locally, then publish from CI. For the 
   dotnet tool install -g vpk
   ```
 
-- The release version set in `engine/__init__.py` before tagging.
+- The release version set in `engine/__init__.py` **before** building: `poe pack` reads that literal, so artefacts built before the bump carry the old version.
 
 ## Steps
 
@@ -52,7 +52,7 @@ Build the Windows artefacts, verify them locally, then publish from CI. For the 
 
    Set `DOCENT_SMOKE_EXE` to inspect a different executable.
 
-5. Set the release version. Edit `__version__` in `engine/__init__.py` (for example `"0.2.0"`) and commit the change. The wheel metadata, About pane, and updater read this literal; the release job refuses a tag that disagrees with it.
+5. Confirm the release version. `__version__` in `engine/__init__.py` (for example `"0.2.0"`) was set before step 1 and committed; the wheel metadata, About pane, and updater read this literal, and the release job refuses a tag that disagrees with it. Locally packed artefacts are for verification only — CI rebuilds from the tagged source.
 
 6. Release by tag push:
 

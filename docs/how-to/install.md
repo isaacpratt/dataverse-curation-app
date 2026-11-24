@@ -28,7 +28,7 @@ Dataverse Docent is a Windows desktop app for curating datasets in a [Dataverse 
 
 3. Run `DataverseDocent-win-Setup.exe`. The install is per-user: it does not ask for administrator rights and adds Start menu and desktop shortcuts. Remove it later through **Apps & Features**.
 
-4. On first launch, Windows SmartScreen may show **Windows protected your PC**. The current build is unsigned, so choose **More info → Run anyway** only after you have verified the checksum. Later releases are signed by SignPath Foundation and show the publisher name instead.
+4. On first launch, Windows SmartScreen may show **Windows protected your PC**. The current build is unsigned, so choose **More info → Run anyway** only after you have verified the checksum. Signing through SignPath Foundation is planned; until a signed release ships, Windows shows an unknown publisher.
 
 5. Open the app and follow [configure your instance](configure-instance.md).
 
@@ -38,7 +38,7 @@ Dataverse Docent is a Windows desktop app for curating datasets in a [Dataverse 
 
 2. Verify the archive. In PowerShell, run `Get-FileHash -Algorithm SHA256 .\DataverseDocent-win-Portable.zip` and compare the result with `SHA256SUMS.txt`.
 
-3. Unzip the archive and run `DataverseDocent.exe` from the extracted folder. Nothing is installed; the app keeps its configuration beside the executable.
+3. Unzip the archive and run `DataverseDocent.exe` from the extracted folder. Nothing is installed; the app creates `config.json` in the portable folder's root (the executable's parent), as described in the [configuration reference](../reference/configuration.md).
 
 ## Run from source
 

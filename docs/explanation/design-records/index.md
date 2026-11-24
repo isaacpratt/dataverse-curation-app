@@ -9,7 +9,7 @@ Some material is worth keeping because it explains *why* the app is the way it i
 
 ## Proposal snapshots — historical
 
-The 2026-11 dataset-review critique produced two proposal reports. Both are **historical design records**: they capture a moment in the project's thinking, are intentionally out of the site navigation and are not statements of what the app does today. Their approved ideas became beads; for the live picture, start with [Architecture](../architecture.md) and the Proposals pointer in the site navigation.
+The 2026-11 dataset-review critique produced two proposal reports. Both are **historical design records**: they capture a moment in the project's thinking, are intentionally out of the site navigation (`not_in_nav`) and are not statements of what the app does today. Their approved ideas became beads; for the live picture, start with [Architecture](../architecture.md), the ADR index below and `bd ready`.
 
 - [Top 10 dataset-review proposals](../../proposals/top10-dataset-review.md) — the approved dossier, with each idea's outcome, code changes, rationale and scoring.
 - [22 further ideas for dataset review](../../proposals/other-ideas-dataset-review.md) — the companion report, including the full source bibliography behind the critique.
@@ -18,7 +18,7 @@ The decision recorded here is that these snapshots stay as historical design rec
 
 ## Architecture decision records
 
-The [ADR index](https://github.com/isaacpratt/dataverse-curation-app/tree/master/docs/adr) holds short, dated records of the repository-level decisions — toolchain, layout, packaging and security — that would otherwise be re-litigated whenever someone asks why something is the way it is. Each ADR states its context, decision, consequences and links, and a reversed decision is superseded by a new ADR rather than editing history. The UI-level decision history is summarised in [Architecture](../architecture.md#decision-log).
+The [ADR index](https://github.com/isaacpratt/dataverse-curation-app/tree/master/docs/adr) holds short, dated records of the repository-level decisions — toolchain, layout, packaging and security — that would otherwise be re-litigated whenever someone asks why something is the way it is. The current set covers uv/poe/pre-commit, the flat `main.py` layout, Ruff formatting, not shipping the app on PyPI, credential-store token storage, the `curation/` core, strict typing, strict-app/relaxed-tests, and the Zensical docs build. Each ADR states its context, decision, consequences and links, and a reversed decision is superseded by a new ADR rather than editing history. The UI-level decision history is summarised in [Architecture](../architecture.md#decision-log).
 
 ## Beads is the live plan
 

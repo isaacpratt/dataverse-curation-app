@@ -5,7 +5,7 @@ audience: all                # curator | developer | contributor | all
 ---
 # Dataverse API reference
 
-The client uses the Native/Search API only — no PostgreSQL/Solr. All endpoints are relative to `config.dataverse.base_url`; authentication is the `X-Dataverse-key` header.
+The client uses the Native/Search API only — no PostgreSQL/Solr. All endpoints are relative to `config.dataverse.base_url`; authentication is the `X-Dataverse-key` header. In the tables below, `…/resource` abbreviates `/api/datasets/:persistentId/resource`, and `CrawlWorker` is the background worker that performs a dashboard discovery pass.
 
 ## Authentication
 
@@ -24,15 +24,14 @@ The client uses the Native/Search API only — no PostgreSQL/Solr. All endpoints
 
 | Purpose | Endpoint | Notes |
 | --- | --- | --- |
-| Version check | `GET /api/info/version` | Verifies instance, adapts to API differences |
+| Version check | `GET /api/info/version` | Settings' **Test connection** button displays the instance version; this request is made directly by the Settings pane, not through the client |
 | Discovery | `GET /api/search?q=*&type=dataset&per_page=1000&start=<n>&subtree=<alias>` | `start` is an offset, not a page. Empty or `:root`/`root` = whole repo (no subtree). First response carries `total_count`, so paging is total-driven; dedup by persistent ID |
 | In-review (strict) | `GET /api/datasets/:persistentId/locks` | `lockType`/`reason` containing "review" (`locks_indicate_review`); `list_datasets_in_review()` filters the draft superset |
 | Metadata | `GET /api/datasets/:persistentId?persistentId=<doi>` | Citation blocks; `versionState` drives the header link |
 | File inventory | `GET …/versions/:draft` (fallback `:latest`, `:latest-published`) | `normalize_files` keeps filename, directoryLabel, filesize, contentType, checksum, UNF, tabular/original-format fields |
 | Bundle download | `GET /api/access/dataset/:persistentId?…&version=draft` | No `Accept: application/json` (406); streamed `iter_content(1 MB)` with progress; tries draft → latest → unversioned |
-| Single file | `GET /api/access/datafile/:id` | Optional triage fetch |
-| Original format | `GET /api/access/datafile/:id?format=original` | Tabular originals (`.sav` etc.); `GET /api/files/:id/ingestStatus` reports ingest state |
-| Variable metadata | `GET /api/access/datafile/:id/metadata/ddi` | Per-file DDI: variable names, labels and types for the coverage check and the dictionary draft (`metadata.var_coverage`) |
+| Original format | `GET /api/access/datafile/:id?format=original` | Tabular originals (`.sav` etc.) |
+| Variable metadata | `GET /api/access/datafile/:id/metadata/ddi` | Per-file DDI: variable names, labels and types for the coverage check and the dictionary draft (`metadata.var_coverage`). Ingest state is read from the `ingestStatus` field of the version payload, not from a live endpoint |
 | Curation status | `GET …/curationStatus?persistentId=<doi>` (+ `includeHistory`) | Current label + `createTime` + assigner; `None` when unset (4xx tolerated) |
 | Bulk curation report | `GET /api/datasets/listCurationStates` (superuser, `text/csv`) | Must send `Accept: text/csv` (406 on JSON). 401/403/404 → per-dataset fallback |
 | Compare versions | `GET …/versions/:latest-published/compare/:draft` | Metadata/terms diffs + added/removed/replaced files; `None` when nothing comparable |
@@ -86,7 +85,7 @@ Termination conditions for the search loop: the collected count reaches `total_c
 | Case | Behavior |
 | --- | --- |
 | Transient network (ConnectionError/ChunkedEncodingError/Timeout/ConnectionResetError, WinError 10054) | 3× retry, 1.5·(attempt+1) s backoff; 429/503 honors `Retry-After` (≤30 s), then a plain-language ConnectionError (VPN/proxy hint) |
-| Bad collection alias (400/404 on subtree) | "Collection '…' not found — try an empty alias for the whole repository" |
+| Bad collection alias (400/404 on subtree) | "The Dataverse URL or collection looks wrong (404). Check the Base URL and collection alias in Settings (Ctrl+,)." Try an empty alias for the whole repository |
 | Discovery cap | None in practice: paging is driven by the server's `total_count`, and a short/empty page ends the crawl. `max_pages=100` is a runaway guard only; a genuine mismatch between collected and total is logged loudly |
 | Guestbook required (400) | The approval window renders the dataset's guestbook (from `GET /api/guestbooks/{id}`, account details prefilled) and POSTs the answers; Dataverse returns `data.signedUrl`, which streams the ZIP. A missing required field is caught before sending; a server rejection shows its reason. No version retries, no "Base URL" hint |
 | Large download | Quote warning ~5 GB in the approval dialog; `Accept: */*` avoids 406 |
@@ -94,7 +93,7 @@ Termination conditions for the search loop: the collected count reaches `total_c
 
 ## Expected refusals (not bugs)
 
-Dataverse answers some requests with a 4xx by design. `dataverse_client._refusal()` classifies every refusal by (path, status, body). A classified refusal is logged as EXPECTED — raw call and raw response kept verbatim, only the tone muted — while anything unclassified (500, a bad request, a wrong path) stays an ERROR.
+Dataverse answers some requests with a 4xx by design. `curation/client/refusals.py:_refusal()` classifies 400/401/403/404 responses by (path, status, body). A classified refusal is logged as EXPECTED — raw call and raw response kept verbatim, only the tone muted — while anything unclassified (500, a bad request, a wrong path) stays an ERROR.
 
 | Refusal | Endpoint | Server condition | Code |
 | --- | --- | --- | --- |
@@ -112,11 +111,11 @@ Reads that cannot exist are not sent. The Native API's dataset read answers with
 
 ## Curation record export (local)
 
-`curation_record.export_record()` composes the review's local outputs into one dated `curation-record/<pid>-<timestamp>/` folder beside the dataset's workspace folder: checks report (JSON + Markdown), depositor response, the curation timeline from `state.db`, per-finding dispositions, the sensitivity questionnaire, the recorded decision + curation label, and a `sha256sums.txt` manifest of the staged files — bound by `index.json` that hashes every artifact. The GUI exposes it as the header's Export record button; headless runs take `--export-record`. No server calls are involved: the record is a local audit bundle.
+`curation.curation_record.export_record()` composes the review's local outputs into one dated `curation-record/<YYYYMMDD-HHMMSS>/` folder beside the dataset's workspace folder: checks report (JSON + Markdown), depositor response, the curation timeline from `state.db`, per-finding dispositions, the sensitivity questionnaire, the recorded decision + curation label, and a `sha256sums.txt` manifest of the staged files — bound by `index.json` that hashes every artifact. The GUI exposes it as the header's Export record button; headless runs take `--export-record`. No server calls are involved: the record is a local audit bundle.
 
-## Verification snapshot
+## Verification snapshot (point in time, 2026-11-03)
 
-Live-verified against `https://demo.borealisdata.ca`: version → Borealis; search `subtree=mcmaster` → 14 datasets in one page (`total_count=14`); whole repository → 2,097 datasets over 3 pages at `per_page=1000`; dataset lookup → citation title OK; versions → 23 files; bundle → 358 477 bytes streamed and unzipped. Empty alias and `:root` return the whole repo; root alias is `dv`. The demo is a real Borealis Dataverse deployment (v6.8.4-SP), not a production instance; a token-backed authenticated pass is deferred.
+These figures were observed against `https://demo.borealisdata.ca` on 2026-11-03 and are a design record, not a live status: a demo collection changes over time. Version → Borealis; search `subtree=mcmaster` → 14 datasets in one page (`total_count=14`); whole repository → 2,097 datasets over 3 pages at `per_page=1000`; dataset lookup → citation title OK; versions → 23 files; bundle → 358 477 bytes streamed and unzipped. Empty alias and `:root` return the whole repo; root alias is `dv`. The demo is a real Borealis Dataverse deployment (v6.8.4-SP), not a production instance; a token-backed authenticated pass is deferred.
 
 ## See also
 

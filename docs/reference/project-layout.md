@@ -5,7 +5,7 @@ audience: contributor        # curator | developer | contributor | all
 ---
 # Project layout reference
 
-Facts about the repository's structure, tasks and test roots. Detailed setup, conventions and rationale live in the development guide and [architecture](../explanation/architecture.md).
+Facts about the repository's structure, tasks and test roots. Task recipes live in [Run the gates](../how-to/run-the-gates.md) and [Package and release](../how-to/package-and-release.md); rationale lives in [Architecture](../explanation/architecture.md) and [UI conventions](../explanation/ui-conventions.md).
 
 ## Repository layout
 
@@ -14,8 +14,8 @@ Facts about the repository's structure, tasks and test roots. Detailed setup, co
 | `main.py` | `--headless`/`--out`/`--format`/`--persistent-id`/`--export-record`/`--config`/`--dataverse`/`--gallery`; lazy Qt (TYPE_CHECKING-only at import); sibling-libs loader (exe dir and its parent); exits 0/1/2; MainWindow with TopNav + QStackedWidget (dashboard/detail/settings/review-config/about/log) |
 | `config.example.json` | Configuration template (see [Configuration reference](configuration.md)) |
 | `curation/startup_probe.py` | Opt-in `DOCENT_STARTUP_LOG` phase timings (process start → first paint); no-op unless the variable is set. The only `tools/`-origin module that became app code, because `main.py` and `ui/dashboard.py` import it at runtime |
-| `curation/config.py` | `DataverseConfig` (base_url, token, collection alias), `AppConfig` (workspace, tesseract, exiftool), `Config.load/save`, `resolve_config_path()` (CWD → exe dir → level above exe), `PRESETS`, DATAVERSE_* env overrides |
-| `curation/client/` | `DataverseClient` (session/retry/downloads in `client.py` + `downloads.py`, parsers in `parsers.py`) — total-driven discovery (`_search_page` → rows + `total_count`) and pooled inventory enrichment (`enrich_datasets_with_inventory`); endpoints in [Dataverse API](dataverse-api.md) |
+| `curation/config.py` | `DataverseConfig` (base_url, token, collection alias), `AppConfig` (workspace, tesseract, exiftool), `Config.load/save`, `resolve_config_path()` (legacy candidates: CWD → exe dir → exe parent → exe grandparent; a new portable file lands in the exe parent), `PRESETS`, DATAVERSE_* env overrides |
+| `curation/client/` | `DataverseClient` (`client.py`, `http.py`, `downloads.py`, `parsers.py`, `caches.py`, `constants.py`, `errors.py`, `refusals.py`, `access.py`) — total-driven discovery (`_search_page` → rows + `total_count`) and pooled inventory enrichment (`enrich_datasets_with_inventory`); endpoints in [Dataverse API](dataverse-api.md) |
 | `curation/download_manager.py` | `quote`/`quote_from`, `missing_files`/`is_fully_staged`, `approve_and_download` (+ `download_originals`), `verify` → `(ok, problems, warnings)`, zip-slip guard, per-dataset cache, per-PID download locks |
 | `curation/metadata_check.py` | `PROFILES`, `DEFAULT_PROFILE="McMaster"`, `check_metadata_completeness`, ORCID regex, `requirements_profiles.json` support |
 | `curation/review_rules.py` | `RULESETS_VERSION=2`, `FIELD_CATALOG`, builtin McMaster/Minimal rulesets, per-Dataverse assignment, content-rule evaluation |
@@ -59,7 +59,7 @@ All tasks run as `uv run poe <task>`.
 
 | Task | Function |
 | --- | --- |
-| `check` | lint + typecheck + tests |
+| `check` | lint + format-check + typecheck + contracts + tests |
 | `lint` | ruff lint |
 | `format-check` | formatting check over the whole tree |
 | `typecheck` | mypy over `[tool.mypy] files` (engine, curation, ui, main.py, in-scope tools; tests relax only three "must annotate" rules) |
@@ -69,9 +69,11 @@ All tasks run as `uv run poe <task>`.
 | `probes` | offscreen UI probes |
 | `audit` | OSV vulnerability scan of the locked set (`tools/audit/audit_deps.py`) |
 | `license-report` / `notice` / `sbom` | license inventory, NOTICE, SBOM |
-| `release-artefacts` | release-artefact checks |
+| `release-artefacts` | generates `dist/licenses.md`, `dist/NOTICE` and both SBOM files |
 | `complexity` | advisory radon view written to `reports/complexity.md` (ruff C901 at max-complexity 12 is the gate) |
-| `docs-links` | docs link check |
+| `docs-lint` | Markdown lint with PyMarkdown (front matter aware) |
+| `docs-links` | offline Markdown link/anchor check |
+| `docs-check` | full docs gate: `docs-lint` + `docs-links` + strict `docs` build |
 | `docs` / `docs-serve` | Zensical build / preview |
 | `hooks` | pre-commit hooks |
 | `build` | PyInstaller onedir build → `dist/DataverseDocent/DataverseDocent.exe` + `config.example.json` |
@@ -108,7 +110,7 @@ The engine and report contract are deliberately not externalised: check messages
 
 ## Startup timing
 
-The window paints its shell before the cached dashboard, local state reads or any network call: `main.py` shows the window, processes the first frame, paints it synchronously and reveals it, then calls `MainWindow.start_background_load()`. Until that reveal the window is cloaked out of DWM composition. Settings, About, Requirements and Log are built on first navigation. `DOCENT_STARTUP_LOG` points at a file where every phase appends one row (total ms since process start, ms since `curation/startup_probe.py` import, label); the total includes the PyInstaller bootloader. The probe is inert when the variable is unset.
+The window paints its shell before the cached dashboard, local state reads or any network call: `main.py` shows the window, processes the first frame, paints it synchronously and reveals it, then calls `MainWindow.start_background_load()`. Until that reveal the window is cloaked out of DWM composition. Settings, About, Review configuration and Log are built on first navigation. `DOCENT_STARTUP_LOG` points at a file where every phase appends one row (total ms since process start, ms since `curation/startup_probe.py` import, label); the total includes the PyInstaller bootloader. The probe is inert when the variable is unset.
 
 ```powershell
 $env:DOCENT_STARTUP_LOG = "$env:TEMP\docent-startup.log"

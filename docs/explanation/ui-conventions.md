@@ -33,7 +33,7 @@ Only user gestures are persisted, in versioned `workspace/table_layout.json` ent
 
 Most of the rules above exist because of a specific Qt behaviour. Each paragraph below pairs what Qt does with what the app does instead.
 
-**A widget stylesheet shadows the application one.** Setting a stylesheet on a widget replaces the application stylesheet for that subtree, so the app's header rules stop applying inside a table that has its own sheet. The app repeats the shared rules from the theme's `header_section_qss()` and `scrollbar_lane_qss()` mixins, keeping one source so the two sheets cannot drift.
+**A widget stylesheet shadows the application one.** Setting a stylesheet on a widget replaces the application stylesheet for that subtree, so the app's header rules stop applying inside a table that has its own sheet. The app repeats the shared rules from the theme's `header_section_qss()` and `scrollbar_lane_qss()` generators, keeping one source so the two sheets cannot drift.
 
 **`sectionResized` fires before the new size lands.** Reading `header.sectionSize(i)` inside the handler returns the old value, persisting stale widths and drifting the last label off-centre. The fit is deferred with `QTimer.singleShot(0, …)`.
 
@@ -53,7 +53,7 @@ Most of the rules above exist because of a specific Qt behaviour. Each paragraph
 
 **A QThread destroyed while running aborts the process.** Qt prints a warning and calls `abort()`. A worker parented to a widget dies with that widget, so quitting during a scan could kill the app. Every worker registers with `ui/workers.py`, checks for interruption between steps, and is adopted before a view is discarded; hooks cover both a clean quit and an unclean process end.
 
-One mismatch remains openly tracked: the QFont point size set by `apply_theme()` and the pixel sizes painted by QSS disagree, so measurement and paint can drift in text elision. It is recorded as a bead rather than hidden in a comment.
+An earlier mismatch between the QFont point size and the pixel sizes painted by QSS was fixed by setting `font.setPixelSize(FONT_BODY)` in `apply_theme()`, so Qt measures what the stylesheet paints. The rule it established remains: text sizes come from the theme's pixel tokens, never from an ad-hoc point size in a view.
 
 ## The gallery is the contract, executable
 
@@ -61,8 +61,8 @@ One mismatch remains openly tracked: the QFont point size set by `apply_theme()`
 
 Adding a component means adding it to the kit and then to the gallery. The gallery contract test checks that every kind is shown and that every button wears a theme object name — the gallery may not exhibit a button the app cannot produce. Pixel probes then check the rendered ink and fit of the controls at real widths.
 
-## Why dark mode becomes a table edit
+## Why dark mode is a table edit
 
-Dark mode is not shipped. It is tracked as an epic whose first step — a second role table — is already done. The reason the role layer was introduced is precisely to make the remaining work a selection rather than a re-skin: the palette stays a palette, the roles decide what each palette entry is for, and a second table decides which entry each role points at in the dark theme. Both tables declare the same role names, and the light mappings are pinned so they cannot move by accident.
+Dark mode ships with the app. **Settings → Appearance** offers **Light**, **Dark** and **Auto (follow system)**, with an auto-switch checkbox for following the operating system; the component gallery can show both themes side by side. The role layer is why this was a selection rather than a re-skin: the palette stays a palette, the roles decide what each palette entry is for, and `DARK_ROLE_TABLE` decides which entry each role points at in the dark theme. Both tables declare the same role names, and the light mappings are pinned so they cannot move by accident.
 
-The remaining work follows the same layering. The contrast floors do not change, but the pairs are redeclared for the dark theme and checked by the same test. The QSS that still hardcodes a surface must be re-pointed at roles. Painted icons are already tinted from roles; the app mark and taskbar icon need dark variants. The gallery should show both themes side by side, turning each contrast decision into a glance. A theme picker in Settings and operating-system-driven switching are deliberately not planned yet: they are UX decisions with preferences to persist, not refactors, and doing them before the role layer existed would have meant rewriting every view.
+The same layering governs the rest. The contrast floors do not change, but `CONTRAST_PAIRS_DARK` and `BADGE_CONTRAST_PAIRS_DARK` redeclare the pairs and are checked by the same test, so an illegible dark combination fails the build. QSS that hardcoded a surface had to be re-pointed at roles — that was the real work. Painted icons are tinted from roles, and dark variants of the app mark and taskbar icon ship for dark surfaces. Doing this before the role layer existed would have meant rewriting every view.

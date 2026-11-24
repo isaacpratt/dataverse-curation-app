@@ -63,7 +63,8 @@ def _kick_update_check() -> None:
         pass
 
 
-def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+def build_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser; the docs generator renders this same definition."""
     parser = argparse.ArgumentParser(description=t("app.cli.description"))
     parser.add_argument(
         "--headless",
@@ -99,6 +100,11 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
         default=None,
         help=t("app.cli.dataverse_help"),
     )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    parser = build_parser()
     args = parser.parse_args(argv)
     mark("args parsed")
 

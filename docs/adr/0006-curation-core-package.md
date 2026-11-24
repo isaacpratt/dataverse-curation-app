@@ -31,7 +31,7 @@ Three constraints shaped the answer:
    `sys.path` surgery or an installed package breaks the frozen build
    (ADR 0002 forbids `src/`).
 3. **The core must stay Qt-free.** The engine is the part that has to
-   run headless, in CI, and in the lite build; if the middle layer
+   run headless, in CI, and in the frozen build; if the middle layer
    reaches for `PySide6`, that separation is gone.
 
 ## Decision
@@ -73,14 +73,16 @@ Three constraints shaped the answer:
   (ADR 0004) and no published package.
 - The curation core is now provably Qt-free: the import-linter contract
   fails the build if `curation/` ever imports `ui/` or `PySide6`.
-  This is what keeps the engine and the lite build honest.
+  This is what keeps the engine and the frozen build honest.
 - `curation/` is a package inside the repository, not an installed
   distribution: `from curation.client import DataverseClient` works
   from a clone and inside the frozen build because the whole tree
   travels with the exe.
-- The type-check scope in `[tool.mypy] files` is now `["engine",
-  "curation"]`, and the coverage source is `["engine", "ui",
-  "curation"]` — both follow the directories.
+- At the time, the type-check scope in `[tool.mypy] files` was `["engine",
+  "curation"]` and the coverage source was `["engine", "ui",
+  "curation"]` — both following the directories. That scope has since grown
+  to `["engine", "curation", "tools/tests", "ui", "main.py"]` under
+  ADR 0008; see `pyproject.toml` for the current list.
 
 ## Links
 
