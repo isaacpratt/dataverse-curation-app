@@ -8,6 +8,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed (docs)
 
+- **SECURITY.md reconciled with the code** — signing is now described as a decided but unwired policy (`dv-4t6.6` remains open) rather than an implemented step, and the in-app update check/feeds replace the old "no update mechanism" and "no automatic update check" claims. Artefact names, the checksum example and the published installation-guide link are current; ADR 0005 carries the same signing qualification.
 - **Published-site wording updated** — with the repository public and GitHub Pages live, `CONTRIBUTING.md`, the release notes and ADR 0009 no longer qualify their documentation-site links as "once deployed".
 - **Housekeeping corrections** — the release notes now record the shipped dark mode; `AGENTS.md` no longer quotes a stale test count or the withdrawn `ui.*` mypy relaxation; the pack comment says .NET 10; and the metadata-row test docstring no longer claims a coloured "required" bar that the UI deliberately does not paint.
 - **CLI reference generated from argparse (dv-c95)** — `main.build_parser()` is now the single source for `docs/reference/cli.md`; `poe docs-gen-cli` regenerates its help block and flag table, and `docs-check`/pytest fail on drift. `main.py`'s runtime CLI behaviour is unchanged. The Markdown-report snapshot suggestion was deliberately skipped.

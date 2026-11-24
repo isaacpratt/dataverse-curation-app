@@ -211,7 +211,7 @@ type = "simple"
 
   [tool.poe.tasks.docs-lint]
   help = "Lint the Markdown docs with pymarkdown (codespell runs in pre-commit)"
-  cmd = "pymarkdown --strict-config --config .pymarkdown.json scan -r docs CONTRIBUTING.md README.md"
+  cmd = "pymarkdown --strict-config --config .pymarkdown.json scan -r docs CONTRIBUTING.md README.md SECURITY.md"
 
   [tool.poe.tasks.docs]
   help = "Build the Zensical documentation site into site/ (strict: broken links fail)"
