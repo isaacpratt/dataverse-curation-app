@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
+    QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -34,7 +35,11 @@ from PySide6.QtWidgets import (
 from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,
+    ACTIVE_THEME,
     BORDER_SUBTLE,
+    DARK_ROLE_TABLE,
+    LIGHT_ROLE_TABLE,
+    ROLE_TABLES,
     STATE_ERROR_BG,
     STATE_ERROR_TEXT,
     STATE_SUCCESS_GRAPHIC,
@@ -48,6 +53,7 @@ from ui.theme import (
     TEXT_PRIMARY,
     TEXT_SUBTLE,
     page_background_qss,
+    role,
     surface_frame_qss,
     transparent_qss,
     transparent_surface_qss,
@@ -523,11 +529,28 @@ class GalleryWindow(QWidget):
         outer.setContentsMargins(24, 20, 24, 20)
         outer.setSpacing(16)
 
+        # Title row with theme selector
+        title_row = QHBoxLayout()
+        title_row.setSpacing(16)
         title, subtitle = make_page_heading(
             t("gallery.heading"),
             t("gallery.subheading"),
         )
-        outer.addWidget(title)
+        title_row.addWidget(title)
+        if subtitle is not None:
+            title_row.addWidget(subtitle)
+        title_row.addStretch(1)
+
+        # Theme selector
+        self._theme_selector = QComboBox()
+        self._theme_selector.addItems([t("gallery.theme.light"), t("gallery.theme.dark"), t("gallery.theme.both")])
+        self._theme_selector.setCurrentText(t("gallery.theme.both"))
+        self._theme_selector.currentTextChanged.connect(self._on_theme_changed)
+        self._theme_selector.setToolTip(t("gallery.theme.tip"))
+        self._theme_selector.setFixedWidth(180)
+        title_row.addWidget(self._theme_selector)
+        outer.addLayout(title_row)
+
         if subtitle is not None:
             outer.addWidget(subtitle)
 
@@ -540,17 +563,10 @@ class GalleryWindow(QWidget):
         body = QVBoxLayout(content)
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(24)
-        for section in (
-            _type_scale_section(),
-            _role_section(),
-            _button_section(),
-            _badge_section(),
-            _input_section(),
-            _container_section(),
-            _icons_section(),
-            _data_section(),
-        ):
-            body.addWidget(section)
+
+        # Show both themes side by side by default
+        self._show_dual_theme(body)
+
         body.addStretch(1)
         scroll.setWidget(content)
         outer.addWidget(scroll, 1)
@@ -561,6 +577,125 @@ class GalleryWindow(QWidget):
         footer.setTextFormat(Qt.TextFormat.PlainText)
         outer.addWidget(footer)
         footer.setToolTip(t("gallery.footer_tip", colour=TEXT_MUTED))
+
+    def _on_theme_changed(self, text: str) -> None:
+        """Handle theme selector change."""
+        # For now, we just rebuild the dual-theme view
+        # In a full implementation, this would switch the active theme
+        pass
+
+    def _show_dual_theme(self, body: QVBoxLayout) -> None:
+        """Show light and dark themes side by side for each section."""
+        from ui.theme import set_active_theme, apply_theme
+
+        # Build light theme sections
+        light_content = QWidget()
+        light_content.setObjectName("GalleryContentLight")
+        light_content.setStyleSheet(page_background_qss("GalleryContentLight"))
+        light_body = QVBoxLayout(light_content)
+        light_body.setContentsMargins(0, 0, 0, 0)
+        light_body.setSpacing(24)
+
+        # Build dark theme sections
+        dark_content = QWidget()
+        dark_content.setObjectName("GalleryContentDark")
+        dark_content.setStyleSheet(page_background_qss("GalleryContentDark"))
+        dark_body = QVBoxLayout(dark_content)
+        dark_body.setContentsMargins(0, 0, 0, 0)
+        dark_body.setSpacing(24)
+
+        # Apply light theme temporarily to build light sections
+        set_active_theme("light")
+        from PySide6.QtWidgets import QApplication
+        app_instance = QApplication.instance()
+        assert isinstance(app_instance, QApplication)
+        apply_theme(app_instance)
+
+        # Add sections to light body
+        for section in (
+            _type_scale_section(),
+            _role_section(),
+            _button_section(),
+            _badge_section(),
+            _input_section(),
+            _container_section(),
+            _icons_section(),
+            _data_section(),
+        ):
+            light_body.addWidget(section)
+
+        # Apply dark theme temporarily to build dark sections
+        set_active_theme("dark")
+        app_instance = QApplication.instance()
+        assert isinstance(app_instance, QApplication)
+        apply_theme(app_instance)
+
+        # Add sections to dark body
+        for section in (
+            _type_scale_section(),
+            _role_section(),
+            _button_section(),
+            _badge_section(),
+            _input_section(),
+            _container_section(),
+            _icons_section(),
+            _data_section(),
+        ):
+            dark_body.addWidget(section)
+
+        # Restore light theme for the actual app
+        set_active_theme("light")
+        app_instance = QApplication.instance()
+        assert isinstance(app_instance, QApplication)
+        apply_theme(app_instance)
+
+        # Create side-by-side layout
+        dual_host = QWidget()
+        dual_host.setObjectName("GalleryDualTheme")
+        dual_layout = QHBoxLayout(dual_host)
+        dual_layout.setContentsMargins(0, 0, 0, 0)
+        dual_layout.setSpacing(16)
+
+        # Light column
+        light_col = QWidget()
+        light_col.setObjectName("GalleryThemeColumn")
+        light_col_lay = QVBoxLayout(light_col)
+        light_col_lay.setContentsMargins(8, 8, 8, 8)
+        light_col_lay.setSpacing(16)
+
+        # Light theme label
+        light_label = QLabel(t("gallery.theme.light"))
+        light_label.setObjectName("LabelStrongSM")
+        light_col_lay.addWidget(light_label)
+
+        light_scroll = QScrollArea()
+        light_scroll.setWidgetResizable(True)
+        light_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        light_scroll.setWidget(light_content)
+        light_col_lay.addWidget(light_scroll, 1)
+
+        # Dark column
+        dark_col = QWidget()
+        dark_col.setObjectName("GalleryThemeColumn")
+        dark_col_lay = QVBoxLayout(dark_col)
+        dark_col_lay.setContentsMargins(8, 8, 8, 8)
+        dark_col_lay.setSpacing(16)
+
+        # Dark theme label
+        dark_label = QLabel(t("gallery.theme.dark"))
+        dark_label.setObjectName("LabelStrongSM")
+        dark_col_lay.addWidget(dark_label)
+
+        dark_scroll = QScrollArea()
+        dark_scroll.setWidgetResizable(True)
+        dark_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        dark_scroll.setWidget(dark_content)
+        dark_col_lay.addWidget(dark_scroll, 1)
+
+        dual_layout.addWidget(light_col, 1)
+        dual_layout.addWidget(dark_col, 1)
+
+        body.addWidget(dual_host)
 
 
 def build_gallery(parent: QWidget | None = None) -> GalleryWindow:

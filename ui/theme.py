@@ -11,6 +11,7 @@ theme - so switching theme is a table swap, not a re-skin.
 
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
+import os
 
 if TYPE_CHECKING:
     from PySide6.QtCore import QEvent, QObject
@@ -738,8 +739,29 @@ BADGE_CONTRAST_PAIRS: tuple[tuple[str, str, str], ...] = (
 )
 
 
-def asset_path(name: str) -> str:
-    """Absolute path to a bundled ui/asset (works frozen via sys._MEIPASS)."""
+def asset_path(name: str, theme: str | None = None) -> str:
+    """Absolute path to a bundled ui/asset (works frozen via sys._MEIPASS).
+
+    If theme is provided and a dark variant exists (name with -dark suffix),
+    it will be preferred when theme="dark".
+    """
+    import sys
+    from pathlib import Path
+
+    # If dark theme requested, try dark variant first
+    if theme == "dark":
+        base, ext = os.path.splitext(name)
+        dark_name = f"{base}-dark{ext}"
+        # Try dark variant first
+        result = _find_asset(dark_name)
+        if result:
+            return result
+
+    return _find_asset(name)
+
+
+def _find_asset(name: str) -> str:
+    """Internal helper to find an asset by name."""
     import sys
     from pathlib import Path
 
@@ -758,23 +780,25 @@ def asset_path(name: str) -> str:
     return ""
 
 
-def app_icon_path() -> str:
+def app_icon_path(theme: str | None = None) -> str:
     """Absolute path to the app icon (ui/assets/docent.png).
 
     The About page keeps this mark. asset_path resolves the bundled
     copy both in dev and frozen (the exe ships --add-data "ui/assets;ui/assets").
+    If theme is provided, a dark variant will be used when available.
     """
-    return asset_path("docent.png")
+    return asset_path("docent.png", theme)
 
 
-def mark_icon_path() -> str:
+def mark_icon_path(theme: str | None = None) -> str:
     """Absolute path to the 16x16.png mark (ui/assets/16x16.png).
 
     The dashboard status pill's mark and the window icon the Windows
     taskbar draws use this; the About page keeps docent.png
     (app_icon_path). Resolved by asset_path (dev + frozen).
+    If theme is provided, a dark variant will be used when available.
     """
-    return asset_path("16x16.png")
+    return asset_path("16x16.png", theme)
 
 
 def _chevron_qss() -> str:

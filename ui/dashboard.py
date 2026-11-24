@@ -784,9 +784,9 @@ class DashboardView(QWidget):
         try:
             from PySide6.QtGui import QPixmap as _QPixmap
 
-            from ui.theme import mark_icon_path
+            from ui.theme import mark_icon_path, ACTIVE_THEME
 
-            _pix = _QPixmap(mark_icon_path())
+            _pix = _QPixmap(mark_icon_path(ACTIVE_THEME))
             if not _pix.isNull():
                 # Native 16x16 — never upscale the pixel mark.
                 mark.setPixmap(_pix.scaledToHeight(16, Qt.TransformationMode.SmoothTransformation))

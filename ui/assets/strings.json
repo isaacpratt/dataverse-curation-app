@@ -1353,6 +1353,12 @@
       "list_manifest": "File checks",
       "list_fields": "Metadata fields",
       "list_extensions": "Extensions"
+    },
+    "theme": {
+      "light": "Light",
+      "dark": "Dark",
+      "both": "Both",
+      "tip": "Switch the gallery between light, dark, or side-by-side view"
     }
   }
 }

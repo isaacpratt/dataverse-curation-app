@@ -432,9 +432,9 @@ class MainWindow(QMainWindow):
         try:
             from PySide6.QtGui import QIcon
 
-            from ui.theme import mark_icon_path
+            from ui.theme import mark_icon_path, ACTIVE_THEME
 
-            _icon = mark_icon_path()
+            _icon = mark_icon_path(ACTIVE_THEME)
             if _icon:
                 self.setWindowIcon(QIcon(_icon))
         except Exception:

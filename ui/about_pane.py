@@ -191,9 +191,9 @@ class AboutPane(QWidget):
         mark = QLabel()
         mark.setObjectName("DocentMark")
         try:
-            from ui.theme import app_icon_path
+            from ui.theme import app_icon_path, ACTIVE_THEME
 
-            pix = QPixmap(app_icon_path())
+            pix = QPixmap(app_icon_path(ACTIVE_THEME))
             if not pix.isNull():
                 mark.setPixmap(pix.scaledToHeight(64, Qt.TransformationMode.SmoothTransformation))
         except Exception:
