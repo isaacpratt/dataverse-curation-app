@@ -217,9 +217,17 @@ type = "simple"
   help = "Build the Zensical documentation site into site/ (strict: broken links fail)"
   cmd = "zensical build --strict"
 
+  [tool.poe.tasks.docs-gen-checks]
+  help = "Regenerate the Check ID index in docs/reference/checks.md from the registry"
+  cmd = "python tools/docs/gen_checks_reference.py --write"
+
+  [tool.poe.tasks.docs-gen-checks-check]
+  help = "Fail when the generated Check ID index is stale"
+  cmd = "python tools/docs/gen_checks_reference.py --check"
+
   [tool.poe.tasks.docs-check]
-  help = "Full docs gate: markdown lint + offline links + strict site build"
-  sequence = ["docs-lint", "docs-links", "docs"]
+  help = "Full docs gate: markdown lint + offline links + generated sections + strict build"
+  sequence = ["docs-lint", "docs-links", "docs-gen-checks-check", "docs"]
 
   [tool.poe.tasks.docs-serve]
   help = "Preview the Zensical docs with live reload"

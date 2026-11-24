@@ -67,6 +67,20 @@ def test_configuration_reference_covers_example_keys() -> None:
     assert not missing, f"config keys absent from reference/configuration.md: {missing}"
 
 
+def test_check_id_index_matches_registry() -> None:
+    """The generated Check ID index must not drift from the engine registry."""
+    sys.path.insert(0, str(ROOT / "tools" / "docs"))
+    from gen_checks_reference import check, render_index
+
+    page = (DOCS / "reference" / "checks.md").read_text(encoding="utf-8")
+    assert check(), "run `poe docs-gen-checks` to regenerate the Check ID index"
+    block = render_index()
+    rows = [line for line in block.splitlines() if line.startswith("| `")]
+    assert len(rows) == len(registry)
+    assert block in page
+    assert str(len(registry)) not in page  # no hardcoded registry count to go stale
+
+
 def test_documented_api_endpoints_exist_in_source() -> None:
     """Every endpoint on the API reference page is one the code actually calls.
 
@@ -116,6 +130,38 @@ def test_documented_api_endpoints_exist_in_source() -> None:
         if not any(token in api_lines for token in distinctive):
             missing.append(endpoint)
     assert not missing, f"documented endpoints not found in source: {missing}"
+
+
+def test_documented_export_record_command_runs(tmp_path: Path) -> None:
+    """The how-to's `--export-record` example writes the documented bundle."""
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    (staged / "data.csv").write_text("id,value\n1,alpha\n", encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "main.py"),
+            "--headless",
+            str(staged),
+            "--out",
+            str(tmp_path / "report.json"),
+            "--format",
+            "both",
+            "--persistent-id",
+            "doi:10.5072/FK2/EXAMPLE",
+            "--export-record",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    records = list((tmp_path / "curation-record").iterdir())
+    assert len(records) == 1, records
+    assert re.fullmatch(r"\d{8}-\d{6}", records[0].name), records[0].name
+    assert {"index.json", "checks_report.json", "sha256sums.txt"} <= {
+        p.name for p in records[0].iterdir()
+    }
 
 
 def test_external_url_extraction_trims_markdown_punctuation(tmp_path: Path) -> None:

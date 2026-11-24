@@ -37,7 +37,7 @@ The same cache remembers the label dropdown union for each pull. Labels are deli
 
 ## Why sizes are capped and rows are windowed
 
-Two distinct limits protect responsiveness, and they are easy to confuse. Size caps bound how much of a single file the engine reads; the painting window bounds how many dashboard rows the GUI draws at once.
+Two distinct limits protect responsiveness, and they can be confused with each other. Size caps bound how much of a single file the engine reads; the painting window bounds how many dashboard rows the GUI draws at once.
 
 The original size is used for tabular files in the download quote, because that is what a curator is approving. The engine's scan caps limit samples, rows, members and pixels inside a check, keeping a pathological file from stalling a review. Separately, very large collections are painted through a 2,000-row window. A benchmark over 25,000 synthetic rows showed that filtering the full set costs about 13 ms while painting costs roughly 0.45 ms per row — about 0.9 seconds at 2,000 painted rows, two seconds at 5,000 and over seven seconds uncapped. Sorting told the same story. The window is therefore the largest cap whose full repaint stays inside a second; it was confirmed, not raised. Filtering and sorting still cover the entire collection, and the status line says how many rows the cap is hiding, so you are never looking at a silently truncated queue.
 

@@ -19,6 +19,7 @@ script is run directly or through a `poe` task from the repository root.
 | `audit/complexity_report.py` | `poe complexity` | Advisory radon report into `reports/complexity.md` (the gate is ruff C901) |
 | `docs/check_doc_links.py` | `poe docs-links` | Offline relative-link and anchor check for the Markdown docs tree |
 | `docs/check_external_links.py` | weekly `docs-links` workflow | External HTTP link check (scheduled, not part of the per-PR gate) |
+| `docs/gen_checks_reference.py` | `poe docs-gen-checks` | Regenerate the Check ID index from the engine registry; `--check` verifies it |
 | `perf/bench_paint_window.py` | — | Measures the queue's paint window (25k synthetic rows); `--markdown` for the docs |
 | `perf/bench_enrichment_cap.py` | — | Measures the enrichment cap (5k synthetic collection, simulated latency) |
 | `probes/` | `poe probes` | Offscreen UI probes; see `probes/README.md` |

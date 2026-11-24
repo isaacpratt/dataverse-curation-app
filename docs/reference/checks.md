@@ -5,7 +5,7 @@ audience: all                # curator | developer | contributor | all
 ---
 # Checks reference
 
-The engine has 24 registered check modules — the keys of `engine/checks/__init__.py:registry`. Each module owns one **family ID** (for example `format.csv`) and declares a scope; a run emits more specific check IDs beneath that family (for example `format.csv.structure`). Results are carried by the [DatasetReport contract](report-contract.md). The checks are ports of the R inspectors in `CUR_Res_CurationTools`.
+The engine has one registered check module per key in `engine/checks/__init__.py:registry`. Each module owns one **family ID** (for example `format.csv`) and declares a scope; a run emits more specific check IDs beneath that family (for example `format.csv.structure`). Results are carried by the [DatasetReport contract](report-contract.md). The checks are ports of the R inspectors in `CUR_Res_CurationTools`.
 
 ## How checks run
 
@@ -41,8 +41,9 @@ Every module emits all owned IDs every run — passes such as "No zero-byte file
 
 ## Check ID index
 
-The 24 registry family IDs, each with its owning module and declared scope. A report can also contain more specific IDs under these families, plus the runner-emitted hint `inventory.unchecked_types` (not a registry key):
+The registry family IDs, each with its owning module and declared scope. This table is generated from `engine.checks.registry` by `poe docs-gen-checks`; a drift test fails when it changes without the registry. A report can also contain more specific IDs under these families, plus the runner-emitted hint `inventory.unchecked_types` (not a registry key):
 
+<!-- BEGIN GENERATED CHECK ID INDEX -->
 | Check ID | Module | Scope |
 | --- | --- | --- |
 | `format.code` | `code_check` | `file` |
@@ -69,8 +70,9 @@ The 24 registry family IDs, each with its owning module and declared scope. A re
 | `inventory.extensions` | `extensions_check` | `dataset` |
 | `metadata.readme_sections` | `readme_check` | `dataset` |
 | `metadata.var_coverage` | `varmeta_check` | `dataset` |
+<!-- END GENERATED CHECK ID INDEX -->
 
-## Per-module checks (24 modules)
+## Per-module checks
 
 Scope is `dataset` or `file`, declared by each check class (`Check.scope`) and enforced at registration: dataset checks run once over the whole staged set and report under `dataset_checks`; file checks run once per matching file and report in that file's `checks`. Extensions say which files a check reads, not what its findings are about — the two are independent, so a cross-file check can read `.csv` and still be dataset-scoped (`engine/tests/test_check_scope.py`). On the dataset page, Dataset checks shows `dataset_checks` (and the metadata completeness card), while File checks shows every `files[].checks` entry in its folder → file → check tree; a finding is never printed in both.
 

@@ -17,7 +17,7 @@ Size was not the only argument. Python checks are pure functions of local files:
 
 The port does not assume equivalence from reading two implementations. For each format, the process was to run the R inspector on a sample from `CUR_Res_CurationTools/data/`, run the matching Python check on the same directory, dump the `DatasetReport` JSON, and assert equivalent findings. Differences that were understood and accepted were encoded as fixtures so the comparison stays honest as the R scripts evolve.
 
-The hardest formats — `sas7bdat`, `gpkg` and `nc`/`hdf5` — were prototyped first. That ordering is the point of a spike: if the difficult cases cannot reach parity, the easy ones cannot rescue the decision. The sample-based parity tests are opt-in (`uv run poe samples`) because CI has no sibling `CUR_Res_CurationTools` clone; a gate whose result depends on a developer's disk is not a gate. The comparison is maintained by whoever runs that task after changing a check, not by CI.
+The hardest formats — `sas7bdat`, `gpkg` and `nc`/`hdf5` — were prototyped first. That ordering is the point of a spike: if the difficult cases cannot reach parity, the simpler ones cannot rescue the decision. The sample-based parity tests are opt-in (`uv run poe samples`) because CI has no sibling `CUR_Res_CurationTools` clone; a gate whose result depends on a developer's disk is not a gate. The comparison is maintained by whoever runs that task after changing a check, not by CI.
 
 ## Notable divergences
 
