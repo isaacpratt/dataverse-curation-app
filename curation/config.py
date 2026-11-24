@@ -148,30 +148,28 @@ def _validate_engine(engine: object) -> None:
             raise ValueError(f"'engine.optional_tools.{key}' must be a string")
 
 
-def normalise_base_url(raw: str) -> str:
-    """Validate and normalise a Dataverse base URL (env or explicit).
+def normalise_base_url(raw: str, source: str = "DATAVERSE_BASE_URL") -> str:
+    """Validate and normalise a Dataverse base URL (env, CLI, file or UI).
 
     Raises ValueError with a message naming the offending value on anything
     that cannot point at a Dataverse: non-http(s) schemes, plain http (the
     API token travels as X-Dataverse-key, so cleartext is refused), missing
-    host, or empty string.
+    host, or empty string. `source` lets each caller name its own input.
     """
     url = raw.strip()
     if not url:
-        raise ValueError("DATAVERSE_BASE_URL is empty")
+        raise ValueError(f"{source} is empty")
     parsed = urlparse(url)
     scheme = (parsed.scheme or "").lower()
     if scheme == "http":
         raise ValueError(
-            f"DATAVERSE_BASE_URL uses plain HTTP ({raw!r}); the API token is sent as "
+            f"{source} uses plain HTTP ({raw!r}); the API token is sent as "
             "X-Dataverse-key - use an https:// URL"
         )
     if scheme != "https":
-        raise ValueError(
-            f"DATAVERSE_BASE_URL must start with https:// (scheme {scheme!r} in {raw!r})"
-        )
+        raise ValueError(f"{source} must start with https:// (scheme {scheme!r} in {raw!r})")
     if not parsed.netloc:
-        raise ValueError(f"DATAVERSE_BASE_URL has no host ({raw!r})")
+        raise ValueError(f"{source} has no host ({raw!r})")
     return url.rstrip("/")
 
 

@@ -199,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
         cfg = _Config()
     if args.dataverse:
         try:
-            cfg.dataverse.base_url = normalise_base_url(args.dataverse)
+            cfg.dataverse.base_url = normalise_base_url(args.dataverse, "--dataverse")
         except ValueError as exc:
             parser.error(str(exc))
     mark("config loaded")
