@@ -82,4 +82,5 @@ Run the local checks that CI enforces before you open a pull request. [The proje
 | `poe docs-links` | `python tools/docs/check_doc_links.py` | Offline internal link check |
 | `poe docs` | `zensical build --strict` | Strict docs build |
 | `poe cover` | `pytest -q --cov=engine --cov-report=term-missing` | Engine coverage against the configured floor |
+| `poe cover-ui` | `pytest -q -n 4 ui/tests/ --cov=ui --cov-report=term-missing --cov-fail-under=71` | UI-only coverage against its own ratcheting floor |
 | `poe samples` | `pytest -q -m samples` | Opt-in parity tests against external sample data |
