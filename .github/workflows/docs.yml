@@ -37,12 +37,17 @@ jobs:
         run: uv lock --check
       - name: Install (locked, dev group includes zensical)
         run: uv sync --frozen --group dev
+      - name: Markdown lint (docs as code)
+        run: uv run --group dev poe docs-lint
+      - name: Offline internal link check
+        run: uv run --group dev poe docs-links
       - name: Build docs (strict — warnings fail the build)
         run: uv run zensical build --strict
       - name: Check built pages exist
         run: |
           test -f site/index.html
-          test -f site/architecture/index.html || test -f site/architecture.html
+          test -f site/tutorials/first-review/index.html || test -f site/tutorials/first-review.html
+          test -f site/explanation/architecture/index.html || test -f site/explanation/architecture.html
       - name: Upload Pages artifact (master pushes only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: actions/upload-pages-artifact@v4

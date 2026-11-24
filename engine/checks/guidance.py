@@ -382,7 +382,7 @@ GUIDANCE: dict[str, tuple[str, str]] = {
 }
 
 # Human-facing names (dv-r0z, dv-dcd): the manifest, the Auto-Checks card,
-# the Markdown report and docs/html/checks-reference.html all name a check
+# the Markdown report and docs/reference/checks.md all name a check
 # through this map, so a user never reads ``format.csv.openable``. The
 # conformance test requires one title per emitted id (and no stale ones);
 # names stay in sentence case like every other label in the app.

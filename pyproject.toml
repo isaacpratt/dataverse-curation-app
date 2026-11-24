@@ -70,6 +70,8 @@ dev = [
     "pytest-xdist>=3.6",
     "import-linter>=2.3",
     "zensical>=0.0.53",
+    # Markdown linter for the docs-as-code gate (pymarkdown CLI, no Node needed).
+    "pymarkdownlnt>=0.9.26",
 ]
 
 [tool.setuptools.packages.find]
@@ -204,12 +206,20 @@ type = "simple"
   sequence = ["license-report", "notice", "sbom"]
 
   [tool.poe.tasks.docs-links]
-  help = "Offline link/anchor check for docs/html/*.html (the retired pre-Zensical pages)"
+  help = "Offline internal link check for the Markdown docs tree (no network)"
   cmd = "python tools/docs/check_doc_links.py"
+
+  [tool.poe.tasks.docs-lint]
+  help = "Lint the Markdown docs with pymarkdown (codespell runs in pre-commit)"
+  cmd = "pymarkdown --strict-config --config .pymarkdown.json scan -r docs CONTRIBUTING.md README.md"
 
   [tool.poe.tasks.docs]
   help = "Build the Zensical documentation site into site/ (strict: broken links fail)"
   cmd = "zensical build --strict"
+
+  [tool.poe.tasks.docs-check]
+  help = "Full docs gate: markdown lint + offline links + strict site build"
+  sequence = ["docs-lint", "docs-links", "docs"]
 
   [tool.poe.tasks.docs-serve]
   help = "Preview the Zensical docs with live reload"

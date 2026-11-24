@@ -1,7 +1,14 @@
 # ADR 0009 — Documentation is built from Markdown by Zensical and published on GitHub Pages
 
-- **Status:** Accepted
+- **Status:** Accepted; information architecture superseded by `dv-uq6` (2026-11-23)
 - **Date:** 2026-11-20
+
+> **Update (2026-11-23, `dv-uq6`):** the docs were rewritten using Diátaxis
+> and The Good Docs Project templates. The ten flat pages became a quadrant-
+> grouped `docs/` tree (home, tutorials, how-to, reference, explanation), and
+> the frozen `docs/html/` tree was retired. References below to `docs/html/`
+> and to the original page names describe the state at the time of this
+> decision; the current layout is recorded in `docs/reports/diataxis-audit.md`.
 
 ## Context
 

@@ -1,5 +1,5 @@
 !!! warning "Historical snapshot"
-    This page is a frozen proposal snapshot kept for provenance. It is intentionally **out of the site navigation** and is not a statement of current behaviour. See [Architecture](../../architecture.md) and the [Proposals](../../proposals.md) pointer for the live picture.
+    This page is a frozen proposal snapshot kept for provenance. It is intentionally **out of the site navigation** and is not a statement of current behaviour. See [Architecture](../explanation/architecture.md) and the [design records](../explanation/design-records/index.md) pointer for the live picture.
 
 # Dataset review page — 22 further ideas
 
@@ -85,8 +85,8 @@ Sources: Dataverse Curation Status API (bulk-friendly per-dataset writes); the a
 
 ArchitectureEffort: M31.5 / 50
 IdeaEach check declares id, applies-to, level semantics, rationale, remediation, and primer link in one place; UI rows, the Markdown report, headless output, and the checks-reference documentation all generate from it.
-Changes · WhyFormalizes what idea 5 starts: class attrs → a CheckMeta dataclass consumed by list_planned_checks, report_md, and a doc generator; docs/html/checks-reference.html gains a "generated" stamp. Kills the drift risk between engine messages, UI copy, and documentation as the check count grows — a maintainer-facing idea whose payoff is consistency.
-Sources: the repo's own docs-as-contract practice (docs/html/checks-reference.html).
+Changes · WhyFormalizes what idea 5 starts: class attrs → a CheckMeta dataclass consumed by list_planned_checks, report_md, and a doc generator; docs/reference/checks.md gains a "generated" stamp. Kills the drift risk between engine messages, UI copy, and documentation as the check count grows — a maintainer-facing idea whose payoff is consistency.
+Sources: the repo's own docs-as-contract practice (docs/reference/checks.md).
 
 ### 22 · Response letter: per-finding curator annotations
 

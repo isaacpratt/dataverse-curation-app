@@ -326,7 +326,7 @@ class ImagesCheck(Check):
                 )
             ]
         except _DECODE_ERRORS:
-            # Taxonomy (docs/html/checks-reference.html): unreadable image = error.
+            # Taxonomy (docs/reference/checks.md): unreadable image = error.
             return [
                 CheckResult(
                     check_id="format.images.valid",

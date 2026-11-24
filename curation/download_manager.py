@@ -3,7 +3,7 @@
 Flow: quote (file count + total bytes from the inventory, no download) ->
 curator approval -> zip bundle download with progress -> safe unzip ->
 checksum verification against the Dataverse inventory. Network work runs on
-Qt worker threads; see docs/html/architecture.html.
+Qt worker threads; see docs/explanation/architecture.md.
 """
 
 import hashlib
@@ -478,7 +478,7 @@ class DownloadManager:
         `.tab` mismatches are warnings, not errors: tabular files are
         server-regenerated ingest products whose stored checksum can predate
         the download — the message carries hashes, size and the file's UNF
-        for manual comparison (see docs/html/user-guide.html "Checksum problems").
+        for manual comparison (see docs/troubleshooting.md "Checksum problems").
         """
         if inventory is None:
             inventory = self._client.get_file_inventory(persistent_id)

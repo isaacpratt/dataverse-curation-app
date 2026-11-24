@@ -10,4 +10,4 @@ state the current plan.
 | `proposal-other-ideas-dataset-review.html` | The companion list of 22 further ideas and the source bibliography. |
 
 The plan itself lives in **beads** (`bd ready`, `bd list`, `bd show <id>`).
-`docs/html/proposals.html` is the pointer to both.
+`docs/explanation/design-records/index.md` is the pointer to both.
