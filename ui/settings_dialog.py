@@ -50,7 +50,6 @@ from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
     ACCENT_PRIMARY,
-    ACTIVE_THEME,
     BORDER_SUBTLE,
     STATE_ERROR_GRAPHIC,
     SURFACE_CARD,
@@ -59,7 +58,7 @@ from ui.theme import (
     enable_table_copy,
     page_background_qss,
     selectable_labels,
-    set_active_theme,
+    surface_frame_qss,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -297,7 +296,7 @@ class SettingsPane(QWidget):
         theme_group = QWidget()
         theme_group.setObjectName("Card")
         theme_group.setStyleSheet(
-            f"QWidget#Card {{ background: {SURFACE_CARD}; border: 1px solid {BORDER_SUBTLE}; border-radius: 8px; }}"
+            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QWidget#Card", radius="8px")
         )
         theme_layout = QVBoxLayout(theme_group)
         theme_layout.setContentsMargins(16, 16, 16, 16)
@@ -1483,8 +1482,9 @@ class SettingsPane(QWidget):
 
     def _apply_theme(self) -> None:
         """Apply the current theme setting to the app."""
-        from ui.theme import set_active_theme, apply_theme
         from PySide6.QtWidgets import QApplication
+
+        from ui.theme import apply_theme, set_active_theme
 
         mode = self._config.app.theme_mode
         if mode == "auto":

@@ -107,7 +107,7 @@ class LogRail(DetailState):
             if not s:
                 return 0.0
             try:
-                from datetime import datetime, timezone
+                from datetime import UTC, datetime
 
                 # Normalize common separators and suffixes
                 normalized = s.replace("Z", "+00:00")
@@ -124,7 +124,7 @@ class LogRail(DetailState):
                     normalized = base + "." + frac
                 dt = datetime.fromisoformat(normalized)
                 if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
+                    dt = dt.replace(tzinfo=UTC)
                 return dt.timestamp() * 1000.0
             except Exception:
                 return 0.0

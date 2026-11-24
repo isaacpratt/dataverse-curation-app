@@ -19,15 +19,11 @@ from ui.dataset.helpers import _pill_state
 from ui.dataset.state import DetailState
 from ui.i18n import t
 from ui.theme import (
-    ACCENT_PRIMARY,
     BORDER_SUBTLE,
-    FONT_BODY,
     STATE_ERROR_BG,
     STATE_ERROR_BORDER,
-    STATE_ERROR_GRAPHIC,
     STATE_SUCCESS_GRAPHIC,
     STATE_WARNING_GRAPHIC,
-    SURFACE_CARD,
     SURFACE_SUBTLE,
     SURFACE_TINT,
     TEXT_AMBER,

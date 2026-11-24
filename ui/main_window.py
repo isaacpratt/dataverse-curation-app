@@ -432,7 +432,7 @@ class MainWindow(QMainWindow):
         try:
             from PySide6.QtGui import QIcon
 
-            from ui.theme import mark_icon_path, ACTIVE_THEME
+            from ui.theme import ACTIVE_THEME, mark_icon_path
 
             _icon = mark_icon_path(ACTIVE_THEME)
             if _icon:

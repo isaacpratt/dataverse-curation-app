@@ -97,33 +97,42 @@ def test_every_badge_role_is_in_the_contract():
     assert not missing_dark, f"badge roles with no contrast check (dark): {missing_dark}"
 
 
-def test_the_roles_resolve_to_real_colours():
-    """A role that is not a colour would silently paint nothing."""
+def _check_colour_format(pairs, theme: str, resolve: bool) -> list[str]:
+    """Check that all values in pairs are valid hex colours."""
     import re
 
     bad = []
-    # Check light theme pairs (already have actual colour values)
-    for label, fg, bg, _kind, _min in CONTRAST_PAIRS:
-        for value in (fg, bg):
-            if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
-                bad.append(f"[light] {label}: {value!r}")
-    # Check dark theme pairs (resolve role names)
-    for label, fg, bg, _kind, _min in CONTRAST_PAIRS_DARK:
-        fg_colour, bg_colour = _resolve_pair(fg, bg, "dark")
-        for value in (fg_colour, bg_colour):
-            if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
-                bad.append(f"[dark] {label}: {value!r}")
-    # Check badge light (actual colour values)
-    for label, fg, bg in BADGE_CONTRAST_PAIRS:
-        for value in (fg, bg):
-            if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
-                bad.append(f"[light] {label}: {value!r}")
-    # Check badge dark (resolve role names)
-    for label, fg, bg in BADGE_CONTRAST_PAIRS_DARK:
-        fg_colour, bg_colour = _resolve_pair(fg, bg, "dark")
-        for value in (fg_colour, bg_colour):
-            if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
-                bad.append(f"[dark] {label}: {value!r}")
+    hex_re = re.compile(r"#[0-9a-fA-F]{6}")
+    for item in pairs:
+        if len(item) == 5:
+            label, fg, bg, _kind, _min = item
+            if resolve:
+                fg_colour, bg_colour = _resolve_pair(fg, bg, theme)
+                values = (fg_colour, bg_colour)
+            else:
+                values = (fg, bg)
+        elif len(item) == 3:
+            label, fg, bg = item
+            if resolve:
+                fg_colour, bg_colour = _resolve_pair(fg, bg, theme)
+                values = (fg_colour, bg_colour)
+            else:
+                values = (fg, bg)
+        else:
+            continue
+        for value in values:
+            if not hex_re.fullmatch(value):
+                bad.append(f"[{theme}] {label}: {value!r}")
+    return bad
+
+
+def test_the_roles_resolve_to_real_colours():
+    """A role that is not a colour would silently paint nothing."""
+    bad = []
+    bad.extend(_check_colour_format(CONTRAST_PAIRS, "light", False))
+    bad.extend(_check_colour_format(CONTRAST_PAIRS_DARK, "dark", True))
+    bad.extend(_check_colour_format(BADGE_CONTRAST_PAIRS, "light", False))
+    bad.extend(_check_colour_format(BADGE_CONTRAST_PAIRS_DARK, "dark", True))
     assert not bad, f"roles that are not colours: {bad}"
 
 

@@ -2797,7 +2797,7 @@ class StatusWidget(QFrame):
         self._icon.setPixmap(_icon(name, color=color, size=16).pixmap(QSize(16, 16)))
 
     def _set_action(self, name: str, tip: str) -> None:
-        """Deprecated (dv-3d0.4): no action button on the status chip."""
+        """Deprecate (dv-3d0.4): no action button on the status chip."""
         pass
 
     def set_running(
@@ -2844,6 +2844,10 @@ class StatusWidget(QFrame):
         self._title.setText("")
         self._detail.setText("")
         self._bar.hide()
+
+    def text(self) -> str:
+        """Return the current status title text (for tests)."""
+        return self._title.text()
 
 
 def fit_tree_height(tree: QTreeView, row_height: int = 40, floor: int = 80) -> None:

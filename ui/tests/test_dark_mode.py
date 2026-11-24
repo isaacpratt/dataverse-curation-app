@@ -7,14 +7,13 @@ and that role resolution works for both themes.
 import pytest
 
 from ui.theme import (
-    ACTIVE_THEME,
+    BADGE_CONTRAST_PAIRS,
+    BADGE_CONTRAST_PAIRS_DARK,
+    CONTRAST_PAIRS,
+    CONTRAST_PAIRS_DARK,
     DARK_ROLE_TABLE,
     LIGHT_ROLE_TABLE,
     ROLE_TABLES,
-    CONTRAST_PAIRS,
-    CONTRAST_PAIRS_DARK,
-    BADGE_CONTRAST_PAIRS,
-    BADGE_CONTRAST_PAIRS_DARK,
     contrast_ratio,
     role,
     role_table,
@@ -69,9 +68,9 @@ def test_set_active_theme_switches_globals():
     assert theme_module.ACTIVE_THEME == "dark"
 
     # Verify globals were updated
-    from ui.theme import TEXT_PRIMARY, SURFACE_CARD
-    assert TEXT_PRIMARY == role("TEXT_PRIMARY", "dark")
-    assert SURFACE_CARD == role("SURFACE_CARD", "dark")
+    from ui.theme import SURFACE_CARD, TEXT_PRIMARY
+    assert role("TEXT_PRIMARY", "dark") == TEXT_PRIMARY
+    assert role("SURFACE_CARD", "dark") == SURFACE_CARD
 
 
 def test_contrast_ratios_both_themes():
@@ -112,13 +111,17 @@ def test_dark_contrast_pairs_match_light_structure():
     assert len(BADGE_CONTRAST_PAIRS_DARK) == len(BADGE_CONTRAST_PAIRS)
 
     # Check that dark pairs use role names (strings) not colour values
-    for label, fg, bg, kind, minimum in CONTRAST_PAIRS_DARK:
-        assert isinstance(fg, str) and fg.isupper(), f"Dark pair {label} fg should be role name"
-        assert isinstance(bg, str) and bg.isupper(), f"Dark pair {label} bg should be role name"
+    for label, fg, bg, _kind, _minimum in CONTRAST_PAIRS_DARK:
+        assert isinstance(fg, str), f"Dark pair {label} fg should be str"
+        assert fg.isupper(), f"Dark pair {label} fg should be role name"
+        assert isinstance(bg, str), f"Dark pair {label} bg should be str"
+        assert bg.isupper(), f"Dark pair {label} bg should be role name"
 
     for label, fg, bg in BADGE_CONTRAST_PAIRS_DARK:
-        assert isinstance(fg, str) and fg.isupper(), f"Dark badge {label} fg should be role name"
-        assert isinstance(bg, str) and bg.isupper(), f"Dark badge {label} bg should be role name"
+        assert isinstance(fg, str), f"Dark badge {label} fg should be str"
+        assert fg.isupper(), f"Dark badge {label} fg should be role name"
+        assert isinstance(bg, str), f"Dark badge {label} bg should be str"
+        assert bg.isupper(), f"Dark badge {label} bg should be role name"
 
 
 def test_no_hardcoded_colours_in_dark_table():

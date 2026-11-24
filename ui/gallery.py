@@ -35,11 +35,7 @@ from PySide6.QtWidgets import (
 from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,
-    ACTIVE_THEME,
     BORDER_SUBTLE,
-    DARK_ROLE_TABLE,
-    LIGHT_ROLE_TABLE,
-    ROLE_TABLES,
     STATE_ERROR_BG,
     STATE_ERROR_TEXT,
     STATE_SUCCESS_GRAPHIC,
@@ -53,7 +49,6 @@ from ui.theme import (
     TEXT_PRIMARY,
     TEXT_SUBTLE,
     page_background_qss,
-    role,
     surface_frame_qss,
     transparent_qss,
     transparent_surface_qss,
@@ -542,12 +537,17 @@ class GalleryWindow(QWidget):
         title_row.addStretch(1)
 
         # Theme selector
-        self._theme_selector = QComboBox()
-        self._theme_selector.addItems([t("gallery.theme.light"), t("gallery.theme.dark"), t("gallery.theme.both")])
+        self._theme_selector = make_combo(
+            [
+                (t("gallery.theme.light"), "light"),
+                (t("gallery.theme.dark"), "dark"),
+                (t("gallery.theme.both"), "both"),
+            ],
+            min_width=180,
+        )
         self._theme_selector.setCurrentText(t("gallery.theme.both"))
         self._theme_selector.currentTextChanged.connect(self._on_theme_changed)
         self._theme_selector.setToolTip(t("gallery.theme.tip"))
-        self._theme_selector.setFixedWidth(180)
         title_row.addWidget(self._theme_selector)
         outer.addLayout(title_row)
 
@@ -586,7 +586,7 @@ class GalleryWindow(QWidget):
 
     def _show_dual_theme(self, body: QVBoxLayout) -> None:
         """Show light and dark themes side by side for each section."""
-        from ui.theme import set_active_theme, apply_theme
+        from ui.theme import apply_theme, set_active_theme
 
         # Build light theme sections
         light_content = QWidget()

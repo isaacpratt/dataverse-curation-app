@@ -784,7 +784,7 @@ class DashboardView(QWidget):
         try:
             from PySide6.QtGui import QPixmap as _QPixmap
 
-            from ui.theme import mark_icon_path, ACTIVE_THEME
+            from ui.theme import ACTIVE_THEME, mark_icon_path
 
             _pix = _QPixmap(mark_icon_path(ACTIVE_THEME))
             if not _pix.isNull():

@@ -42,15 +42,10 @@ from ui.dataset.workflow_section import WorkflowSection
 from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
-    BORDER_SUBTLE,
-    FONT_BODY,
     FONT_CAPTION,
-    SURFACE_CARD,
-    TEXT_MUTED,
     enable_list_copy,
     page_background_qss,
     selectable_labels,
-    status_strip_qss,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -782,9 +777,9 @@ class DatasetDetailView(
             pass
 
     def _move_dataset_log(self, to_sidebar: bool) -> None:
-        """Deprecated (dv-3d0.1): the dataset log now stays in the sidebar.
+        """Deprecate (dv-3d0.1): the dataset log now stays in the sidebar.
 
-        Kept as a no-op for any external callers; the log is hidden/shown
+        Keep as a no-op for any external callers; the log is hidden/shown
         with the sidebar scroll area instead of being reparented.
         """
         pass

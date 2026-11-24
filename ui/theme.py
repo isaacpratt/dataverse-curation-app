@@ -9,9 +9,9 @@ the role layer says what it is FOR, and the role layer is a table per
 theme - so switching theme is a table swap, not a re-skin.
 """
 
+import os
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
-import os
 
 if TYPE_CHECKING:
     from PySide6.QtCore import QEvent, QObject
@@ -745,9 +745,6 @@ def asset_path(name: str, theme: str | None = None) -> str:
     If theme is provided and a dark variant exists (name with -dark suffix),
     it will be preferred when theme="dark".
     """
-    import sys
-    from pathlib import Path
-
     # If dark theme requested, try dark variant first
     if theme == "dark":
         base, ext = os.path.splitext(name)
@@ -761,7 +758,7 @@ def asset_path(name: str, theme: str | None = None) -> str:
 
 
 def _find_asset(name: str) -> str:
-    """Internal helper to find an asset by name."""
+    """Find an asset by name."""
     import sys
     from pathlib import Path
 

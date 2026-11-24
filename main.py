@@ -220,7 +220,6 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
         if theme_mode == "auto":
             # Detect OS theme (Windows 10/11)
             try:
-                import sys
                 if sys.platform.startswith("win"):
                     import winreg
                     key = winreg.OpenKey(
