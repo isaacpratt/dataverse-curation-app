@@ -29,28 +29,36 @@ def test_check_reference_lists_every_registered_check_id() -> None:
     assert not missing, f"check IDs absent from reference/checks.md: {missing}"
 
 
-def test_cli_reference_matches_help_output() -> None:
-    """Documented flags and defaults come from the live CLI, not memory."""
+def test_cli_reference_matches_argparse() -> None:
+    """The published CLI block is generated from, and matches, the real CLI."""
+    sys.path.insert(0, str(ROOT / "tools" / "docs"))
+    from gen_cli_reference import check, render_reference
+
+    page = (DOCS / "reference" / "cli.md").read_text(encoding="utf-8")
+    assert check(), "run `poe docs-gen-cli` to regenerate the CLI reference"
+    block = render_reference()
+    assert block in page
+
     help_text = subprocess.run(
         [sys.executable, str(ROOT / "main.py"), "--headless", "--help"],
         capture_output=True,
         text=True,
         check=True,
     ).stdout
-    page = (DOCS / "reference" / "cli.md").read_text(encoding="utf-8")
-    # Every argparse flag appears in both outputs.
-    flags = sorted(
-        {
-            token.split("=")[0]
-            for token in help_text.split()
-            if token.startswith("--") and len(token) > 2 and token[2] not in "{|}"
-        }
+    assert help_text.strip() in block
+    assert all(
+        f"`{flag}`" in block
+        for flag in (
+            "--headless",
+            "--gallery",
+            "--out",
+            "--format",
+            "--persistent-id",
+            "--export-record",
+            "--config",
+            "--dataverse",
+        )
     )
-    assert flags
-    missing = [flag for flag in flags if f"`{flag}" not in page]
-    assert not missing, f"CLI flags absent from reference/cli.md: {missing}"
-    assert "--format {json,md,both}" in help_text
-    assert "`json|md|both`" in page or "`json`, `md`, `both`" in page
 
 
 def test_configuration_reference_covers_example_keys() -> None:

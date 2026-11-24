@@ -5,7 +5,11 @@ audience: all                # curator | developer | contributor | all
 ---
 # Command-line reference
 
-Argument parser: `main.py:main()` (`argparse`, description from `t("app.cli.description")` = "Dataverse Docent"). Verbatim help from `uv run python main.py --headless --help`:
+The CLI is defined by `main.build_parser()` (`argparse`; description from `t("app.cli.description")` = "Dataverse Docent"). The help text and flag table below are generated from that parser by `poe docs-gen-cli`; do not edit the marked block. Headless rules are in [Headless mode](#headless-mode).
+
+## Arguments and flags
+
+<!-- BEGIN GENERATED CLI REFERENCE -->
 
 ```text
 usage: main.py [-h] [--headless] [--gallery] [--out OUT]
@@ -37,20 +41,20 @@ options:
                         https://demo.borealisdata.ca)
 ```
 
-## Arguments and flags
+| Argument | Form | Default | Help |
+| --- | --- | --- | --- |
+| `-h`, `--help` | flag | — | show this help message and exit |
+| `--headless` | flag | `False` | run checks on a local directory and write a JSON report |
+| `--gallery` | flag | `False` | open the component gallery (every kit component on one page) |
+| `dataset_dir` | optional positional | — | staged dataset directory (headless mode) |
+| `--out` | value | `curation_report.json` | output report path |
+| `--format` | choice (json|md|both) | `json` | report format: json, md, or both (default: json) |
+| `--persistent-id` | value | `""` | dataset persistent ID |
+| `--export-record` | flag | `False` | also write a dated curation-record folder beside the report |
+| `--config` | value | `config.json` | path to config.json (default: ./config.json) |
+| `--dataverse` | value | None | override dataverse base URL (e.g. https://demo.borealisdata.ca) |
 
-| Argument | Form | Default | Exact help text | Notes |
-| --- | --- | --- | --- | --- |
-| `-h`, `--help` | flag | — | show this help message and exit | Built-in argparse action; exits before any work |
-| `dataset_dir` | optional positional | none | staged dataset directory (headless mode) | Required when `--headless` is set; must exist and be a directory |
-| `--headless` | store_true | `False` | run checks on a local directory and write a JSON report | Selects the headless path; no Qt, config or network |
-| `--gallery` | store_true | `False` | open the component gallery (every kit component on one page) | GUI-only; needs no server, token or workspace |
-| `--out` | value | `curation_report.json` | output report path | Parent directories are created; output-format write failures return exit 2 |
-| `--format` | choice | `json` | report format: json, md, or both (default: json) | Choices: `json`, `md`, `both`; headless only |
-| `--persistent-id` | value | `""` | dataset persistent ID | Recorded in the DatasetReport; headless only |
-| `--export-record` | store_true | `False` | also write a dated curation-record folder beside the report | Headless only; writes a dated `curation-record/<YYYYMMDD-HHMMSS>/` folder |
-| `--config` | value | `config.json` | path to config.json (default: ./config.json) | GUI-only; rejected under `--headless` when non-default |
-| `--dataverse` | value | `None` | override dataverse base URL (e.g. https://demo.borealisdata.ca) | GUI-only; overrides the configured base URL; rejected under `--headless` |
+<!-- END GENERATED CLI REFERENCE -->
 
 ## Headless mode
 

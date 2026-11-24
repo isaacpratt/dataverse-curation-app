@@ -76,9 +76,9 @@ The `page_type` matches the quadrant, or `governance` for a governance page. The
 - `uv run poe docs-lint` runs `pymarkdown --strict-config --config .pymarkdown.json scan -r docs CONTRIBUTING.md README.md`.
 - `uv run poe docs-links` checks internal links in the Markdown tree offline; it makes no network requests.
 - `uv run poe docs` runs `zensical build --strict`; a broken relative link or anchor fails the build.
-- `uv run poe docs-check` chains Markdown lint, offline link check, the generated Check ID index check, and the strict build. This is the full docs gate.
+- `uv run poe docs-check` chains Markdown lint, offline link check, both generated-section checks, and the strict build. This is the full docs gate.
 - The normal pytest suite adds prose and consistency checks: documented UI labels against `ui/assets/strings.json`, style-guide values against the front-matter gate, `poe` task names, API endpoints, cited repository paths, banned filler words, dated verification claims, and the `--export-record` smoke command.
-- The Check ID index in `docs/reference/checks.md` is generated from `engine.checks.registry`. Change the registry first, then run `uv run poe docs-gen-checks`; never hand-edit the marked block.
+- Two reference blocks are generated: the Check ID index in `docs/reference/checks.md` comes from `engine.checks.registry` (`poe docs-gen-checks`), and the help text plus flag table in `docs/reference/cli.md` comes from `main.build_parser()` (`poe docs-gen-cli`). Change the source first, then regenerate; never hand-edit a marked block.
 - `uv run pre-commit run --all-files` also runs pymarkdown and `codespell` over Markdown, plus whitespace and end-of-file checks. External links are checked on a weekly schedule, not on every pull request.
 
 ## Definition of done
@@ -88,7 +88,7 @@ The `page_type` matches the quadrant, or `governance` for a governance page. The
 - [ ] Voice rules hold: second person, imperative steps, no "just" or "simply", terms defined at first use.
 - [ ] Every code block is fenced and true, and commands match `pyproject.toml`.
 - [ ] Internal links are relative and resolve; the page is in the `nav` if it is published.
-- [ ] `uv run poe docs-check` passes (Markdown lint, offline links, generated sections, strict build).
+- [ ] `uv run poe docs-check` passes (Markdown lint, offline links, both generated sections, strict build).
 - [ ] `uv run pre-commit run --all-files` passes, including pymarkdown and codespell.
 - [ ] `uv run pytest -q` passes the docs prose and consistency suites; generated blocks were regenerated, not hand-edited.
 - [ ] No stale counts, retired page names, or references to `docs/html/` as the source of truth.

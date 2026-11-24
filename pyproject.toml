@@ -225,9 +225,17 @@ type = "simple"
   help = "Fail when the generated Check ID index is stale"
   cmd = "python tools/docs/gen_checks_reference.py --check"
 
+  [tool.poe.tasks.docs-gen-cli]
+  help = "Regenerate the CLI reference in docs/reference/cli.md from argparse"
+  cmd = "python tools/docs/gen_cli_reference.py --write"
+
+  [tool.poe.tasks.docs-gen-cli-check]
+  help = "Fail when the generated CLI reference is stale"
+  cmd = "python tools/docs/gen_cli_reference.py --check"
+
   [tool.poe.tasks.docs-check]
   help = "Full docs gate: markdown lint + offline links + generated sections + strict build"
-  sequence = ["docs-lint", "docs-links", "docs-gen-checks-check", "docs"]
+  sequence = ["docs-lint", "docs-links", "docs-gen-checks-check", "docs-gen-cli-check", "docs"]
 
   [tool.poe.tasks.docs-serve]
   help = "Preview the Zensical docs with live reload"
