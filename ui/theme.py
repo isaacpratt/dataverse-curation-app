@@ -1941,12 +1941,52 @@ QSplitter::handle:vertical {{ height: 1px; }}
 """
 
 
-def apply_theme(app: "QApplication", theme: str | None = None) -> None:
+#: Attribute a kit factory sets on a widget to carry its own repaint.
+#: The value is a ``(rebuilder_name, *args)`` tuple of plain data - never a
+#: closure. A closure would capture the widget, and the widget holding the
+#: closure makes a reference cycle; a cycle keeps the Python wrapper alive
+#: after Qt has deleted the C++ object, and the next method call on that
+#: wrapper aborts the process. Plain data cannot do that, and it dies with
+#: the widget.
+RETHEME_ATTR = "_retheme_spec"
+
+#: Installed by ``ui.widgets`` at import. ``ui.theme`` must not import the
+#: kit (the kit imports the theme), so the extension point lives here and
+#: the implementation registers itself.
+_retheme_hook: Callable[["QApplication"], int] | None = None
+
+
+def set_retheme_hook(hook: Callable[["QApplication"], int] | None) -> None:
+    """Install the callable that repaints scoped sheets (used by ``ui.widgets``)."""
+    global _retheme_hook
+    _retheme_hook = hook
+
+
+def retheme_widgets(app: "QApplication") -> int:
+    """Repaint every widget that carries a scoped sheet. Returns how many ran.
+
+    Called from :func:`apply_theme` after the application sheet is replaced.
+    Without a hook (the kit not imported) this is a no-op.
+    """
+    if _retheme_hook is None:
+        return 0
+    try:
+        return _retheme_hook(app)
+    except Exception:
+        return 0
+
+
+def apply_theme(app: "QApplication", theme: str | None = None, *, retheme: bool = False) -> None:
     """Apply global QSS and default font.
 
     ``theme`` is the role table to paint; it defaults to the active one,
     so a plain ``apply_theme(app)`` after ``set_active_theme(name)``
     repaints in that theme.
+
+    ``retheme`` also repaints widgets that carry their own scoped sheet
+    (cards, buttons, tables). Pass ``False`` when building a second theme's
+    widgets in one process - the gallery does - so a temporary switch does
+    not repaint the column that is already built.
     """
     from PySide6.QtGui import QFont
 
@@ -1960,6 +2000,8 @@ def apply_theme(app: "QApplication", theme: str | None = None) -> None:
     app.setFont(font)
     app.setStyleSheet(global_qss(theme or ACTIVE_THEME))
     _install_interaction_tracking(app)
+    if retheme:
+        retheme_widgets(app)
     _log_active_role_table()
 
 

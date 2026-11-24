@@ -71,14 +71,16 @@ reissue, and update the app via Settings.
 
 ## Signing
 
-**Decision (2026-11-17): distributed Windows builds are signed through a
-managed signing service — SignPath Foundation.** SignPath Foundation
+**Decision (2026-11-17): distributed Windows builds are to be signed through
+a managed signing service — SignPath Foundation.** SignPath Foundation
 signs open-source Windows software for free; the publisher name Windows
-shows is *SignPath Foundation*, not an individual maintainer. The
-signing step is implemented and wired in `dv-4t6.6`, and it is gated on
-the `SIGNPATH_*` repository secrets: when they are absent the release
-workflow logs "signing skipped" and publishes unsigned artefacts, so
-forks and local builds are unaffected.
+shows is *SignPath Foundation*, not an individual maintainer. **This is
+not wired up yet:** no workflow contains a signing step, so every
+artefact published today is unsigned. The intent is to gate the step on
+the `SIGNPATH_*` repository secrets, so that when they are absent the
+release workflow logs "signing skipped" and publishes unsigned artefacts
+and forks and local builds are unaffected. Until that lands, the
+"unsigned" paragraph below is the operative one.
 
 - **Cert source:** SignPath Foundation (managed). There is no
   institutional certificate to buy or hold, and no key material in this
@@ -130,13 +132,18 @@ Out of scope / accepted risks:
 - The app trusts the filesystem and the configured Dataverse instance;
   a hostile Dataverse endpoint can serve malicious files, which the
   format checks will report but cannot neutralize.
-- No update mechanism: new versions are distributed through the same
-  channels as the installer you received; outdated installs keep their
+- Updates are checked for, not applied silently. An installed Velopack
+  build asks the repository's public releases feed at most once a day
+  (`ui/updater.py`); a portable zip or a source checkout reports that
+  updates are unavailable in that build. Nothing is downloaded or
+  installed without the curator asking, and an outdated install keeps its
   audit state.
 
 ## What does not happen
 
 - The app never contacts any service other than the configured Dataverse
   instance (and, incidentally, the OS credential store).
-- No telemetry, crash reporting, analytics, or automatic update check.
+- No telemetry, crash reporting or analytics. The one outbound call the
+  app makes on its own is the once-a-day update check described above,
+  to the repository's public releases feed; it carries no curator data.
 - No API-token hints, previews or fingerprints are written to disk.

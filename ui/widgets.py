@@ -16,6 +16,7 @@ Intentional one-offs (NOT kit violations):
 """
 
 import textwrap
+import weakref
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, cast
 
@@ -136,6 +137,139 @@ def _active_theme() -> str:
     return _theme.ACTIVE_THEME
 
 
+#: Widgets that carry a retheme spec, weakly. Iterating this instead of
+#: ``app.allWidgets()`` keeps a switch proportional to what the kit built,
+#: not to everything the process ever created.
+_RETHEME_REGISTRY: "weakref.WeakSet[Any]" = weakref.WeakSet()
+
+
+def _register(widget: QWidget, name: str, *args: object) -> None:
+    """Attach a scoped-sheet rebuild to ``widget`` for live theme switches.
+
+    Every factory that bakes its own sheet calls this, so a switch can
+    repaint already-built widgets (dv-4jm.7). The spec is plain data - a
+    rebuilder name plus its arguments - and the rebuilders are module-level
+    functions that take the widget as a parameter. Storing a closure here
+    instead would capture the widget and form a reference cycle, which
+    keeps the Python wrapper alive past the C++ object and crashes the
+    process on the next call.
+    """
+    try:
+        setattr(widget, _theme.RETHEME_ATTR, (name, args))
+        _RETHEME_REGISTRY.add(widget)
+    except Exception:
+        pass
+
+
+def _is_live(widget: object) -> bool:
+    """Return whether ``widget`` still has a C++ object behind it.
+
+    Qt deletes the C++ object on ``deleteLater``, and a parent's
+    destruction takes its children with it, while the Python wrapper can
+    outlive both. Calling a method on such a wrapper aborts the process.
+    """
+    try:
+        import shiboken6
+
+        return bool(shiboken6.isValid(widget))
+    except Exception:
+        return True
+
+
+def _reapply_card(card: QWidget) -> None:
+    """Repaint a card and its top bar (one face, two widgets)."""
+    theme = _active_theme()
+    card.setStyleSheet(
+        f"QFrame#Card {{ background: {role('SURFACE_CARD', theme)}; "
+        f"border: 1px solid {role('BORDER_SUBTLE', theme)}; border-radius: 8px; }}"
+    )
+    top = card.findChild(QFrame, "CardTopBar")
+    if top is not None:
+        top.setStyleSheet(
+            f"QFrame#CardTopBar {{ background: {role('SURFACE_PAGE', theme)}; "
+            f"border-bottom: 1px solid {role('SURFACE_SUBTLE', theme)}; "
+            "border-top-left-radius: 8px; border-top-right-radius: 8px; }"
+        )
+
+
+# Rebuilders, keyed by the name a factory passes to _register. Each takes
+# the widget as its first parameter, so nothing captures it.
+_REBUILDERS: dict[str, Any] = {
+    "button": lambda w, kind: w.setStyleSheet(
+        button_qss(kind, selector="QPushButton", theme=_active_theme())
+    ),
+    "input": lambda w, selector, font_size, family: w.setStyleSheet(
+        input_qss(
+            selector,
+            font_size=font_size,
+            family=family,
+            theme=_active_theme(),
+        )
+    ),
+    "checkbox": lambda w: w._apply_sheet(),
+    "progress_bar": lambda w: w.setStyleSheet(
+        f"QProgressBar {{ background: {role('SURFACE_SUBTLE', _active_theme())}; "
+        f"border: 1px solid {role('BORDER_SUBTLE', _active_theme())}; "
+        f"border-radius: {RADIUS_LG}; }} "
+        f"QProgressBar::chunk {{ background: {role('ACCENT_PRIMARY', _active_theme())}; "
+        f"border-radius: {RADIUS_LG}; }}"
+    ),
+    "card": lambda w: _reapply_card(w),
+    "value_chip": lambda w: w._apply_sheet(),
+    "pane_footer": lambda w: w._apply_sheet(),
+    "status_widget": lambda w: w._apply_sheet(),
+    "tree": lambda w, flush, row_height, hover: w.setStyleSheet(
+        tree_style(flush=flush, row_height=row_height, hover=hover)
+    ),
+    "list": lambda w, last, flush: w.setStyleSheet(
+        flush_list_style(last=last) if flush else framed_list_style()
+    ),
+    "flush_table": lambda w, last, header_background, item_padding: w.setStyleSheet(
+        flush_table_style(
+            last=last,
+            header_background=header_background,
+            item_padding=item_padding,
+        )
+    ),
+}
+
+
+def _retheme_all(app: Any) -> int:
+    """Repaint every widget carrying a retheme spec. Returns how many ran.
+
+    Iterates the registry of *registered* widgets, not ``app.allWidgets()``:
+    the suite (and a long-running app) can hold far more widgets than the
+    kit built, and walking all of them on every switch is what made a theme
+    change expensive. The registry is weak, so a widget that is gone drops
+    out of it on its own.
+    """
+    run = 0
+    for widget in list(_RETHEME_REGISTRY):
+        spec = getattr(widget, _theme.RETHEME_ATTR, None)
+        if not isinstance(spec, tuple) or len(spec) != 2:
+            continue
+        name, args = spec
+        rebuild = _REBUILDERS.get(str(name))
+        if rebuild is None or not _is_live(widget):
+            continue
+        if not widget.isVisible():
+            # Repaint what is on screen. A hidden widget is not painting, and
+            # a long session can accumulate many; skipping them keeps a switch
+            # proportional to the visible UI rather than to every widget ever
+            # built. One hidden at switch time and shown later keeps its old
+            # face until the next switch.
+            continue
+        try:
+            rebuild(widget, *args)
+            run += 1
+        except Exception:
+            continue
+    return run
+
+
+_theme.set_retheme_hook(_retheme_all)
+
+
 __all__ = [
     "BUTTON_HEIGHTS",
     "AppButton",
@@ -183,6 +317,7 @@ __all__ = [
     "make_split_chip",
     "make_value_list",
     "set_chip_room_limited",
+    "set_flush_table_style",
     "tree_style",
 ]
 
@@ -731,6 +866,33 @@ def flush_table_style(
     )
 
 
+def set_flush_table_style(
+    table: QTableWidget,
+    *,
+    last: bool = True,
+    header_background: str | None = None,
+    item_padding: str | None = None,
+) -> None:
+    """Apply :func:`flush_table_style` to ``table`` and keep it in step with the theme.
+
+    A table's sheet is scoped, so a live theme switch would otherwise leave
+    it on the old palette (dv-4jm.7). Views call this instead of
+    ``table.setStyleSheet(flush_table_style(...))``.
+    """
+
+    def _apply() -> None:
+        table.setStyleSheet(
+            flush_table_style(
+                last=last,
+                header_background=header_background,
+                item_padding=item_padding,
+            )
+        )
+
+    _apply()
+    _register(table, "flush_table", last, header_background, item_padding)
+
+
 def framed_list_style() -> str:
     """Build the framed QListWidget face (a list that lives inside a card body).
 
@@ -891,7 +1053,12 @@ class AppTree(_BranchPainting, QTreeView):
         self.setIndentation(18)
         self.setRootIsDecorated(True)
         self.setFrameStyle(QFrame.Shape.NoFrame)
-        self.setStyleSheet(tree_style(flush=flush, row_height=row_height))
+
+        def _apply() -> None:
+            self.setStyleSheet(tree_style(flush=flush, row_height=row_height))
+
+        _apply()
+        _register(self, "tree", flush, row_height, True)
         # One selection face app-wide, and no dotted focus box (dv-coj).
         self.setItemDelegate(SelectionDelegate(self))
         self._fitting = False
@@ -985,7 +1152,12 @@ class AppTreeWidget(_BranchPainting, QTreeWidget):
         self.setIndentation(18)
         self.setRootIsDecorated(True)
         self.setFrameStyle(QFrame.Shape.NoFrame)
-        self.setStyleSheet(tree_style(flush=flush, row_height=row_height, hover=hover_tint))
+
+        def _apply() -> None:
+            self.setStyleSheet(tree_style(flush=flush, row_height=row_height, hover=hover_tint))
+
+        _apply()
+        _register(self, "tree", flush, row_height, hover_tint)
         # One selection face app-wide, and no dotted focus box (dv-coj).
         self.setItemDelegate(SelectionDelegate(self))
         self._fitting = False
@@ -1031,6 +1203,7 @@ def make_action_button(
     """
     btn = AppButton(text, kind=kind, size=size, parent=parent, tip=tip)
     btn.setStyleSheet(button_qss(kind, selector="QPushButton", theme=_active_theme()))
+    _register(btn, "button", kind)
     return btn
 
 
@@ -1063,14 +1236,19 @@ def make_multiline_input(
     elif fixed:
         field.setFixedHeight(height)
     field.setReadOnly(read_only)
-    field.setStyleSheet(
-        input_qss(
-            selector,
-            font_size=font_size,
-            family=MONO_FAMILY if mono else None,
-            theme=_active_theme(),
+
+    def _apply() -> None:
+        field.setStyleSheet(
+            input_qss(
+                selector,
+                font_size=font_size,
+                family=MONO_FAMILY if mono else None,
+                theme=_active_theme(),
+            )
         )
-    )
+
+    _apply()
+    _register(field, "input", selector, font_size, MONO_FAMILY if mono else None)
     return field
 
 
@@ -1084,9 +1262,16 @@ def make_plain_text_view(
     view = QPlainTextEdit(parent)
     view.setPlaceholderText(placeholder)
     view.setReadOnly(True)
-    view.setStyleSheet(
-        input_qss("QPlainTextEdit", font_size=font_size, family=MONO_FAMILY, theme=_active_theme())
-    )
+
+    def _apply() -> None:
+        view.setStyleSheet(
+            input_qss(
+                "QPlainTextEdit", font_size=font_size, family=MONO_FAMILY, theme=_active_theme()
+            )
+        )
+
+    _apply()
+    _register(view, "input", "QPlainTextEdit", font_size, MONO_FAMILY)
     return view
 
 
@@ -1103,7 +1288,12 @@ def make_list(
     the card's bottom corners.
     """
     lst = QListWidget(parent)
-    lst.setStyleSheet(flush_list_style(last=last) if flush else framed_list_style())
+
+    def _apply() -> None:
+        lst.setStyleSheet(flush_list_style(last=last) if flush else framed_list_style())
+
+    _apply()
+    _register(lst, "list", last, flush)
     return lst
 
 
@@ -1181,6 +1371,11 @@ class AppCheckBox(QCheckBox):
 
     def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
         super().__init__(text, parent)
+        self._apply_sheet()
+        _register(self, "checkbox")
+
+    def _apply_sheet(self) -> None:
+        """Paint the checkbox face from the active role table."""
         theme = _active_theme()
         self.setStyleSheet(
             f"QCheckBox {{ color: {role('TEXT_PRIMARY', theme)}; font-size: {FONT_BODY}px; "
@@ -1262,13 +1457,18 @@ def make_progress_bar(
     bar = QProgressBar(parent)
     bar.setTextVisible(False)
     bar.setFixedHeight(height)
-    theme = _active_theme()
-    bar.setStyleSheet(
-        f"QProgressBar {{ background: {role('SURFACE_SUBTLE', theme)}; "
-        f"border: 1px solid {role('BORDER_SUBTLE', theme)}; border-radius: {RADIUS_LG}; }} "
-        f"QProgressBar::chunk {{ background: {role('ACCENT_PRIMARY', theme)}; "
-        f"border-radius: {RADIUS_LG}; }}"
-    )
+
+    def _apply() -> None:
+        theme = _active_theme()
+        bar.setStyleSheet(
+            f"QProgressBar {{ background: {role('SURFACE_SUBTLE', theme)}; "
+            f"border: 1px solid {role('BORDER_SUBTLE', theme)}; border-radius: {RADIUS_LG}; }} "
+            f"QProgressBar::chunk {{ background: {role('ACCENT_PRIMARY', theme)}; "
+            f"border-radius: {RADIUS_LG}; }}"
+        )
+
+    _apply()
+    _register(bar, "progress_bar")
     return bar
 
 
@@ -1855,11 +2055,6 @@ def make_card(
     """
     card = QFrame(parent)
     card.setObjectName("Card")
-    theme = _active_theme()
-    card.setStyleSheet(
-        f"QFrame#Card {{ background: {role('SURFACE_CARD', theme)}; "
-        f"border: 1px solid {role('BORDER_SUBTLE', theme)}; border-radius: 8px; }}"
-    )
     outer = QVBoxLayout(card)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
@@ -1867,11 +2062,23 @@ def make_card(
     # Scoped (#id): a bare `QFrame {...}` rule would restyle every QFrame
     # below this bar — inline scope beats app-level rules subtree-wide.
     top.setObjectName("CardTopBar")
-    top.setStyleSheet(
-        f"QFrame#CardTopBar {{ background: {role('SURFACE_PAGE', theme)}; "
-        f"border-bottom: 1px solid {role('SURFACE_SUBTLE', theme)}; "
-        "border-top-left-radius: 8px; border-top-right-radius: 8px; }"
-    )
+
+    def _apply() -> None:
+        theme = _active_theme()
+        card.setStyleSheet(
+            f"QFrame#Card {{ background: {role('SURFACE_CARD', theme)}; "
+            f"border: 1px solid {role('BORDER_SUBTLE', theme)}; border-radius: 8px; }}"
+        )
+        top.setStyleSheet(
+            f"QFrame#CardTopBar {{ background: {role('SURFACE_PAGE', theme)}; "
+            f"border-bottom: 1px solid {role('SURFACE_SUBTLE', theme)}; "
+            "border-top-left-radius: 8px; border-top-right-radius: 8px; }"
+        )
+
+    _apply()
+    # One registration covers both faces: they are one card. The top bar is
+    # found through the card, so the spec stays plain data.
+    _register(card, "card")
     top_lay = QHBoxLayout(top)
     top_lay.setContentsMargins(16, 12, 16, 12)
     top_lay.setSpacing(12)
@@ -2238,12 +2445,8 @@ class _ValueChip(QFrame):
         super().__init__(parent)
         self.value = str(text)
         self.setObjectName("ValueChip")
-        theme = _active_theme()
-        self.setStyleSheet(
-            f"QFrame#ValueChip {{ background: {role('SURFACE_TINT', theme)}; "
-            f"border: 1px solid {role('BORDER_SUBTLE', theme)}; border-radius: {RADIUS_SM}; "
-            f"padding: 0 2px 0 8px; }}"
-        )
+        self._apply_sheet()
+        _register(self, "value_chip")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
@@ -2258,6 +2461,15 @@ class _ValueChip(QFrame):
         btn.clicked.connect(on_remove)
         lay.addWidget(label)
         lay.addWidget(btn)
+
+    def _apply_sheet(self) -> None:
+        """Paint the chip face from the active role table."""
+        theme = _active_theme()
+        self.setStyleSheet(
+            f"QFrame#ValueChip {{ background: {role('SURFACE_TINT', theme)}; "
+            f"border: 1px solid {role('BORDER_SUBTLE', theme)}; border-radius: {RADIUS_SM}; "
+            f"padding: 0 2px 0 8px; }}"
+        )
 
 
 class _ChipFlow(QWidget):
@@ -2512,10 +2724,8 @@ class PaneFooter(QFrame):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("PaneFooter")
-        self.setStyleSheet(
-            f"QFrame#PaneFooter {{ background: transparent; "
-            f"border-top: 1px solid {role('BORDER_SUBTLE', _active_theme())}; }}"
-        )
+        self._apply_sheet()
+        _register(self, "pane_footer")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 10, 0, 0)
         layout.setSpacing(8)
@@ -2542,6 +2752,13 @@ class PaneFooter(QFrame):
         )
         self.save_btn.clicked.connect(self.saveRequested)
         layout.addWidget(self.save_btn)
+
+    def _apply_sheet(self) -> None:
+        """Paint the footer's top hairline from the active role table."""
+        self.setStyleSheet(
+            f"QFrame#PaneFooter {{ background: transparent; "
+            f"border-top: 1px solid {role('BORDER_SUBTLE', _active_theme())}; }}"
+        )
 
     def set_status(self, text: str) -> None:
         self.status.setText(text or "")
@@ -2822,6 +3039,11 @@ class StatusWidget(QFrame):
         self._rows.addWidget(self._bar)
         self._bar.hide()
         outer.addLayout(self._rows, 1)
+        self._apply_sheet()
+        _register(self, "status_widget")
+
+    def _apply_sheet(self) -> None:
+        """Paint the chip face from the active role table."""
         theme = _active_theme()
         self.setStyleSheet(
             f"QFrame#StatusWidget {{ background: {role('SURFACE_SUBTLE', theme)}; "

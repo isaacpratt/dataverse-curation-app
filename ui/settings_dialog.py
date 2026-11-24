@@ -64,7 +64,6 @@ from ui.theme import (
 from ui.widgets import (
     AppTable,
     PaneFooter,
-    flush_table_style,
     make_action_button,
     make_checkbox,
     make_combo,
@@ -72,6 +71,7 @@ from ui.widgets import (
     make_icon_text_button,
     make_line_edit,
     make_page_heading,
+    set_flush_table_style,
 )
 from ui.workers import register_worker
 
@@ -367,7 +367,7 @@ class SettingsPane(QWidget):
         # vertical padding here (12px horizontal inset kept, item text stays
         # centered at the same y) lets the cell fill the row; the row
         # separator still comes from the app rule's border-bottom.
-        self.ext_table.setStyleSheet(flush_table_style(last=False, item_padding="0px 12px"))
+        set_flush_table_style(self.ext_table, last=False, item_padding="0px 12px")
         # Remember the user's column widths/order across sessions. The
         # controller owns the persistence: it saves user gestures only.
         try:
@@ -1498,10 +1498,12 @@ class SettingsPane(QWidget):
             return
 
         # Swap the palette at the dimmest point of a short fade, so the
-        # change reads as a transition rather than a one-frame cut.
+        # change reads as a transition rather than a one-frame cut. The
+        # repaint also re-runs every scoped sheet (cards, buttons, tables),
+        # which is the half Qt does not do for us (dv-4jm.7).
         def _repaint() -> None:
             set_active_theme(theme)
-            apply_theme(app, theme)
+            apply_theme(app, theme, retheme=True)
 
         if theme == ACTIVE_THEME:
             _repaint()

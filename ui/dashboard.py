@@ -59,7 +59,6 @@ from ui.widgets import (
     AppTable,
     ElidedLabel,
     RingProgress,
-    flush_table_style,
     human_size,
     make_action_button,
     make_caption_label,
@@ -69,6 +68,7 @@ from ui.widgets import (
     make_refresh_button,
     make_search_field,
     make_small_body_label,
+    set_flush_table_style,
 )
 from ui.workers import BulkCheckWorker, CrawlWorker
 
@@ -687,7 +687,7 @@ class DashboardView(QWidget):
         self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # Flush under the banner header (last child: square top meets the
         # banner, 8px bottom meets the card border — see flush_table_style).
-        self._table.setStyleSheet(flush_table_style())
+        set_flush_table_style(self._table)
         self._table.cellDoubleClicked.connect(self._on_double_click)
         # Keyboard parity for the queue: Enter/Return opens the focused row
         # (double-click alone locks out keyboard-only users), F5 refreshes,

@@ -5,6 +5,7 @@ from typing import Any
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame,
+    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -27,12 +28,12 @@ from ui.widgets import (
     AppTable,
     add_info_tip,
     flush_list_style,
-    flush_table_style,
     make_card,
     make_field_label,
     make_list,
     make_reset_columns_button,
     make_small_body_label,
+    set_flush_table_style,
 )
 
 
@@ -102,11 +103,10 @@ class VersionsSection(DetailState):
             for i, (w, kind) in enumerate(flush_widgets):
                 last = i == len(flush_widgets) - 1
                 try:
-                    w.setStyleSheet(
-                        flush_table_style(last=last)
-                        if kind == "table"
-                        else flush_list_style(last=last)
-                    )
+                    if kind == "table" and isinstance(w, QTableWidget):
+                        set_flush_table_style(w, last=last)
+                    else:
+                        w.setStyleSheet(flush_list_style(last=last))
                 except Exception:
                     pass
 

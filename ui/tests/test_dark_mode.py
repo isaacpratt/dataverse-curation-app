@@ -489,54 +489,131 @@ def test_animate_theme_change_fades_the_window_it_is_given(qapp):
     window.deleteLater()
 
 
-# --- The known limit of a live switch (dv-4jm.5 follow-up) ---------------
+# --- Scoped sheets follow a live switch (dv-4jm.7) -----------------------
 
 
-def test_app_sheet_follows_a_live_switch_but_scoped_sheets_do_not(qapp):
-    """Pin the current contract, including its gap.
+def test_scoped_sheets_follow_a_live_switch(qapp):
+    """A switch repaints widgets that carry their own sheet.
 
-    ``apply_theme`` replaces the *application* sheet, so anything painted
-    by the app-level rules follows a switch at once. A widget that set its
-    own stylesheet keeps it - Qt does not re-derive it - so kit factories
-    that bake a scoped sheet (card, button, input, checkbox, progress bar,
-    pane footer) hold their pre-switch face until the widget is rebuilt.
-
-    This test asserts the gap on purpose: it is the visible half of
-    dv-4jm.5 that is still open. When scoped sheets are made to follow a
-    switch, this test is the one to rewrite.
+    ``apply_theme`` replaces the application sheet, but a widget that called
+    ``setStyleSheet`` keeps that sheet - Qt does not re-derive it. Kit
+    factories register a rebuild, and ``apply_theme`` runs them, so a card or
+    button built before the switch paints the new palette without being
+    rebuilt.
     """
+    from PySide6.QtWidgets import QWidget
+
     from ui import theme
-    from ui.widgets import make_action_button, make_card
+    from ui.widgets import make_action_button, make_card, make_progress_bar
 
     theme.set_active_theme("light")
-    theme.apply_theme(qapp, "light")
+    theme.apply_theme(qapp, "light", retheme=True)
+    host = QWidget()
+    host.resize(240, 240)
+    host.show()
+    qapp.processEvents()
     try:
         card, _body, _title, _header = make_card("Probe")
         button = make_action_button("Probe")
+        bar = make_progress_bar()
+        # The rebuild covers what is on screen, so the widgets are shown -
+        # which is also how a curator meets them.
+        for widget in (card, button, bar):
+            widget.setParent(host)
+            widget.show()
+        qapp.processEvents()
         card_light = card.styleSheet()
         button_light = button.styleSheet()
-        app_light = qapp.styleSheet()
 
         assert theme.role("SURFACE_CARD", "light") in card_light
         assert theme.role("SURFACE_CARD", "light") in button_light
 
         theme.set_active_theme("dark")
-        theme.apply_theme(qapp, "dark")
+        theme.apply_theme(qapp, "dark", retheme=True)
 
         # The application sheet moved...
-        assert qapp.styleSheet() != app_light
         assert theme.role("SURFACE_CARD", "dark") in qapp.styleSheet()
-        # ...but the scoped sheets the widgets already carry did not.
-        assert card.styleSheet() == card_light
-        assert button.styleSheet() == button_light
+        # ...and so did every scoped sheet the widgets already carried.
+        assert card.styleSheet() != card_light
+        assert theme.role("SURFACE_CARD", "dark") in card.styleSheet()
+        assert button.styleSheet() != button_light
+        assert theme.role("ACCENT_PRIMARY", "dark") in bar.styleSheet()
 
-        # Rebuilding picks up the new palette: the generators are correct,
-        # it is the already-constructed widget that is stale.
-        rebuilt, _b, _t, _h = make_card("Probe")
-        assert theme.role("SURFACE_CARD", "dark") in rebuilt.styleSheet()
+        # And back again: the rebuild is not a one-way latch.
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+        assert theme.role("SURFACE_CARD", "light") in card.styleSheet()
+    finally:
+        host.close()
+        host.deleteLater()
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+
+
+def test_retheme_skips_widgets_that_are_gone(qapp):
+    """A destroyed widget must not break the switch.
+
+    The rebuild is stored on the widget, so it dies with it - but a widget
+    deleted in C++ while its Python wrapper lives on must be skipped rather
+    than raising.
+    """
+    from PySide6.QtWidgets import QWidget
+
+    from ui import theme
+
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light", retheme=True)
+    try:
+        orphan = QWidget()
+        orphan.setStyleSheet("QWidget { color: red; }")
+        orphan.deleteLater()
+        qapp.processEvents()
+
+        theme.set_active_theme("dark")
+        ran = theme.retheme_widgets(qapp)  # must not raise
+        assert ran >= 0
     finally:
         theme.set_active_theme("light")
-        theme.apply_theme(qapp, "light")
+        theme.apply_theme(qapp, "light", retheme=True)
+
+
+def test_retheme_can_be_switched_off_for_a_temporary_build(qapp):
+    """The gallery builds a second theme in one process.
+
+    With retheme on, switching to dark to build that column would repaint
+    the light column that is already built. ``retheme=False`` keeps the
+    temporary switch from touching existing widgets.
+    """
+    from PySide6.QtWidgets import QWidget
+
+    from ui import theme
+    from ui.widgets import make_card
+
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light", retheme=True)
+    host = QWidget()
+    host.resize(200, 200)
+    host.show()
+    qapp.processEvents()
+    try:
+        card, _b, _t, _h = make_card("Probe")
+        card.setParent(host)
+        card.show()
+        qapp.processEvents()
+        light_sheet = card.styleSheet()
+
+        theme.set_active_theme("dark")
+        theme.apply_theme(qapp, "dark", retheme=False)
+        assert card.styleSheet() == light_sheet, "a temporary switch must not repaint"
+
+        # A real switch, with retheme on, does.
+        theme.apply_theme(qapp, "dark", retheme=True)
+        assert card.styleSheet() != light_sheet
+    finally:
+        host.close()
+        host.deleteLater()
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
 
 
 if __name__ == "__main__":
