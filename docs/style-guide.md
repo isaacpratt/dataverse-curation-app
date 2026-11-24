@@ -23,7 +23,7 @@ One page serves one quadrant. A tutorial teaches; a how-to is a short recipe wit
 
 ## Front matter
 
-Every published page begins with exactly five lines of front matter, followed immediately by one H1:
+Every page published by Zensical (that is, every `.md` under `docs/` except the `adr/`, `reports/` and `proposals/` folders) begins with exactly five lines of front matter, followed immediately by one H1. Root files such as `README.md` and `CONTRIBUTING.md` are not Zensical pages and carry no front matter:
 
 ```yaml
 ---
@@ -37,9 +37,9 @@ Use these values:
 
 | Key | Allowed values |
 | --- | --- |
-| `page_type` | `tutorial`, `how-to`, `reference`, `explanation`, `governance`, `troubleshooting` |
-| `tgdp_template` | `Landing page`, `Tutorial`, `How-to`, `Installation guide`, `Reference`, `Glossary`, `Concept`, `Troubleshooting`, `Style guide`, `Contributing guide`, `Release notes` |
-| `audience` | `developer`, `contributor`, `all` |
+| `page_type` | `tutorial`, `how-to`, `reference`, `explanation`, `governance`, `troubleshooting`, `home` |
+| `tgdp_template` | `Tutorial`, `How-to`, `Installation guide`, `Reference`, `Glossary`, `Concept`, `Explanation`, `Troubleshooting`, `Style guide`, `Release notes`, `Home` |
+| `audience` | `curator`, `developer`, `contributor`, `all` |
 
 The `page_type` matches the quadrant, or `governance` for a governance page. The `tgdp_template` names the template the page follows. Do not invent a value.
 
@@ -60,7 +60,7 @@ The `page_type` matches the quadrant, or `governance` for a governance page. The
 - Make every command copy-pasteable and true. Use the exact poe task names in `pyproject.toml` (`uv run poe check`, not an invented alias).
 - Mark a placeholder clearly, for example `<format>` or `<staged_dir>`.
 - A shown file path must exist. A shown API field must match the report contract.
-- Do not repeat stale counts from older prose. Check the source: the check registry currently has 24 check IDs.
+- Do not repeat stale counts from older prose. Check the source: the engine registry currently has 24 family keys, and reports contain more specific check IDs beneath them.
 
 ## Layout and links
 
@@ -73,7 +73,7 @@ The `page_type` matches the quadrant, or `governance` for a governance page. The
 
 ## Linting
 
-- `uv run poe docs-lint` runs `pymarkdown --config .pymarkdown.json scan docs CONTRIBUTING.md README.md`.
+- `uv run poe docs-lint` runs `pymarkdown --strict-config --config .pymarkdown.json scan -r docs CONTRIBUTING.md README.md`.
 - `uv run poe docs-links` checks internal links in the Markdown tree offline; it makes no network requests.
 - `uv run poe docs` runs `zensical build --strict`; a broken relative link or anchor fails the build.
 - `uv run poe docs-check` chains all three: Markdown lint, offline link check, and strict build. This is the full docs gate.

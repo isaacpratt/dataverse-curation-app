@@ -5,7 +5,7 @@ audience: all                # curator | developer | contributor | all
 ---
 # Command-line reference
 
-Argument parser: `main.py:main()` (`argparse`, description "Dataverse Docent"). Verbatim help from `uv run python main.py --headless --help`:
+Argument parser: `main.py:main()` (`argparse`, description from `t("app.cli.description")` = "Dataverse Docent"). Verbatim help from `uv run python main.py --headless --help`:
 
 ```text
 usage: main.py [-h] [--headless] [--gallery] [--out OUT]
@@ -48,7 +48,7 @@ options:
 | `--out` | value | `curation_report.json` | output report path | Parent directories are created; output-format write failures return exit 2 |
 | `--format` | choice | `json` | report format: json, md, or both (default: json) | Choices: `json`, `md`, `both`; headless only |
 | `--persistent-id` | value | `""` | dataset persistent ID | Recorded in the DatasetReport; headless only |
-| `--export-record` | store_true | `False` | also write a dated curation-record folder beside the report | Headless only; writes a dated `curation-record/<pid>-<timestamp>/` folder |
+| `--export-record` | store_true | `False` | also write a dated curation-record folder beside the report | Headless only; writes a dated `curation-record/<YYYYMMDD-HHMMSS>/` folder |
 | `--config` | value | `config.json` | path to config.json (default: ./config.json) | GUI-only; rejected under `--headless` when non-default |
 | `--dataverse` | value | `None` | override dataverse base URL (e.g. https://demo.borealisdata.ca) | GUI-only; overrides the configured base URL; rejected under `--headless` |
 

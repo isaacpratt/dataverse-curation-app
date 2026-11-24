@@ -5,11 +5,11 @@ audience: all                # curator | developer | contributor | all
 ---
 # Checks reference
 
-The engine has 24 registered check modules — the keys of `engine/checks/__init__.py:registry`. Each module owns one check ID and declares a scope. Results are carried by the [DatasetReport contract](report-contract.md). The checks are ports of the R inspectors in `CUR_Res_CurationTools`.
+The engine has 24 registered check modules — the keys of `engine/checks/__init__.py:registry`. Each module owns one **family ID** (for example `format.csv`) and declares a scope; a run emits more specific check IDs beneath that family (for example `format.csv.structure`). Results are carried by the [DatasetReport contract](report-contract.md). The checks are ports of the R inspectors in `CUR_Res_CurationTools`.
 
 ## How checks run
 
-Compound names shed one outer layer first. Symlinks are skipped; each file runs in isolation so one crash cannot sink the report. Results aggregate into the DatasetReport contract (JSON + Markdown). Secrets/PII scanners (hush-scan, piigex) are required and bundled — never "missing". Structured PII uses `regions=["intl"]` plus the Canadian postal/SIN pack; foreign national IDs are disabled by policy.
+Compound file extensions (for example `.fq.gz` or `.tar.gz`) shed one outer layer before dispatch. Symlinks are skipped; each file runs in isolation so one crash cannot sink the report. Results aggregate into the DatasetReport contract (JSON + Markdown). Secrets/PII scanners (hush-scan, piigex) are required and bundled — never "missing". Structured PII uses `regions=["intl"]` plus the Canadian postal/SIN pack; foreign national IDs are disabled by policy.
 
 ## Badge meanings
 
@@ -27,7 +27,9 @@ Compound names shed one outer layer first. Symlinks are skipped; each file runs 
 
 Every module emits all owned IDs every run — passes such as "No zero-byte files" and "no PII values detected" stay visible in the manifest tree and Markdown. Finding lists are capped (`secret_max_listed=20`, `pii_max_samples=10`); the message always states the truncation ("showing first 10 of 47 sample(s)") and `details.count` carries the full total.
 
-status.summarize() aggregates passed / failed-error / failed-warning / skipped / total; file_status() rolls a file row up to one label.
+### Result aggregation
+
+`status.summarize()` aggregates passed / failed-error / failed-warning / skipped / total; `file_status()` rolls a file row up to one label.
 
 ## Issue taxonomy
 
@@ -39,7 +41,7 @@ status.summarize() aggregates passed / failed-error / failed-warning / skipped /
 
 ## Check ID index
 
-The 24 registered IDs, each with its owning module and declared scope:
+The 24 registry family IDs, each with its owning module and declared scope. A report can also contain more specific IDs under these families, plus the runner-emitted hint `inventory.unchecked_types` (not a registry key):
 
 | Check ID | Module | Scope |
 | --- | --- | --- |
@@ -95,7 +97,7 @@ Scope is `dataset` or `file`, declared by each check class (`Check.scope`) and e
 | containers_check | file | format.containers.* | Zip testzip, tar members, traversal (../absolute), encrypted entries; capped 10k members / 2 GiB | Corrupt (error); traversal + encrypted (warning) |
 | fastq_check | file | format.fastq.* | Gzip-aware 4-line validation (header/+/seq-qual length), length/GC on capped sample | Malformed incl. length mismatch (warning); no valid reads (error) |
 | extensions_check | dataset | inventory.* | Extension census, 0-byte files, executables, OS junk (nested `__MACOSX` incl.) | 0-byte (error); executables/junk (warning) |
-| access_check | dataset | inventory.restricted_files, inventory.embargoed_files | Names restricted and embargoed files from the Dataverse inventory; each finding carries the embargo date and the dataset's terms of access | Restricted/embargoed file(s) (warning); skipped without an inventory (staged-only run) |
+| access_check | dataset | inventory.restricted_files, inventory.embargoed_files | Names restricted and embargoed files from the Dataverse inventory. Both findings carry file names and the dataset's terms of access; only the embargoed finding carries embargo dates | Restricted/embargoed file(s) (warning); skipped without an inventory (staged-only run) |
 | varmeta_check | dataset | metadata.var_coverage | Per-file variable-metadata coverage from Dataverse's DDI: how many variables carry a label. Rides the per-file coverage map and the labels on its first result so the File Manifest annotates each tabular file and the dictionary draft works offline. | Tabular file with no variable labels (warning); under half labeled (warning); skipped without an inventory |
 | readme_check | dataset | metadata.readme_sections | Scores the staged README against the five standard sections (overview, files, methods, missing-data codes, sharing/access) by scanning its heading lines; a ruleset may override the section list with `section_rules`. Details record which sections were found/missing; the depositor template can use `{readme_sections}`. | Missing required section(s) (warning); missing optional section only (info); skipped when no README is present (the presence rule still applies) |
 
@@ -103,11 +105,11 @@ MATLAB `.mat` (and any format without a module) is reported once per dataset as 
 
 ## Registry guidance
 
-Every finding carries guidance from `engine/checks/guidance.py`: a "Why this matters" field and a "How to fix" field. Response templates pull the fix text with a `{remediation}` placeholder. Family rows (e.g. `format.csv`) are the always-emit parents for their module.
+Every finding carries guidance from `engine/checks/guidance.py`: a "Why this matters" field and a "How to fix" field. Response templates pull the fix text with a `{remediation}` placeholder. A family row (for example `format.csv`) is the parent check a module always emits, even when its sub-checks produce no findings; specific IDs such as `format.csv.structure` carry the sub-check results.
 
 ## Download verification (a gate, not a check)
 
-Before checks run, `DownloadManager.verify()` rehashes every staged file against the Dataverse checksum (md5/sha1). Mismatches surface as "checksum mismatch" with expected/actual hashes. Tabular `.tab` derivatives are server-regenerated, so their message includes the file's UNF for manual comparison instead of failing byte-exact.
+Before checks run, `DownloadManager.verify()` checks staged files against the checksum recorded in the Dataverse inventory. The algorithm comes from the inventory's `checksum_type` (default `md5`); original-format tabular files are checked **by size**, not rehashed, because their original bytes are fetched separately. Mismatches surface as "checksum mismatch" with expected/actual hashes. `.tab` derivatives are server-regenerated, so their message includes the file's UNF for manual comparison instead of failing byte-exact.
 
 ## See also
 

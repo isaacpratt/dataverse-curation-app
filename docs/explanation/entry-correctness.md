@@ -15,7 +15,7 @@ That decision has a large payoff and one constraint. There is no second code pat
 
 ## The design intent behind the nine checks
 
-The nine sub-checks are params that can be combined on one rule. Each catches a distinct failure mode of deposited text, and each is local and deterministic.
+The nine sub-checks are `min_length`, `regex` (with `regex_mode`), `blocklist`, `not_common_placeholders`, `not_all_caps`, `controlled_vocabulary`, `date`, `date_order` and `url`. They can be combined on one rule; each catches a distinct failure mode of deposited text, and each is local and deterministic. Their exact parameters and messages are in the [entry checks reference](../reference/entry-checks.md).
 
 Length and text-shape checks handle the "obviously unfinished" class. `min_length` measures content — concatenated for a plain multi-entry field such as `dsDescription`, per entry for a dotted compound path such as `author.authorAffiliation` — because "the description is at least 50 characters" is a single knob a curator can reason about. `regex` with `regex_mode` expresses discipline-specific shapes when a pattern is genuinely known. `blocklist` and the built-in `not_common_placeholders` catch the refusal list and the usual filler words; `not_all_caps` catches shouted titles and only fires when the value actually has cased letters. The intent is to flag low-effort entries, not to judge prose quality.
 
@@ -57,4 +57,4 @@ Some enrollments belong last or never. A controlled vocabulary for subject or to
 
 ## How you know it is working
 
-Three signals are worth keeping. The field-found rate — incomplete rows attributable to `looks_correct` — should start above zero and then settle. The fix rate is the fraction of letters mentioning an entry-correctness finding that come back with a conforming value; below about half, the wording is the problem, not the depositors. False-positive anecdotes deserve more weight than their count suggests: one curator remembering a good deposit that was flagged outweighs a thousand quiet passes.
+The app has no telemetry or built-in dashboard for these signals; track them from your own review log or a spreadsheet. Three signals are worth keeping. The field-found rate — incomplete rows attributable to `looks_correct` — should start above zero and then settle. The fix rate is the fraction of letters mentioning an entry-correctness finding that come back with a conforming value; below about half, the wording is the problem, not the depositors. False-positive anecdotes deserve more weight than their count suggests: one curator remembering a good deposit that was flagged outweighs a thousand quiet passes.

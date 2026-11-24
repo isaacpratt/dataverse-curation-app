@@ -9,6 +9,7 @@ and the documented headless command against a real staged run.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -64,6 +65,57 @@ def test_configuration_reference_covers_example_keys() -> None:
 
     missing = sorted(key for key in keys(example) if f"`{key}`" not in page)
     assert not missing, f"config keys absent from reference/configuration.md: {missing}"
+
+
+def test_documented_api_endpoints_exist_in_source() -> None:
+    """Every endpoint on the API reference page is one the code actually calls.
+
+    This is the check that catches a fabricated endpoint (the retired
+    ``/api/files/:id/ingestStatus`` claim) without pinning the exact f-string
+    used at each call site.
+    """
+    page = (DOCS / "reference" / "dataverse-api.md").read_text(encoding="utf-8")
+    expanded = page.replace("…/", "/api/datasets/:persistentId/")
+    endpoints = set(re.findall(r"/api/[A-Za-z0-9_/:{}.-]+", expanded))
+    # The page defines `…/` with a literal `resource` placeholder; that is
+    # notation, not an endpoint.
+    endpoints.discard("/api/datasets/:persistentId/resource")
+    assert endpoints
+
+    def normalise(text: str) -> str:
+        """Drop dynamic segments so an f-string and a `:placeholder` doc match."""
+        text = re.sub(r"\{[^}]*\}|<[^>]*>|:[A-Za-z_][A-Za-z0-9_]*", "", text)
+        return re.sub(r"/{2,}", "/", text)
+
+    sources = normalise(
+        "\n".join(
+            path.read_text(encoding="utf-8")
+            for folder in ("curation", "engine", "ui")
+            for path in (ROOT / folder).rglob("*.py")
+            if "tests" not in path.parts
+        )
+    )
+    # Only URL-construction lines count for the token fallback: an endpoint
+    # name can also appear as a payload field (``ingestStatus``) without ever
+    # being called as an endpoint.
+    markers = ("/api/", "_curation_paths(", "_get_json(", "_get_text(", "_api(")
+    api_lines = "\n".join(line for line in sources.splitlines() if any(m in line for m in markers))
+    generic = {"api", "datasets", "versions", "access", "datafile", "metadata", "all"}
+    missing = []
+    for endpoint in endpoints:
+        normalised = normalise(endpoint).rstrip("/")
+        if normalised in sources:
+            continue
+        # Some paths are assembled from a `_dataset_endpoint(name)` helper, so
+        # the literal name appears at the call site rather than in the path.
+        distinctive = [
+            segment
+            for segment in endpoint.split("?")[0].split("/")
+            if len(segment) >= 5 and segment not in generic and not segment.startswith((":", "{"))
+        ]
+        if not any(token in api_lines for token in distinctive):
+            missing.append(endpoint)
+    assert not missing, f"documented endpoints not found in source: {missing}"
 
 
 def test_external_url_extraction_trims_markdown_punctuation(tmp_path: Path) -> None:

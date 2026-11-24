@@ -23,8 +23,7 @@ floor.
 - **The project is an application, not a library.** `pyproject.toml` sets
   `[tool.uv] package = false`: `uv sync` installs the dependencies and the
   toolchain, and does not try to build or install the project itself.
-- **No PyPI publication, no console-script entry point.** Distribution is the
-  PyInstaller artefact (lite/full) and, later, the installer produced from it.
+- **No PyPI publication, no console-script entry point.** At the time, distribution was the PyInstaller artefact (then a `lite`/`full` pair) and, later, the installer produced from it. There is now one onedir build packaged as a Velopack release; the no-PyPI decision is unchanged.
 - **Metadata is PEP 639-clean:** `license = "MIT"` (SPDX expression),
   `license-files = ["LICENSE"]`, repository/homepage/documentation/issues
   URLs, authors, and no duplicate licence classifier.

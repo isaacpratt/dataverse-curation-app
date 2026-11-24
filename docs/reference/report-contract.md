@@ -15,7 +15,7 @@ audience: all                # curator | developer | contributor | all
 {
   "persistent_id": "doi:10.5072/FK2/EXAMPLE",
   "label": "Example dataset title",
-  "engine_version": "0.1.0",
+  "engine_version": "0.2.0-rc.1",
   "timestamp": "2026-08-26T12:00:00+00:00",
   "dataset_checks": [
     {"check_id": "inventory.extensions", "level": "info", "passed": true,
@@ -27,7 +27,7 @@ audience: all                # curator | developer | contributor | all
   "files": [
     {"path": "data/raw.csv", "size_bytes": 12345, "mime_type": "text/csv",
      "checks": [
-       {"check_id": "format.csv.structure", "level": "warning", "passed": false,
+       {"check_id": "format.text.line_endings", "level": "warning", "passed": false,
         "message": "Mixed line endings detected", "details": {"line_endings": {"LF": 900, "CRLF": 3}}},
        {"check_id": "format.xlsx.openable", "level": "warning", "passed": true,
         "message": "Missing: pip install openpyxl — check not executed", "details": {"skipped": true}}
@@ -44,7 +44,7 @@ audience: all                # curator | developer | contributor | all
 | --- | --- | --- |
 | `persistent_id` | string | Dataset identity, from the inventory / detail header |
 | `label` | string | Dataset title, from the inventory / detail header |
-| `engine_version` | string | Schema version; the GUI guards incompatible payloads |
+| `engine_version` | string | Engine package version (`engine.__version__`) recorded when the report was produced; a schema change is not guarded separately |
 | `timestamp` | string | ISO-8601 UTC production time (`datetime.now(UTC).isoformat()`) |
 | `dataset_checks` | list of `CheckResult` | Whole-dataset findings: extension census (`inventory.extensions` + `zero_byte`/`executables`/`system_junk`), access restrictions (`inventory.restricted_files`/`inventory.embargoed_files` — file names, embargo dates, terms of access) and the no-automated-check hint (`inventory.unchecked_types`) |
 | `files` | list of `FileEntry` | One entry per staged file (path relative POSIX, size_bytes, mime_type). Empty `checks` = no check applied or file skipped. Which list a finding lands in follows the check's declared scope (`dataset` → `dataset_checks`, `file` → that file's `checks`), never its extensions. `files[]` feeds the File checks section (folder → file → check tree); `dataset_checks` feeds Dataset checks. The two sections never repeat a finding, and each summary counts its own list only. |
@@ -65,16 +65,18 @@ audience: all                # curator | developer | contributor | all
 | `CheckResult` | `message` | string | Human-readable finding text |
 | `CheckResult` | `details` | object | Structured payload; optional keys include `skipped`, `count`, sampled values |
 
-Load validation raises `ValueError` on a non-object payload, a missing required field, an invalid field type, or a non-list `checks`/`dataset_checks`/`files`.
+Load validation raises `ValueError` on a non-object payload, a missing required field, or a non-dict/non-list container. Scalar fields are coerced (`str()`, `int()`, `bool()`), so a value of the wrong scalar type is converted rather than rejected.
 
 ## Levels and badges
 
 | Badge | Level | Meaning | GUI |
 | --- | --- | --- | --- |
 | PASS | info + passed:true | Informational; no action (e.g. "NetCDF variables: 12") | blue badge |
-| WARN | warning | Review; likely a fix or a note to the researcher (incl. "check not executed") | amber badge |
+| WARN | warning level | Review; likely a fix or a note to the researcher | amber badge |
 | FAIL | error + passed:false | Integrity problem (unparseable, corrupt, checksum mismatch) | red badge |
-| ○ SKIPPED | warning + passed:true + details.skipped | Could not run (missing lib, encrypted, size caps, legacy, unreadable) via `_util.skipped()`; classified by `engine/status.py:classify` | muted badge |
+| ○ SKIPPED | `details.skipped: true` at any level | Could not run (missing lib, encrypted, size caps, legacy, unreadable) via `_util.skipped()`; classification keys off the flag alone, so an info-level skip is still SKIPPED | muted badge |
+
+A "check not executed" result from `_util.missing_library()` is `warning + passed:true + details.skipped`, so it renders as SKIPPED (muted), not WARN/amber.
 
 Always-emit: when a module runs, it emits exactly one `CheckResult` per owned check_id — passes included. Absent IDs mean "never ran", never a silent pass. `status.summarize()` aggregates passed / failed-error / failed-warning / skipped / total; `file_status()` rolls a file row up to one label.
 
@@ -90,7 +92,7 @@ Always-emit: when a module runs, it emits exactly one `CheckResult` per owned ch
 | `format.<format>.*` | `format.csv.structure`, `format.gpkg.layers`, `format.pdf.text`, `format.secrets` | per-file |
 | `metadata.*` | `metadata.var_coverage`, `metadata.readme_sections` | dataset-level |
 
-Registered checks live in `engine/checks/__init__.py:registry` (24 modules). `engine/runner.py:list_planned_checks` enumerates IDs before execution — shown in the Auto-Checks card as planned badges, then as results. The literal registry index, with module and scope for each ID, is in [Checks reference](checks.md#check-id-index).
+Registered checks live in `engine/checks/__init__.py:registry` (24 modules, one family ID each). `engine/runner.py:list_planned_checks` enumerates IDs before execution — shown in the **Automated checks** card as planned badges, then as results. The literal registry index, with module and scope for each family ID, is in [Checks reference](checks.md#check-id-index).
 
 ## Serialization and export
 
