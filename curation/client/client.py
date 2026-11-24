@@ -7,6 +7,7 @@ client.downloads (mixed into DataverseClient below). See
 docs/reference/dataverse-api.md for endpoints and auth.
 """
 
+import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -42,24 +43,25 @@ from curation.client.parsers import (
     search_item_state,
 )
 from curation.client.refusals import expected_api_reason, refusal_code
+from curation.config import normalise_base_url
 
 
 class DataverseClient(_DownloadsMixin):
     def __init__(self, base_url: str, api_token: str, timeout: int = 120) -> None:
-        self._base_url = base_url.rstrip("/")
+        # Defence in depth: callers normally come through Config (which
+        # validates), but workers build clients from their own copies of the
+        # URL and the token is sent in a header on every request.
+        self._base_url = normalise_base_url(base_url)
         self._api_token = api_token
         self._timeout = timeout
-        # Connection pooling: one Session reuses TCP+TLS across calls
-        # (crawl locks, metadata, inventory) instead of handshaking per GET.
-        self._session = requests.Session()
-        try:
-            from requests.adapters import HTTPAdapter
-
-            adapter = HTTPAdapter(pool_connections=4, pool_maxsize=16)
-            self._session.mount("https://", adapter)
-            self._session.mount("http://", adapter)
-        except Exception:
-            pass
+        # A requests.Session is not thread-safe, and this client is shared by
+        # the enrichment, lock-probe and detail-fetch pools. Give each thread
+        # its own session so connection reuse stays per-thread and no two
+        # threads touch the same pool. Tests may assign a fake session, which
+        # then acts as an override for every thread.
+        self._session_override: requests.Session | None = None
+        self._local = threading.local()
+        self._all_sessions: list[requests.Session] = []
         # Probe-round bookkeeping for allowedCurationLabels (see
         # get_allowed_curation_labels / fetch_allowed_labels_shared):
         # _last_allowed_got_200 tracks the latest single attempt,
@@ -67,11 +69,40 @@ class DataverseClient(_DownloadsMixin):
         self._last_allowed_got_200 = False
         self._last_fetch_answered = False
 
+    @property
+    def _session(self) -> requests.Session:
+        if self._session_override is not None:
+            return self._session_override
+        session = getattr(self._local, "session", None)
+        if session is None:
+            session = requests.Session()
+            try:
+                from requests.adapters import HTTPAdapter
+
+                adapter = HTTPAdapter(pool_connections=4, pool_maxsize=16)
+                session.mount("https://", adapter)
+                session.mount("http://", adapter)
+            except Exception:
+                pass
+            self._local.session = session
+            self._all_sessions.append(session)
+        return session
+
+    @_session.setter
+    def _session(self, value: requests.Session) -> None:
+        self._session_override = value
+
     def close(self) -> None:
-        try:
-            self._session.close()
-        except Exception:
-            pass
+        # Tests may construct via __new__ with only a fake session.
+        sessions = list(getattr(self, "_all_sessions", []))
+        override = getattr(self, "_session_override", None)
+        if override is not None:
+            sessions.append(override)
+        for session in sessions:
+            try:
+                session.close()
+            except Exception:
+                pass
 
     # -- low level -----------------------------------------------------------
 

@@ -46,6 +46,33 @@ PRESETS: dict[str, str] = {
 }
 
 
+def _windows_owner_principal() -> str:
+    r"""Resolve the current Windows account as a principal `icacls` accepts.
+
+    Prefer ``DOMAIN\\USER`` from the environment; when only one half is
+    present, ask the OS rather than guessing. A missing or unresolved
+    principal raises instead of falling back to a wildcard: a config that
+    may hold a plaintext token must never be granted to ``Everyone``.
+    """
+    import subprocess
+
+    domain = os.environ.get("USERDOMAIN", "").strip()
+    user = os.environ.get("USERNAME", "").strip()
+    if domain and user:
+        principal = f"{domain}\\{user}"
+    else:
+        try:
+            result = subprocess.run(["whoami"], capture_output=True, timeout=10, check=False)
+            principal = result.stdout.decode("utf-8", "replace").strip()
+            if result.returncode != 0:
+                principal = ""
+        except Exception:
+            principal = ""
+    if not principal or principal.lower() in {"everyone", "users", "authenticated users", "*"}:
+        raise RuntimeError("could not resolve the current Windows account")
+    return principal
+
+
 def _warn_acl_failure(reason: str) -> None:
     """Config was written without owner-only protection; say so (no secrets)."""
     try:
@@ -78,6 +105,12 @@ def validate_raw(raw: object) -> dict[str, Any]:
         "api_token_source",
     ):
         _check_str(dv, key, "dataverse")
+    # The API token travels in a request header (X-Dataverse-key), so a
+    # cleartext or otherwise unusable base URL is rejected wherever the
+    # value came from - not only for the env override in Config.load.
+    base_url = dv.get("base_url")
+    if base_url:
+        normalise_base_url(str(base_url))
     app = _section(raw, "app")
     for key in ("workspace", "tesseract", "exiftool"):
         _check_str(app, key, "app")
@@ -115,31 +148,43 @@ def _validate_engine(engine: object) -> None:
             raise ValueError(f"'engine.optional_tools.{key}' must be a string")
 
 
-def normalise_base_url(raw: str) -> str:
-    """Validate and normalise a Dataverse base URL (env or explicit).
+def normalise_base_url(raw: str, source: str = "DATAVERSE_BASE_URL") -> str:
+    """Validate and normalise a Dataverse base URL (env, CLI, file or UI).
 
     Raises ValueError with a message naming the offending value on anything
     that cannot point at a Dataverse: non-http(s) schemes, plain http (the
     API token travels as X-Dataverse-key, so cleartext is refused), missing
-    host, or empty string.
+    host, or empty string. `source` lets each caller name its own input.
     """
     url = raw.strip()
     if not url:
-        raise ValueError("DATAVERSE_BASE_URL is empty")
+        raise ValueError(f"{source} is empty")
     parsed = urlparse(url)
     scheme = (parsed.scheme or "").lower()
     if scheme == "http":
         raise ValueError(
-            f"DATAVERSE_BASE_URL uses plain HTTP ({raw!r}); the API token is sent as "
+            f"{source} uses plain HTTP ({raw!r}); the API token is sent as "
             "X-Dataverse-key - use an https:// URL"
         )
     if scheme != "https":
-        raise ValueError(
-            f"DATAVERSE_BASE_URL must start with https:// (scheme {scheme!r} in {raw!r})"
-        )
+        raise ValueError(f"{source} must start with https:// (scheme {scheme!r} in {raw!r})")
     if not parsed.netloc:
-        raise ValueError(f"DATAVERSE_BASE_URL has no host ({raw!r})")
+        raise ValueError(f"{source} has no host ({raw!r})")
     return url.rstrip("/")
+
+
+def base_url_key(url: str) -> str:
+    """Identity-normalise a base URL for cache keys and ruleset matching.
+
+    Lowercase and strip the trailing slash only. Unlike `normalise_base_url`
+    this deliberately does not validate the scheme: a malformed URL saved in
+    an older ruleset or cache must still produce a stable key instead of
+    breaking the lookup.
+    """
+    try:
+        return (url or "").rstrip("/").lower()
+    except Exception:
+        return ""
 
 
 def _env_workspace() -> Path | None:
@@ -384,9 +429,11 @@ class Config:
         )
         cfg = cls(
             dataverse=DataverseConfig(
-                base_url=str(
-                    dv.get("base_url", "https://demo.borealisdata.ca")
-                    or "https://demo.borealisdata.ca"
+                base_url=normalise_base_url(
+                    str(
+                        dv.get("base_url", "https://demo.borealisdata.ca")
+                        or "https://demo.borealisdata.ca"
+                    )
                 ),
                 api_token=str(dv.get("api_token", "") or ""),
                 collection=str(collection or ""),
@@ -474,6 +521,12 @@ class Config:
         import tempfile
 
         cfg_path = resolve_config_path(path or self.source_path)
+        # Resolve the ACL principal before writing anything: if it cannot be
+        # found, abort instead of replacing a working config with one we
+        # cannot protect (and instead of deleting the old file afterwards).
+        acl_principal: str | None = None
+        if os.name == "nt" and self.dataverse.api_token:
+            acl_principal = _windows_owner_principal()
         # Credential-store persistence: the in-memory token never lands on
         # disk when the store can hold it (migration path for legacy
         # plaintext configs: they become keyring-backed on first save).
@@ -526,7 +579,7 @@ class Config:
             _warn_acl_failure(f"chmod(cfg_path, 0600) failed: {exc}")
         # Windows: chmod is a no-op for ACLs — apply a user-only ACL so
         # other local accounts cannot read the API token.
-        if os.name == "nt" and self.dataverse.api_token:
+        if acl_principal is not None:
             try:
                 import subprocess
 
@@ -537,7 +590,7 @@ class Config:
                         str(cfg_path),
                         "/inheritance:r",
                         "/grant:r",
-                        f"{os.environ.get('USERNAME', 'Everyone')}:F",
+                        f"{acl_principal}:F",
                     ],
                     capture_output=True,
                     timeout=10,

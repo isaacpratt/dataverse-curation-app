@@ -20,6 +20,71 @@ from ui.widgets import (
 )
 
 
+def format_log_timestamp(raw: str) -> str:
+    """Date + time when a time is present; date-only values stay date-only."""
+    s = (raw or "").strip()
+    if not s:
+        return t("common.em_dash")
+    normalized = s.replace("T", " ").replace("Z", "").strip()
+    # Drop seconds + fractional/timezone suffixes, keep HH:MM.
+    parts = normalized.split()
+    if len(parts) >= 2 and len(parts[0]) == 10 and parts[1][:2].isdigit():
+        return f"{parts[0]} {parts[1][:5]}"
+    if len(s) > 10 and s[10] in ("T", " "):
+        return s[:16].replace("T", " ")
+    return s[:10]
+
+
+def parse_log_timestamp(raw: str) -> float:
+    """Parse a timestamp to epoch milliseconds for sorting.
+
+    Handles ISO 8601 (T or space separator, Z or offset), date-only and
+    common display formats. Returns 0 on failure or when absent.
+    """
+    s = (raw or "").strip()
+    if not s:
+        return 0.0
+    try:
+        from datetime import UTC, datetime
+
+        normalized = s.replace("Z", "+00:00")
+        if "T" not in normalized and " " in normalized and len(normalized) > 10:
+            normalized = normalized.replace(" ", "T", 1)
+        if "." in normalized:
+            base, frac = normalized.split(".", 1)
+            normalized = base + "." + (frac + "000000")[:6]
+        dt = datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.timestamp() * 1000.0
+    except Exception:
+        return 0.0
+
+
+class _LogEvents:
+    """Collect (sort_key, display text) pairs for the timeline."""
+
+    def __init__(self) -> None:
+        self.items: list[tuple[float, str]] = []
+        self.dated_creations: list[str] = []
+        self.published_days: set[str] = set()
+
+    def _line(self, stamp: str, text: str) -> str:
+        return t("detail.dataset_log.timeline_format", stamp=format_log_timestamp(stamp), text=text)
+
+    def add(self, ts: Any, text: str) -> None:
+        raw = str(ts or "").strip()
+        if raw:
+            self.items.append((parse_log_timestamp(raw), self._line(raw, text)))
+        else:
+            self.items.append((0.0, t("common.em_dash") + " " + text))
+
+    def dated(self, ts: str, text: str) -> None:
+        """Add a line that is always timestamped (never a dash placeholder)."""
+        if ts:
+            self.items.append((parse_log_timestamp(ts), self._line(ts, text)))
+
+
 class LogRail(DetailState):
     """The dataset log card: the curator's own action trail for this dataset."""
 
@@ -81,89 +146,9 @@ class LogRail(DetailState):
         except Exception:
             pass
 
-    def _refresh_dataset_log(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-        """Newest-first timeline: versions, record dates, review, labels, files, local actions.
-
-        Sources (each best-effort; missing sources are simply skipped):
-        - versions list: draft created / version published / deaccessioned
-        - timestamps endpoint: first published (when different from created),
-          DOI minted, draft last updated
-        - notifications inbox: submitted for review (matched by title)
-        - curation history: label assigned (+ assigner)
-        - file inventory: embargo / retention dates
-        - local state.db: downloaded / checks run / decision / exported
-        """
-        from PySide6.QtWidgets import QListWidgetItem
-
-        events: list[tuple[float, str]] = []  # (epoch_ms, display text)
-
-        def _parse_ts(raw: str) -> float:
-            """Parse a timestamp string to epoch milliseconds for sorting.
-
-            Handles ISO 8601 (with T or space separator, Z or offset),
-            date-only, and common display formats. Returns 0 on failure.
-            """
-            s = (raw or "").strip()
-            if not s:
-                return 0.0
-            try:
-                from datetime import UTC, datetime
-
-                # Normalize common separators and suffixes
-                normalized = s.replace("Z", "+00:00")
-                if "T" in normalized:
-                    pass  # already ISO with T
-                elif " " in normalized and len(normalized) > 10:
-                    # Space-separated datetime: replace first space with T
-                    normalized = normalized.replace(" ", "T", 1)
-                # Truncate to seconds precision for fromisoformat compatibility
-                if "." in normalized:
-                    base, frac = normalized.split(".", 1)
-                    # Keep only up to 6 digits (microseconds)
-                    frac = (frac + "000000")[:6]
-                    normalized = base + "." + frac
-                dt = datetime.fromisoformat(normalized)
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=UTC)
-                return dt.timestamp() * 1000.0
-            except Exception:
-                return 0.0
-
-        def _fmt_ts(raw: str) -> str:
-            """Display timestamp as date + time when a time is present.
-
-            ISO datetimes (2026-09-15T14:30:00Z, with TZ/seconds, or space-
-            separated) render as 'YYYY-MM-DD HH:MM'; date-only values stay
-            date-only so embargo/retention dates don't gain a bogus midnight.
-            """
-            s = (raw or "").strip()
-            if not s:
-                return t("common.em_dash")
-            normalized = s.replace("T", " ").replace("Z", "").strip()
-            # Drop seconds + fractional/timezone suffixes, keep HH:MM.
-            parts = normalized.split()
-            if len(parts) >= 2 and len(parts[0]) == 10 and parts[1][:2].isdigit():
-                return f"{parts[0]} {parts[1][:5]}"
-            if len(s) > 10 and (s[10] in ("T", " ")):
-                return s[:16].replace("T", " ")
-            return s[:10]
-
-        def _add(ts: Any, text: str) -> None:
-            raw = str(ts or "").strip()
-            sort_key = _parse_ts(raw)
-            if raw:
-                events.append(
-                    (
-                        sort_key,
-                        t("detail.dataset_log.timeline_format", stamp=_fmt_ts(raw), text=text),
-                    )
-                )
-            else:
-                events.append((0.0, t("common.em_dash") + " " + text))
-
+    def _version_events(self, events: _LogEvents) -> None:
+        """Version lifecycle: draft created, published, deaccessioned."""
         versions = self._versions if isinstance(self._versions, list) else []
-        dated_creations: list[str] = []
-        version_published_days: set[str] = set()
         for v in versions:
             if not isinstance(v, dict):
                 continue
@@ -171,44 +156,45 @@ class LogRail(DetailState):
             state = (v.get("state", "") or "").upper()
             ct, rt = v.get("create_time", ""), v.get("release_time", "")
             if ct:
-                dated_creations.append(ct)
+                events.dated_creations.append(ct)
             if state == "DRAFT":
-                _add(ct, t("detail.dataset_log.version_draft_created", num=num))
+                events.add(ct, t("detail.dataset_log.version_draft_created", num=num))
             elif state == "DEACCESSIONED":
-                _add(rt or ct, t("detail.dataset_log.version_deaccessioned", num=num))
+                events.add(rt or ct, t("detail.dataset_log.version_deaccessioned", num=num))
             else:
                 if rt:
-                    _add(rt, t("detail.dataset_log.version_published", num=num))
-                    version_published_days.add(rt[:10])
+                    events.add(rt, t("detail.dataset_log.version_published", num=num))
+                    events.published_days.add(rt[:10])
                 if ct and ct[:10] != (rt or "")[:10]:
-                    _add(ct, t("detail.dataset_log.version_created", num=num))
-        if dated_creations:
-            first = sorted(dated_creations)[0]
-            _add(first, t("detail.dataset_log.first_created"))
+                    events.add(ct, t("detail.dataset_log.version_created", num=num))
+        if events.dated_creations:
+            events.dated(sorted(events.dated_creations)[0], t("detail.dataset_log.first_created"))
 
-        # Lifecycle timestamps endpoint (dataset-level record dates).
+    def _timestamp_events(self, events: _LogEvents) -> None:
+        """Dataset-level record dates from the timestamps endpoint."""
         ts = self._timestamps if isinstance(self._timestamps, dict) else {}
-        ts_created = str(ts.get("createTime") or "")
-        if not dated_creations and ts_created:
+        created = str(ts.get("createTime") or "")
+        if not events.dated_creations and created:
             # No version dates at all — timestamps are the only source.
-            _add(ts_created, t("detail.dataset_log.first_created"))
-        ts_published = str(ts.get("publicationTime") or "")
+            events.dated(created, t("detail.dataset_log.first_created"))
+        published = str(ts.get("publicationTime") or "")
         if (
-            ts_published
-            and ts_published[:10] != ts_created[:10]
-            and ts_published[:10] not in version_published_days
+            published
+            and published[:10] != created[:10]
+            and published[:10] not in events.published_days
         ):
             # Only shown when it differs from creation (per curator request)
             # and no version event already covers that day.
-            _add(ts_published, t("detail.dataset_log.first_published"))
-        ts_doi = str(ts.get("globalIdCreateTime") or "")
-        if ts_doi:
-            _add(ts_doi, t("detail.dataset_log.doi_minted"))
-        ts_touched = str(ts.get("lastUpdateTime") or "")
-        if ts_touched:
-            _add(ts_touched, t("detail.dataset_log.draft_updated"))
+            events.dated(published, t("detail.dataset_log.first_published"))
+        doi = str(ts.get("globalIdCreateTime") or "")
+        if doi:
+            events.dated(doi, t("detail.dataset_log.doi_minted"))
+        touched = str(ts.get("lastUpdateTime") or "")
+        if touched:
+            events.dated(touched, t("detail.dataset_log.draft_updated"))
 
-        # Review submissions (SUBMITTEDDS inbox notes, PID-matched).
+    def _submission_events(self, events: _LogEvents) -> None:
+        """Review submissions (SUBMITTEDDS inbox notes, PID-matched)."""
         for sub in self._review_submissions if isinstance(self._review_submissions, list) else []:
             if not isinstance(sub, dict):
                 continue
@@ -220,8 +206,9 @@ class LogRail(DetailState):
                 text += t("detail.dataset_log.publish_in", dataset=dv)
             if who:
                 text += t("detail.dataset_log.by", who=who)
-            _add(when, text)
+            events.add(when, text)
 
+    def _curation_events(self, events: _LogEvents) -> None:
         for h in (self._curation or {}).get("history") or []:
             if not isinstance(h, dict):
                 continue
@@ -232,8 +219,9 @@ class LogRail(DetailState):
             text = t("detail.dataset_log.curation_label_assigned", label=label)
             if who:
                 text += t("detail.dataset_log.by", who=who)
-            _add(h.get("time", ""), text)
+            events.add(h.get("time", ""), text)
 
+    def _local_action_events(self, events: _LogEvents) -> None:
         st = None
         try:
             st = self._state()
@@ -246,7 +234,7 @@ class LogRail(DetailState):
                     st.close()
                 except Exception:
                     pass
-        _local_text = {
+        local_text = {
             "downloaded": t("detail.dataset_log.action_downloaded"),
             "checks_run": t("detail.dataset_log.action_checks_run"),
             "decision": t("detail.dataset_log.action_decision"),
@@ -261,49 +249,66 @@ class LogRail(DetailState):
         }
         for a in actions:
             act = a.get("action") or ""
-            if act not in _local_text:
+            if act not in local_text:
                 continue
             notes = (a.get("notes") or "").strip()
-            text = _local_text[act] + (
+            text = local_text[act] + (
                 t("detail.dataset_log.action_notes", notes=notes[:90]) if notes else ""
             )
-            _add(a.get("timestamp", ""), text)
+            events.add(a.get("timestamp", ""), text)
 
-        # Embargo / retention dates from the file inventory (as applicable).
+    def _inventory_events(self, events: _LogEvents) -> None:
+        """Embargo / retention dates from the file inventory."""
         for entry in self._inventory if isinstance(self._inventory, list) else []:
             if not isinstance(entry, dict):
                 continue
             path = str(entry.get("path") or "").strip() or t("detail.dataset_log.unnamed_file")
             embargo = str(entry.get("embargo_date") or "").strip()
             if embargo:
-                _add(
+                events.add(
                     embargo,
-                    t(
-                        "detail.dataset_log.embargoed",
-                        path=path,
-                        date=embargo[:10],
-                    ),
+                    t("detail.dataset_log.embargoed", path=path, date=embargo[:10]),
                 )
             retention = str(entry.get("retention") or "").strip()
             if retention:
-                _add(
+                events.add(
                     retention,
-                    t(
-                        "detail.dataset_log.retention",
-                        path=path,
-                        value=retention[:60],
-                    ),
+                    t("detail.dataset_log.retention", path=path, value=retention[:60]),
                 )
+
+    def _paint_log(self, events: _LogEvents) -> None:
+        from PySide6.QtWidgets import QListWidgetItem
 
         try:
             self._dataset_log.clear()
-            if not events:
+            if not events.items:
                 self._dataset_log.addItem(t("detail.dataset_log.no_history"))
                 return
-            events.sort(key=lambda e: e[0], reverse=True)  # epoch_ms, newest first
-            for _key, text in events[:100]:
+            events.items.sort(key=lambda e: e[0], reverse=True)  # epoch_ms
+            for _key, text in events.items[:100]:
                 item = QListWidgetItem(text)
                 item.setToolTip(text)
                 self._dataset_log.addItem(item)
         except Exception:
             pass
+
+    def _refresh_dataset_log(self) -> None:
+        """Newest-first timeline: versions, record dates, review, labels, files, local actions.
+
+        Sources (each best-effort; missing sources are simply skipped):
+        - versions list: draft created / version published / deaccessioned
+        - timestamps endpoint: first published (when different from created),
+          DOI minted, draft last updated
+        - notifications inbox: submitted for review (matched by title)
+        - curation history: label assigned (+ assigner)
+        - file inventory: embargo / retention dates
+        - local state.db: downloaded / checks run / decision / exported
+        """
+        events = _LogEvents()
+        self._version_events(events)
+        self._timestamp_events(events)
+        self._submission_events(events)
+        self._curation_events(events)
+        self._local_action_events(events)
+        self._inventory_events(events)
+        self._paint_log(events)

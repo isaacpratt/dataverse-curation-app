@@ -160,13 +160,15 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
                 warnings=warnings,
             )
         )
-        # One synthesized verdict line (dv-6nv); tokens, not copy.
+        # One synthesized verdict line (dv-6nv); tokens, not copy. A failure
+        # here is a defect in the app, not a clean run: say so on stderr,
+        # without changing the findings-based exit code.
         try:
             from engine.verdict import assess, format_line
 
             print(t("app.cli.verdict_line", verdict=format_line(assess(report))))
-        except Exception:
-            pass
+        except Exception as exc:
+            print(t("app.cli.verdict_unavailable", exc=exc), file=sys.stderr)
         # Optional curation-record bundle (dv-vwt).
         if getattr(args, "export_record", False):
             try:
@@ -187,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
 
     from PySide6.QtWidgets import QApplication
 
-    from curation.config import Config
+    from curation.config import Config, normalise_base_url
     from ui.main_window import MainWindow
 
     mark("PySide6 + ui.main_window imported")
@@ -202,7 +204,10 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
 
         cfg = _Config()
     if args.dataverse:
-        cfg.dataverse.base_url = args.dataverse.rstrip("/")
+        try:
+            cfg.dataverse.base_url = normalise_base_url(args.dataverse, "--dataverse")
+        except ValueError as exc:
+            parser.error(str(exc))
     mark("config loaded")
 
     app = QApplication(sys.argv)

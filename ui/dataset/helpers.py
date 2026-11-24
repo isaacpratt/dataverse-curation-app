@@ -10,30 +10,11 @@ from pathlib import Path
 from typing import Any
 
 from ui.i18n import t
+from ui.widgets import human_size
 
-
-def _human_size(n: int) -> str:
-    # Re-exported from the shared helper (dv-005): labels are decimal (KB/MB).
-    from ui.widgets import human_size as _shared
-
-    return _shared(n)
-
-
-def _icon_for_ext(path: str) -> str:
-    ext = Path(path).suffix.lower()
-    if ext in (".csv",):
-        return "description"
-    if ext in (".nc", ".h5", ".hdf5"):
-        return "map"
-    if ext in (".zip", ".tar", ".gz", ".7z"):
-        return "code"
-    if ext in (".pdf",):
-        return "picture_as_pdf"
-    if ext in (".json",):
-        return "data_object"
-    if ext in (".txt", ".md"):
-        return "article"
-    return "description"
+# One decimal (KB/MB) formatter in ui.widgets; keep the local name as a
+# direct alias so every call site shares the same function object.
+_human_size = human_size
 
 
 def _manifest_display_for_entry(e: dict[str, Any]) -> tuple[str, int, str]:

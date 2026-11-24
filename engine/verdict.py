@@ -83,7 +83,99 @@ def _is_resolved(dispositions: dict[str, Any] | None, key: str) -> bool:
     return _disposition_of(dispositions, key) in RESOLVED_DISPOSITIONS
 
 
-def assess(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+def _count_check_findings(report: Any, dispositions: dict[str, Any] | None) -> tuple[int, int]:
+    """Unresolved error/warning findings across dataset and per-file checks."""
+    errors = warnings = 0
+    try:
+        entries = [(c, "") for c in list(getattr(report, "dataset_checks", None) or [])] + [
+            (c, str(getattr(f, "path", "") or ""))
+            for f in list(getattr(report, "files", None) or [])
+            for c in list(getattr(f, "checks", None) or [])
+        ]
+        for c, path in entries:
+            kind = classify(c)
+            if kind not in ("failed-error", "failed-warning"):
+                continue
+            key = finding_key(
+                str(getattr(c, "check_id", "") or ""),
+                path,
+                str(getattr(c, "message", "") or ""),
+            )
+            if _is_resolved(dispositions, key):
+                continue
+            if kind == "failed-error":
+                errors += 1
+            else:
+                warnings += 1
+    except Exception:
+        pass
+    return errors, warnings
+
+
+def _count_metadata_findings(
+    evaluable: list[dict[str, Any]], dispositions: dict[str, Any] | None
+) -> tuple[int, int]:
+    """Incomplete required/optional rule rows, resolved ones discounted."""
+    required_missing = optional_missing = 0
+    for r in evaluable:
+        try:
+            if not isinstance(r, dict):
+                continue
+            if r.get("status") == "complete" or r.get("pending"):
+                continue
+            rule_id = str(r.get("rule_id") or r.get("field") or "")
+            message = str(r.get("requirement") or r.get("field") or "")
+            if _is_resolved(dispositions, finding_key(rule_id, "", message)):
+                continue
+            if str(r.get("level") or "required") == "required":
+                required_missing += 1
+            else:
+                optional_missing += 1
+        except Exception:
+            continue
+    return required_missing, optional_missing
+
+
+def _sensitivity_pending(sensitivity: dict[str, Any] | None) -> bool:
+    return bool(isinstance(sensitivity, dict) and sensitivity.get("complete") is False)
+
+
+def _reasons(
+    errors: int,
+    warnings: int,
+    required_missing: int,
+    optional_missing: int,
+    sensitivity_pending: bool,
+) -> list[Reason]:
+    reasons: list[Reason] = []
+    if errors:
+        reasons.append(Reason(REASON_ERRORS, errors, REASON_TARGETS[REASON_ERRORS]))
+    if required_missing:
+        reasons.append(Reason(REASON_REQUIRED, required_missing, REASON_TARGETS[REASON_REQUIRED]))
+    if warnings:
+        reasons.append(Reason(REASON_WARNINGS, warnings, REASON_TARGETS[REASON_WARNINGS]))
+    if optional_missing:
+        reasons.append(Reason(REASON_OPTIONAL, optional_missing, REASON_TARGETS[REASON_OPTIONAL]))
+    if sensitivity_pending:
+        reasons.append(Reason(REASON_SENSITIVITY, 1, REASON_TARGETS[REASON_SENSITIVITY]))
+    return reasons
+
+
+def _level(
+    errors: int,
+    warnings: int,
+    required_missing: int,
+    optional_missing: int,
+    sensitivity_pending: bool,
+) -> str:
+    if errors or sensitivity_pending:
+        return LEVEL_BLOCKED
+    if warnings or required_missing or optional_missing:
+        return LEVEL_REVISIONS
+    return LEVEL_READY
+
+
+def assess(
     report: Any = None,
     completeness: list[dict[str, Any]] | None = None,
     dispositions: dict[str, Any] | None = None,
@@ -107,79 +199,11 @@ def assess(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decom
         if not has_report and not has_meta:
             return Verdict(LEVEL_UNREVIEWED)
 
-        # Unresolved check findings (dataset-level and per-file).
-        errors = warnings = 0
-        if report is not None:
-            try:
-                entries = [(c, "") for c in list(getattr(report, "dataset_checks", None) or [])] + [
-                    (c, str(getattr(f, "path", "") or ""))
-                    for f in list(getattr(report, "files", None) or [])
-                    for c in list(getattr(f, "checks", None) or [])
-                ]
-                for c, path in entries:
-                    kind = classify(c)
-                    if kind not in ("failed-error", "failed-warning"):
-                        continue
-                    key = finding_key(
-                        str(getattr(c, "check_id", "") or ""),
-                        path,
-                        str(getattr(c, "message", "") or ""),
-                    )
-                    if _is_resolved(dispositions, key):
-                        continue
-                    if kind == "failed-error":
-                        errors += 1
-                    else:
-                        warnings += 1
-            except Exception:
-                pass
-
-        # Incomplete metadata rules, resolved ones discounted.
-        # Synthesized "skipped" rows (unchecked rules) carry no verdict.
-        required_missing = optional_missing = 0
-        for r in evaluable:
-            try:
-                if not isinstance(r, dict):
-                    continue
-                if r.get("status") == "complete" or r.get("pending"):
-                    continue
-                rule_id = str(r.get("rule_id") or r.get("field") or "")
-                message = str(r.get("requirement") or r.get("field") or "")
-                if _is_resolved(dispositions, finding_key(rule_id, "", message)):
-                    continue
-                if str(r.get("level") or "required") == "required":
-                    required_missing += 1
-                else:
-                    optional_missing += 1
-            except Exception:
-                continue
-
-        sensitivity_pending = bool(
-            isinstance(sensitivity, dict) and sensitivity.get("complete") is False
-        )
-
-        reasons: list[Reason] = []
-        if errors:
-            reasons.append(Reason(REASON_ERRORS, errors, REASON_TARGETS[REASON_ERRORS]))
-        if required_missing:
-            reasons.append(
-                Reason(REASON_REQUIRED, required_missing, REASON_TARGETS[REASON_REQUIRED])
-            )
-        if warnings:
-            reasons.append(Reason(REASON_WARNINGS, warnings, REASON_TARGETS[REASON_WARNINGS]))
-        if optional_missing:
-            reasons.append(
-                Reason(REASON_OPTIONAL, optional_missing, REASON_TARGETS[REASON_OPTIONAL])
-            )
-        if sensitivity_pending:
-            reasons.append(Reason(REASON_SENSITIVITY, 1, REASON_TARGETS[REASON_SENSITIVITY]))
-
-        if errors or sensitivity_pending:
-            level = LEVEL_BLOCKED
-        elif warnings or required_missing or optional_missing:
-            level = LEVEL_REVISIONS
-        else:
-            level = LEVEL_READY
+        errors, warnings = _count_check_findings(report, dispositions)
+        required_missing, optional_missing = _count_metadata_findings(evaluable, dispositions)
+        pending = _sensitivity_pending(sensitivity)
+        reasons = _reasons(errors, warnings, required_missing, optional_missing, pending)
+        level = _level(errors, warnings, required_missing, optional_missing, pending)
         return Verdict(level, tuple(reasons))
     except Exception:
         return Verdict(LEVEL_UNREVIEWED)

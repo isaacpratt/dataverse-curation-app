@@ -19,6 +19,7 @@
       "run_failed": "headless run failed: {exc}",
       "report_written": "Report written to {written} ({files} files, {warnings} finding(s))",
       "verdict_line": "Verdict: {verdict}",
+      "verdict_unavailable": "Verdict unavailable: {exc}",
       "export_record_help": "also write a dated curation-record folder beside the report",
       "record_written": "Curation record written to {path}",
       "config_warning": "config warning: {exc} — using defaults",

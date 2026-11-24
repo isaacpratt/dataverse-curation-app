@@ -67,3 +67,35 @@ def test_finished_payload_does_not_break_registry(qapp):
             )
     finally:
         workers.stop_all_workers()
+
+
+def test_about_to_quit_hook_installed_once_per_application(monkeypatch: Any) -> None:
+    from PySide6.QtWidgets import QApplication
+
+    class _Signal:
+        def __init__(self) -> None:
+            self.connects = 0
+
+        def connect(self, slot: Any) -> None:
+            self.connects += 1
+
+    class _App:
+        def __init__(self) -> None:
+            self.aboutToQuit = _Signal()
+
+        def processEvents(self) -> None:
+            # pytest-qt's autouse event pump sees this instance too.
+            return None
+
+    app = _App()
+    monkeypatch.setattr(QApplication, "instance", lambda: app)
+    monkeypatch.setattr(workers, "_QUIT_HOOK_APP", None)
+    threads = [_DictPayloadWorker() for _ in range(3)]
+    try:
+        for thread in threads:
+            workers.register_worker(thread)
+        assert app.aboutToQuit.connects == 1
+        workers.register_worker(_DictPayloadWorker())
+        assert app.aboutToQuit.connects == 1
+    finally:
+        workers.stop_all_workers()

@@ -6,7 +6,6 @@ checksum verification against the Dataverse inventory. Network work runs on
 Qt worker threads; see docs/explanation/architecture.md.
 """
 
-import hashlib
 import os
 import shutil
 import threading
@@ -17,9 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from curation.client import DownloadCancelled
-
-_STREAM_CHUNK = 1 << 20
-
+from curation.client.hashing import hash_file
 
 _STAGE_LOCKS: dict[str, threading.Lock] = {}
 
@@ -590,7 +587,7 @@ class DownloadManager:
                 return (None, f"no checksum recorded for {rel} — integrity unverified")
             algorithm = item.get("checksum_type") or "md5"
             try:
-                actual = self._hash_file(local, algorithm)
+                actual = hash_file(local, algorithm)
             except ValueError:
                 return (
                     f"unsupported checksum type '{algorithm}' for {rel}",
@@ -704,11 +701,3 @@ class DownloadManager:
         if dest.exists():
             shutil.rmtree(dest)
         staging.rename(dest)
-
-    @staticmethod
-    def _hash_file(path: Path, algorithm: str) -> str:
-        digest = hashlib.new(algorithm)
-        with open(path, "rb") as handle:
-            for chunk in iter(lambda: handle.read(_STREAM_CHUNK), b""):
-                digest.update(chunk)
-        return digest.hexdigest()

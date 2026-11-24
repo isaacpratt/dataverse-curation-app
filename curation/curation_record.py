@@ -24,13 +24,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-_DISPOSITION_LABELS = {
-    "acknowledged": "Acknowledged",
-    "fix-requested": "Fix requested",
-    "wontfix": "Won't fix",
-    "blocked": "Blocked",
-}
-
 
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
@@ -64,24 +57,6 @@ def _log_markdown(actions: list[dict[str, Any]]) -> str:
         line = f"- {ts} [{actor}] {action}"
         if notes:
             line += f" — {notes}"
-        lines.append(line)
-    return "\n".join(lines) + "\n"
-
-
-def _dispositions_markdown(dispositions: dict[str, Any]) -> str:
-    lines = ["# Finding dispositions", ""]
-    if not dispositions:
-        lines.append("(no dispositions recorded)")
-    for key, entry in dispositions.items():
-        token = str(entry.get("disposition") or "")
-        label = _DISPOSITION_LABELS.get(token, token or "unset")
-        note = str(entry.get("note") or "").replace("\n", " ")
-        when = str(entry.get("updated_at") or "")[:19].replace("T", " ")
-        line = f"- {key[:12]}… {label}"
-        if when:
-            line += f" ({when})"
-        if note:
-            line += f" — {note}"
         lines.append(line)
     return "\n".join(lines) + "\n"
 

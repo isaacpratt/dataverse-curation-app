@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
 )
 
 from curation.client import DataverseClient
-from curation.config import PRESETS, Config
+from curation.config import PRESETS, Config, normalise_base_url
 from ui.dialogs import (
     confirm,
     confirm_save_discard_cancel,
@@ -1413,8 +1413,9 @@ class SettingsPane(QWidget):
 
     def persist(self) -> bool:
         """Validate and write config.json; no navigation, no `saved` signal."""
-        base = self.url_edit.text().strip().rstrip("/")
-        if not base.startswith("http"):
+        try:
+            base = normalise_base_url(self.url_edit.text())
+        except ValueError:
             show_warning(
                 self,
                 t("settings.title"),

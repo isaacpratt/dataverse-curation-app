@@ -90,6 +90,8 @@ from datetime import datetime as _datetime
 from pathlib import Path
 from typing import Any
 
+from curation.config import base_url_key
+
 RULESETS_VERSION = 2
 
 
@@ -696,10 +698,7 @@ def get_ruleset(key: str, rulesets: dict[str, dict[str, Any]] | None = None) -> 
 
 
 def _norm_base(url: str) -> str:
-    try:
-        return (url or "").rstrip("/").lower()
-    except Exception:
-        return ""
+    return base_url_key(url)
 
 
 def rulesets_for_dataverse(
@@ -813,12 +812,6 @@ def _field_path(blocks: dict[str, Any], block: str, field: str) -> list[Any] | N
     if out is None:
         return []
     return out if isinstance(out, list) else [out]
-
-
-def _leaf_list(v: Any) -> list[Any]:
-    if v is None:
-        return []
-    return v if isinstance(v, list) else [v]
 
 
 def _leaves_value(leaves: list[Any], max_len: int = 200) -> str:

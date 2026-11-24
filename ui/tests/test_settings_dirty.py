@@ -139,13 +139,14 @@ def test_persist_failure_keeps_dirty(pane, monkeypatch):
     assert pane.has_unsaved_changes()
 
 
-def test_persist_rejects_an_invalid_url(pane, monkeypatch):
+@pytest.mark.parametrize("bad_url", ["ftp://example.org", "http://example.org", "httpx://x.test"])
+def test_persist_rejects_an_invalid_url(pane, monkeypatch, bad_url):
     warnings = []
     monkeypatch.setattr(
         "ui.settings_dialog.show_warning",
         lambda *a, **k: warnings.append(True),
     )
-    pane.url_edit.setText("ftp://example.org")
+    pane.url_edit.setText(bad_url)
     assert pane.persist() is False
     assert warnings == [True]
     assert pane.has_unsaved_changes()

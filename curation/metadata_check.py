@@ -654,12 +654,3 @@ def refresh_profiles_from_rulesets() -> None:
         _register_rulesets_in_profiles()
     except Exception:
         pass
-
-
-def check_completeness(
-    metadata: dict[str, Any],
-    profile: str = DEFAULT_PROFILE,
-    inventory: list[dict[str, Any]] | None = None,
-) -> list[dict[str, Any]]:
-    """Citation-block completeness against a McMaster/Minimal profile."""
-    return check_metadata_completeness(metadata, profile, inventory)

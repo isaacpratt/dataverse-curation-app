@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from curation.client.parsers import top_level_collection
+from curation.config import base_url_key
 
 # Authenticated-identity cache: (base_url, token fingerprint) -> /api/users/:me data.
 # Keyed by a SHA-256 fingerprint, never the token itself. Successes only —
@@ -180,10 +181,7 @@ _METADATABLOCKS_LOCK = threading.Lock()
 
 
 def _metadatablocks_disk_key(base_url: str) -> str:
-    try:
-        return (base_url or "").rstrip("/").lower()
-    except Exception:
-        return ""
+    return base_url_key(base_url)
 
 
 def get_cached_metadata_fields(base_url: str) -> list[dict[str, Any]] | None:
