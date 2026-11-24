@@ -1992,8 +1992,8 @@ def apply_theme(app: "QApplication", theme: str | None = None) -> None:
     _log_active_role_table()
 
 
-def animate_theme_change(app: "QApplication", repaint: Callable[[], None]) -> None:
-    """Fade the old palette out, ``repaint``, fade the new one in.
+def animate_theme_change(window: "QWidget", repaint: Callable[[], None]) -> None:
+    """Fade ``window`` out, ``repaint``, fade it back in.
 
     A stylesheet swap is one atomic repaint, so without a transition the
     window cuts from one palette to the other in a single frame (dv-4jm.3).
@@ -2008,9 +2008,13 @@ def animate_theme_change(app: "QApplication", repaint: Callable[[], None]) -> No
     fade. An effect is a paint-time operation, so the same code path runs
     (and is testable) on every platform.
 
+    The window is named by the caller rather than looked up. "The first
+    visible top-level window" is ambiguous in a process that may hold
+    several - the app's main window, a dialog, a test's own window - and
+    picking wrong fades a window the curator is not looking at.
+
     Falls back to an immediate ``repaint()`` when there is nothing to fade:
-    no visible top-level window (headless runs, a torn-down app), or a
-    window that already carries a graphics effect, which this must not
+    a window that already carries a graphics effect, which this must not
     clobber.
     """
     try:
@@ -2020,10 +2024,6 @@ def animate_theme_change(app: "QApplication", repaint: Callable[[], None]) -> No
         repaint()
         return
 
-    window = next(
-        (widget for widget in app.topLevelWidgets() if widget.isVisible() and widget.isWindow()),
-        None,
-    )
     if window is None or window.graphicsEffect() is not None:
         repaint()
         return

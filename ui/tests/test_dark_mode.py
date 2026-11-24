@@ -415,23 +415,42 @@ def test_gallery_window_without_config_still_opens(qapp):
 # --- Smooth transitions (dv-4jm.3) ---------------------------------------
 
 
-def test_animate_theme_change_repaints_without_a_window(qapp):
-    """Headless (no visible top-level) must still swap the sheet."""
+def test_animate_theme_change_repaints_at_once_when_it_cannot_fade(qapp):
+    """A window that already has an effect must not be faded.
+
+    The fade installs a ``QGraphicsOpacityEffect``, and a widget can only
+    carry one - fading a window that already has an effect would silently
+    replace it. That case must swap the sheet immediately instead.
+    """
+    from PySide6.QtWidgets import QGraphicsOpacityEffect, QWidget
+
     from ui import theme
 
-    calls: list[str] = []
-    theme.animate_theme_change(qapp, lambda: calls.append("repainted"))
-    assert calls == ["repainted"], "no window: repaint must happen immediately"
+    window = QWidget()
+    window.resize(120, 60)
+    window.setGraphicsEffect(QGraphicsOpacityEffect(window))
+    window.show()
+    qapp.processEvents()
+    try:
+        calls: list[str] = []
+        theme.animate_theme_change(window, lambda: calls.append("repainted"))
+        assert calls == ["repainted"], "an unusable target: repaint must happen immediately"
+    finally:
+        window.close()
+        window.deleteLater()
 
 
-def test_animate_theme_change_fades_on_the_test_platform(qapp):
-    """The fade runs on offscreen too, not only under a real compositor.
+def test_animate_theme_change_fades_the_window_it_is_given(qapp):
+    """The fade runs on the named window, on the test platform too.
 
-    It fades a ``QGraphicsOpacityEffect`` rather than ``windowOpacity``:
-    window opacity is a window-manager property, and the offscreen plugin
-    has no manager - it answers with a Qt warning and no fade, which this
-    suite treats as a failure. An effect is a paint-time operation, so the
-    same code path runs everywhere and is worth asserting.
+    Two things are pinned here. The target is the window passed in, not
+    "the first visible top-level" - a process can hold several, and picking
+    wrong fades a window nobody is looking at. And it fades a
+    ``QGraphicsOpacityEffect`` rather than ``windowOpacity``: window opacity
+    is a window-manager property, and the offscreen plugin has no manager -
+    it answers with a Qt warning and no fade, which this suite treats as a
+    failure. An effect is a paint-time operation, so the same code path runs
+    everywhere.
     """
     import time
 
@@ -445,7 +464,7 @@ def test_animate_theme_change_fades_on_the_test_platform(qapp):
     qapp.processEvents()
 
     swapped: list[str] = []
-    theme.animate_theme_change(qapp, lambda: swapped.append("swapped"))
+    theme.animate_theme_change(window, lambda: swapped.append("swapped"))
     qapp.processEvents()
 
     effect = window.graphicsEffect()

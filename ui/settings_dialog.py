@@ -1505,4 +1505,6 @@ class SettingsPane(QWidget):
         if theme == ACTIVE_THEME:
             _repaint()
         else:
-            animate_theme_change(app, _repaint)
+            # Fade the window the curator is looking at, not "the first
+            # visible top-level" - a process can hold several.
+            animate_theme_change(self.window(), _repaint)
