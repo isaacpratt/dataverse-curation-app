@@ -55,7 +55,8 @@ dataverse-curation-app/
 ```bash
 uv sync                   # create .venv and install everything incl. dev group (from uv.lock; no pip needed)
 copy config.example.json config.json   # Windows cmd (PowerShell: Copy-Item config.example.json config.json); default is the Borealis demo (demo.borealisdata.ca); edit base_url/api_token for your instance
-uv run pytest             # 1185 tests (19 samples deselected); run uv run pytest --collect-only for current count
+uv run pytest             # full suite; current count: uv run pytest --collect-only -q
+# UI suite in parallel: uv run pytest ui/tests/ -q -n 4 (QT_QPA_PLATFORM=offscreen)
 pre-commit run --all-files # optional local gate (CI runs it too); needs uv on PATH. core.hooksPath is beads-managed, so hooks are not auto-installed — run it manually or rely on CI
 uv run python main.py                # launch the desktop GUI — pick the Dataverse in the top-nav Settings page (demo preset included)
 uv run python main.py --gallery      # the component gallery: every kit component on one page
@@ -132,7 +133,7 @@ Gate before handoff; run from the repository root when code (not docs-only) chan
 - `uv run pytest -q` — must exit 0. The default run is the repository's own suite: the parity tests that read the sibling `CUR_Res_CurationTools` clone carry the `samples` marker and are deselected, so the same tests run on every machine
 - `uv run poe samples` — the opt-in parity run against that sample data (skipped when the clone is absent). Not part of the gate: CI has no such clone, and a gate whose result depends on a developer's disk is not a gate
 - `uv run poe cover` — engine coverage, compared against the floor in `[tool.coverage.report]` (65). The measure omits `*/tests/*`: test modules used to sit inside the measured packages and counted as covered source, which is how `83%` was reported while the production number was ~65%
-- `uv run poe typecheck` — must report `Success: no issues found`; the scope is `[tool.mypy] files` (`engine/`, `curation/`, `tools/tests`, `ui/`, `main.py`), so run bare `uv run mypy`. Every application module — engine, curation, `ui/` and `main.py` — is checked under full `--strict` (ADR 0008, which superseded ADR 0007 and withdrew the old `ui.*` override). Only the four test packages relax, and only `disallow_untyped_defs`, `disallow_incomplete_defs` and `disallow_untyped_decorators`; `check_untyped_defs` and every shape check stay on for tests too
+- `uv run poe typecheck` — must report `Success: no issues found`; the scope is `[tool.mypy] files` (`engine/`, `curation/`, `tools/tests`, `ui/`, `main.py`), so run bare `uv run mypy`. Every application module — `ui.*` included — is checked under full `--strict`; only the four test packages relax three "you must annotate" rules (`disallow_untyped_defs`, `disallow_incomplete_defs`, `disallow_untyped_decorators`), while `check_untyped_defs` and every shape check stay on (ADR 0008)
 - `uv run poe contracts` — import-linter contracts must stay green: `engine/` and `curation/` may not import `ui/` or `PySide6`, and the operational helpers in `tools/` may not import `ui/` (the UI probes are the documented exception)
 - `python tools/probes/run_all.py` — must end with `all N probes passed`; mandatory for UI/theme changes, and cheap enough to always run
 - headless box? set `QT_QPA_PLATFORM=offscreen` first, or the probes fail for the wrong reason

@@ -310,6 +310,9 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         "not executed": "needle matched against an engine check description",
         "DatasetReport | None": "quoted forward-reference return annotation (TYPE_CHECKING import)",
     },
+    "ui/gallery.py": {
+        "gallery: could not persist theme view ": "Log line prefix for a failed config save",
+    },
     "ui/help_index.py": {
         "metadata check": "keyword match for grouping tips under the Checks task",
         "auto-check": "keyword match for grouping tips under the Checks task",

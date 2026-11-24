@@ -168,9 +168,7 @@ class LogRail(DetailState):
                 if ct and ct[:10] != (rt or "")[:10]:
                     events.add(ct, t("detail.dataset_log.version_created", num=num))
         if events.dated_creations:
-            events.dated(
-                sorted(events.dated_creations)[0], t("detail.dataset_log.first_created")
-            )
+            events.dated(sorted(events.dated_creations)[0], t("detail.dataset_log.first_created"))
 
     def _timestamp_events(self, events: _LogEvents) -> None:
         """Dataset-level record dates from the timestamps endpoint."""

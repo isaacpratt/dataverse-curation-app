@@ -42,6 +42,9 @@ ALLOWED_TEMPLATES = {
     "Home",
     "README",
 }
+ALLOWED_AUDIENCES = {"curator", "developer", "contributor", "all"}
+PYPROJECT = ROOT / "pyproject.toml"
+STYLE_GUIDE = DOCS / "style-guide.md"
 
 
 def _published_pages() -> list[Path]:
@@ -73,9 +76,7 @@ def test_every_published_page_declares_one_quadrant() -> None:
         assert fields.get("tgdp_template", "") in ALLOWED_TEMPLATES, (
             f"{path.name}: unknown tgdp_template"
         )
-        assert fields.get("audience", "") in {"curator", "developer", "contributor", "all"}, (
-            f"{path.name}: unknown audience"
-        )
+        assert fields.get("audience", "") in ALLOWED_AUDIENCES, f"{path.name}: unknown audience"
 
 
 def test_nav_lists_exactly_the_published_pages() -> None:
@@ -118,6 +119,49 @@ def test_quadrant_audit_matches_front_matter() -> None:
             f"{rel}: audit says {rows.get(rel)}, front matter says "
             f"{[fields['page_type'], fields['tgdp_template']]}"
         )
+
+
+def test_style_guide_documents_every_value_the_gate_accepts() -> None:
+    """The style guide's allowed-values table must not drift from the gate."""
+    text = STYLE_GUIDE.read_text(encoding="utf-8")
+    documented: dict[str, set[str]] = {}
+    for line in text.splitlines():
+        match = re.match(r"^\|\s+`([a-z_]+)`\s+\|\s+(.+?)\s+\|\s*$", line)
+        if match:
+            documented[match.group(1)] = set(re.findall(r"`([^`]+)`", match.group(2)))
+
+    used: dict[str, set[str]] = {"page_type": set(), "tgdp_template": set(), "audience": set()}
+    for page in _published_pages():
+        fields = _front_matter(page)
+        for key in used:
+            used[key].add(fields[key])
+
+    for key, accepted in (
+        ("page_type", ALLOWED_TYPES),
+        ("tgdp_template", ALLOWED_TEMPLATES),
+        ("audience", ALLOWED_AUDIENCES),
+    ):
+        assert documented.get(key), f"style-guide.md: no allowed-values row for {key}"
+        assert documented[key] <= accepted, f"style-guide.md advertises invalid {key} values"
+        assert used[key] <= documented[key], (
+            f"style-guide.md omits {key} values used by pages: {sorted(used[key] - documented[key])}"
+        )
+
+
+def test_documented_poe_tasks_exist() -> None:
+    """Every `poe <task>` quoted in the docs is a real task in pyproject.toml."""
+    tasks = set(tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["tool"]["poe"]["tasks"])
+    pages = [*_published_pages(), ROOT / "CONTRIBUTING.md"]
+    # Prose such as "poe is the task runner" is not a command; skip those words.
+    prose = {"is", "task", "tasks", "and", "the", "as", "for"}
+    mentioned: dict[str, str] = {}
+    for page in pages:
+        for match in re.finditer(r"\bpoe\s+([a-z][a-z0-9-]*)\b", page.read_text(encoding="utf-8")):
+            if match.group(1) not in prose:
+                mentioned.setdefault(match.group(1), page.relative_to(ROOT).as_posix())
+    assert mentioned
+    missing = {task: source for task, source in mentioned.items() if task not in tasks}
+    assert not missing, f"documented poe tasks that do not exist: {missing}"
 
 
 def test_nav_is_grouped_by_quadrant() -> None:

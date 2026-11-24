@@ -59,4 +59,4 @@ no server, so there is no need for an application-level secrets service.
 - `SECURITY.md` — token handling, reporting channel, threat model.
 - `curation/config.py` — `KEYRING_SERVICE`, load precedence, save fallback.
 - `curation/applog.py` — redaction patterns.
-- `engine/tests/test_config.py` — keyring contract tests.
+- `curation/tests/test_config.py` — keyring contract tests.

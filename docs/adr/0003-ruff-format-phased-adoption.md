@@ -1,7 +1,7 @@
 # ADR 0003 — Ruff format adopted in phases, over the whole tree
 
 - **Status:** Accepted
-- **Date:** 2026-11-13 (decision), 2026-11-16 (phases 1 and 2 landed)
+- **Date:** 2026-11-13 (decision), 2026-11-16 (phases 1 and 2 landed), 2026-11-23 (phase 3: whole-tree format gate landed)
 
 ## Context
 

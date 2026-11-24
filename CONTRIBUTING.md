@@ -1,6 +1,6 @@
 # Contributing to Dataverse Docent
 
-Thanks for helping improve Dataverse Docent. This guide covers how to report problems, propose changes, set up a development environment, and get your work through the gates. For the rules that govern the prose you write, read the [published documentation style guide](https://isaacpratt.github.io/dataverse-curation-app/style-guide/) or its source page, [docs/style-guide.md](docs/style-guide.md).
+Thanks for helping improve Dataverse Docent. This guide covers how to report problems, propose changes, set up a development environment, and get your work through the gates. For the rules that govern the prose you write, read [docs/style-guide.md](docs/style-guide.md); the same guide is published on the [documentation site](https://isaacpratt.github.io/dataverse-curation-app/style-guide/) once Pages has deployed it.
 
 ## Report a bug or request a feature
 
@@ -40,20 +40,19 @@ Thanks for helping improve Dataverse Docent. This guide covers how to report pro
 Before you open a pull request, run the gates in [Run the gates](docs/how-to/run-the-gates.md) and confirm they pass:
 
 ```powershell
-uv run poe check
-uv run poe hooks
-uv run poe typecheck
-uv run poe contracts
-uv run poe probes
-uv run poe test
-uv run poe docs-check
+uv run poe check       # lint, format-check, typecheck, contracts, tests
+uv run poe hooks       # pre-commit
+uv run poe probes      # offscreen UI probes
+uv run poe docs-check  # Markdown lint, links, strict site build
 ```
+
+`poe check` already sequences typecheck, contracts and tests; run those individually only when you are debugging one of them.
 
 CI runs the same gate on every pull request. A docs-only change still needs the strict docs build.
 
 ## Write documentation
 
-- Follow the [published documentation style guide](https://isaacpratt.github.io/dataverse-curation-app/style-guide/) and [docs/style-guide.md](docs/style-guide.md).
+- Follow [docs/style-guide.md](docs/style-guide.md) (also published on the documentation site once Pages has deployed it).
 - Put one idea in one page and keep each page in one Diátaxis quadrant.
 - Use relative links between pages in `docs/`, fenced code blocks with a language, and commands copied from `pyproject.toml`.
 - Add a new page to the explicit `nav` in `zensical.toml`.

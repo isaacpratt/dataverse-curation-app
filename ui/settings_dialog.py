@@ -50,7 +50,6 @@ from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
     ACCENT_PRIMARY,
-    ACTIVE_THEME,
     BORDER_SUBTLE,
     STATE_ERROR_GRAPHIC,
     SURFACE_CARD,
@@ -59,7 +58,7 @@ from ui.theme import (
     enable_table_copy,
     page_background_qss,
     selectable_labels,
-    set_active_theme,
+    surface_frame_qss,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -297,7 +296,7 @@ class SettingsPane(QWidget):
         theme_group = QWidget()
         theme_group.setObjectName("Card")
         theme_group.setStyleSheet(
-            f"QWidget#Card {{ background: {SURFACE_CARD}; border: 1px solid {BORDER_SUBTLE}; border-radius: 8px; }}"
+            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QWidget#Card", radius="8px")
         )
         theme_layout = QVBoxLayout(theme_group)
         theme_layout.setContentsMargins(16, 16, 16, 16)
@@ -577,9 +576,7 @@ class SettingsPane(QWidget):
             }
             # Load theme settings
             theme_mode = getattr(self._config.app, "theme_mode", "light")
-            self.theme_mode_combo.setCurrentIndex(
-                self.theme_mode_combo.findData(theme_mode)
-            )
+            self.theme_mode_combo.setCurrentIndex(self.theme_mode_combo.findData(theme_mode))
             # Auto-switch checkbox
             auto_theme = theme_mode == "auto"
             self.auto_theme_checkbox.setChecked(auto_theme)
@@ -1484,31 +1481,31 @@ class SettingsPane(QWidget):
 
     def _apply_theme(self) -> None:
         """Apply the current theme setting to the app."""
-        from ui.theme import set_active_theme, apply_theme
         from PySide6.QtWidgets import QApplication
 
-        mode = self._config.app.theme_mode
-        if mode == "auto":
-            # Detect OS theme (Windows 10/11)
-            try:
-                import sys
-                if sys.platform.startswith("win"):
-                    import winreg
-                    key = winreg.OpenKey(
-                        winreg.HKEY_CURRENT_USER,
-                        r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-                    )
-                    value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
-                    winreg.CloseKey(key)
-                    theme = "light" if value else "dark"
-                else:
-                    theme = "light"  # Default to light on non-Windows
-            except Exception:
-                theme = "light"
-        else:
-            theme = mode
+        from ui.theme import (
+            ACTIVE_THEME,
+            animate_theme_change,
+            apply_theme,
+            resolve_theme_mode,
+            set_active_theme,
+        )
 
-        set_active_theme(theme)
+        theme = resolve_theme_mode(self._config.app.theme_mode)
         app = QApplication.instance()
-        if isinstance(app, QApplication):
-            apply_theme(app)
+        if not isinstance(app, QApplication):
+            set_active_theme(theme)
+            return
+
+        # Swap the palette at the dimmest point of a short fade, so the
+        # change reads as a transition rather than a one-frame cut.
+        def _repaint() -> None:
+            set_active_theme(theme)
+            apply_theme(app, theme)
+
+        if theme == ACTIVE_THEME:
+            _repaint()
+        else:
+            # Fade the window the curator is looking at, not "the first
+            # visible top-level" - a process can hold several.
+            animate_theme_change(self.window(), _repaint)

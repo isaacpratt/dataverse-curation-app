@@ -26,7 +26,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ui.i18n import t
-from ui.theme import FONT_CAPTION, transparent_surface_qss
+from ui.theme import ACTIVE_THEME, FONT_CAPTION, transparent_surface_qss
 from ui.widgets import (
     add_info_tip,
     make_action_button,
@@ -543,7 +543,7 @@ class PreviewCard(QFrame):
         # other labels even though the preview above runs edge to edge.
         note_row = QWidget()
         note_row.setObjectName("PreviewNote")
-        note_row.setStyleSheet(transparent_surface_qss("PreviewNote"))
+        note_row.setStyleSheet(transparent_surface_qss("PreviewNote", theme=ACTIVE_THEME))
         note_lay = QHBoxLayout(note_row)
         note_lay.setContentsMargins(16, 8, 16, 8)
         note_lay.addWidget(self._note)
@@ -561,7 +561,7 @@ class PreviewCard(QFrame):
         # edge (dv-gfx.16).
         tools = QWidget()
         tools.setObjectName("PreviewTools")
-        tools.setStyleSheet(transparent_surface_qss("PreviewTools"))
+        tools.setStyleSheet(transparent_surface_qss("PreviewTools", theme=ACTIVE_THEME))
         tools_lay = QHBoxLayout(tools)
         tools_lay.setContentsMargins(16, 12, 16, 12)
         tools_lay.addWidget(self._open_btn)

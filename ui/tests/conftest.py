@@ -56,6 +56,47 @@ def qapp():
     return app
 
 
+@pytest.fixture(autouse=True)
+def _no_leaked_windows(qapp):
+    """Take top-level windows a test left open out of the paint path.
+
+    A widget built without a parent is a top-level window: left visible it
+    stays for the rest of the session and keeps taking part in style
+    recalculation and event delivery. That is not a correctness failure in
+    the test that leaked, but it makes every *later* test slower - the
+    gallery test measured 1.3 s alone and 80 s after a few hundred leaked
+    windows.
+
+    Deliberately non-destructive: hide and close, never delete. A leaked
+    window may still be owned by a fixture that tears down after this one,
+    or have a queued signal or background load still aimed at it, and
+    forcing deletion here left the worker holding a dangling pointer (seen
+    as a silent crash in test_lazy_startup). Hiding is idempotent and is
+    enough to stop the cost.
+    """
+    from typing import cast
+
+    from PySide6.QtWidgets import QApplication
+
+    # instance() is typed as QCoreApplication | None; only QApplication has
+    # topLevelWidgets().
+    app = cast("QApplication | None", QApplication.instance())
+    if app is None:
+        yield
+        return
+    # Only windows that appear during the test are candidates: the session
+    # ``win`` fixture is shown before the first test and must stay shown.
+    before = set(app.topLevelWidgets())
+    yield
+    for widget in set(app.topLevelWidgets()) - before:
+        try:
+            widget.hide()
+            widget.close()
+        except Exception:
+            pass
+    qapp.processEvents()
+
+
 @pytest.fixture(scope="session")
 def win(qapp):
     from curation.config import Config

@@ -22,7 +22,7 @@ flowchart LR
     UI -->|curation labels, decisions| C
 ```
 
-The diagram is the dependency direction, not a call graph. The client owns Dataverse, the download manager owns bytes on disk, the engine owns judgements about local files, and the GUI owns presentation. A change that crosses one of these lines is a design decision, not a refactor.
+The diagram is the dependency direction, not a call graph: solid arrows are the main data flow, the dashed arrow is an observational side channel (the request log), and the unlabelled arrow from metadata completeness means the GUI consumes its results. The client owns Dataverse, the download manager owns bytes on disk, the engine owns judgements about local files, and the GUI owns presentation. A change that crosses one of these lines is a design decision, not a refactor.
 
 ## The layers and why they are separate
 
@@ -47,7 +47,7 @@ A dataset runs one check at a time, and each result is persisted as a `DatasetRe
 
 A dashboard refresh pages the Search API at `per_page=1000`, driven by the first response's `total_count`, deduplicates by persistent ID, and enriches drafts first with a small pooled batch of version fetches. That pass writes the cache and the queue. The first paint comes from the cache; a background diff reports what is new, updated or removed. Very large collections are painted through a bounded row window so the filter and sort stay responsive while the visible set is capped.
 
-Opening a dataset schedules a metadata load: citation blocks, inventory, curation state, version comparison and timestamps arrive on a worker, and the detail page fills in as they land. Download All quotes the transfer first, using original size for tabular files, and waits for approval. Once approved, the bundle streams to a partial file and is renamed atomically; originals are fetched and `.tab` siblings removed for an originals-only deposit; `verify()` returns `(ok, problems, warnings)` rather than a single pass/fail, because a checksum mismatch and a recoverable warning are different curator facts. Both streaming loops poll a cancellation flag so the detail page's Cancel is real.
+Opening a dataset schedules a metadata load: citation blocks, inventory, curation state, version comparison and timestamps arrive on a worker, and the detail page fills in as they land. **Download Dataset** quotes the transfer first, using original size for tabular files, and waits for approval. Once approved, the bundle streams to a partial file and is renamed atomically; originals are fetched and `.tab` siblings removed for an originals-only deposit; `verify()` returns `(ok, problems, warnings)` rather than a single pass/fail, because a checksum mismatch and a recoverable warning are different curator facts. Both streaming loops poll a cancellation flag so the detail page's Cancel is real.
 
 Checks then dispatch per file and at dataset level, writing reports under the staged dataset's workspace folder. The curator's attention lands on the main column — metadata completeness, dataset checks, file checks, version history — and on a sidebar that holds the response and the curation label. A verdict and per-finding dispositions live alongside the report, and the label push travels back through the client to Dataverse. The workflow rail only navigates between these sections; it deliberately never starts a download or an export.
 
@@ -67,7 +67,7 @@ The palette in `ui/theme.py` says what a colour is — `PRIMARY`, `SURFACE_CONTA
 
 Only `ui/theme.py` and `ui/widgets.py` may name a palette entry. A view names a role, the kit builds the component, and the theme owns the rules. This is checked, not reviewed: `ui/tests/test_theme_conformance.py` fails the build when a view paints for itself, names a raw colour, builds a raw input widget or writes a button sheet by hand. The guards parse source with `ast`, so they are cheap, exact and need no window.
 
-The role names are stable; what they resolve to is not. `ui/theme.py` holds one table per theme — `LIGHT_ROLE_TABLE` and `DARK_ROLE_TABLE` over the same 94 role names — plus a resolver and a switch. The light table is what the app paints today; dark mode is not shipped. The role groups give an idea of the vocabulary:
+The role names are stable; what they resolve to is not. `ui/theme.py` holds one table per theme — `LIGHT_ROLE_TABLE` and `DARK_ROLE_TABLE` over the same 94 role names — plus a resolver and `set_active_theme()`. **Settings → Appearance** selects Light, Dark or Auto (follow system), so a theme change swaps tables instead of repainting views. The role groups give an idea of the vocabulary:
 
 | Group | Purpose |
 | --- | --- |
@@ -111,7 +111,7 @@ Geometry is part of the contract. The queue has no horizontal scrollbar, so its 
 
 ## Reports and extensibility
 
-The engine and the GUI communicate through `DatasetReport` JSON, implemented in `engine/report.py` and specified in the [report contract](../reference/report-contract.md). The GUI renders that structure directly, without knowing individual checks; headless mode exercises the same contract. A format check is a new module in `engine/checks/` implementing `Check`, registered in the registry. The Auto-Checks card and `list_planned_checks()` pick it up automatically, and missing optional libraries surface as "Missing …" rather than errors.
+The engine and the GUI communicate through `DatasetReport` JSON, implemented in `engine/report.py` and specified in the [report contract](../reference/report-contract.md). The GUI renders that structure directly, without knowing individual checks; headless mode exercises the same contract. A format check is a new module in `engine/checks/` implementing `Check`, registered in the registry. The Automated checks card and `list_planned_checks()` pick it up automatically, and missing optional libraries surface as "Missing …" rather than errors.
 
 Scope is now declared, not inferred: every check states whether its findings are about the dataset or a file, the registry refuses a class that omits the declaration, and routing follows it. Extensions only say which files a check reads, so a cross-file check can still report once for the dataset. All 24 registered checks declare a scope. Human-readable names come from one `TITLES` registry, so a check is never shown to a curator by its raw ID. See the [checks reference](../reference/checks.md) for what each check examines.
 
@@ -125,7 +125,7 @@ There is one build artefact. `poe build` produces `dist/DataverseDocent/Datavers
 
 Keeping one build is a deliberate simplification. The portable zip is the small download the old `lite` variant existed to provide, so a second build bought cost without buying choice. Every format library ships in both the installer and the zip, and a frozen run that lacks a library names a reinstall rather than a second download.
 
-Install identity is fixed in `tools/build/check_pack.py`: the pack ID names the install directory and the update feed, so changing it would orphan existing installs instead of updating them. Updates are deltas. The .NET SDK is required only to run the packer, never by the shipped app. Distributed Windows builds are signed through a managed service, with the first releases unsigned and checksums published. No R runtime ships: R was needed only during the port for parity verification. macOS is deferred, because an unnotarised app is blocked by Gatekeeper and notarisation needs a paid developer program.
+Install identity is fixed in `tools/build/check_pack.py`: the pack ID names the install directory and the update feed, so changing it would orphan existing installs instead of updating them. Updates are deltas when a previous release of the same channel is available; a full package is built otherwise. The .NET SDK is required only to run the packer, never by the shipped app. Signing through a managed service is planned and gated on secrets; current Windows builds are unsigned, so checksums are published for verification. No R runtime ships: R was needed only during the port for parity verification. macOS is deferred, because an unnotarised app is blocked by Gatekeeper and notarisation needs a paid developer program.
 
 ## Decision log
 
@@ -149,6 +149,7 @@ A condensed record of the decisions that shaped the current shape. The full hist
 | 2026-11-16 | One name and one build: the app, the artefact, the installer and the distribution all say Dataverse Docent; the two-variant build was removed. |
 | 2026-11-17 | The dataset detail module was split into a facade over ten section modules sharing one typed contract; the queue painting window and enrichment cap were measured and confirmed. |
 | 2026-11-19 | Every check now declares its scope; the Python floor was made 3.11 everywhere; dependency floors were aligned with what ships. |
-| 2026-11-20 | All application code moved to full strict type checking with only tests relaxed; documentation moved to Zensical and GitHub Pages, leaving the old HTML tree frozen as a reference. |
+| 2026-11-20 | All application code moved to full strict type checking with only tests relaxed; documentation moved from hand-authored HTML to a Markdown tree built by Zensical and configured for GitHub Pages. |
+| 2026-11-23 | The docs were rewritten into Diátaxis quadrants with TGDP templates, and the old HTML tree was retired. |
 
 The proposal snapshots that produced several of these decisions are kept as historical design records, described in [Design records](design-records/index.md).

@@ -120,7 +120,7 @@ def _builders() -> list[tuple[str, Callable[[], str]]]:
         ),
         ("flush_list_style", widgets.flush_list_style),
         ("flush_list_style last=False", lambda: widgets.flush_list_style(last=False)),
-        ("framed_list_style", lambda: widgets._FRAMED_LIST_STYLE),
+        ("framed_list_style", widgets.framed_list_style),
         ("tree_style", widgets.tree_style),
         (
             "tree_style framed",

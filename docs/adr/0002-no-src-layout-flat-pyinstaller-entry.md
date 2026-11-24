@@ -26,7 +26,8 @@ parsing, caching and download logic in one module.
 - **Large modules are split into packages, not moved under `src/`.**
   `dataverse_client.py` became `client/` (constants, errors, http, parsers,
   caches, downloads, client) with `dataverse_client.py` kept as a thin
-  compatibility shim so every existing import still resolves.
+  compatibility shim so every existing import still resolves. **Historical:
+  the shim was deleted later; see the Amendment below.**
 - **Root modules stay flat until they grow:** `engine/`, `ui/`, `client/` and
   `tools/` are packages; the remaining root modules are single-purpose.
   `dashboard_cache.py` (the Qt-free dashboard cache helpers) is one of them:

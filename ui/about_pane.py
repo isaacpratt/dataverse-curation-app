@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from ui.i18n import t
 from ui.theme import (
+    ACTIVE_THEME,
     BORDER_SUBTLE,
     SURFACE_CARD,
     TEXT_SUBTLE,
@@ -144,7 +145,7 @@ class AboutPane(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds below this pane.
         self.setObjectName("AboutPane")
-        self.setStyleSheet(page_background_qss("AboutPane"))
+        self.setStyleSheet(page_background_qss("AboutPane", theme=ACTIVE_THEME))
 
         # Updates section state (the feed logic lives in ui/updater.py).
         self._update_state = (
@@ -166,7 +167,11 @@ class AboutPane(QWidget):
 
         card = QFrame()
         card.setObjectName("Card")
-        card.setStyleSheet(surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card"))
+        card.setStyleSheet(
+            surface_frame_qss(
+                SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card", theme=ACTIVE_THEME
+            )
+        )
         body = QVBoxLayout(card)
         body.setContentsMargins(20, 20, 20, 20)
         body.setSpacing(10)
@@ -191,14 +196,14 @@ class AboutPane(QWidget):
         mark = QLabel()
         mark.setObjectName("DocentMark")
         try:
-            from ui.theme import app_icon_path, ACTIVE_THEME
+            from ui.theme import app_icon_path
 
             pix = QPixmap(app_icon_path(ACTIVE_THEME))
             if not pix.isNull():
                 mark.setPixmap(pix.scaledToHeight(64, Qt.TransformationMode.SmoothTransformation))
         except Exception:
             pass
-        mark.setStyleSheet(transparent_surface_qss("DocentMark"))
+        mark.setStyleSheet(transparent_surface_qss("DocentMark", theme=ACTIVE_THEME))
         mark.setFixedWidth(64)
         head_row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
         head_row.addWidget(title, 1)
@@ -271,7 +276,7 @@ class AboutPane(QWidget):
 
         card = QFrame()
         card.setObjectName("UpdatesCard")
-        card.setStyleSheet(transparent_surface_qss("UpdatesCard"))
+        card.setStyleSheet(transparent_surface_qss("UpdatesCard", theme=ACTIVE_THEME))
         layout = QVBoxLayout(card)
         layout.setContentsMargins(0, 12, 0, 0)
         layout.setSpacing(6)

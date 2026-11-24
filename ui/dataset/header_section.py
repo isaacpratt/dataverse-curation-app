@@ -19,15 +19,12 @@ from ui.dataset.helpers import _pill_state
 from ui.dataset.state import DetailState
 from ui.i18n import t
 from ui.theme import (
-    ACCENT_PRIMARY,
+    ACTIVE_THEME,
     BORDER_SUBTLE,
-    FONT_BODY,
     STATE_ERROR_BG,
     STATE_ERROR_BORDER,
-    STATE_ERROR_GRAPHIC,
     STATE_SUCCESS_GRAPHIC,
     STATE_WARNING_GRAPHIC,
-    SURFACE_CARD,
     SURFACE_SUBTLE,
     SURFACE_TINT,
     TEXT_AMBER,
@@ -569,7 +566,7 @@ class HeaderSection(DetailState):
             }
             bg, border, ink, icon_name = faces.get(verdict.level, faces["unreviewed"])
             self._verdict_card.setStyleSheet(
-                surface_frame_qss(bg, border, selector="QFrame#VerdictCard")
+                surface_frame_qss(bg, border, selector="QFrame#VerdictCard", theme=ACTIVE_THEME)
             )
             try:
                 self._verdict_icon.setPixmap(_icon(icon_name, color=ink).pixmap(18, 18))

@@ -15,6 +15,7 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QLabel
 
 from ui.theme import (
+    ACTIVE_THEME,
     STATE_ERROR_GRAPHIC,
     STATE_SUCCESS_GRAPHIC,
     STATE_WARNING_GRAPHIC,
@@ -163,7 +164,7 @@ def icon_label(name: str, size: int = 16, color: str | None = None) -> QLabel:
         lbl.setPixmap(icon(name, color=color, size=size).pixmap(QSize(int(size), int(size))))
         lbl.setFixedSize(int(size) + 4, int(size) + 4)
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setStyleSheet(transparent_qss("QLabel"))
+        lbl.setStyleSheet(transparent_qss("QLabel", theme=ACTIVE_THEME))
     except Exception:
         pass
     return lbl

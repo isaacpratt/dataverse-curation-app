@@ -47,10 +47,11 @@ implementer choices on 2026-11-20 (bead `dv-l1f`).
   to Pages on pushes to `master` only, via `actions/configure-pages`,
   `upload-pages-artifact` and `deploy-pages`. The deploy job is gated on the
   event and ref so forks and PRs can never publish.
-- **The old `docs/html/` tree is kept as a frozen reference** until the
-  Diátaxis rewrite. It is not the build source and not the published site.
-  Retiring it now would leave no live reference while the repo is still
-  private and the Pages deployment cannot be verified end to end.
+- **The old `docs/html/` tree was kept as a frozen reference** until the
+  Diátaxis rewrite. It was not the build source and not the published site.
+  Retiring it immediately would have left no live reference while the repo
+  was still private and the Pages deployment could not be verified end to end.
+  `dv-uq6` retired it on 2026-11-23.
 
 ## Consequences
 
@@ -59,16 +60,16 @@ implementer choices on 2026-11-20 (bead `dv-l1f`).
   from Zensical rather than per-page hand-written markup.
 - Strict builds validate internal links and anchors, so a broken cross
   reference fails CI before publishing.
-- There is a transition period with two copies of the prose (Markdown build
-  source, frozen HTML reference). `dv-uq6` will rewrite the Markdown and can
-  then retire `docs/html/` in one step; until then, edits go to Markdown only.
+- There was a transition period with two copies of the prose (Markdown build
+  source, frozen HTML reference). `dv-uq6` rewrote the Markdown and retired
+  `docs/html/` in one step; edits now go to Markdown only.
 - README, AGENTS.md, SECURITY.md and the package metadata point at the Pages
-  URL; source comments that still name `docs/html/*.html` refer to the frozen
-  tree that remains on disk.
+  URL. Source comments that named `docs/html/*.html` were repointed at the
+  new Markdown pages when the frozen tree was retired.
 
 ## Links
 
-- Bead: `dv-l1f` (migration), `dv-uq6` (the later Diátaxis rewrite it blocks).
+- Beads: `dv-l1f` (migration), `dv-uq6` (the later Diátaxis rewrite that superseded this page's information architecture).
 - `zensical.toml` — native config, explicit nav, `not_in_nav`, Mermaid fence.
 - `docs/*.md`, `docs/proposals/*.md`, `docs/assets/extra.css` — the site source.
 - `.github/workflows/docs.yml` — PR build and master-only Pages deploy.

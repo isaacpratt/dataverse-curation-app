@@ -364,12 +364,20 @@ class AppConfig:
     exiftool: str = ""
     # Theme mode: "light", "dark", or "auto" (follow OS)
     theme_mode: str = "light"
+    # Gallery theme view: "light", "dark", or "both" (side by side).
+    # The gallery is a component reference, so "both" is the useful
+    # default; a curator who prefers one theme keeps that choice.
+    gallery_theme_mode: str = "both"
 
 
 @dataclass
 class Config:
     dataverse: DataverseConfig = field(default_factory=DataverseConfig)
     app: AppConfig = field(default_factory=AppConfig)
+    #: The file this config was read from. ``save()`` with no argument
+    #: writes back here, so a caller that loaded an explicit path does not
+    #: silently persist to the default one.
+    source_path: Path | None = field(default=None, compare=False)
 
     @classmethod
     def load(cls, path: Path | None = None) -> Config:  # noqa: C901 - grandfathered; complexity burns down as config schema validation lands (dv-hcg.10)
@@ -380,7 +388,7 @@ class Config:
         env_token = os.environ.get("DATAVERSE_API_TOKEN", "").strip()
         env_collection = os.environ.get("DATAVERSE_COLLECTION", "").strip()
         if not cfg_path.exists():
-            cfg = cls()
+            cfg = cls(source_path=cfg_path)
             if env_url:
                 cfg.dataverse.base_url = normalise_base_url(env_url)
             if env_token:
@@ -441,7 +449,9 @@ class Config:
                 tesseract=str(engine_raw.get("tesseract", app_raw.get("tesseract", "")) or ""),
                 exiftool=str(engine_raw.get("exiftool", app_raw.get("exiftool", "")) or ""),
                 theme_mode=str(app_raw.get("theme_mode", "light") or "light"),
+                gallery_theme_mode=str(app_raw.get("gallery_theme_mode", "both") or "both"),
             ),
+            source_path=cfg_path,
         )
         # Keyring holds the token when the config says so (or when a stale
         # source marker names it); a stored plaintext token wins whenever
@@ -510,7 +520,7 @@ class Config:
     def save(self, path: Path | None = None) -> None:
         import tempfile
 
-        cfg_path = resolve_config_path(path)
+        cfg_path = resolve_config_path(path or self.source_path)
         # Resolve the ACL principal before writing anything: if it cannot be
         # found, abort instead of replacing a working config with one we
         # cannot protect (and instead of deleting the old file afterwards).
@@ -533,6 +543,7 @@ class Config:
             "app": {
                 "workspace": str(self.app.workspace),
                 "theme_mode": self.app.theme_mode,
+                "gallery_theme_mode": self.app.gallery_theme_mode,
             },
             "engine": {
                 "optional_tools": {

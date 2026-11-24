@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
 from ui.status_text import status_text
 from ui.theme import (
+    ACTIVE_THEME,
     SURFACE_PAGE,
     SURFACE_SUBTLE,
     band_qss,
@@ -81,7 +82,7 @@ class FilesSection(DetailState):
         # The title bar carries title + (i) only; every tool sits on this row.
         tools = QWidget()
         tools.setObjectName("FileManifestTools")
-        tools.setStyleSheet(transparent_surface_qss("FileManifestTools"))
+        tools.setStyleSheet(transparent_surface_qss("FileManifestTools", theme=ACTIVE_THEME))
         tools_lay = QHBoxLayout(tools)
         tools_lay.setContentsMargins(16, 8, 16, 8)
         tools_lay.setSpacing(8)
@@ -124,9 +125,7 @@ class FilesSection(DetailState):
         self._dictionary_btn.clicked.connect(self._on_draft_dictionary)
         tools_lay.addWidget(self._dictionary_btn)
         # Reset button - standard action button (dv-3d0.5), not a ghost icon.
-        self._file_reset_btn = make_action_button(
-            t("common.reset"), kind="secondary", size="md"
-        )
+        self._file_reset_btn = make_action_button(t("common.reset"), kind="secondary", size="md")
         self._file_reset_btn.setToolTip(t("detail.files.reset_columns_tip"))
         self._file_reset_btn.setAccessibleName(t("detail.files.reset_columns_a11y"))
         self._file_reset_btn.clicked.connect(self._on_reset_file_view)
@@ -165,7 +164,7 @@ class FilesSection(DetailState):
 
         # Footer: showing X of Y + total size
         footer = QFrame()
-        footer.setStyleSheet(band_qss(SURFACE_PAGE, SURFACE_SUBTLE, edge="top"))
+        footer.setStyleSheet(band_qss(SURFACE_PAGE, SURFACE_SUBTLE, edge="top", theme=ACTIVE_THEME))
         fl = QHBoxLayout(footer)
         fl.setContentsMargins(16, 10, 16, 10)
         # Both footer labels elide: "No files yet - load metadata to see

@@ -42,15 +42,11 @@ from ui.dataset.workflow_section import WorkflowSection
 from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
-    BORDER_SUBTLE,
-    FONT_BODY,
+    ACTIVE_THEME,
     FONT_CAPTION,
-    SURFACE_CARD,
-    TEXT_MUTED,
     enable_list_copy,
     page_background_qss,
     selectable_labels,
-    status_strip_qss,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -189,6 +185,7 @@ class DatasetDetailView(
                 "DetailResponsePage",
                 "DetailResponseInner",
                 "Canvas",
+                theme=ACTIVE_THEME,
             )
         )
         self.setAutoFillBackground(False)
@@ -477,7 +474,9 @@ class DatasetDetailView(
         main_container = QWidget()
         main_container.setLayout(main_wrap)
         main_container.setObjectName("DetailMainContainer")
-        main_container.setStyleSheet(transparent_surface_qss("DetailMainContainer"))
+        main_container.setStyleSheet(
+            transparent_surface_qss("DetailMainContainer", theme=ACTIVE_THEME)
+        )
         canvas_lay.addWidget(main_container)
 
         # SIDEBAR (right, sticky): the sticky rail is the navigation map;
@@ -507,7 +506,9 @@ class DatasetDetailView(
         side_container = QWidget()
         side_container.setLayout(side_wrap)
         side_container.setObjectName("DetailSideContainer")
-        side_container.setStyleSheet(transparent_surface_qss("DetailSideContainer"))
+        side_container.setStyleSheet(
+            transparent_surface_qss("DetailSideContainer", theme=ACTIVE_THEME)
+        )
         side_scroll.setWidget(side_container)
 
         # Response page (second page per dataset) + register both pages.
@@ -577,7 +578,10 @@ class DatasetDetailView(
             self._refresh_dataset_log()
             self._auto_load_timer.start(100)
 
-        if self._report is not None and not self._status.isVisible():
+        # The general message strip became the compact StatusWidget (dv-3d0.4):
+        # the guard asks the chip whether it is already showing something.
+        status_widget = getattr(self, "_status_widget", None)
+        if self._report is not None and (status_widget is None or not status_widget.isVisible()):
             # Cached checks report (auto-saved on every run): results are
             # already rendered by the refresh calls above; keep the primary
             # label in step with what was restored.
@@ -767,9 +771,9 @@ class DatasetDetailView(
             pass
 
     def _move_dataset_log(self, to_sidebar: bool) -> None:
-        """Deprecated (dv-3d0.1): the dataset log now stays in the sidebar.
+        """Deprecate (dv-3d0.1): the dataset log now stays in the sidebar.
 
-        Kept as a no-op for any external callers; the log is hidden/shown
+        Keep as a no-op for any external callers; the log is hidden/shown
         with the sidebar scroll area instead of being reparented.
         """
         pass

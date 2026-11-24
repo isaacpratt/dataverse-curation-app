@@ -48,7 +48,7 @@ def test_cancel_click_signals_worker_and_disables(det):
         det._on_download_cancel_click()
         assert fake.cancel_called, "click must reach the worker's stop flag"
         assert not det._dl_cancel_btn.isEnabled(), "disable until acknowledged"
-        assert "Cancelling" in det._status.text()
+        assert "Cancelling" in det._status_widget.text()
     finally:
         det._dl_worker = None
         det._dl_cancel_btn.setEnabled(True)
@@ -70,11 +70,12 @@ def test_cancelled_handler_resets_action_row(det, monkeypatch):
     try:
         det._on_download_cancelled()
         assert det._dl_worker is None
-        assert det._status_widget.isHidden()
+        # Status widget shows "Download cancelled" message (not hidden)
+        assert not det._status_widget.isHidden()
         assert det._dl_btn.isEnabled()
         assert det._dl_cancel_btn.isHidden()
         assert det._dl_cancel_btn.isEnabled()
-        assert "Download cancelled" in det._status.text()
+        assert "Download cancelled" in det._status_widget.text()
         assert logged.get("action") == "downloaded"
         assert "Cancelled" in logged.get("notes", "")
     finally:
