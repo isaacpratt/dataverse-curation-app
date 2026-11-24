@@ -282,7 +282,7 @@ type = "simple"
 
   # Velopack packaging: turns dist/DataverseDocent into dist/releases
   # (Setup.exe, portable zip, nupkg, feed) and verifies the result with
-  # tools/build/check_pack.py. Build-time only: needs the .NET 8 SDK plus
+  # tools/build/check_pack.py. Build-time only: needs the .NET 10 SDK plus
   # `dotnet tool install -g vpk` on the machine. Never publishes.
   [tool.poe.tasks.pack]
   help = "Pack dist/DataverseDocent into a Velopack release (dist/releases)"

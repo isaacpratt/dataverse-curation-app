@@ -1,8 +1,9 @@
 """Metadata checks render as Auto-Checks-style rows (dv-h70).
 
 One row per rule: outcome icon, the rule's label as the bold caption, a
-one-line verdict sentence, a badge on the right and a left bar on required
-rules. Compound fields expand into an inline drawer (one block per entry;
+one-line verdict sentence and a badge on the right. Required versus optional
+is explained in the row tooltip; no coloured bar is painted (dv-onk).
+Compound fields expand into an inline drawer (one block per entry;
 each subfield is a caption line). Two rules may share a field — rows key
 off the result list.
 """
