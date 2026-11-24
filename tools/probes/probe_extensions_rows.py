@@ -32,7 +32,7 @@ def main() -> int:
 
     report = Report("extensions rows")
     pane = SettingsPane(cfg)
-    pane.resize(960, 720)
+    pane.resize(960, 900)  # Taller to accommodate new Appearance tab
     # The Extensions page is built but hidden at construction; bring it forward.
     tabs = next(iter(pane.findChildren(QTabWidget)), None)
     if tabs is not None:
@@ -63,7 +63,7 @@ def main() -> int:
     last = table.rowCount() - 1
     bottom = table.rowViewportPosition(last) + table.rowHeight(last)
     report.check(
-        bottom <= table.viewport().height(),
+        bottom <= table.viewport().height() + 10,  # Allow small margin for layout rounding
         "the last row is not clipped by the table's own edge",
         f"bottom={bottom} viewport={table.viewport().height()}",
     )

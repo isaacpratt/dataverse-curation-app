@@ -50,12 +50,16 @@ from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
     ACCENT_PRIMARY,
+    ACTIVE_THEME,
+    BORDER_SUBTLE,
     STATE_ERROR_GRAPHIC,
+    SURFACE_CARD,
     TEXT_DANGER,
     TEXT_ON_TINT,
     enable_table_copy,
     page_background_qss,
     selectable_labels,
+    set_active_theme,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -63,6 +67,7 @@ from ui.widgets import (
     PaneFooter,
     flush_table_style,
     make_action_button,
+    make_checkbox,
     make_combo,
     make_field_label,
     make_icon_text_button,
@@ -280,6 +285,49 @@ class SettingsPane(QWidget):
         form.addRow(self._user_status)
 
         tabs.addTab(general, t("settings.tabs.general"))
+
+        # Appearance tab
+        appearance = QWidget()
+        appearance.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        appearance_layout = QVBoxLayout(appearance)
+        appearance_layout.setContentsMargins(16, 16, 16, 16)
+        appearance_layout.setSpacing(16)
+
+        # Theme mode selector
+        theme_group = QWidget()
+        theme_group.setObjectName("Card")
+        theme_group.setStyleSheet(
+            f"QWidget#Card {{ background: {SURFACE_CARD}; border: 1px solid {BORDER_SUBTLE}; border-radius: 8px; }}"
+        )
+        theme_layout = QVBoxLayout(theme_group)
+        theme_layout.setContentsMargins(16, 16, 16, 16)
+        theme_layout.setSpacing(12)
+
+        theme_label = make_field_label(t("settings.appearance.theme_label"))
+        theme_layout.addWidget(theme_label)
+
+        self.theme_mode_combo = make_combo(
+            [
+                (t("settings.appearance.theme_light"), "light"),
+                (t("settings.appearance.theme_dark"), "dark"),
+                (t("settings.appearance.theme_auto"), "auto"),
+            ],
+            min_width=200,
+        )
+        self.theme_mode_combo.currentIndexChanged.connect(self._on_theme_mode_changed)
+        theme_layout.addWidget(self.theme_mode_combo)
+
+        # Auto-switch checkbox
+        self.auto_theme_checkbox = make_checkbox(t("settings.appearance.auto_switch"))
+        self.auto_theme_checkbox.setToolTip(t("settings.appearance.auto_switch_tip"))
+        self.auto_theme_checkbox.toggled.connect(self._on_auto_theme_toggled)
+        theme_layout.addWidget(self.auto_theme_checkbox)
+
+        theme_layout.addStretch(1)
+        appearance_layout.addWidget(theme_group)
+        appearance_layout.addStretch(1)
+
+        tabs.addTab(appearance, t("settings.tabs.appearance"))
 
         # Extensions tab: optional libs + external binaries.
         # Flush tab page (card pattern): zero layout margins; the table
@@ -527,6 +575,16 @@ class SettingsPane(QWidget):
                 "tesseract": self._config.app.tesseract or "",
                 "exiftool": self._config.app.exiftool or "",
             }
+            # Load theme settings
+            theme_mode = getattr(self._config.app, "theme_mode", "light")
+            self.theme_mode_combo.setCurrentIndex(
+                self.theme_mode_combo.findData(theme_mode)
+            )
+            # Auto-switch checkbox
+            auto_theme = theme_mode == "auto"
+            self.auto_theme_checkbox.setChecked(auto_theme)
+            if auto_theme:
+                self.theme_mode_combo.setEnabled(False)
             self._on_preset_changed(self.preset_combo.currentText())
         finally:
             self._loading = False
@@ -1382,8 +1440,12 @@ class SettingsPane(QWidget):
         self._config.app.workspace = ws
         self._config.app.tesseract = (self._tool_paths or {}).get("tesseract", "").strip()
         self._config.app.exiftool = (self._tool_paths or {}).get("exiftool", "").strip()
+        # Save theme settings
+        self._config.app.theme_mode = self.theme_mode_combo.currentData() or "light"
         try:
             self._config.save()
+            # Apply theme immediately after saving
+            self._apply_theme()
         except Exception as exc:
             show_critical(
                 self,
@@ -1401,3 +1463,51 @@ class SettingsPane(QWidget):
     def _on_save(self) -> None:
         if self.persist():
             self.saved.emit()
+
+    def _on_theme_mode_changed(self, index: int) -> None:
+        """Handle theme mode combo change."""
+        theme_mode = self.theme_mode_combo.currentData()
+        if theme_mode:
+            self._config.app.theme_mode = theme_mode
+            self._refresh_dirty()
+
+    def _on_auto_theme_toggled(self, checked: bool) -> None:
+        """Handle auto-switch checkbox toggle."""
+        if checked:
+            self._config.app.theme_mode = "auto"
+        else:
+            # If unchecking auto, keep current theme but don't auto-switch
+            if self._config.app.theme_mode == "auto":
+                self._config.app.theme_mode = "light"
+        self._refresh_dirty()
+
+    def _apply_theme(self) -> None:
+        """Apply the current theme setting to the app."""
+        from ui.theme import set_active_theme, apply_theme
+        from PySide6.QtWidgets import QApplication
+
+        mode = self._config.app.theme_mode
+        if mode == "auto":
+            # Detect OS theme (Windows 10/11)
+            try:
+                import sys
+                if sys.platform.startswith("win"):
+                    import winreg
+                    key = winreg.OpenKey(
+                        winreg.HKEY_CURRENT_USER,
+                        r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                    )
+                    value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+                    winreg.CloseKey(key)
+                    theme = "light" if value else "dark"
+                else:
+                    theme = "light"  # Default to light on non-Windows
+            except Exception:
+                theme = "light"
+        else:
+            theme = mode
+
+        set_active_theme(theme)
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            apply_theme(app)
