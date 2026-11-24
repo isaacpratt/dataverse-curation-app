@@ -424,6 +424,52 @@ def test_animate_theme_change_repaints_without_a_window(qapp):
     assert calls == ["repainted"], "no window: repaint must happen immediately"
 
 
+def test_animate_theme_change_fades_on_the_test_platform(qapp):
+    """The fade runs on offscreen too, not only under a real compositor.
+
+    It fades a ``QGraphicsOpacityEffect`` rather than ``windowOpacity``:
+    window opacity is a window-manager property, and the offscreen plugin
+    has no manager - it answers with a Qt warning and no fade, which this
+    suite treats as a failure. An effect is a paint-time operation, so the
+    same code path runs everywhere and is worth asserting.
+    """
+    import time
+
+    from PySide6.QtWidgets import QGraphicsOpacityEffect, QWidget
+
+    from ui import theme
+
+    window = QWidget()
+    window.resize(120, 60)
+    window.show()
+    qapp.processEvents()
+
+    swapped: list[str] = []
+    theme.animate_theme_change(qapp, lambda: swapped.append("swapped"))
+    qapp.processEvents()
+
+    effect = window.graphicsEffect()
+    assert isinstance(effect, QGraphicsOpacityEffect), "the fade must install an effect"
+    assert swapped == [], "the sheet must not swap until the fade is part-way"
+
+    # Let the fade-out finish (140 ms) plus a beat.
+    deadline = time.perf_counter() + 0.25
+    while time.perf_counter() < deadline and not swapped:
+        qapp.processEvents()
+        time.sleep(0.005)
+    assert swapped == ["swapped"], "the repaint must land at the dimmest point"
+
+    # And the effect is removed again once the fade-in completes.
+    deadline = time.perf_counter() + 0.3
+    while time.perf_counter() < deadline and window.graphicsEffect() is not None:
+        qapp.processEvents()
+        time.sleep(0.005)
+    assert window.graphicsEffect() is None, "the effect must not be left installed"
+
+    window.close()
+    window.deleteLater()
+
+
 # --- The known limit of a live switch (dv-4jm.5 follow-up) ---------------
 
 

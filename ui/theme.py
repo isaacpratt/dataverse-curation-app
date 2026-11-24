@@ -1997,25 +1997,26 @@ def animate_theme_change(app: "QApplication", repaint: Callable[[], None]) -> No
 
     A stylesheet swap is one atomic repaint, so without a transition the
     window cuts from one palette to the other in a single frame (dv-4jm.3).
-    Qt cannot interpolate a whole stylesheet, so the fade runs on
-    ``windowOpacity``: the window dims toward the desktop, the new sheet
-    goes on at the dimmest point, and it fades back up. 140 ms each way
-    reads as a fade without feeling like a wait.
+    Qt cannot interpolate a whole stylesheet, so the fade runs on a
+    ``QGraphicsOpacityEffect``: the window dims toward the desktop, the new
+    sheet goes on at the dimmest point, and it fades back up. 140 ms each
+    way reads as a fade without feeling like a wait.
+
+    An effect rather than ``windowOpacity``: window opacity is a
+    window-manager property, and the offscreen/minimal platform plugins have
+    no manager to blend against - they answer it with a Qt warning and no
+    fade. An effect is a paint-time operation, so the same code path runs
+    (and is testable) on every platform.
 
     Falls back to an immediate ``repaint()`` when there is nothing to fade:
     no visible top-level window (headless runs, a torn-down app), or a
-    platform plugin without a compositor. The offscreen and minimal plugins
-    have no window manager to blend against and answer ``setWindowOpacity``
-    with a Qt warning, so asking them for a fade would only add noise.
+    window that already carries a graphics effect, which this must not
+    clobber.
     """
     try:
         from PySide6.QtCore import QEasingCurve, QPropertyAnimation
+        from PySide6.QtWidgets import QGraphicsEffect, QGraphicsOpacityEffect
     except Exception:
-        repaint()
-        return
-
-    # "offscreen"/"minimal" have no compositor: fading warns and does nothing.
-    if app.platformName().lower() in ("offscreen", "minimal"):
         repaint()
         return
 
@@ -2023,9 +2024,13 @@ def animate_theme_change(app: "QApplication", repaint: Callable[[], None]) -> No
         (widget for widget in app.topLevelWidgets() if widget.isVisible() and widget.isWindow()),
         None,
     )
-    if window is None:
+    if window is None or window.graphicsEffect() is not None:
         repaint()
         return
+
+    effect = QGraphicsOpacityEffect(window)
+    effect.setOpacity(1.0)
+    window.setGraphicsEffect(effect)
 
     fade_ms = 140
     curve = QEasingCurve.Type.InOutQuad
@@ -2035,23 +2040,30 @@ def animate_theme_change(app: "QApplication", repaint: Callable[[], None]) -> No
     holder: dict[str, QPropertyAnimation] = {}
 
     def _fade(start: float, end: float, done: Callable[[], None] | None = None) -> None:
-        animation = QPropertyAnimation(window, b"windowOpacity", window)
+        animation = QPropertyAnimation(effect, b"opacity", effect)
         animation.setDuration(fade_ms)
         animation.setStartValue(start)
         animation.setEndValue(end)
         animation.setEasingCurve(curve)
         if done is not None:
             animation.finished.connect(done)
-        # Parented to the window, so Qt owns the lifetime; deleteLater on
+        # Parented to the effect, so Qt owns the lifetime; deleteLater on
         # completion keeps repeated switches from accumulating finished
-        # QObjects as children of the window.
+        # QObjects.
         animation.finished.connect(animation.deleteLater)
         holder["fade"] = animation
         animation.start()
 
     def _swap() -> None:
         repaint()
-        _fade(0.0, 1.0)
+        _fade(0.0, 1.0, _restore)
+
+    def _restore() -> None:
+        # Drop the effect so the window paints normally again; leaving it on
+        # would keep an offscreen render surface alive for no reason.
+        # The cast is for the type checker: Qt documents None as "remove the
+        # effect" but types the parameter as non-optional.
+        window.setGraphicsEffect(cast("QGraphicsEffect", None))
 
     _fade(1.0, 0.0, _swap)
 
