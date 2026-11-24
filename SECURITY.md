@@ -3,9 +3,10 @@
 ## Scope
 
 Dataverse Docent is a single-process desktop application (Windows-first,
-PySide6) with no server component, no telemetry and no update channel. It
-talks only to the Dataverse instance you configure, and keeps its state on
-your disk. It handles exactly one secret: your Dataverse API token.
+PySide6) with no server component and no telemetry. For curation work it
+talks to the Dataverse instance you configure; for updates it reads the
+repository's public release feed. It keeps its state on your disk and
+handles exactly one secret: your Dataverse API token.
 
 ## Reporting a vulnerability
 
@@ -71,42 +72,41 @@ reissue, and update the app via Settings.
 
 ## Signing
 
-**Decision (2026-11-17): distributed Windows builds are signed through a
-managed signing service — SignPath Foundation.** SignPath Foundation
-signs open-source Windows software for free; the publisher name Windows
-shows is *SignPath Foundation*, not an individual maintainer. The
-signing step is implemented and wired in `dv-4t6.6`, and it is gated on
-the `SIGNPATH_*` repository secrets: when they are absent the release
-workflow logs "signing skipped" and publishes unsigned artefacts, so
-forks and local builds are unaffected.
+**Decision (2026-11-17): distributed Windows builds are to be signed
+through a managed signing service — SignPath Foundation.** SignPath
+Foundation signs open-source Windows software for free; the publisher
+name Windows would show is *SignPath Foundation*, not an individual
+maintainer. This is a policy decision, not a shipped feature: wiring
+the signing step into `.github/workflows/release.yml` is tracked in bead
+`dv-4t6.6` and has not landed. The workflow consumes no `SIGNPATH_*`
+secrets today, so **every published build is currently unsigned**.
 
-- **Cert source:** SignPath Foundation (managed). There is no
+- **Planned cert source:** SignPath Foundation (managed). There is no
   institutional certificate to buy or hold, and no key material in this
   repository — the service holds the signing key and signs on request.
 - **Renewal:** nothing to renew. SignPath's published signing policy
-  governs what may be signed; each release is approved manually in the
-  SignPath dashboard before it is signed, so a release cannot be signed
-  without a deliberate human action.
-- **Scope:** the built `curation-app-full` executable and the packed
-  installer are signed. The update package is not (the feed hashes the
-  package, not the installer).
+  governs what may be signed; each release is to be approved manually in
+  the SignPath dashboard, so a release cannot be signed without a
+  deliberate human action.
+- **Planned scope:** the built executable and the packed installer. The
+  update package is not signed (the feed hashes the package, not the
+  installer).
 
-**Until the first signed release, the builds are unsigned.** Every
-release publishes a `SHA256SUMS.txt` next to its artefacts, and Windows
-SmartScreen or institutional AV tools may flag an unsigned build as an
-unknown publisher. That is expected for the first release; the
-click-through and the checksum check are documented in the
-[user guide](https://isaacpratt.github.io/dataverse-curation-app/user-guide/) (First run). Verify an
-artefact before running it:
+Until signing ships, every release publishes a `SHA256SUMS.txt` next to
+its artefacts, and Windows SmartScreen or institutional AV tools may
+flag an unsigned build as an unknown publisher. Verify an artefact before
+running it:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\curation-app-lite.zip
+Get-FileHash -Algorithm SHA256 .\DataverseDocent-win-Setup.exe
 ```
 
-and compare the digest with the matching line in `SHA256SUMS.txt`.
+and compare the digest with the matching line in `SHA256SUMS.txt`. The
+click-through is documented in the
+[installation guide](https://isaacpratt.github.io/dataverse-curation-app/how-to/install/).
 
-The release workflow (`.github/workflows/release.yml`) links this
-decision and publishes the checksums.
+The release workflow (`.github/workflows/release.yml`) publishes the
+checksums and will carry the signing step when `dv-4t6.6` lands.
 
 ## Threat model
 
@@ -117,7 +117,8 @@ In scope:
 - Token theft via malicious dependencies is covered by the pinned lock,
   CI OSV audit and Dependabot.
 - Tampering with the installed exes is mitigated by checksum comparison
-  (and by the Authenticode signature once signing goes live).
+  today, and will also be covered by the Authenticode signature once the
+  signing step in `dv-4t6.6` lands.
 
 Out of scope / accepted risks:
 
@@ -130,13 +131,21 @@ Out of scope / accepted risks:
 - The app trusts the filesystem and the configured Dataverse instance;
   a hostile Dataverse endpoint can serve malicious files, which the
   format checks will report but cannot neutralize.
-- No update mechanism: new versions are distributed through the same
-  channels as the installer you received; outdated installs keep their
-  audit state.
+- Updates are read from the repository's public release feed. The About
+  page offers **Check for updates** and a once-a-day background check on
+  the stable (`win`) channel; prereleases are never offered to a stable
+  install. A check is cached for a day, failures are silent in the GUI
+  apart from one Log line, and a portable or source build reports updates
+  unavailable because it cannot self-replace. Applying an update always
+  requires the restart you approve; the app never installs silently.
+  Outdated installs keep their audit state.
 
 ## What does not happen
 
-- The app never contacts any service other than the configured Dataverse
-  instance (and, incidentally, the OS credential store).
-- No telemetry, crash reporting, analytics, or automatic update check.
+- The app contacts only the configured Dataverse instance, the OS
+  credential store and the repository's GitHub releases feed for update
+  metadata. No other service.
+- No telemetry, crash reporting or analytics. The daily update check is a
+  feed query that uploads no local data and records one Log line on
+  failure.
 - No API-token hints, previews or fingerprints are written to disk.
