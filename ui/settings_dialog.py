@@ -576,9 +576,7 @@ class SettingsPane(QWidget):
             }
             # Load theme settings
             theme_mode = getattr(self._config.app, "theme_mode", "light")
-            self.theme_mode_combo.setCurrentIndex(
-                self.theme_mode_combo.findData(theme_mode)
-            )
+            self.theme_mode_combo.setCurrentIndex(self.theme_mode_combo.findData(theme_mode))
             # Auto-switch checkbox
             auto_theme = theme_mode == "auto"
             self.auto_theme_checkbox.setChecked(auto_theme)
@@ -1484,30 +1482,27 @@ class SettingsPane(QWidget):
         """Apply the current theme setting to the app."""
         from PySide6.QtWidgets import QApplication
 
-        from ui.theme import apply_theme, set_active_theme
+        from ui.theme import (
+            ACTIVE_THEME,
+            animate_theme_change,
+            apply_theme,
+            resolve_theme_mode,
+            set_active_theme,
+        )
 
-        mode = self._config.app.theme_mode
-        if mode == "auto":
-            # Detect OS theme (Windows 10/11)
-            try:
-                import sys
-                if sys.platform.startswith("win"):
-                    import winreg
-                    key = winreg.OpenKey(
-                        winreg.HKEY_CURRENT_USER,
-                        r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-                    )
-                    value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
-                    winreg.CloseKey(key)
-                    theme = "light" if value else "dark"
-                else:
-                    theme = "light"  # Default to light on non-Windows
-            except Exception:
-                theme = "light"
-        else:
-            theme = mode
-
-        set_active_theme(theme)
+        theme = resolve_theme_mode(self._config.app.theme_mode)
         app = QApplication.instance()
-        if isinstance(app, QApplication):
+        if not isinstance(app, QApplication):
+            set_active_theme(theme)
+            return
+
+        # Swap the palette at the dimmest point of a short fade, so the
+        # change reads as a transition rather than a one-frame cut.
+        def _repaint() -> None:
+            set_active_theme(theme)
             apply_theme(app, theme)
+
+        if theme == ACTIVE_THEME:
+            _repaint()
+        else:
+            animate_theme_change(app, _repaint)

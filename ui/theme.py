@@ -10,7 +10,9 @@ theme - so switching theme is a table swap, not a re-skin.
 """
 
 import os
-from collections.abc import Mapping
+import subprocess
+import sys
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -158,6 +160,9 @@ ACCENT_PRIMARY = PRIMARY
 ACCENT_PRIMARY_HOVER = ON_PRIMARY_FIXED_VARIANT
 ACCENT_PRIMARY_PRESSED = PRIMARY_PRESSED
 ACCENT_PRIMARY_DISABLED = PRIMARY_DISABLED
+# Keyboard-focus face on a filled (primary) button: a lighter brand blue
+# than the resting fill, so the tint reads against the fill itself.
+ACCENT_PRIMARY_FOCUS = PRIMARY_CONTAINER
 ACCENT_TINT = PRIMARY_FIXED  # selected row / pressed fill
 ACCENT_FOCUS_TINT = PRIMARY_FIXED_DIM  # the focus tint's fill
 ACCENT_FOCUS_RING = PRIMARY  # the focus ring's stroke (7.2:1 on a card)
@@ -276,6 +281,9 @@ _ROLE_NAMES: tuple[str, ...] = (
     "ACCENT_PRIMARY_HOVER",
     "ACCENT_PRIMARY_PRESSED",
     "ACCENT_PRIMARY_DISABLED",
+    # Keyboard-focus face on a filled (primary) button: a lighter brand
+    # blue than the resting fill, so the tint reads on the fill itself.
+    "ACCENT_PRIMARY_FOCUS",
     "ACCENT_TINT",
     "ACCENT_FOCUS_TINT",
     "ACCENT_FOCUS_RING",
@@ -381,6 +389,7 @@ DARK_ROLE_TABLE: dict[str, str] = {
     "ACCENT_PRIMARY_HOVER": "#8bbaff",
     "ACCENT_PRIMARY_PRESSED": "#4d8bff",
     "ACCENT_PRIMARY_DISABLED": "#3d5a8f",
+    "ACCENT_PRIMARY_FOCUS": "#8bbaff",
     "ACCENT_TINT": "#1c3357",
     "ACCENT_FOCUS_TINT": "#24406b",
     "ACCENT_FOCUS_RING": "#8bbaff",
@@ -491,6 +500,93 @@ def set_active_theme(name: str) -> None:
     table = role_table(name)
     ACTIVE_THEME = name
     globals().update(table)
+
+
+def detect_os_theme() -> str:
+    """Return "light" or "dark" for the desktop's current appearance.
+
+    "Auto" follows the OS, so the app needs one read per platform:
+
+    * **Windows** - ``AppsUseLightTheme`` under the per-user Personalize
+      key (0 = dark).
+    * **macOS** - ``defaults read -g AppleInterfaceStyle`` prints
+      ``Dark`` in dark mode and exits non-zero in light mode (the key is
+      absent), so the exit status carries the answer.
+    * **Linux/GNOME** - ``gsettings get org.gnome.desktop.interface
+      color-scheme`` returns ``prefer-dark`` or ``prefer-light`` (older
+      GNOME only has ``gtk-theme``; a dark theme name is the fallback).
+
+    Anything else, or any failure, reads as light: a wrong guess must
+    never leave the curator on an unreadable palette.
+    """
+    platform = sys.platform
+    try:
+        if platform.startswith("win"):
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            ) as key:
+                value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+            return "light" if value else "dark"
+
+        if platform == "darwin":
+            result = subprocess.run(
+                ["defaults", "read", "-g", "AppleInterfaceStyle"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+            # Non-zero exit = the key is unset = light mode.
+            return "dark" if result.returncode == 0 else "light"
+
+        if platform.startswith("linux"):
+            result = subprocess.run(
+                [
+                    "gsettings",
+                    "get",
+                    "org.gnome.desktop.interface",
+                    "color-scheme",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+            if result.returncode == 0:
+                scheme = result.stdout.strip().strip("'\"")
+                if scheme in ("prefer-dark", "dark"):
+                    return "dark"
+                if scheme in ("prefer-light", "light", "default"):
+                    return "light"
+            # Older GNOME: the GTK theme name is the only signal.
+            result = subprocess.run(
+                ["gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+            if result.returncode == 0:
+                name = result.stdout.strip().strip("'\"").lower()
+                if "dark" in name:
+                    return "dark"
+    except Exception:
+        pass
+    return "light"
+
+
+def resolve_theme_mode(mode: str) -> str:
+    """Map a config theme mode to the palette to paint.
+
+    ``"light"``/``"dark"`` pass through; ``"auto"`` (and anything
+    unrecognised) asks the OS, falling back to light.
+    """
+    if mode in ("light", "dark"):
+        return mode
+    return detect_os_theme()
 
 
 # --- Typography (Qt QSS uses px) ---
@@ -798,8 +894,9 @@ def mark_icon_path(theme: str | None = None) -> str:
     return asset_path("16x16.png", theme)
 
 
-def _chevron_qss() -> str:
+def _chevron_qss(theme: str | None = None) -> str:
     """Down-arrow rule: Lucide chevron when bundled, CSS triangle fallback."""
+    theme = theme or ACTIVE_THEME
     arrow = asset_path("lucide/chevron-down-grey.svg")
     if not arrow:
         arrow = asset_path("chevron-down.png")
@@ -814,12 +911,12 @@ def _chevron_qss() -> str:
     image: none;
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
-    border-top: 6px solid {ON_SURFACE_VARIANT};
+    border-top: 6px solid {role("TEXT_MUTED", theme)};
     margin-right: 8px;
 }}"""
 
 
-def header_section_qss(*, flush: bool = False) -> str:
+def header_section_qss(*, flush: bool = False, theme: str | None = None) -> str:
     """Table/tree header section rules — one source of truth.
 
     A widget-level stylesheet replaces the app-level rules for that
@@ -831,18 +928,19 @@ def header_section_qss(*, flush: bool = False) -> str:
     flush=True squares the end caps: the header sits flush inside a card,
     where a rounded cap would notch the unfilled corner.
     """
+    theme = theme or ACTIVE_THEME
     radius = "0px" if flush else RADIUS_LG
     return (
         # The header is one continuous band: the area right of the last
         # section (the vertical scrollbar's lane) carries the header's
         # own background, not the page colour.
-        f"QHeaderView {{ background: {SURFACE_CONTAINER}; }} "
-        f"QHeaderView::section {{ background: {SURFACE_CONTAINER}; "
-        f"color: {ON_SURFACE_VARIANT}; padding: 8px 14px 8px 12px; "
+        f"QHeaderView {{ background: {role('SURFACE_TINT', theme)}; }} "
+        f"QHeaderView::section {{ background: {role('SURFACE_TINT', theme)}; "
+        f"color: {role('TEXT_MUTED', theme)}; padding: 8px 14px 8px 12px; "
         # One continuous band: a bottom rule only. A right border drew a
         # vertical bar between sections, which reads as a column divider
         # and crept back into the review-config and dataset tables.
-        f"border: none; border-bottom: 1px solid {OUTLINE_VARIANT}; "
+        f"border: none; border-bottom: 1px solid {role('BORDER_SUBTLE', theme)}; "
         f"font-size: {FONT_CAPTION}px; "
         # No text-transform here: Qt applies it when it *paints* a label
         # but not when it *measures* one, so the painted header was wider
@@ -852,14 +950,14 @@ def header_section_qss(*, flush: bool = False) -> str:
         # in (see AppTable.setHorizontalHeaderLabels), so the metrics and
         # the paint agree - and a translation can choose its own casing.
         "font-weight: 600; } "
-        f"QHeaderView::section:hover {{ background: {SURFACE_CONTAINER_HIGH}; }} "
-        f"QHeaderView::section:pressed {{ background: {PRIMARY_FIXED}; }} "
+        f"QHeaderView::section:hover {{ background: {role('SURFACE_RAISED', theme)}; }} "
+        f"QHeaderView::section:pressed {{ background: {role('ACCENT_TINT', theme)}; }} "
         f"QHeaderView::section:first {{ border-top-left-radius: {radius}; }} "
         f"QHeaderView::section:last {{ border-top-right-radius: {radius}; }} "
     )
 
 
-def selection_qss(scope: str = "", *, hover: bool = True) -> str:
+def selection_qss(scope: str = "", *, hover: bool = True, theme: str | None = None) -> str:
     """Row selection and hover for an item view — one source of truth.
 
     Every table and tree wears the same face: a quiet full-row tint on
@@ -876,35 +974,40 @@ def selection_qss(scope: str = "", *, hover: bool = True) -> str:
     over a row must not paint a band that reads as "this is the one" while
     the Response pane still targets a different rule (dv-ud0).
     """
+    theme = theme or ACTIVE_THEME
     # No space between the scope and ``::item``: a descendant selector
     # (``QTreeView ::item``) matches a *child widget*, so the rules were
     # silently dead and views fell back to the native highlight colour.
     prefix = f"{scope}::item" if scope else "::item"
-    # SECONDARY_CONTAINER is the palette's selection fill (it already backs
+    # ACCENT_SECONDARY is the palette's selection fill (it already backs
     # menus and combo popups); SURFACE_TINT is the header band, so using it
     # here made a selected row indistinguishable from its own header.
     # The selected rules repeat instead of sharing a `tint` variable: the
     # catalogue guard reads every prose-shaped literal in this module, and
     # a bare ":selected { " fragment reads as prose.
     return (
-        (f"{prefix}:hover {{ background: {SURFACE_SUBTLE}; }} " if hover else "")
+        (f"{prefix}:hover {{ background: {role('SURFACE_SUBTLE', theme)}; }} " if hover else "")
         # Keep the selected face when the view loses focus: the inactive
         # palette would otherwise drop the row back to an unstyled white.
-        + f"{prefix}:selected {{ background: {SECONDARY_CONTAINER}; "
-        f"color: {TEXT_PRIMARY}; }} "
-        f"{prefix}:selected:!active {{ background: {SECONDARY_CONTAINER}; "
-        f"color: {TEXT_PRIMARY}; }} "
+        + f"{prefix}:selected {{ background: {role('ACCENT_SECONDARY', theme)}; "
+        f"color: {role('TEXT_PRIMARY', theme)}; }} "
+        f"{prefix}:selected:!active {{ background: {role('ACCENT_SECONDARY', theme)}; "
+        f"color: {role('TEXT_PRIMARY', theme)}; }} "
     )
 
 
-def scrollbar_lane_qss(scope: str = "") -> str:
+def scrollbar_lane_qss(scope: str = "", theme: str | None = None) -> str:
     """Transparent scrollbar lanes for a widget scope.
 
     A filled lane paints the page colour over the card's rounded
     bottom-right corner, so the card border ends in a white notch. The
     lanes stay transparent and the card's own surface shows through;
     thumbs and grooves keep coming from the global theme.
+
+    ``theme`` is accepted for signature parity with the other generators;
+    a transparent rule carries no colour to resolve.
     """
+    theme = theme or ACTIVE_THEME
     prefix = f"{scope} " if scope else ""
     return (
         f"{prefix}QScrollBar:vertical {{ background: transparent; }} "
@@ -932,6 +1035,7 @@ def button_qss(
     *,
     selector: str | None = None,
     scope: str = "",
+    theme: str | None = None,
 ) -> str:
     """Build the QSS for one button kind.
 
@@ -946,7 +1050,11 @@ def button_qss(
 
     ``scope`` prefixes the selector (``scope="#TopNav"`` gives
     ``#TopNav QPushButton#NavItem``).
+
+    ``theme`` picks the role table the colours resolve through, so a
+    widget sheet built for the dark theme paints dark faces.
     """
+    theme = theme or ACTIVE_THEME
     prefix = f"{scope} " if scope else ""
     if selector:
         sel = f"{prefix}{selector}"
@@ -955,48 +1063,48 @@ def button_qss(
 
     if kind == "primary":
         return (
-            f"{sel} {{ background: {PRIMARY}; color: {ON_PRIMARY}; border: none; "
+            f"{sel} {{ background: {role('ACCENT_PRIMARY', theme)}; color: {role('TEXT_ON_ACCENT', theme)}; border: none; "
             f"border-radius: {RADIUS_LG}; padding: 8px 16px; font-weight: 600; "
             f"font-size: {FONT_SMALL}px; }} "
-            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_CONTAINER}; }} '
-            f"{sel}:hover {{ background: {ON_PRIMARY_FIXED_VARIANT}; }} "
-            f"{sel}:pressed {{ background: {PRIMARY_PRESSED}; }} "
+            f'{sel}[focusVisible="true"] {{ background: {role("ACCENT_PRIMARY_FOCUS", theme)}; }} '
+            f"{sel}:hover {{ background: {role('ACCENT_PRIMARY_HOVER', theme)}; }} "
+            f"{sel}:pressed {{ background: {role('ACCENT_PRIMARY_PRESSED', theme)}; }} "
             # Disabled: a muted blue face with the dark text colour. White
             # on the old face was 2.35:1 - the label was unreadable.
-            f"{sel}:disabled {{ background: {PRIMARY_DISABLED}; color: {TEXT_PRIMARY}; }}"
+            f"{sel}:disabled {{ background: {role('ACCENT_PRIMARY_DISABLED', theme)}; color: {role('TEXT_PRIMARY', theme)}; }}"
         )
     if kind == "secondary":
         return (
-            f"{sel} {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; "
-            f"border: 1px solid {BORDER_CONTROL}; border-radius: {RADIUS_LG}; "
+            f"{sel} {{ background: {role('SURFACE_CARD', theme)}; color: {role('TEXT_PRIMARY', theme)}; "
+            f"border: 1px solid {role('BORDER_CONTROL', theme)}; border-radius: {RADIUS_LG}; "
             f"padding: 7px 14px; font-weight: 600; font-size: {FONT_SMALL}px; }} "
-            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; }} '
-            f"{sel}:hover {{ background: {SURFACE_CONTAINER_HIGH}; "
-            f"border: 1px solid {PRIMARY}; }} "
-            f"{sel}:pressed {{ background: {SECONDARY_CONTAINER}; }} "
-            f"{sel}:disabled {{ background: {SURFACE_CONTAINER_LOW}; "
-            f"color: {MUTED_TEXT}; }}"
+            f'{sel}[focusVisible="true"] {{ background: {role("ACCENT_FOCUS_TINT", theme)}; }} '
+            f"{sel}:hover {{ background: {role('SURFACE_RAISED', theme)}; "
+            f"border: 1px solid {role('ACCENT_PRIMARY', theme)}; }} "
+            f"{sel}:pressed {{ background: {role('ACCENT_SECONDARY', theme)}; }} "
+            f"{sel}:disabled {{ background: {role('SURFACE_SUBTLE', theme)}; "
+            f"color: {role('TEXT_DISABLED', theme)}; }}"
         )
     if kind == "ghost":
         return (
-            f"{sel} {{ background: transparent; color: {TEXT_PRIMARY}; "
+            f"{sel} {{ background: transparent; color: {role('TEXT_PRIMARY', theme)}; "
             f"border: none; border-radius: {RADIUS_LG}; padding: 6px 10px; "
             f"font-size: {FONT_SMALL}px; font-weight: 500; }} "
-            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
-            f"color: {ON_SURFACE}; }} "
-            f"{sel}:hover {{ background: {SURFACE_CONTAINER}; color: {ON_SURFACE}; }} "
-            f"{sel}:disabled {{ color: {MUTED_TEXT}; }}"
+            f'{sel}[focusVisible="true"] {{ background: {role("ACCENT_FOCUS_TINT", theme)}; '
+            f"color: {role('TEXT_PRIMARY', theme)}; }} "
+            f"{sel}:hover {{ background: {role('SURFACE_TINT', theme)}; color: {role('TEXT_PRIMARY', theme)}; }} "
+            f"{sel}:disabled {{ color: {role('TEXT_DISABLED', theme)}; }}"
         )
     if kind == "chip":
         return (
-            f"{sel} {{ background: {SURFACE_CONTAINER_LOWEST}; "
-            f"border: 1px solid {BORDER_CONTROL}; border-radius: {RADIUS_LG}; "
+            f"{sel} {{ background: {role('SURFACE_CARD', theme)}; "
+            f"border: 1px solid {role('BORDER_CONTROL', theme)}; border-radius: {RADIUS_LG}; "
             f"padding: 6px 10px; font-size: {FONT_SMALL}px; font-weight: 600; "
-            f"color: {ON_SURFACE_VARIANT}; }} "
-            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
-            f"color: {ON_SURFACE}; }} "
-            f"{sel}:hover {{ background: {SURFACE_CONTAINER_HIGH}; "
-            f"border: 1px solid {PRIMARY}; }}"
+            f"color: {role('TEXT_MUTED', theme)}; }} "
+            f'{sel}[focusVisible="true"] {{ background: {role("ACCENT_FOCUS_TINT", theme)}; '
+            f"color: {role('TEXT_PRIMARY', theme)}; }} "
+            f"{sel}:hover {{ background: {role('SURFACE_RAISED', theme)}; "
+            f"border: 1px solid {role('ACCENT_PRIMARY', theme)}; }}"
         )
     if kind == "cell":
         # The compact face for a table action cell: the standard action
@@ -1004,15 +1112,15 @@ def button_qss(
         # against a 240px column, clipping both buttons. Same button
         # system, cell-sized padding.
         return (
-            f"{sel} {{ background: {SURFACE_CONTAINER_LOWEST}; color: {ON_SURFACE}; "
-            f"border: 1px solid {BORDER_CONTROL}; border-radius: 6px; "
+            f"{sel} {{ background: {role('SURFACE_CARD', theme)}; color: {role('TEXT_PRIMARY', theme)}; "
+            f"border: 1px solid {role('BORDER_CONTROL', theme)}; border-radius: 6px; "
             f"padding: 0 8px; font-weight: 600; font-size: {FONT_SMALL}px; }} "
-            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; }} '
-            f"{sel}:hover {{ background: {SURFACE_CONTAINER_HIGH}; "
-            f"border: 1px solid {PRIMARY}; }} "
-            f"{sel}:pressed {{ background: {SECONDARY_CONTAINER}; }} "
-            f"{sel}:disabled {{ background: {MUTED_BG}; color: {MUTED_TEXT}; "
-            f"border: 1px solid {MUTED_BORDER}; }}"
+            f'{sel}[focusVisible="true"] {{ background: {role("ACCENT_FOCUS_TINT", theme)}; }} '
+            f"{sel}:hover {{ background: {role('SURFACE_RAISED', theme)}; "
+            f"border: 1px solid {role('ACCENT_PRIMARY', theme)}; }} "
+            f"{sel}:pressed {{ background: {role('ACCENT_SECONDARY', theme)}; }} "
+            f"{sel}:disabled {{ background: {role('SURFACE_DISABLED', theme)}; color: {role('TEXT_DISABLED', theme)}; "
+            f"border: 1px solid {role('BORDER_DISABLED', theme)}; }}"
         )
     if kind == "link":
         # A left-aligned brand row that navigates to a section. The
@@ -1020,33 +1128,33 @@ def button_qss(
         # that happens to be a button.
         return (
             f"{sel} {{ text-align: left; padding: 7px 8px; "
-            f"font-size: {FONT_SMALL}px; color: {PRIMARY}; "
+            f"font-size: {FONT_SMALL}px; color: {role('ACCENT_PRIMARY', theme)}; "
             f"background: transparent; border: none; border-radius: {RADIUS_LG}; }} "
-            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
-            f"color: {ON_SURFACE}; }} "
-            f"{sel}:hover {{ background: {SURFACE_CONTAINER}; }} "
-            f"{sel}:disabled {{ color: {MUTED_TEXT}; }}"
+            f'{sel}[focusVisible="true"] {{ background: {role("ACCENT_FOCUS_TINT", theme)}; '
+            f"color: {role('TEXT_PRIMARY', theme)}; }} "
+            f"{sel}:hover {{ background: {role('SURFACE_TINT', theme)}; }} "
+            f"{sel}:disabled {{ color: {role('TEXT_DISABLED', theme)}; }}"
         )
     if kind == "nav-active":
         return (
-            f"{sel} {{ background: {SECONDARY_CONTAINER}; color: {ON_SECONDARY_FIXED}; "
+            f"{sel} {{ background: {role('ACCENT_SECONDARY', theme)}; color: {role('TEXT_ON_SECONDARY', theme)}; "
             f"border: none; border-radius: {RADIUS_LG}; padding: 6px 12px; "
             f"font-weight: 600; font-size: {FONT_SMALL}px; }} "
-            f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
-            f"color: {ON_SURFACE}; }}"
+            f'{sel}[focusVisible="true"] {{ background: {role("ACCENT_FOCUS_TINT", theme)}; '
+            f"color: {role('TEXT_PRIMARY', theme)}; }}"
         )
     # nav
     return (
-        f"{sel} {{ background: transparent; color: {ON_SURFACE_VARIANT}; "
+        f"{sel} {{ background: transparent; color: {role('TEXT_MUTED', theme)}; "
         f"border: none; border-radius: {RADIUS_LG}; padding: 6px 12px; "
         f"font-weight: 600; font-size: {FONT_SMALL}px; }} "
-        f'{sel}[focusVisible="true"] {{ background: {PRIMARY_FIXED_DIM}; '
-        f"color: {ON_SURFACE}; }} "
-        f"{sel}:hover {{ background: {SURFACE_CONTAINER_HIGH}; color: {ON_SURFACE}; }}"
+        f'{sel}[focusVisible="true"] {{ background: {role("ACCENT_FOCUS_TINT", theme)}; '
+        f"color: {role('TEXT_PRIMARY', theme)}; }} "
+        f"{sel}:hover {{ background: {role('SURFACE_RAISED', theme)}; color: {role('TEXT_PRIMARY', theme)}; }}"
     )
 
 
-def page_background_qss(*names: str) -> str:
+def page_background_qss(*names: str, theme: str | None = None) -> str:
     """Build the page background rule for a view root.
 
     Every view sits on the page colour. A view sets it on its own root
@@ -1055,29 +1163,39 @@ def page_background_qss(*names: str) -> str:
     paints its own viewport, and without the rule the area shows the
     parent's colour around a white canvas.
     """
+    theme = theme or ACTIVE_THEME
+    page = role("SURFACE_PAGE", theme)
     parts = []
     if names:
         selectors = ", ".join(f"QWidget#{name}" for name in names)
-        parts.append(f"{selectors} {{ background: {BACKGROUND}; border: none; }}")
-    parts.append(f"QScrollArea {{ background: {BACKGROUND}; border: none; }}")
+        parts.append(f"{selectors} {{ background: {page}; border: none; }}")
+    parts.append(f"QScrollArea {{ background: {page}; border: none; }}")
     return " ".join(parts)
 
 
-def transparent_qss(selector: str = "QWidget") -> str:
+def transparent_qss(selector: str = "QWidget", theme: str | None = None) -> str:
     """Build the transparent rule for one selector.
 
     A bare label that carries a pixmap (an icon) must not paint a face
     of its own, or it shows as a chip inside the row it sits in.
+
+    ``theme`` is accepted for signature parity with the other generators;
+    a transparent rule carries no colour to resolve.
     """
+    theme = theme or ACTIVE_THEME
     return f"{selector} {{ background: transparent; border: none; }}"
 
 
-def transparent_surface_qss(*names: str) -> str:
+def transparent_surface_qss(*names: str, theme: str | None = None) -> str:
     """Build the transparent rule for a wrapper that must not paint.
 
     A wrapper inside a card inherits the card's background when it does
     not paint one of its own, which shows as a seam.
+
+    ``theme`` is accepted for signature parity with the other generators;
+    a transparent rule carries no colour to resolve.
     """
+    theme = theme or ACTIVE_THEME
     if not names:
         return ""
     selectors = ", ".join(f"QWidget#{name}" for name in names)
@@ -1091,6 +1209,7 @@ def surface_frame_qss(
     radius: str = RADIUS_LG,
     selector: str = "QFrame",
     border_style: str = "solid",
+    theme: str | None = None,
 ) -> str:
     """Build a plain surface frame (a card face, a check row).
 
@@ -1098,7 +1217,12 @@ def surface_frame_qss(
     to pass another one. ``border_style`` is "solid" everywhere except
     the empty-state card, whose dashed edge is the cue that there is
     nothing here yet.
+
+    The fill and edge arrive as arguments, so the caller decides which
+    role they came from; ``theme`` is accepted so a call site can name
+    the theme it resolved them against and keep one call shape app-wide.
     """
+    theme = theme or ACTIVE_THEME
     return (
         f"{selector} {{ background: {background}; "
         f"border: 1px {border_style} {border}; border-radius: {radius}; }}"
@@ -1112,6 +1236,7 @@ def band_qss(
     radius: str = RADIUS_LG,
     selector: str = "QFrame",
     edge: str = "bottom",
+    theme: str | None = None,
 ) -> str:
     """Build a tinted band with one edge (a card's header bar or footer).
 
@@ -1119,7 +1244,11 @@ def band_qss(
     edge, so it keeps the top corners and carries its border along the
     bottom. ``edge="top"`` is a flush footer: it keeps the bottom
     corners and carries its border along the top.
+
+    The fill and edge arrive as arguments; ``theme`` is accepted so every
+    generator shares one call shape.
     """
+    theme = theme or ACTIVE_THEME
     if edge == "top":
         return (
             f"{selector} {{ background: {background}; "
@@ -1143,13 +1272,17 @@ def status_strip_qss(
     padding: str = "6px 10px",
     selector: str = "QLabel",
     weight: int | None = None,
+    theme: str | None = None,
 ) -> str:
     """Build a one-line status strip: a message on a card face.
 
     The strip carries its own face (background, edge, padding) and its
     own text colour, because a widget-level sheet replaces the app
     sheet for that widget - the label's type token would not reach it.
+    The three colours arrive as arguments; ``theme`` is accepted so every
+    generator shares one call shape.
     """
+    theme = theme or ACTIVE_THEME
     weight_rule = f" font-weight: {int(weight)};" if weight else ""
     return (
         f"{selector} {{ background: {background}; color: {text_color}; "
@@ -1158,7 +1291,9 @@ def status_strip_qss(
     )
 
 
-def workflow_step_qss(state: str = "todo", *, active: bool = False) -> str:
+def workflow_step_qss(
+    state: str = "todo", *, active: bool = False, theme: str | None = None
+) -> str:
     """Build the face of one step in the dataset step rail.
 
     The rail is guidance, not a gate: every step is clickable in every
@@ -1171,61 +1306,62 @@ def workflow_step_qss(state: str = "todo", *, active: bool = False) -> str:
     ``state="nav"`` is the dataset page's section tab face (dv-3d0.2):
     fixed 36px height, left-aligned, no expanding, hairline separators.
     """
-    hover = f"QPushButton#WorkflowStep:hover {{ background: {SURFACE_TINT}; border-radius: 8px; }}"
+    theme = theme or ACTIVE_THEME
+    hover = f"QPushButton#WorkflowStep:hover {{ background: {role('SURFACE_TINT', theme)}; border-radius: 8px; }}"
     if state == "nav":
         # Tab face: 36px fixed height, padding for text, no border by default
         # Active tab gets a shaded background
         if active:
             return (
-                f"QPushButton#WorkflowStep {{ color: {ACCENT_PRIMARY}; font-size: 12px; "
-                f"font-weight: 700; background: {ACCENT_TINT}; "
+                f"QPushButton#WorkflowStep {{ color: {role('ACCENT_PRIMARY', theme)}; font-size: 12px; "
+                f"font-weight: 700; background: {role('ACCENT_TINT', theme)}; "
                 f"border: none; border-radius: {RADIUS_MD}; "
                 f"padding: 0 12px; min-width: 0; height: 36px; }} "
-                f"QPushButton#WorkflowStep:hover {{ background: {ACCENT_TINT}; }}"
+                f"QPushButton#WorkflowStep:hover {{ background: {role('ACCENT_TINT', theme)}; }}"
             )
         return (
-            f"QPushButton#WorkflowStep {{ color: {TEXT_MUTED}; font-size: 12px; "
+            f"QPushButton#WorkflowStep {{ color: {role('TEXT_MUTED', theme)}; font-size: 12px; "
             f"font-weight: 500; background: transparent; border: none; "
             f"padding: 0 12px; min-width: 0; height: 36px; }} {hover}"
         )
     if active:
         return (
-            f"QPushButton#WorkflowStep {{ color: {ACCENT_PRIMARY}; font-size: 12px; "
-            f"font-weight: 700; background: {ACCENT_TINT}; "
-            f"border: 1px solid {ACCENT_FOCUS_TINT}; border-radius: {RADIUS_MD}; "
+            f"QPushButton#WorkflowStep {{ color: {role('ACCENT_PRIMARY', theme)}; font-size: 12px; "
+            f"font-weight: 700; background: {role('ACCENT_TINT', theme)}; "
+            f"border: 1px solid {role('ACCENT_FOCUS_TINT', theme)}; border-radius: {RADIUS_MD}; "
             f"padding: 3px 10px; }} "
-            f"QPushButton#WorkflowStep:hover {{ background: {ACCENT_TINT}; "
-            f"border: 1px solid {ACCENT_PRIMARY}; }}"
+            f"QPushButton#WorkflowStep:hover {{ background: {role('ACCENT_TINT', theme)}; "
+            f"border: 1px solid {role('ACCENT_PRIMARY', theme)}; }}"
         )
     if state == "done":
         return (
-            f"QPushButton#WorkflowStep {{ color: {TEXT_SUCCESS}; font-size: 12px; "
+            f"QPushButton#WorkflowStep {{ color: {role('TEXT_SUCCESS', theme)}; font-size: 12px; "
             f"font-weight: 600; background: transparent; border: none; "
             f"padding: 3px 6px; }} {hover}"
         )
     if state == "current":
         return (
-            f"QPushButton#WorkflowStep {{ color: {ACCENT_PRIMARY}; font-size: 12px; "
-            f"font-weight: 700; background: {ACCENT_TINT}; "
-            f"border: 1px solid {ACCENT_FOCUS_TINT}; border-radius: 8px; "
+            f"QPushButton#WorkflowStep {{ color: {role('ACCENT_PRIMARY', theme)}; font-size: 12px; "
+            f"font-weight: 700; background: {role('ACCENT_TINT', theme)}; "
+            f"border: 1px solid {role('ACCENT_FOCUS_TINT', theme)}; border-radius: 8px; "
             f"padding: 2px 8px; }} "
-            f"QPushButton#WorkflowStep:hover {{ background: {SURFACE_RAISED}; "
-            f"border: 1px solid {ACCENT_PRIMARY}; }}"
+            f"QPushButton#WorkflowStep:hover {{ background: {role('SURFACE_RAISED', theme)}; "
+            f"border: 1px solid {role('ACCENT_PRIMARY', theme)}; }}"
         )
     if state == "blocked":
         # A blocked step is guidance, not a disabled control: it stays
         # clickable and stays legible (the lock mark carries the state).
         return (
-            f"QPushButton#WorkflowStep {{ color: {TEXT_BLOCKED}; font-size: 12px; "
+            f"QPushButton#WorkflowStep {{ color: {role('TEXT_BLOCKED', theme)}; font-size: 12px; "
             f"background: transparent; border: none; padding: 3px 6px; }} {hover}"
         )
     return (
-        f"QPushButton#WorkflowStep {{ color: {TEXT_MUTED}; font-size: 12px; "
+        f"QPushButton#WorkflowStep {{ color: {role('TEXT_MUTED', theme)}; font-size: 12px; "
         f"background: transparent; border: none; padding: 3px 6px; }} {hover}"
     )
 
 
-def workflow_rail_qss() -> str:
+def workflow_rail_qss(theme: str | None = None) -> str:
     """Build the section rail's band: nav-bar hairlines, full width (dv-gfx.4).
 
     The rail sits directly under the app nav bar and above the header
@@ -1233,9 +1369,10 @@ def workflow_rail_qss() -> str:
     of that stack rather than as another card. In nav mode (dv-3d0.2) the
     rail is a row of tabs with a bottom hairline spanning the page width.
     """
+    theme = theme or ACTIVE_THEME
     return (
-        f"QWidget#WorkflowRail {{ background: {SURFACE_PAGE}; "
-        f"border-bottom: 1px solid {BORDER_SUBTLE}; }}"
+        f"QWidget#WorkflowRail {{ background: {role('SURFACE_PAGE', theme)}; "
+        f"border-bottom: 1px solid {role('BORDER_SUBTLE', theme)}; }}"
     )
 
 
@@ -1244,6 +1381,7 @@ def input_qss(
     *,
     font_size: int = FONT_SMALL,
     family: str | None = None,
+    theme: str | None = None,
 ) -> str:
     """Build the standard text input sheet for one selector.
 
@@ -1254,16 +1392,17 @@ def input_qss(
     ``family`` overrides the font stack (a raw payload view uses the
     mono stack).
     """
+    theme = theme or ACTIVE_THEME
     stack = f"font-family: {family}; " if family else ""
     return (
-        f"{selector} {{ background: {SURFACE_CONTAINER_LOWEST}; "
-        f"border: 1px solid {BORDER_CONTROL}; border-radius: {RADIUS_LG}; "
+        f"{selector} {{ background: {role('SURFACE_CARD', theme)}; "
+        f"border: 1px solid {role('BORDER_CONTROL', theme)}; border-radius: {RADIUS_LG}; "
         f"padding: 7px 10px; font-size: {font_size}px; {stack}"
-        f"selection-background-color: {PRIMARY_FIXED}; }} "
-        f"{selector}:focus {{ border: 1px solid {ACCENT_FOCUS_RING}; }} "
+        f"selection-background-color: {role('ACCENT_TINT', theme)}; }} "
+        f"{selector}:focus {{ border: 1px solid {role('ACCENT_FOCUS_RING', theme)}; }} "
         # The placeholder is text: it carries its own colour instead of
         # inheriting the platform's (a pale grey that fails 4.5:1).
-        f"{selector}::placeholder-text {{ color: {TEXT_PLACEHOLDER}; }}"
+        f"{selector}::placeholder-text {{ color: {role('TEXT_PLACEHOLDER', theme)}; }}"
     )
 
 
@@ -1274,13 +1413,16 @@ def badge_qss(
     *,
     font_size: int = FONT_MICRO,
     padding: str = "0 6px",
+    theme: str | None = None,
 ) -> str:
     """Build a badge face from role colours.
 
     A badge is text on a fill: the fill, the text and the edge are three
     roles, and the badge's contract (a rounded, bordered, bold label)
-    is the same everywhere.
+    is the same everywhere. The three colours arrive as arguments;
+    ``theme`` is accepted so every generator shares one call shape.
     """
+    theme = theme or ACTIVE_THEME
     return (
         f"QLabel {{ background: {background}; color: {foreground}; "
         f"border: 1px solid {border}; border-radius: {RADIUS_LG}; "
@@ -1288,71 +1430,72 @@ def badge_qss(
     )
 
 
-def global_qss() -> str:
+def global_qss(theme: str | None = None) -> str:
     """Return the app's global Qt style sheet, derived from the active palette."""
+    theme = theme or ACTIVE_THEME
     return f"""
 /* ===== Base ===== */
 QWidget {{
     font-family: {FONT_FAMILY};
-    color: {ON_SURFACE};
+    color: {role("TEXT_PRIMARY", theme)};
 }}
 QMainWindow, QStackedWidget, QScrollArea {{
-    background: {BACKGROUND};
+    background: {role("SURFACE_PAGE", theme)};
 }}
 
 /* ===== Top nav / header bar ===== */
 #TopNav {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    border-bottom: 1px solid {OUTLINE_VARIANT};
+    background: {role("SURFACE_CARD", theme)};
+    border-bottom: 1px solid {role("BORDER_SUBTLE", theme)};
 }}
-{button_qss("nav-active", scope="#TopNav")}
-{button_qss("nav", scope="#TopNav")}
+{button_qss("nav-active", scope="#TopNav", theme=theme)}
+{button_qss("nav", scope="#TopNav", theme=theme)}
 /* Keyboard focus tint (focus-visible) — a colour change, never an outline.
    Sits before :hover/:checked so hover feedback wins when both apply. */
 #TopNav QPushButton#NavActive[focusVisible="true"],
 #TopNav QPushButton#NavItem[focusVisible="true"] {{
-    background: {PRIMARY_FIXED_DIM};
-    color: {ON_SURFACE};
+    background: {role("ACCENT_FOCUS_TINT", theme)};
+    color: {role("TEXT_PRIMARY", theme)};
 }}
 #TopNav QPushButton#NavItem:hover {{
-    background: {SURFACE_CONTAINER_HIGH};
-    color: {ON_SURFACE};
+    background: {role("SURFACE_RAISED", theme)};
+    color: {role("TEXT_PRIMARY", theme)};
 }}
 /* Toggle nav buttons (Settings/Log/About) are checkable: a checked button
    reads exactly like the active location tab so "pane open" is unmistakable
    and identical for Log and Settings. */
 #TopNav QPushButton#NavItem:checked {{
-    background: {SECONDARY_CONTAINER};
-    color: {ON_SECONDARY_FIXED};
+    background: {role("ACCENT_SECONDARY", theme)};
+    color: {role("TEXT_ON_SECONDARY", theme)};
     font-weight: 600;
 }}
 #TopNav QLabel#Brand {{
     font-size: 16px;
     font-weight: 700;
-    color: {PRIMARY};
+    color: {role("ACCENT_PRIMARY", theme)};
 }}
 
 /* ===== Cards ===== */
 #Card {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    border: {CARD_BORDER};
+    background: {role("SURFACE_CARD", theme)};
+    border: 1px solid {role("BORDER_SUBTLE", theme)};
     border-radius: {RADIUS_LG};
 }}
 #MetricCard {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    border: {CARD_BORDER};
+    background: {role("SURFACE_CARD", theme)};
+    border: 1px solid {role("BORDER_SUBTLE", theme)};
     border-radius: {RADIUS_LG};
 }}
 /* The metric cards filter the queue: hover signals the affordance
    (dv-1k4). Keyboard focus already tints via [focusVisible="true"]. */
 #MetricCard:hover {{
-    background: {SURFACE_CONTAINER_LOW};
-    border: 1px solid {PRIMARY};
+    background: {role("SURFACE_SUBTLE", theme)};
+    border: 1px solid {role("ACCENT_PRIMARY", theme)};
 }}
 
 #SectionHeader {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    border-bottom: 1px solid {SURFACE_CONTAINER_LOW};
+    background: {role("SURFACE_CARD", theme)};
+    border-bottom: 1px solid {role("SURFACE_SUBTLE", theme)};
 }}
 
 /* ===== Buttons: one system (QPushButton), generated by theme.button_qss() ===== */
@@ -1370,9 +1513,9 @@ QMainWindow, QStackedWidget, QScrollArea {{
    button the app's secondary face; an affirmative button that opts into
    the #PrimaryButton id (see ui.dialogs) picks up the brand fill. */
 QDialogButtonBox QPushButton {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    color: {ON_SURFACE};
-    border: 1px solid {BORDER_CONTROL};
+    background: {role("SURFACE_CARD", theme)};
+    color: {role("TEXT_PRIMARY", theme)};
+    border: 1px solid {role("BORDER_CONTROL", theme)};
     border-radius: {RADIUS_LG};
     padding: 7px 16px;
     font-weight: 600;
@@ -1380,31 +1523,31 @@ QDialogButtonBox QPushButton {{
     min-height: 18px;
 }}
 QDialogButtonBox QPushButton:hover {{
-    background: {SURFACE_CONTAINER_HIGH};
-    border-color: {PRIMARY};
+    background: {role("SURFACE_RAISED", theme)};
+    border-color: {role("ACCENT_PRIMARY", theme)};
 }}
 QDialogButtonBox QPushButton:focus {{
-    outline: 2px solid {ACCENT_FOCUS_RING};
+    outline: 2px solid {role("ACCENT_FOCUS_RING", theme)};
     outline-offset: 2px;
 }}
-{button_qss("primary", scope="QDialogButtonBox")}
+{button_qss("primary", scope="QDialogButtonBox", theme=theme)}
 
 /* ===== Inputs ===== */
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    border: 1px solid {BORDER_CONTROL};
+    background: {role("SURFACE_CARD", theme)};
+    border: 1px solid {role("BORDER_CONTROL", theme)};
     border-radius: {RADIUS_LG};
     padding: 7px 10px;
-    selection-background-color: {PRIMARY_FIXED};
+    selection-background-color: {role("ACCENT_TINT", theme)};
 }}
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{
-    border: 1px solid {ACCENT_FOCUS_RING};
+    border: 1px solid {role("ACCENT_FOCUS_RING", theme)};
 }}
 /* The placeholder is text, so it carries its own colour: the platform
    default is a pale grey that does not clear 4.5:1 on a white field. */
 QLineEdit::placeholder-text, QTextEdit::placeholder-text,
 QPlainTextEdit::placeholder-text {{
-    color: {TEXT_PLACEHOLDER};
+    color: {role("TEXT_PLACEHOLDER", theme)};
 }}
 /* Keyboard focus (Tab/arrow navigation) paints a colour tint — never an
    outline (2026-10-02 — replaces both the outline batch and its removal).
@@ -1412,12 +1555,12 @@ QPlainTextEdit::placeholder-text {{
    (theme._install_interaction_tracking); mouse clicks set no tint. Focused inputs
    still signal focus via the border-colour change above. */
 QPushButton[focusVisible="true"] {{
-    background: {PRIMARY_FIXED_DIM};
-    color: {ON_SURFACE};
+    background: {role("ACCENT_FOCUS_TINT", theme)};
+    color: {role("TEXT_PRIMARY", theme)};
 }}
 QTabBar[focusVisible="true"]::tab:selected {{
-    background: {PRIMARY_FIXED_DIM};
-    color: {ON_SURFACE};
+    background: {role("ACCENT_FOCUS_TINT", theme)};
+    color: {role("TEXT_PRIMARY", theme)};
 }}
 /* Keyboard focus ring — 2px offset, high-contrast stroke.
    Applied to every focusable control so keyboard users never lose their place. */
@@ -1431,18 +1574,18 @@ QTabBar[focusVisible="true"]::tab:selected,
 QToolButton[focusVisible="true"],
 QAbstractScrollArea[focusVisible="true"],
 QWidget[focusVisible="true"] {{
-    outline: 2px solid {ACCENT_FOCUS_RING};
+    outline: 2px solid {role("ACCENT_FOCUS_RING", theme)};
     outline-offset: 2px;
 }}
 
 QLineEdit#SearchField {{
     padding-left: 32px;
-    background: {SURFACE_CONTAINER_LOWEST};
-    border: 1px solid {BORDER_CONTROL};
+    background: {role("SURFACE_CARD", theme)};
+    border: 1px solid {role("BORDER_CONTROL", theme)};
     border-radius: {RADIUS_LG};
 }}
 QLineEdit#SearchField:focus {{
-    border: 1px solid {ACCENT_FOCUS_RING};
+    border: 1px solid {role("ACCENT_FOCUS_RING", theme)};
 }}
 
 /* ComboBox drop-down: fully owner-drawn button so no native edge, groove
@@ -1461,20 +1604,20 @@ QComboBox::drop-down {{
     subcontrol-origin: padding;
     subcontrol-position: top right;
 }}
-{_chevron_qss()}
+{_chevron_qss(theme=theme)}
 /* Popup descends straight from the button: square top corners meet the
    (squared when open) button flush, 8px rounds only the bottom. Item
    metrics are pinned (not font-implied) so every menu spaces choices
    identically no matter which card hosts the combo. */
 QComboBox QAbstractItemView {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    border: 1px solid {OUTLINE_VARIANT};
+    background: {role("SURFACE_CARD", theme)};
+    border: 1px solid {role("BORDER_SUBTLE", theme)};
     border-top-left-radius: 0px;
     border-top-right-radius: 0px;
     border-bottom-left-radius: {RADIUS_LG};
     border-bottom-right-radius: {RADIUS_LG};
-    selection-background-color: {SECONDARY_CONTAINER};
-    selection-color: {ON_SURFACE};
+    selection-background-color: {role("ACCENT_SECONDARY", theme)};
+    selection-color: {role("TEXT_PRIMARY", theme)};
     outline: 0;
 }}
 QComboBox QAbstractItemView::item {{
@@ -1483,8 +1626,8 @@ QComboBox QAbstractItemView::item {{
     padding: 6px 10px;
 }}
 QComboBox QAbstractItemView::item:selected {{
-    background: {SECONDARY_CONTAINER};
-    color: {ON_SURFACE};
+    background: {role("ACCENT_SECONDARY", theme)};
+    color: {role("TEXT_PRIMARY", theme)};
     border: none;
 }}
 /* While open, the field's bottom corners go square so they meet the
@@ -1499,27 +1642,27 @@ QComboBox:on {{
    palette's selection role). A visible focus ring (added above) carries
    focus for keyboard users. */
 QTableWidget {{
-    background: {SURFACE_CONTAINER_LOWEST};
+    background: {role("SURFACE_CARD", theme)};
     border: none;
-    gridline-color: {OUTLINE_VARIANT};
-    selection-background-color: {SECONDARY_CONTAINER};
-    alternate-background-color: {SURFACE_CONTAINER_LOW};
+    gridline-color: {role("BORDER_SUBTLE", theme)};
+    selection-background-color: {role("ACCENT_SECONDARY", theme)};
+    alternate-background-color: {role("SURFACE_SUBTLE", theme)};
 }}
 QTableWidget::item {{
     padding: 10px 12px;
-    border-bottom: 1px solid {SURFACE_CONTAINER_LOW};
+    border-bottom: 1px solid {role("SURFACE_SUBTLE", theme)};
 }}
-{header_section_qss()}
-{selection_qss("QTableWidget")}
+{header_section_qss(theme=theme)}
+{selection_qss("QTableWidget", theme=theme)}
 
 /* ===== Tooltips ===== */
 /* Explicit light face for EVERY tooltip app-wide: without this, the global
    QWidget text color leaks into system-drawn (dark) tooltip backgrounds and
    renders black unreadable boxes (seen on dataset log + metadata table). */
 QToolTip {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    color: {ON_SURFACE};
-    border: 1px solid {OUTLINE_VARIANT};
+    background: {role("SURFACE_CARD", theme)};
+    color: {role("TEXT_PRIMARY", theme)};
+    border: 1px solid {role("BORDER_SUBTLE", theme)};
     border-radius: {RADIUS_LG};
     padding: 6px 8px;
     font-size: 12px;
@@ -1530,94 +1673,94 @@ QToolTip {{
 QLabel#DisplayLG {{
     font-size: {FONT_HEADLINE}px;
     font-weight: 700;
-    color: {ON_SURFACE};
+    color: {role("TEXT_PRIMARY", theme)};
 }}
 QLabel#HeadlineLG {{
     font-size: {FONT_HEADLINE}px;
     font-weight: 600;
-    color: {ON_SURFACE};
+    color: {role("TEXT_PRIMARY", theme)};
     letter-spacing: -0.2px;
 }}
 QLabel#HeadlineMD {{
     font-size: {FONT_TITLE}px;
     font-weight: 600;
-    color: {ON_SURFACE};
+    color: {role("TEXT_PRIMARY", theme)};
 }}
 QLabel#BodyMD {{
     font-size: {FONT_BODY}px;
-    color: {ON_SURFACE_VARIANT};
+    color: {role("TEXT_MUTED", theme)};
 }}
 QLabel#LabelMD {{
     font-size: {FONT_CAPTION}px;
     font-weight: 600;
-    color: {ON_SURFACE_VARIANT};
+    color: {role("TEXT_MUTED", theme)};
     letter-spacing: 0.5px;
 }}
 QLabel#CardTitle {{
     font-size: {FONT_SECTION}px;
     font-weight: 600;
-    color: {ON_SURFACE};
+    color: {role("TEXT_PRIMARY", theme)};
 }}
 /* The separator between two steps of the dataset step rail. */
 QLabel#WorkflowSeparator {{
     font-size: 13px;
-    color: {BORDER_SUBTLE};
+    color: {role("BORDER_SUBTLE", theme)};
 }}
 QLabel#CaptionSM {{
     font-size: {FONT_CAPTION}px;
-    color: {ON_SURFACE_VARIANT};
+    color: {role("TEXT_MUTED", theme)};
 }}
 /* A field or section label on the primary text colour (11px, semibold,
    tracked) - "Decision State", "Internal Notes". */
 QLabel#LabelStrongSM {{
     font-size: {FONT_CAPTION}px;
     font-weight: 600;
-    color: {ON_SURFACE};
+    color: {role("TEXT_PRIMARY", theme)};
     letter-spacing: 0.5px;
 }}
 /* Brand-coloured text: a link-like line of copy. */
 QLabel#AccentSM {{
     font-size: {FONT_SMALL}px;
-    color: {PRIMARY};
+    color: {role("ACCENT_PRIMARY", theme)};
 }}
 /* Success-coloured text: a result line ("All checks passed"). */
 QLabel#SuccessSM {{
     font-size: {FONT_SMALL}px;
-    color: {SUCCESS_DARK};
+    color: {role("TEXT_SUCCESS", theme)};
 }}
 /* Warning-coloured text: a caution line ("Large dataset"). */
 QLabel#WarningSM {{
     font-size: {FONT_SMALL}px;
-    color: {WARNING_DARK};
+    color: {role("TEXT_WARNING", theme)};
 }}
 /* Danger-coloured text: a validation error line. */
 QLabel#DangerSM {{
     font-size: {FONT_SMALL}px;
-    color: {ERROR};
+    color: {role("STATE_ERROR_GRAPHIC", theme)};
 }}
 /* A result line at body size: a confirmation reads as unmissable at a
    glance (success pair already in the contrast contract). */
 QLabel#SuccessMD {{
     font-size: {FONT_BODY}px;
     font-weight: 600;
-    color: {SUCCESS_DARK};
+    color: {role("TEXT_SUCCESS", theme)};
 }}
 /* An error line at body size, distinct from success at the same glance. */
 QLabel#DangerMD {{
     font-size: {FONT_BODY}px;
     font-weight: 600;
-    color: {ERROR};
+    color: {role("STATE_ERROR_GRAPHIC", theme)};
 }}
 /* The dashboard counter: the data it is — body size, primary ink (the
    CaptionSM it wore read as chrome). */
 QLabel#ValueMD {{
     font-size: {FONT_BODY}px;
     font-weight: 600;
-    color: {ON_SURFACE};
+    color: {role("TEXT_PRIMARY", theme)};
 }}
 QLabel#BodySM {{
     font-size: {FONT_SMALL}px;
-    color: {ON_SURFACE_VARIANT};
+    color: {role("TEXT_MUTED", theme)};
 }}
 /* A loaded value (a signed-in user's checked identity): the same size
    as BodySM but on the primary text colour, so it reads as the data it
@@ -1625,82 +1768,82 @@ QLabel#BodySM {{
    value wears ValueSM. */
 QLabel#ValueSM {{
     font-size: {FONT_SMALL}px;
-    color: {ON_SURFACE};
+    color: {role("TEXT_PRIMARY", theme)};
 }}
 /* A de-emphasised hint: the explanatory sentence under a field. */
 QLabel#HintSM {{
     font-size: {FONT_SMALL}px;
-    color: {ON_SECONDARY_CONTAINER};
+    color: {role("TEXT_ON_TINT", theme)};
 }}
 QLabel#StateMD {{
     font-size: {FONT_SMALL}px;
     font-weight: 600;
-    color: {ON_SURFACE_VARIANT};
+    color: {role("TEXT_MUTED", theme)};
     letter-spacing: 0.5px;
 }}
 QLabel#MonoSM {{
     font-family: {MONO_FAMILY};
     font-size: {FONT_SMALL}px;
-    color: {ON_SURFACE_VARIANT};
+    color: {role("TEXT_MUTED", theme)};
 }}
 
 /* ===== Status pills (QLabel with objectName) ===== */
 QLabel#PillInReview {{
-    background: {SECONDARY_CONTAINER};
-    color: {PILL_BLUE_TEXT};
-    border: 1px solid {PILL_BLUE_BORDER};
+    background: {role("ACCENT_SECONDARY", theme)};
+    color: {role("BADGE_BLUE_TEXT", theme)};
+    border: 1px solid {role("BADGE_BLUE_BORDER", theme)};
     border-radius: {RADIUS_LG};
     padding: 2px 8px;
     font-size: 11px;
     font-weight: 700;
 }}
 QLabel#PillDraft {{
-    background: {SURFACE_VARIANT};
-    color: {ON_SURFACE_VARIANT};
-    border: 1px solid {OUTLINE_VARIANT};
+    background: {role("SURFACE_ALT", theme)};
+    color: {role("TEXT_MUTED", theme)};
+    border: 1px solid {role("BORDER_SUBTLE", theme)};
     border-radius: {RADIUS_LG};
     padding: 2px 8px;
     font-size: 11px;
     font-weight: 700;
 }}
 QLabel#PillAuthorContacted {{
-    background: {ERROR_CONTAINER};
-    color: {ON_ERROR_CONTAINER};
-    border: 1px solid {ERROR_OUTLINE};
+    background: {role("STATE_ERROR_BG", theme)};
+    color: {role("STATE_ERROR_TEXT", theme)};
+    border: 1px solid {role("STATE_ERROR_BORDER", theme)};
     border-radius: {RADIUS_LG};
     padding: 2px 8px;
     font-size: 11px;
     font-weight: 700;
 }}
 QLabel#PillReady {{
-    background: {TERTIARY};
-    color: {ON_PRIMARY};
-    border: 1px solid {TERTIARY};
+    background: {role("ACCENT_TERTIARY", theme)};
+    color: {role("TEXT_ON_ACCENT", theme)};
+    border: 1px solid {role("ACCENT_TERTIARY", theme)};
     border-radius: {RADIUS_LG};
     padding: 2px 8px;
     font-size: 11px;
     font-weight: 700;
 }}
 QLabel#PillClean {{
-    color: {PRIMARY};
+    color: {role("ACCENT_PRIMARY", theme)};
     font-size: 12px;
     font-weight: 600;
 }}
 QLabel#PillFlagged {{
-    color: {ERROR};
+    color: {role("STATE_ERROR_GRAPHIC", theme)};
     font-size: 12px;
     font-weight: 600;
 }}
 
 /* ===== Auto-check rows ===== */
 #CheckRowPass {{
-    background: {SURFACE_CONTAINER};
-    border: 1px solid {OUTLINE_VARIANT};
+    background: {role("SURFACE_TINT", theme)};
+    border: 1px solid {role("BORDER_SUBTLE", theme)};
     border-radius: 8px;
 }}
 #CheckRowFail {{
-    background: {ERROR_SURFACE};
-    border: 1px solid {ERROR_OUTLINE};
+    background: {role("STATE_ERROR_SURFACE", theme)};
+    border: 1px solid {role("STATE_ERROR_BORDER", theme)};
     border-radius: 8px;
 }}
 
@@ -1709,13 +1852,13 @@ QLabel#PillFlagged {{
    left the scrollbar lanes + the bottom-right meeting corner page-colored
    ("unfilled"). White matches every table/list surface in the app. */
 QScrollBar:vertical {{
-    background: {SURFACE_CONTAINER_LOWEST};
+    background: {role("SURFACE_CARD", theme)};
     width: 8px;
     margin: 0;
     border-radius: {RADIUS_SM};
 }}
 QScrollBar::handle:vertical {{
-    background: {OUTLINE_VARIANT};
+    background: {role("BORDER_SUBTLE", theme)};
     border-radius: {RADIUS_SM};
     min-height: 24px;
 }}
@@ -1727,7 +1870,7 @@ QScrollBar::groove:vertical {{
 }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 QScrollBar:horizontal {{
-    background: {SURFACE_CONTAINER_LOWEST};
+    background: {role("SURFACE_CARD", theme)};
     height: 8px;
     margin: 0;
     border-radius: {RADIUS_SM};
@@ -1739,7 +1882,7 @@ QScrollBar::groove:horizontal {{
     margin: 0px;
 }}
 QScrollBar::handle:horizontal {{
-    background: {OUTLINE_VARIANT};
+    background: {role("BORDER_SUBTLE", theme)};
     border-radius: {RADIUS_SM};
     min-width: 24px;
 }}
@@ -1761,7 +1904,7 @@ QTabWidget::pane {{
 }}
 QTabBar::tab {{
     background: transparent;
-    color: {ON_SURFACE_VARIANT};
+    color: {role("TEXT_MUTED", theme)};
     padding: 8px 14px;
     border: 1px solid transparent;
     border-bottom: 2px solid transparent;
@@ -1769,33 +1912,33 @@ QTabBar::tab {{
     font-weight: 600;
 }}
 QTabBar::tab:selected {{
-    color: {PRIMARY};
-    border-bottom: 2px solid {PRIMARY};
-    background: {SURFACE_CONTAINER_LOWEST};
+    color: {role("ACCENT_PRIMARY", theme)};
+    border-bottom: 2px solid {role("ACCENT_PRIMARY", theme)};
+    background: {role("SURFACE_CARD", theme)};
 }}
-QTabBar::tab:hover {{ color: {ON_SURFACE}; }}
+QTabBar::tab:hover {{ color: {role("TEXT_PRIMARY", theme)}; }}
 
 /* ===== Progress ===== */
 QProgressBar {{
-    border: 1px solid {OUTLINE_VARIANT};
+    border: 1px solid {role("BORDER_SUBTLE", theme)};
     border-radius: {RADIUS_LG};
-    background: {SURFACE_CONTAINER_LOW};
+    background: {role("SURFACE_SUBTLE", theme)};
     height: 6px;
 }}
 QProgressBar::chunk {{
-    background: {PRIMARY};
+    background: {role("ACCENT_PRIMARY", theme)};
     border-radius: {RADIUS_LG};
 }}
 
 /* ===== Menu bar ===== */
 QMenuBar {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    border-bottom: 1px solid {OUTLINE_VARIANT};
+    background: {role("SURFACE_CARD", theme)};
+    border-bottom: 1px solid {role("BORDER_SUBTLE", theme)};
 }}
-QMenuBar::item:selected {{ background: {SURFACE_CONTAINER}; }}
+QMenuBar::item:selected {{ background: {role("SURFACE_TINT", theme)}; }}
 QMenu {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    border: 1px solid {OUTLINE_VARIANT};
+    background: {role("SURFACE_CARD", theme)};
+    border: 1px solid {role("BORDER_SUBTLE", theme)};
     /* Square top corners: a menu opens directly under its button, so the
        popup connects flush into the element that opened it (same junction
        contract as QComboBox popups above). Only the bottom rounds. */
@@ -1805,37 +1948,42 @@ QMenu {{
     border-bottom-right-radius: {RADIUS_LG};
     padding: 4px;
 }}
-QMenu::item:selected {{ background: {SECONDARY_CONTAINER}; border-radius: {RADIUS_LG}; }}
+QMenu::item:selected {{ background: {role("ACCENT_SECONDARY", theme)}; border-radius: {RADIUS_LG}; }}
 
 /* ===== Status bar ===== */
 QStatusBar {{
-    background: {SURFACE_CONTAINER_LOWEST};
-    border-top: 1px solid {OUTLINE_VARIANT};
-    color: {ON_SURFACE_VARIANT};
+    background: {role("SURFACE_CARD", theme)};
+    border-top: 1px solid {role("BORDER_SUBTLE", theme)};
+    color: {role("TEXT_MUTED", theme)};
     font-size: 11px;
 }}
 QStatusBar::item {{ border: none; }}
 
 /* ===== Dock widgets (log panel renders its own card, no native title bar) ===== */
 QDockWidget {{
-    background: {BACKGROUND};
+    background: {role("SURFACE_PAGE", theme)};
     border: none;
-    color: {ON_SURFACE};
+    color: {role("TEXT_PRIMARY", theme)};
     titlebar-close-icon: none;
     titlebar-normal-icon: none;
 }}
 
 /* ===== Splitter ===== */
 QSplitter::handle {{
-    background: {OUTLINE_VARIANT};
+    background: {role("BORDER_SUBTLE", theme)};
 }}
 QSplitter::handle:horizontal {{ width: 1px; }}
 QSplitter::handle:vertical {{ height: 1px; }}
 """
 
 
-def apply_theme(app: "QApplication") -> None:
-    """Apply global QSS and default font."""
+def apply_theme(app: "QApplication", theme: str | None = None) -> None:
+    """Apply global QSS and default font.
+
+    ``theme`` is the role table to paint; it defaults to the active one,
+    so a plain ``apply_theme(app)`` after ``set_active_theme(name)``
+    repaints in that theme.
+    """
     from PySide6.QtGui import QFont
 
     # Prefer Inter if installed; fall back to Segoe UI
@@ -1846,9 +1994,61 @@ def apply_theme(app: "QApplication") -> None:
     # tokens are px (FONT_BODY=13) while a 9pt app font is ~12px.
     font.setPixelSize(FONT_BODY)
     app.setFont(font)
-    app.setStyleSheet(global_qss())
+    app.setStyleSheet(global_qss(theme or ACTIVE_THEME))
     _install_interaction_tracking(app)
     _log_active_role_table()
+
+
+def animate_theme_change(app: "QApplication", repaint: Callable[[], None]) -> None:
+    """Fade the old palette out, ``repaint``, fade the new one in.
+
+    A stylesheet swap is one atomic repaint, so without a transition the
+    window cuts from one palette to the other in a single frame (dv-4jm.3).
+    Qt cannot interpolate a whole stylesheet, so the fade runs on
+    ``windowOpacity``: the window dims toward the desktop, the new sheet
+    goes on at the dimmest point, and it fades back up. 140 ms each way
+    reads as a fade without feeling like a wait.
+
+    Falls back to an immediate ``repaint()`` when there is no visible
+    top-level window (headless runs, a torn-down app).
+    """
+    try:
+        from PySide6.QtCore import QEasingCurve, QPropertyAnimation
+        from PySide6.QtWidgets import QApplication as _QApplication
+    except Exception:
+        repaint()
+        return
+
+    window = None
+    for widget in _QApplication.topLevelWidgets():
+        if widget.isVisible() and widget.isWindow():
+            window = widget
+            break
+    if window is None:
+        repaint()
+        return
+
+    fade_ms = 140
+    curve = QEasingCurve.Type.InOutQuad
+
+    def _fade(start: float, end: float, done: Callable[[], None] | None = None) -> None:
+        animation = QPropertyAnimation(window, b"windowOpacity", window)
+        animation.setDuration(fade_ms)
+        animation.setStartValue(start)
+        animation.setEndValue(end)
+        animation.setEasingCurve(curve)
+        if done is not None:
+            animation.finished.connect(done)
+        animation.start()
+        # Qt does not own a started animation; keep it alive on the window.
+        window._theme_animations = getattr(window, "_theme_animations", [])  # type: ignore[attr-defined]
+        window._theme_animations.append(animation)  # type: ignore[attr-defined]
+
+    def _swap() -> None:
+        repaint()
+        _fade(0.0, 1.0)
+
+    _fade(1.0, 0.0, _swap)
 
 
 def _log_active_role_table() -> None:
@@ -1866,7 +2066,7 @@ def _log_active_role_table() -> None:
         pass
 
 
-def action_button_style(primary: bool = False) -> str:
+def action_button_style(primary: bool = False, theme: str | None = None) -> str:
     """Build the scoped (widget-level) button sheet for a critical action.
 
     A widget-level stylesheet replaces the application sheet for that
@@ -1875,10 +2075,17 @@ def action_button_style(primary: bool = False) -> str:
     from ``button_qss()``, the same generator the app-level rules use,
     so the two cannot drift.
 
+    ``theme`` defaults to the active role table, so a sheet built after
+    a theme switch paints the new theme.
+
     Views do not call this: they build the button with the kit's
     ``make_action_button()``.
     """
-    return button_qss("primary" if primary else "secondary", selector="QPushButton")
+    return button_qss(
+        "primary" if primary else "secondary",
+        selector="QPushButton",
+        theme=theme or ACTIVE_THEME,
+    )
 
 
 # The badge roles: (background, text, border) per role. Every distinct

@@ -57,7 +57,9 @@ def _check_pairs(pairs, theme: str, kind_floors: dict[str, float]):
             ratio = contrast_ratio(fg_colour, bg_colour)
             floor = max(minimum, kind_floors.get(kind, 4.5))
             if ratio < floor:
-                failures.append(f"[{theme}] {label}: {ratio:.2f}:1 ({fg_colour} on {bg_colour}), needs {floor}:1")
+                failures.append(
+                    f"[{theme}] {label}: {ratio:.2f}:1 ({fg_colour} on {bg_colour}), needs {floor}:1"
+                )
     return failures
 
 

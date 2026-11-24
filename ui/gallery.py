@@ -18,9 +18,10 @@ conformance test covers it too.
 
 from __future__ import annotations
 
+from typing import Any
+
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -35,6 +36,7 @@ from PySide6.QtWidgets import (
 from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,
+    ACTIVE_THEME,
     BORDER_SUBTLE,
     STATE_ERROR_BG,
     STATE_ERROR_TEXT,
@@ -513,8 +515,12 @@ def _tree_item(label: str) -> QTreeWidgetItem:
 class GalleryWindow(QWidget):
     """The gallery window: the kit, one page."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, config: Any = None) -> None:
         super().__init__(parent)
+        self._config = config
+        # The layout the sections are built into; set by _build_gallery so
+        # the selector handler can rebuild in place.
+        self._body: QVBoxLayout | None = None
         self.setWindowTitle(t("gallery.window_title"))
         self.resize(960, 900)
         self.setObjectName("GalleryWindow")
@@ -536,7 +542,9 @@ class GalleryWindow(QWidget):
             title_row.addWidget(subtitle)
         title_row.addStretch(1)
 
-        # Theme selector
+        # Theme selector — opens on the curator's saved view (dv-4jm.6).
+        # The combo carries the English label as its item text and the
+        # mode as item data, so the selection is read back by data.
         self._theme_selector = make_combo(
             [
                 (t("gallery.theme.light"), "light"),
@@ -545,8 +553,9 @@ class GalleryWindow(QWidget):
             ],
             min_width=180,
         )
-        self._theme_selector.setCurrentText(t("gallery.theme.both"))
-        self._theme_selector.currentTextChanged.connect(self._on_theme_changed)
+        self._gallery_mode = self._saved_gallery_mode()
+        self._select_gallery_mode(self._gallery_mode)
+        self._theme_selector.currentIndexChanged.connect(self._on_theme_changed)
         self._theme_selector.setToolTip(t("gallery.theme.tip"))
         title_row.addWidget(self._theme_selector)
         outer.addLayout(title_row)
@@ -564,8 +573,9 @@ class GalleryWindow(QWidget):
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(24)
 
-        # Show both themes side by side by default
-        self._show_dual_theme(body)
+        # Build the saved view: "both" shows the two themes side by side,
+        # a single theme shows just that one.
+        self._build_gallery(body)
 
         body.addStretch(1)
         scroll.setWidget(content)
@@ -578,15 +588,111 @@ class GalleryWindow(QWidget):
         outer.addWidget(footer)
         footer.setToolTip(t("gallery.footer_tip", colour=TEXT_MUTED))
 
-    def _on_theme_changed(self, text: str) -> None:
-        """Handle theme selector change."""
-        # For now, we just rebuild the dual-theme view
-        # In a full implementation, this would switch the active theme
-        pass
+    def _saved_gallery_mode(self) -> str:
+        """Return the gallery view the config remembers ("light"/"dark"/"both")."""
+        mode = ""
+        if self._config is not None:
+            try:
+                mode = str(getattr(self._config.app, "gallery_theme_mode", "") or "")
+            except Exception:
+                mode = ""
+        return mode if mode in ("light", "dark", "both") else "both"
+
+    def _select_gallery_mode(self, mode: str) -> None:
+        """Point the combo at ``mode`` without firing the change handler."""
+        index = self._theme_selector.findData(mode)
+        if index >= 0:
+            self._theme_selector.blockSignals(True)
+            self._theme_selector.setCurrentIndex(index)
+            self._theme_selector.blockSignals(False)
+
+    def _remember_gallery_mode(self, mode: str) -> None:
+        """Persist the chosen view so the next open starts there (dv-4jm.6)."""
+        if self._config is None:
+            return
+        try:
+            self._config.app.gallery_theme_mode = mode
+            self._config.save()
+        except Exception:
+            # A read-only config must not stop the curator switching views.
+            pass
+
+    def _on_theme_changed(self, _text: str = "") -> None:
+        """Rebuild the page for the selected view and remember it."""
+        mode = self._theme_selector.currentData() or "both"
+        self._gallery_mode = str(mode)
+        self._remember_gallery_mode(self._gallery_mode)
+        body = self._body
+        if body is None:
+            return
+        # Drop the old sections; the layout keeps its trailing stretch.
+        while body.count():
+            item = body.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+        self._build_gallery(body)
+        body.addStretch(1)
+
+    def _build_gallery(self, body: QVBoxLayout) -> None:
+        """Fill ``body`` with the sections for the current view mode."""
+        self._body = body
+        if self._gallery_mode == "both":
+            self._show_dual_theme(body)
+        else:
+            body.addWidget(self._single_theme(self._gallery_mode))
+
+    def _sections(self) -> tuple[Any, ...]:
+        """Return the kit sections, in page order."""
+        return (
+            _type_scale_section(),
+            _role_section(),
+            _button_section(),
+            _badge_section(),
+            _input_section(),
+            _container_section(),
+            _icons_section(),
+            _data_section(),
+        )
+
+    def _single_theme(self, theme_name: str) -> QWidget:
+        """One theme's sections in a scrolling column."""
+        from PySide6.QtWidgets import QApplication
+
+        from ui.theme import apply_theme, set_active_theme
+
+        host = QWidget()
+        host.setObjectName("GalleryContentSingle")
+        host.setStyleSheet(page_background_qss("GalleryContentSingle", theme=theme_name))
+        lay = QVBoxLayout(host)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(24)
+
+        # Build the sections against the requested palette, then put the
+        # app back on the curator's own theme.
+        previous = ACTIVE_THEME
+        set_active_theme(theme_name)
+        app_instance = QApplication.instance()
+        if isinstance(app_instance, QApplication):
+            apply_theme(app_instance, theme_name)
+        try:
+            for section in self._sections():
+                lay.addWidget(section)
+        finally:
+            set_active_theme(previous)
+            if isinstance(app_instance, QApplication):
+                apply_theme(app_instance, previous)
+        return host
 
     def _show_dual_theme(self, body: QVBoxLayout) -> None:
         """Show light and dark themes side by side for each section."""
+        from PySide6.QtWidgets import QApplication
+
         from ui.theme import apply_theme, set_active_theme
+
+        # The curator's own theme, restored once both columns are built.
+        previous = ACTIVE_THEME
 
         # Build light theme sections
         light_content = QWidget()
@@ -606,22 +712,12 @@ class GalleryWindow(QWidget):
 
         # Apply light theme temporarily to build light sections
         set_active_theme("light")
-        from PySide6.QtWidgets import QApplication
         app_instance = QApplication.instance()
         assert isinstance(app_instance, QApplication)
         apply_theme(app_instance, "light")
 
         # Add sections to light body
-        for section in (
-            _type_scale_section(),
-            _role_section(),
-            _button_section(),
-            _badge_section(),
-            _input_section(),
-            _container_section(),
-            _icons_section(),
-            _data_section(),
-        ):
+        for section in self._sections():
             light_body.addWidget(section)
 
         # Apply dark theme temporarily to build dark sections
@@ -631,23 +727,14 @@ class GalleryWindow(QWidget):
         apply_theme(app_instance, "dark")
 
         # Add sections to dark body
-        for section in (
-            _type_scale_section(),
-            _role_section(),
-            _button_section(),
-            _badge_section(),
-            _input_section(),
-            _container_section(),
-            _icons_section(),
-            _data_section(),
-        ):
+        for section in self._sections():
             dark_body.addWidget(section)
 
-        # Restore light theme for the actual app
-        set_active_theme("light")
+        # Restore the curator's theme for the actual app
+        set_active_theme(previous)
         app_instance = QApplication.instance()
         assert isinstance(app_instance, QApplication)
-        apply_theme(app_instance, "light")
+        apply_theme(app_instance, previous)
 
         # Create side-by-side layout
         dual_host = QWidget()
@@ -698,9 +785,13 @@ class GalleryWindow(QWidget):
         body.addWidget(dual_host)
 
 
-def build_gallery(parent: QWidget | None = None) -> GalleryWindow:
-    """Build the gallery window."""
-    return GalleryWindow(parent)
+def build_gallery(parent: QWidget | None = None, config: Any = None) -> GalleryWindow:
+    """Build the gallery window.
+
+    ``config`` is the app config: the gallery reads and writes the
+    curator's chosen view in ``app.gallery_theme_mode`` (dv-4jm.6).
+    """
+    return GalleryWindow(parent, config)
 
 
 def main() -> int:

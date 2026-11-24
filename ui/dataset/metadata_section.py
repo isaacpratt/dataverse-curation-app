@@ -547,21 +547,33 @@ class MetadataSection(DetailState):
         if pending:
             # Pending = no data yet: muted row, neutral badge, no bar.
             frame.setStyleSheet(
-                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME)
+                surface_frame_qss(
+                    SURFACE_SUBTLE,
+                    BORDER_SUBTLE,
+                    selector="QFrame#AutoCheckRow",
+                    theme=ACTIVE_THEME,
+                )
             )
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = t("detail.metadata_check.status_pending")
             badge_bg, badge_fg = SURFACE_ALT, TEXT_MUTED
         elif status == "complete":
             frame.setStyleSheet(
-                surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME)
+                surface_frame_qss(
+                    SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME
+                )
             )
             icon_name, icon_color = "check", ACCENT_PRIMARY
             badge_text = t("detail.metadata_check.status_complete")
             badge_bg, badge_fg = ACCENT_PRIMARY, TEXT_ON_ACCENT
         elif status == "skipped":
             frame.setStyleSheet(
-                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME)
+                surface_frame_qss(
+                    SURFACE_SUBTLE,
+                    BORDER_SUBTLE,
+                    selector="QFrame#AutoCheckRow",
+                    theme=ACTIVE_THEME,
+                )
             )
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = t("detail.metadata_check.status_unchecked")
@@ -569,7 +581,10 @@ class MetadataSection(DetailState):
         elif level_required:
             frame.setStyleSheet(
                 surface_frame_qss(
-                    STATE_ERROR_BG, STATE_ERROR_BORDER, selector="QFrame#AutoCh", theme=ACTIVE_THEMEeckRow"
+                    STATE_ERROR_BG,
+                    STATE_ERROR_BORDER,
+                    selector="QFrame#AutoCheckRow",
+                    theme=ACTIVE_THEME,
                 )
             )
             icon_name, icon_color = "octagon-x", STATE_ERROR_GRAPHIC
@@ -578,7 +593,10 @@ class MetadataSection(DetailState):
         else:
             frame.setStyleSheet(
                 surface_frame_qss(
-                    STATE_ERROR_SURFACE, STATE_ERROR_BORDER, selector="QFrame#A", theme=ACTIVE_THEMEutoCheckRow"
+                    STATE_ERROR_SURFACE,
+                    STATE_ERROR_BORDER,
+                    selector="QFrame#AutoCheckRow",
+                    theme=ACTIVE_THEME,
                 )
             )
             icon_name, icon_color = "octagon-alert", STATE_WARNING_GRAPHIC

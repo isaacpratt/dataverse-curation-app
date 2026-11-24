@@ -90,7 +90,11 @@ class HelpPane(QWidget):
     def _entry_block(self, name: str, text: str) -> QFrame:
         block = QFrame()
         block.setObjectName("Card")
-        block.setStyleSheet(surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card", theme=ACTIVE_THEME))
+        block.setStyleSheet(
+            surface_frame_qss(
+                SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card", theme=ACTIVE_THEME
+            )
+        )
         lay = QVBoxLayout(block)
         lay.setContentsMargins(14, 10, 14, 10)
         lay.setSpacing(4)

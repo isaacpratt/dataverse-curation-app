@@ -135,8 +135,9 @@ def test_cancelling_a_check_run_resets_the_header(det):
         det._on_checks_cancelled()
         assert det._check_btn.isEnabled(), "Run checks must come back"
         assert det._check_btn.text() != "Cancel checks", "the button stops offering Cancel"
-        assert det._status_widget.isHidden(), "the progress face must fold away"
-        assert "cancelled" in det._status.text().lower()
+        # The chip carries the "cancelled" line; the bar folds away with it.
+        assert not det._status_widget._bar.isVisible()
+        assert "cancelled" in det._status_widget.text().lower()
     finally:
         det._set_status("")
 
@@ -147,7 +148,7 @@ def test_a_failed_check_run_stays_failed_on_the_page(det, monkeypatch):
     det._on_checks_error("RuntimeError: the check engine fell over")
     try:
         assert det._status_widget.isVisible(), "the failure must stay on the page"
-        assert "failed" in det._status.text().lower()
+        assert "failed" in det._status_widget.text().lower()
         assert det._check_btn.isEnabled(), "the curator must be able to retry"
         assert det._check_btn.text() != "Cancel checks"
     finally:
@@ -155,15 +156,21 @@ def test_a_failed_check_run_stays_failed_on_the_page(det, monkeypatch):
 
 
 def test_the_primary_button_becomes_cancel_while_checks_run(det):
-    """One button, two labels: Cancel during a run (dv-gfx.3)."""
+    """One button, two labels: Cancel during a run (dv-gfx.3).
+
+    At the start there is no measurement yet, so the chip shows the
+    running line without a bar; the bar appears with the first fraction.
+    """
     det._start_checks()
     try:
         assert det._check_btn.text() == "Cancel checks"
         assert det._check_btn.isEnabled()
         assert det._status_widget.isVisible()
-        assert det._status_widget._bar.isVisible()
+        assert not det._status_widget._bar.isVisible(), "no fraction yet: no bar"
+
+        det._show_status_running("Checking…", "7/21", 7 / 21)
+        assert det._status_widget._bar.isVisible(), "a measured run shows its bar"
     finally:
-        det._hide_ring()
         det._restore_check_button()
         det._set_status("")
 
@@ -177,16 +184,25 @@ def test_the_status_widget_bar_sits_under_its_text(det):
         bar = widget._bar.mapTo(widget, widget._bar.rect().center())
         assert bar.y() > title.y()
     finally:
-        det._hide_ring()
         det._set_status("")
 
 
 def test_the_completion_text_is_body_size(det):
-    """The status strip reads at body size, not caption size."""
-    from ui.theme import FONT_BODY
+    """The status title reads at small-body size, not caption size.
 
-    sheet = det._status.styleSheet()
-    assert f"font-size: {FONT_BODY}px" in sheet, "the run commentary must be body-sized"
+    The chip is a compact line beside the dataset identity, so its title
+    wears ``BodySM`` (12px): a step above ``CaptionSM`` (11px), which the
+    old message strip's caption-sized commentary failed.
+    """
+    from ui.theme import FONT_CAPTION, FONT_SMALL
+
+    det._show_status_complete("All checks complete")
+    try:
+        title = det._status_widget._title
+        assert title.objectName() == "BodySM"
+        assert FONT_SMALL > FONT_CAPTION, "the title token must out-size a caption"
+    finally:
+        det._set_status("")
 
 
 def test_check_worker_emits_cancelled_when_interrupted(qapp, tmp_path, monkeypatch):

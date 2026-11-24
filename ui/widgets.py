@@ -74,12 +74,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui import theme as _theme
 from ui.i18n import t
 from ui.ring import RingProgress
 from ui.theme import (
     ACCENT_FOCUS_RING,
     ACCENT_PRIMARY,
-    ACTIVE_THEME,
     BORDER_CONTROL,
     BORDER_SUBTLE,
     BUTTON_OBJECTS,
@@ -99,14 +99,11 @@ from ui.theme import (
     STATE_ERROR_GRAPHIC,
     STATE_SUCCESS_GRAPHIC,
     SURFACE_CARD,
-    SURFACE_PAGE,
-    SURFACE_RAISED,
     SURFACE_SUBTLE,
     SURFACE_TINT,
     TEXT_BLOCKED,
     TEXT_DANGER,
     TEXT_DISABLED,
-    TEXT_MUTED,
     TEXT_ON_TINT,
     TEXT_PLACEHOLDER,
     TEXT_PRIMARY,
@@ -118,6 +115,7 @@ from ui.theme import (
     header_section_qss,
     input_qss,
     label_badge_style,
+    role,
     scrollbar_lane_qss,
     selection_qss,
     transparent_qss,
@@ -126,6 +124,17 @@ from ui.theme import (
     workflow_step_qss,
 )
 from ui.workflow import STEP_ORDER, Workflow
+
+
+def _active_theme() -> str:
+    """Return the role table the app is painting right now.
+
+    Read through the module, not a from-import: ``set_active_theme()``
+    rebinds ``ui.theme.ACTIVE_THEME``, and a value imported here would
+    stay on the palette the kit was loaded with.
+    """
+    return _theme.ACTIVE_THEME
+
 
 __all__ = [
     "BUTTON_HEIGHTS",
@@ -326,7 +335,7 @@ class SortArrowHeaderView(QHeaderView):
         self._arrow.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self._arrow.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._arrow.setMouseTracking(False)
-        self._arrow.setStyleSheet(transparent_qss("QLabel", theme=ACTIVE_THEME))
+        self._arrow.setStyleSheet(transparent_qss("QLabel", theme=_active_theme()))
         self._arrow.hide()
         self._painting = False
         # setSortIndicator / setSortIndicatorShown update the
@@ -705,38 +714,49 @@ def flush_table_style(
     that subtree, so they have to be repeated here — from one source, so
     they cannot drift.
     """
+    theme = _active_theme()
     bottom = "8px" if last else "0px"
     return (
-        "QTableWidget { background: " + SURFACE_CARD + "; border: none; "
+        "QTableWidget { background: " + role("SURFACE_CARD", theme) + "; border: none; "
         "border-top-left-radius: 0px; border-top-right-radius: 0px; "
         "border-bottom-left-radius: " + bottom + "; "
         "border-bottom-right-radius: "
         + bottom
         + "; } "
-        + header_section_qss(flush=True, theme=ACTIVE_THEME)
-        + selection_qss("QTableWidget", theme=ACTIVE_THEME)
-        + scrollbar_lane_qss("QTableWidget", theme=ACTIVE_THEME)
+        + header_section_qss(flush=True, theme=theme)
+        + selection_qss("QTableWidget", theme=theme)
+        + scrollbar_lane_qss("QTableWidget", theme=theme)
         + (f" QHeaderView {{ background: {header_background}; }}" if header_background else "")
         + (f" QTableWidget::item {{ padding: {item_padding}; }}" if item_padding else "")
     )
 
 
-_FRAMED_LIST_STYLE = (
-    f"QListWidget {{ background: {SURFACE_CARD}; "
-    f"border: 1px solid {SURFACE_RAISED}; border-radius: {RADIUS_LG}; "
-    f"font-size: {FONT_SMALL}px; color: {TEXT_MUTED}; }}"
-)
+def framed_list_style() -> str:
+    """Build the framed QListWidget face (a list that lives inside a card body).
+
+    A function, not a module constant: the colours come from the active
+    role table, and a constant built at import would stay on the palette
+    the kit was loaded with.
+    """
+    theme = _active_theme()
+    return (
+        f"QListWidget {{ background: {role('SURFACE_CARD', theme)}; "
+        f"border: 1px solid {role('SURFACE_RAISED', theme)}; border-radius: {RADIUS_LG}; "
+        f"font-size: {FONT_SMALL}px; color: {role('TEXT_MUTED', theme)}; }}"
+    )
 
 
 def flush_list_style(last: bool = True) -> str:
     """Edge-to-edge QListWidget face, same corner contract as flush tables."""
     bottom = "8px" if last else "0px"
+    theme = _active_theme()
     return (
-        f"QListWidget {{ background: {SURFACE_CARD}; border: none; "
+        f"QListWidget {{ background: {role('SURFACE_CARD', theme)}; border: none; "
         "border-top-left-radius: 0px; border-top-right-radius: 0px; "
         "border-bottom-left-radius: " + bottom + "; "
         "border-bottom-right-radius: " + bottom + "; "
-        f"font-size: {FONT_SMALL}px; color: {TEXT_MUTED}; }}" + scrollbar_lane_qss("QListWidget")
+        f"font-size: {FONT_SMALL}px; color: {role('TEXT_MUTED', theme)}; }}"
+        + scrollbar_lane_qss("QListWidget", theme=theme)
     )
 
 
@@ -756,7 +776,12 @@ def tree_style(*, flush: bool = True, row_height: int | None = 30, hover: bool =
     The header rules and scrollbar lanes come from the theme mixins, so
     every tree in the app wears the same header.
     """
-    frame = "border: none;" if flush else f"border: 1px solid {SURFACE_RAISED}; border-radius: 8px;"
+    theme = _active_theme()
+    frame = (
+        "border: none;"
+        if flush
+        else f"border: 1px solid {role('SURFACE_RAISED', theme)}; border-radius: 8px;"
+    )
     item = (
         f"QTreeView::item {{ height: {row_height}px; border: none; }} "
         if row_height
@@ -766,12 +791,12 @@ def tree_style(*, flush: bool = True, row_height: int | None = 30, hover: bool =
     # native Windows 11 branch chip ignored ``image: none`` and put a
     # blue accent chevron beside the selected row (dv-coj).
     return (
-        f"QTreeView {{ background: {SURFACE_CARD}; {frame} "
-        f"font-size: {FONT_SMALL}px; color: {TEXT_PRIMARY}; }} "
+        f"QTreeView {{ background: {role('SURFACE_CARD', theme)}; {frame} "
+        f"font-size: {FONT_SMALL}px; color: {role('TEXT_PRIMARY', theme)}; }} "
         + item
-        + selection_qss("QTreeView", hover=hover, theme=ACTIVE_THEME)
-        + header_section_qss(flush=flush, theme=ACTIVE_THEME)
-        + scrollbar_lane_qss("QTreeView", theme=ACTIVE_THEME)
+        + selection_qss("QTreeView", hover=hover, theme=theme)
+        + header_section_qss(flush=flush, theme=theme)
+        + scrollbar_lane_qss("QTreeView", theme=theme)
     )
 
 
@@ -1005,7 +1030,7 @@ def make_action_button(
     cannot drift - and a view never writes button CSS itself.
     """
     btn = AppButton(text, kind=kind, size=size, parent=parent, tip=tip)
-    btn.setStyleSheet(button_qss(kind, selector="QPushButton", theme=ACTIVE_THEME))
+    btn.setStyleSheet(button_qss(kind, selector="QPushButton", theme=_active_theme()))
     return btn
 
 
@@ -1043,7 +1068,7 @@ def make_multiline_input(
             selector,
             font_size=font_size,
             family=MONO_FAMILY if mono else None,
-            theme=ACTIVE_THEME,
+            theme=_active_theme(),
         )
     )
     return field
@@ -1059,7 +1084,9 @@ def make_plain_text_view(
     view = QPlainTextEdit(parent)
     view.setPlaceholderText(placeholder)
     view.setReadOnly(True)
-    view.setStyleSheet(input_qss("QPlainTextEdit", font_size=font_size, family=MONO_FAMILY, theme=ACTIVE_THEME))
+    view.setStyleSheet(
+        input_qss("QPlainTextEdit", font_size=font_size, family=MONO_FAMILY, theme=_active_theme())
+    )
     return view
 
 
@@ -1076,7 +1103,7 @@ def make_list(
     the card's bottom corners.
     """
     lst = QListWidget(parent)
-    lst.setStyleSheet(flush_list_style(last=last) if flush else _FRAMED_LIST_STYLE)
+    lst.setStyleSheet(flush_list_style(last=last) if flush else framed_list_style())
     return lst
 
 
@@ -1154,15 +1181,16 @@ class AppCheckBox(QCheckBox):
 
     def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
         super().__init__(text, parent)
+        theme = _active_theme()
         self.setStyleSheet(
-            f"QCheckBox {{ color: {TEXT_PRIMARY}; font-size: {FONT_BODY}px; "
+            f"QCheckBox {{ color: {role('TEXT_PRIMARY', theme)}; font-size: {FONT_BODY}px; "
             f"spacing: 8px; }} "
             # The indicator is painted below, so the sheet only reserves its
             # box: the text starts 8px after it, in every state.
             f"QCheckBox::indicator {{ width: {_CHECK_INDICATOR_PX}px; "
             f"height: {_CHECK_INDICATOR_PX}px; background: transparent; "
             f"border: none; }} "
-            f"QCheckBox:disabled {{ color: {TEXT_DISABLED}; }} "
+            f"QCheckBox:disabled {{ color: {role('TEXT_DISABLED', theme)}; }} "
             # A widget sheet can shadow the app-wide focus rule, so carry it.
             f'QCheckBox[focusVisible="true"] {{ outline: 2px solid '
             f"{ACCENT_FOCUS_RING}; outline-offset: 2px; }}"
@@ -1234,10 +1262,11 @@ def make_progress_bar(
     bar = QProgressBar(parent)
     bar.setTextVisible(False)
     bar.setFixedHeight(height)
+    theme = _active_theme()
     bar.setStyleSheet(
-        f"QProgressBar {{ background: {SURFACE_SUBTLE}; "
-        f"border: 1px solid {BORDER_SUBTLE}; border-radius: {RADIUS_LG}; }} "
-        f"QProgressBar::chunk {{ background: {ACCENT_PRIMARY}; "
+        f"QProgressBar {{ background: {role('SURFACE_SUBTLE', theme)}; "
+        f"border: 1px solid {role('BORDER_SUBTLE', theme)}; border-radius: {RADIUS_LG}; }} "
+        f"QProgressBar::chunk {{ background: {role('ACCENT_PRIMARY', theme)}; "
         f"border-radius: {RADIUS_LG}; }}"
     )
     return bar
@@ -1428,7 +1457,7 @@ def make_split_chip(
     """
     chip = QFrame(parent)
     chip.setObjectName("DatasetChip")
-    chip.setStyleSheet(transparent_surface_qss("DatasetChip", theme=ACTIVE_THEME))
+    chip.setStyleSheet(transparent_surface_qss("DatasetChip", theme=_active_theme()))
     lay = QHBoxLayout(chip)
     lay.setContentsMargins(0, 0, 0, 0)
     lay.setSpacing(0)
@@ -1826,9 +1855,10 @@ def make_card(
     """
     card = QFrame(parent)
     card.setObjectName("Card")
+    theme = _active_theme()
     card.setStyleSheet(
-        f"QFrame#Card {{ background: {SURFACE_CARD}; "
-        f"border: 1px solid {BORDER_SUBTLE}; border-radius: 8px; }}"
+        f"QFrame#Card {{ background: {role('SURFACE_CARD', theme)}; "
+        f"border: 1px solid {role('BORDER_SUBTLE', theme)}; border-radius: 8px; }}"
     )
     outer = QVBoxLayout(card)
     outer.setContentsMargins(0, 0, 0, 0)
@@ -1838,7 +1868,8 @@ def make_card(
     # below this bar — inline scope beats app-level rules subtree-wide.
     top.setObjectName("CardTopBar")
     top.setStyleSheet(
-        f"QFrame#CardTopBar {{ background: {SURFACE_PAGE}; border-bottom: 1px solid {SURFACE_SUBTLE}; "
+        f"QFrame#CardTopBar {{ background: {role('SURFACE_PAGE', theme)}; "
+        f"border-bottom: 1px solid {role('SURFACE_SUBTLE', theme)}; "
         "border-top-left-radius: 8px; border-top-right-radius: 8px; }"
     )
     top_lay = QHBoxLayout(top)
@@ -1855,7 +1886,7 @@ def make_card(
     wrap = QWidget()
     wrap.setLayout(body)
     wrap.setObjectName("CardBodyWrap")
-    wrap.setStyleSheet(transparent_surface_qss("CardBodyWrap", theme=ACTIVE_THEME))
+    wrap.setStyleSheet(transparent_surface_qss("CardBodyWrap", theme=_active_theme()))
     outer.addWidget(wrap)
     apply_elevation(card)
     return card, body, title_lbl, top_lay
@@ -2087,7 +2118,7 @@ def make_cell_control(
     """
     host = QWidget(parent)
     host.setObjectName(_CELL_HOST_NAME)
-    host.setStyleSheet(transparent_surface_qss(_CELL_HOST_NAME, theme=ACTIVE_THEME))
+    host.setStyleSheet(transparent_surface_qss(_CELL_HOST_NAME, theme=_active_theme()))
     lay = QHBoxLayout(host)
     lay.setContentsMargins(h_margin, v_margin, h_margin, v_margin)
     lay.setSpacing(0)
@@ -2207,9 +2238,10 @@ class _ValueChip(QFrame):
         super().__init__(parent)
         self.value = str(text)
         self.setObjectName("ValueChip")
+        theme = _active_theme()
         self.setStyleSheet(
-            f"QFrame#ValueChip {{ background: {SURFACE_TINT}; "
-            f"border: 1px solid {BORDER_SUBTLE}; border-radius: {RADIUS_SM}; "
+            f"QFrame#ValueChip {{ background: {role('SURFACE_TINT', theme)}; "
+            f"border: 1px solid {role('BORDER_SUBTLE', theme)}; border-radius: {RADIUS_SM}; "
             f"padding: 0 2px 0 8px; }}"
         )
         lay = QHBoxLayout(self)
@@ -2482,7 +2514,7 @@ class PaneFooter(QFrame):
         self.setObjectName("PaneFooter")
         self.setStyleSheet(
             f"QFrame#PaneFooter {{ background: transparent; "
-            f"border-top: 1px solid {BORDER_SUBTLE}; }}"
+            f"border-top: 1px solid {role('BORDER_SUBTLE', _active_theme())}; }}"
         )
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 10, 0, 0)
@@ -2650,7 +2682,9 @@ class WorkflowRail(QWidget):
                 sep = QFrame()
                 sep.setFrameShape(QFrame.Shape.VLine)
                 sep.setFixedWidth(1)
-                sep.setStyleSheet(f"QFrame {{ background: {BORDER_SUBTLE}; border: none; }}")
+                sep.setStyleSheet(
+                    f"QFrame {{ background: {role('BORDER_SUBTLE', _active_theme())}; border: none; }}"
+                )
                 lay.addWidget(sep)
         # The buttons and hint should share space; we remove the hard stretch
         # to allow the MinimumExpanding buttons to actually expand.
@@ -2675,8 +2709,8 @@ class WorkflowRail(QWidget):
     def _style_for(state: str, *, active: bool = False) -> str:
         """Return the step's face for its state - the theme owns the rule."""
         if state == "nav":
-            return workflow_step_qss("nav", active=active, theme=ACTIVE_THEME)
-        return workflow_step_qss(state, active=active, theme=ACTIVE_THEME)
+            return workflow_step_qss("nav", active=active, theme=_active_theme())
+        return workflow_step_qss(state, active=active, theme=_active_theme())
 
     def set_active_step(self, key: str) -> None:
         """Shade the step whose section is on screen (dv-gfx.4).
@@ -2692,7 +2726,7 @@ class WorkflowRail(QWidget):
         for step_key, btn in self.buttons.items():
             state = "current" if step_key == key else "available"
             btn.setStyleSheet(self._style_for(state, active=step_key == key))
-        self.setStyleSheet(workflow_rail_qss(theme=ACTIVE_THEME))
+        self.setStyleSheet(workflow_rail_qss(theme=_active_theme()))
 
     def set_workflow(self, workflow: Workflow) -> None:
         """Paint each step and the next-step hint; never disables a step.
@@ -2788,9 +2822,10 @@ class StatusWidget(QFrame):
         self._rows.addWidget(self._bar)
         self._bar.hide()
         outer.addLayout(self._rows, 1)
+        theme = _active_theme()
         self.setStyleSheet(
-            f"QFrame#StatusWidget {{ background: {SURFACE_SUBTLE}; "
-            f"border: 1px solid {BORDER_SUBTLE}; border-radius: {RADIUS_LG}; }}"
+            f"QFrame#StatusWidget {{ background: {role('SURFACE_SUBTLE', theme)}; "
+            f"border: 1px solid {role('BORDER_SUBTLE', theme)}; border-radius: {RADIUS_LG}; }}"
         )
 
     def _paint_icon(self, name: str, color: str) -> None:
@@ -2810,14 +2845,23 @@ class StatusWidget(QFrame):
         *,
         cancelling: bool = False,
     ) -> None:
-        """Spinner + a bar under the words (no action button)."""
+        """Spinner + the words; a bar only when the work is measurable.
+
+        ``fraction=None`` is an informational line (a status message with
+        no progress behind it), so it shows no bar - a bar that never
+        moves reads as stalled work. A determinate fraction gets one.
+        """
         self._paint_icon("loader-circle", ACCENT_PRIMARY)
         self._title.setText(title)
         self._detail.setText(detail)
-        self._bar.setRange(0, 100 if fraction is not None else 0)
-        if fraction is not None:
+        if fraction is None:
+            self._bar.setRange(0, 1)
+            self._bar.setValue(0)
+            self._bar.hide()
+        else:
+            self._bar.setRange(0, 100)
             self._bar.setValue(int(max(0.0, min(1.0, fraction)) * 100))
-        self._bar.show()
+            self._bar.show()
         self.show()
 
     def set_complete(self, title: str, detail: str = "") -> None:

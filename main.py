@@ -213,28 +213,11 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
     except Exception:
         pass
     try:
-        from ui.theme import apply_theme, set_active_theme
+        from ui.theme import apply_theme, resolve_theme_mode, set_active_theme
 
-        # Apply theme from config
-        theme_mode = cfg.app.theme_mode
-        if theme_mode == "auto":
-            # Detect OS theme (Windows 10/11)
-            try:
-                if sys.platform.startswith("win"):
-                    import winreg
-                    key = winreg.OpenKey(
-                        winreg.HKEY_CURRENT_USER,
-                        r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-                    )
-                    value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
-                    winreg.CloseKey(key)
-                    theme = "light" if value else "dark"
-                else:
-                    theme = "light"  # Default to light on non-Windows
-            except Exception:
-                theme = "light"
-        else:
-            theme = theme_mode
+        # "auto" asks the OS (Windows registry, macOS defaults, GNOME
+        # gsettings); "light"/"dark" pass straight through.
+        theme = resolve_theme_mode(cfg.app.theme_mode)
 
         set_active_theme(theme)
         apply_theme(app, theme)
@@ -247,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
         # shows the kit, not the data.
         from ui.gallery import build_gallery
 
-        gallery = build_gallery()
+        gallery = build_gallery(config=cfg)
         gallery.show()
         mark("gallery shown")
         return app.exec()

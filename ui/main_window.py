@@ -57,9 +57,9 @@ from ui.dialogs import show_warning
 from ui.i18n import t
 from ui.icons import icon as lucide_icon
 from ui.theme import (
-    ACTIVE_THEME,
     ACCENT_FOCUS_TINT,
     ACCENT_SECONDARY,
+    ACTIVE_THEME,
     BORDER_SUBTLE,
     STATE_ERROR_BG,
     STATE_ERROR_GRAPHIC,

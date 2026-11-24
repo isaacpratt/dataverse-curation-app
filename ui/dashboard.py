@@ -41,9 +41,9 @@ from curation.dashboard_cache import (
 from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
-    ACTIVE_THEME,
     ACCENT_PRIMARY,
     ACCENT_TERTIARY,
+    ACTIVE_THEME,
     BORDER_SUBTLE,
     STATE_ERROR_GRAPHIC,
     SURFACE_CARD,
@@ -575,7 +575,9 @@ class DashboardView(QWidget):
         queue_card = QFrame()
         queue_card.setObjectName("Card")
         queue_card.setStyleSheet(
-            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card", theme=ACTIVE_THEME)
+            surface_frame_qss(
+                SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card", theme=ACTIVE_THEME
+            )
         )
         queue_layout = QVBoxLayout(queue_card)
         queue_layout.setContentsMargins(0, 0, 0, 0)
@@ -584,7 +586,9 @@ class DashboardView(QWidget):
         header = QFrame()
         header.setObjectName("QueueHeaderBar")
         header.setStyleSheet(
-            band_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#QueueHeaderBar", theme=ACTIVE_THEME)
+            band_qss(
+                SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#QueueHeaderBar", theme=ACTIVE_THEME
+            )
         )
         # The queue header follows the card contract: the title row carries
         # the title (and only the title - no tools), and every tool lives
@@ -658,7 +662,9 @@ class DashboardView(QWidget):
 
         self._filter_wrap = QWidget()
         self._filter_wrap.setObjectName("QueueFilterWrap")
-        self._filter_wrap.setStyleSheet(transparent_surface_qss("QueueFilterWrap", theme=ACTIVE_THEME))
+        self._filter_wrap.setStyleSheet(
+            transparent_surface_qss("QueueFilterWrap", theme=ACTIVE_THEME)
+        )
         self._filter_wrap.setLayout(filter_row)
         hdr_layout.addWidget(self._filter_wrap)
 
@@ -738,7 +744,9 @@ class DashboardView(QWidget):
         pill = QFrame()
         pill.setObjectName("StatusPill")
         pill.setStyleSheet(
-            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#StatusPill", theme=ACTIVE_THEME)
+            surface_frame_qss(
+                SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#StatusPill", theme=ACTIVE_THEME
+            )
         )
         pill_lay = QHBoxLayout(pill)
         pill_lay.setContentsMargins(14, 6, 14, 6)
@@ -785,7 +793,7 @@ class DashboardView(QWidget):
         try:
             from PySide6.QtGui import QPixmap as _QPixmap
 
-            from ui.theme import ACTIVE_THEME, mark_icon_path
+            from ui.theme import mark_icon_path
 
             _pix = _QPixmap(mark_icon_path(ACTIVE_THEME))
             if not _pix.isNull():

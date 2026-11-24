@@ -104,8 +104,12 @@ def main() -> int:
     # Find controls in both theme columns (dual-theme gallery)
     numbers = window.findChildren(AppNumberField)
     lists = window.findChildren(AppValueList)
-    report.check(len(numbers) >= 6, "the gallery shows number fields (both themes)", f"fields={len(numbers)}")
-    report.check(len(lists) >= 4, "the gallery shows value lists (both themes)", f"lists={len(lists)}")
+    report.check(
+        len(numbers) >= 6, "the gallery shows number fields (both themes)", f"fields={len(numbers)}"
+    )
+    report.check(
+        len(lists) >= 4, "the gallery shows value lists (both themes)", f"lists={len(lists)}"
+    )
 
     # No clipped stepper: each ghost button is a whole 32px square inside
     # its field, and the spin box between them is inside too.

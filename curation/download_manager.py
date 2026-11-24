@@ -225,8 +225,11 @@ class DownloadManager:
     # -- on-disk metadata / manifest / reports --------------------------------
 
     def save_metadata(
-        self, persistent_id: str, metadata: dict[str, Any], inventory: list[Any],
-        curation: dict[str, Any] | None = None
+        self,
+        persistent_id: str,
+        metadata: dict[str, Any],
+        inventory: list[Any],
+        curation: dict[str, Any] | None = None,
     ) -> None:
         """Cache dataset metadata + file manifest + curation label beside the downloads."""
         try:
@@ -261,7 +264,9 @@ class DownloadManager:
 
             get_app_log().error(f"save_metadata({persistent_id}): {exc}")
 
-    def load_metadata(self, persistent_id: str) -> tuple[dict[str, Any] | None, list[Any] | None, dict[str, Any] | None]:
+    def load_metadata(
+        self, persistent_id: str
+    ) -> tuple[dict[str, Any] | None, list[Any] | None, dict[str, Any] | None]:
         """Load cached (metadata, inventory, curation) or (None, None, None) — never raises."""
         try:
             import json as _json

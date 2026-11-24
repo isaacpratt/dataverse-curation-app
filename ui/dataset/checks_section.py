@@ -79,9 +79,7 @@ class ChecksSection(DetailState):
         rule = QFrame()
         rule.setObjectName("ChecksDivider")
         rule.setFixedHeight(1)
-        rule.setStyleSheet(
-            f"QFrame#ChecksDivider {{ background: {BORDER_SUBTLE}; border: none; }}"
-        )
+        rule.setStyleSheet(f"QFrame#ChecksDivider {{ background: {BORDER_SUBTLE}; border: none; }}")
         outer.addWidget(rule)
 
         head = QWidget()
@@ -200,7 +198,12 @@ class ChecksSection(DetailState):
             )
         ):
             frame.setStyleSheet(
-                surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME)
+                surface_frame_qss(
+                    SURFACE_SUBTLE,
+                    BORDER_SUBTLE,
+                    selector="QFrame#AutoCheckRow",
+                    theme=ACTIVE_THEME,
+                )
             )
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = (
@@ -213,7 +216,10 @@ class ChecksSection(DetailState):
         elif not passed and level in ("error", "warning"):
             frame.setStyleSheet(
                 surface_frame_qss(
-                    STATE_ERROR_BG, STATE_ERROR_BORDER, selector="QFrame#AutoCh", theme=ACTIVE_THEMEeckRow"
+                    STATE_ERROR_BG,
+                    STATE_ERROR_BORDER,
+                    selector="QFrame#AutoCheckRow",
+                    theme=ACTIVE_THEME,
                 )
             )
             icon_name, icon_color = (
@@ -227,7 +233,10 @@ class ChecksSection(DetailState):
         elif passed and level == "warning" and "Missing" in (badge or desc):
             frame.setStyleSheet(
                 surface_frame_qss(
-                    STATE_ERROR_SURFACE, STATE_ERROR_BORDER, selector="QFrame#A", theme=ACTIVE_THEMEutoCheckRow"
+                    STATE_ERROR_SURFACE,
+                    STATE_ERROR_BORDER,
+                    selector="QFrame#AutoCheckRow",
+                    theme=ACTIVE_THEME,
                 )
             )
             icon_name, icon_color = "octagon-alert", STATE_WARNING_GRAPHIC
@@ -236,7 +245,9 @@ class ChecksSection(DetailState):
             badge_fg = STATE_ERROR_TEXT
         elif passed:
             frame.setStyleSheet(
-                surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME)
+                surface_frame_qss(
+                    SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME
+                )
             )
             icon_name, icon_color = "check", ACCENT_PRIMARY
             badge_text = badge or t("status.badges.passed")
@@ -244,7 +255,9 @@ class ChecksSection(DetailState):
             badge_fg = TEXT_ON_ACCENT
         else:
             frame.setStyleSheet(
-                surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME)
+                surface_frame_qss(
+                    SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME
+                )
             )
             icon_name, icon_color = "minus", TEXT_MUTED
             badge_text = badge or t("common.em_dash")

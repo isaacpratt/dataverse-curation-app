@@ -125,9 +125,7 @@ class FilesSection(DetailState):
         self._dictionary_btn.clicked.connect(self._on_draft_dictionary)
         tools_lay.addWidget(self._dictionary_btn)
         # Reset button - standard action button (dv-3d0.5), not a ghost icon.
-        self._file_reset_btn = make_action_button(
-            t("common.reset"), kind="secondary", size="md"
-        )
+        self._file_reset_btn = make_action_button(t("common.reset"), kind="secondary", size="md")
         self._file_reset_btn.setToolTip(t("detail.files.reset_columns_tip"))
         self._file_reset_btn.setAccessibleName(t("detail.files.reset_columns_a11y"))
         self._file_reset_btn.clicked.connect(self._on_reset_file_view)
