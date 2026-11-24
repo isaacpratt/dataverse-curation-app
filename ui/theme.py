@@ -1007,7 +1007,6 @@ def scrollbar_lane_qss(scope: str = "", theme: str | None = None) -> str:
     ``theme`` is accepted for signature parity with the other generators;
     a transparent rule carries no colour to resolve.
     """
-    theme = theme or ACTIVE_THEME
     prefix = f"{scope} " if scope else ""
     return (
         f"{prefix}QScrollBar:vertical {{ background: transparent; }} "
@@ -1182,7 +1181,6 @@ def transparent_qss(selector: str = "QWidget", theme: str | None = None) -> str:
     ``theme`` is accepted for signature parity with the other generators;
     a transparent rule carries no colour to resolve.
     """
-    theme = theme or ACTIVE_THEME
     return f"{selector} {{ background: transparent; border: none; }}"
 
 
@@ -1195,7 +1193,6 @@ def transparent_surface_qss(*names: str, theme: str | None = None) -> str:
     ``theme`` is accepted for signature parity with the other generators;
     a transparent rule carries no colour to resolve.
     """
-    theme = theme or ACTIVE_THEME
     if not names:
         return ""
     selectors = ", ".join(f"QWidget#{name}" for name in names)
@@ -1222,7 +1219,6 @@ def surface_frame_qss(
     role they came from; ``theme`` is accepted so a call site can name
     the theme it resolved them against and keep one call shape app-wide.
     """
-    theme = theme or ACTIVE_THEME
     return (
         f"{selector} {{ background: {background}; "
         f"border: 1px {border_style} {border}; border-radius: {radius}; }}"
@@ -1248,7 +1244,6 @@ def band_qss(
     The fill and edge arrive as arguments; ``theme`` is accepted so every
     generator shares one call shape.
     """
-    theme = theme or ACTIVE_THEME
     if edge == "top":
         return (
             f"{selector} {{ background: {background}; "
@@ -1282,7 +1277,6 @@ def status_strip_qss(
     The three colours arrive as arguments; ``theme`` is accepted so every
     generator shares one call shape.
     """
-    theme = theme or ACTIVE_THEME
     weight_rule = f" font-weight: {int(weight)};" if weight else ""
     return (
         f"{selector} {{ background: {background}; color: {text_color}; "
@@ -1422,7 +1416,6 @@ def badge_qss(
     is the same everywhere. The three colours arrive as arguments;
     ``theme`` is accepted so every generator shares one call shape.
     """
-    theme = theme or ACTIVE_THEME
     return (
         f"QLabel {{ background: {background}; color: {foreground}; "
         f"border: 1px solid {border}; border-radius: {RADIUS_LG}; "
@@ -2009,27 +2002,37 @@ def animate_theme_change(app: "QApplication", repaint: Callable[[], None]) -> No
     goes on at the dimmest point, and it fades back up. 140 ms each way
     reads as a fade without feeling like a wait.
 
-    Falls back to an immediate ``repaint()`` when there is no visible
-    top-level window (headless runs, a torn-down app).
+    Falls back to an immediate ``repaint()`` when there is nothing to fade:
+    no visible top-level window (headless runs, a torn-down app), or a
+    platform plugin without a compositor. The offscreen and minimal plugins
+    have no window manager to blend against and answer ``setWindowOpacity``
+    with a Qt warning, so asking them for a fade would only add noise.
     """
     try:
         from PySide6.QtCore import QEasingCurve, QPropertyAnimation
-        from PySide6.QtWidgets import QApplication as _QApplication
     except Exception:
         repaint()
         return
 
-    window = None
-    for widget in _QApplication.topLevelWidgets():
-        if widget.isVisible() and widget.isWindow():
-            window = widget
-            break
+    # "offscreen"/"minimal" have no compositor: fading warns and does nothing.
+    if app.platformName().lower() in ("offscreen", "minimal"):
+        repaint()
+        return
+
+    window = next(
+        (widget for widget in app.topLevelWidgets() if widget.isVisible() and widget.isWindow()),
+        None,
+    )
     if window is None:
         repaint()
         return
 
     fade_ms = 140
     curve = QEasingCurve.Type.InOutQuad
+    # One slot, replaced per switch: a running animation must not be
+    # collected mid-flight, and keeping only the newest keeps this bounded
+    # no matter how often the curator toggles the theme.
+    holder: dict[str, QPropertyAnimation] = {}
 
     def _fade(start: float, end: float, done: Callable[[], None] | None = None) -> None:
         animation = QPropertyAnimation(window, b"windowOpacity", window)
@@ -2039,10 +2042,12 @@ def animate_theme_change(app: "QApplication", repaint: Callable[[], None]) -> No
         animation.setEasingCurve(curve)
         if done is not None:
             animation.finished.connect(done)
+        # Parented to the window, so Qt owns the lifetime; deleteLater on
+        # completion keeps repeated switches from accumulating finished
+        # QObjects as children of the window.
+        animation.finished.connect(animation.deleteLater)
+        holder["fade"] = animation
         animation.start()
-        # Qt does not own a started animation; keep it alive on the window.
-        window._theme_animations = getattr(window, "_theme_animations", [])  # type: ignore[attr-defined]
-        window._theme_animations.append(animation)  # type: ignore[attr-defined]
 
     def _swap() -> None:
         repaint()

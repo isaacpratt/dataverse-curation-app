@@ -424,5 +424,55 @@ def test_animate_theme_change_repaints_without_a_window(qapp):
     assert calls == ["repainted"], "no window: repaint must happen immediately"
 
 
+# --- The known limit of a live switch (dv-4jm.5 follow-up) ---------------
+
+
+def test_app_sheet_follows_a_live_switch_but_scoped_sheets_do_not(qapp):
+    """Pin the current contract, including its gap.
+
+    ``apply_theme`` replaces the *application* sheet, so anything painted
+    by the app-level rules follows a switch at once. A widget that set its
+    own stylesheet keeps it - Qt does not re-derive it - so kit factories
+    that bake a scoped sheet (card, button, input, checkbox, progress bar,
+    pane footer) hold their pre-switch face until the widget is rebuilt.
+
+    This test asserts the gap on purpose: it is the visible half of
+    dv-4jm.5 that is still open. When scoped sheets are made to follow a
+    switch, this test is the one to rewrite.
+    """
+    from ui import theme
+    from ui.widgets import make_action_button, make_card
+
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light")
+    try:
+        card, _body, _title, _header = make_card("Probe")
+        button = make_action_button("Probe")
+        card_light = card.styleSheet()
+        button_light = button.styleSheet()
+        app_light = qapp.styleSheet()
+
+        assert theme.role("SURFACE_CARD", "light") in card_light
+        assert theme.role("SURFACE_CARD", "light") in button_light
+
+        theme.set_active_theme("dark")
+        theme.apply_theme(qapp, "dark")
+
+        # The application sheet moved...
+        assert qapp.styleSheet() != app_light
+        assert theme.role("SURFACE_CARD", "dark") in qapp.styleSheet()
+        # ...but the scoped sheets the widgets already carry did not.
+        assert card.styleSheet() == card_light
+        assert button.styleSheet() == button_light
+
+        # Rebuilding picks up the new palette: the generators are correct,
+        # it is the already-constructed widget that is stale.
+        rebuilt, _b, _t, _h = make_card("Probe")
+        assert theme.role("SURFACE_CARD", "dark") in rebuilt.styleSheet()
+    finally:
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

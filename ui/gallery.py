@@ -610,15 +610,26 @@ class GalleryWindow(QWidget):
         """Persist the chosen view so the next open starts there (dv-4jm.6)."""
         if self._config is None:
             return
+        self._config.app.gallery_theme_mode = mode
         try:
-            self._config.app.gallery_theme_mode = mode
             self._config.save()
-        except Exception:
-            # A read-only config must not stop the curator switching views.
-            pass
+        except Exception as exc:
+            # A read-only or unwritable config must not stop the curator
+            # switching views; say so in the log rather than silently
+            # pretending the choice was kept.
+            try:
+                from curation.applog import get_app_log
 
-    def _on_theme_changed(self, _text: str = "") -> None:
-        """Rebuild the page for the selected view and remember it."""
+                get_app_log().warn(f"gallery: could not persist theme view {mode!r}: {exc}")
+            except Exception:
+                pass
+
+    def _on_theme_changed(self, _index: int = 0) -> None:
+        """Rebuild the page for the selected view and remember it.
+
+        Connected to ``currentIndexChanged``, so the argument is the new
+        row index; the mode itself is read from the combo's item data.
+        """
         mode = self._theme_selector.currentData() or "both"
         self._gallery_mode = str(mode)
         self._remember_gallery_mode(self._gallery_mode)
