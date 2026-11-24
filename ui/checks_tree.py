@@ -36,7 +36,7 @@ from ui.check_titles import check_summary, check_title
 from ui.i18n import t
 from ui.icons import file_icon, icon, status_icon
 from ui.status_text import status_text
-from ui.widgets import disposition_label
+from ui.widgets import disposition_label, human_size
 
 COLUMNS = [
     t("checks.columns.name"),
@@ -131,11 +131,9 @@ def format_details_tooltip(result: Any, path: str = "") -> str:
     return _tooltip(result, path)
 
 
-def _human_size(n: int) -> str:
-    # Re-exported from the shared helper (dv-005): labels are decimal (KB/MB).
-    from ui.widgets import human_size as _shared
-
-    return _shared(n)
+# One decimal (KB/MB) formatter in ui.widgets; keep the local name as a
+# direct alias so every call site shares the same function object.
+_human_size = human_size
 
 
 def variable_coverage(report: Any) -> dict[str, dict[str, int]]:
@@ -171,7 +169,180 @@ def _new_item(text: str, tooltip: str = "") -> QStandardItem:
     return item
 
 
-def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+def _group_file_rows(
+    rows: list[tuple[str, int, str, str]] | None,
+) -> tuple[dict[str, list[tuple[str, int, str, str]]], bool, list[str]]:
+    """Group rows by folder; a single flat folder gets no wrapper node."""
+    folders: dict[str, list[tuple[str, int, str, str]]] = {}
+    for row in rows or []:
+        path = row[0] if len(row) > 0 else ""
+        size = row[1] if len(row) > 1 else 0
+        fmt = row[2] if len(row) > 2 else ""
+        derivative = row[3] if len(row) > 3 else ""
+        parent = path.rpartition("/")[0] if "/" in path else "."
+        folders.setdefault(parent, []).append((path, size, fmt, derivative))
+    flat = set(folders) == {"."}
+    parents = ["."] if flat else sorted(folders)
+    return folders, flat, parents
+
+
+def _inventory_note(entry: Any, path: str, derivative: str) -> str:
+    """Tooltip notes for a tabular derivative and inventory access facts."""
+    note = (
+        "\n" + t("checks.tabular_ingest", derivative=derivative)
+        if derivative and derivative != path
+        else ""
+    )
+    if not isinstance(entry, dict):
+        return note
+    if entry.get("restricted"):
+        note += "\n" + t("checks.access_restricted")
+    embargo = str(entry.get("embargo_date") or "").strip()
+    if embargo:
+        note += "\n" + t("checks.embargo_until", date=embargo[:10])
+    retention = str(entry.get("retention") or "").strip()
+    if retention:
+        note += "\n" + t("checks.retention", retention=retention)
+    ingest_status = str(entry.get("ingest_status") or "").strip()
+    ingest_error = str(entry.get("ingest_error") or "").strip()
+    if ingest_status or ingest_error:
+        bits = [t("checks.ingest_status", status=ingest_status)] if ingest_status else []
+        if ingest_error:
+            bits.append(t("checks.ingest_error", error=ingest_error))
+        note += "\n" + t("common.separator").join(bits)
+    return note
+
+
+def _file_scan(
+    path: str,
+    staged: bool,
+    entry: Any,
+    report: Any,
+    coverage: dict[str, Any],
+    note: str,
+) -> tuple[str, str]:
+    """Scan text + tooltip for one file, before variable-coverage suffix."""
+    checks = list(entry.checks) if entry else []
+    if report is None:
+        scan = t("checks.run_after_download") if not staged else t("common.not_checked")
+        tip = path
+    elif entry is None:
+        scan = t("checks.not_in_report")
+        tip = f"{path}\n{t('checks.not_present')}"
+    elif not checks:
+        scan = t("checks.no_automated")
+        tip = f"{path}\n{t('checks.no_auto_format')}"
+    else:
+        scan = status_text(checks)
+        tip = (
+            path + "\n" + "\n".join(f"[{c.level}] {c.check_id}: {c.message}" for c in checks)[:2000]
+        )
+    if note:
+        tip += note
+    cov = coverage.get(path)
+    if isinstance(cov, dict):
+        try:
+            labeled = int(cov.get("labeled") or 0)
+            total = int(cov.get("total") or 0)
+        except (TypeError, ValueError):
+            # A stale/hand-written report may carry non-numeric coverage;
+            # never take down the manifest-tree build.
+            labeled = total = 0
+        if total or labeled:
+            scan += t("checks.var_coverage_suffix", labeled=labeled, total=total)
+            tip += "\n" + t("checks.var_coverage_tip", labeled=labeled, total=total)
+    return scan, tip
+
+
+def _check_items(check: Any, path: str, dispositions: dict[Any, Any] | None) -> list[Any]:
+    """One check row: title, icon, sentence-case scan text and tooltip."""
+    kind = {
+        "passed": "pass",
+        "failed-warning": "warn",
+        "failed-error": "fail",
+        "skipped": "skip",
+    }.get(classify(check), "pass")
+    token = ""
+    try:
+        token = str(
+            (dispositions or {})
+            .get(finding_key(check.check_id, path, check.message), {})
+            .get("disposition")
+            or ""
+        )
+    except Exception:
+        token = ""
+    # dv-r0z: the row is named for a person ("CSV Openable"), and the Scan
+    # column is a sentence about what was verified — no check_id, no
+    # PASS/WARN badge, no filename the row already shows. The status still
+    # rides on the name cell's icon.
+    scan_text = check_summary(check, path)
+    tip = format_details_tooltip(check, path)
+    if token:
+        label = disposition_label(token)
+        scan_text += t("common.separator") + label
+        tip += "\n" + t("detail.disposition.tree_note", label=label)
+    c_name = _new_item(check_title(check.check_id), tip)
+    try:
+        c_name.setIcon(status_icon(kind))
+    except Exception:
+        pass
+    c_name.setData(
+        {
+            "kind": "check",
+            "path": path,
+            "check_id": check.check_id,
+            "msg": check.message,
+        },
+        _KIND_ROLE,
+    )
+    return [c_name, _new_item(""), _new_item(""), _new_item(scan_text, tip)]
+
+
+def _folder_summaries(model: QStandardItemModel) -> None:
+    """Folder aggregate Scan cells: worst child rank wins."""
+    for r in range(model.rowCount()):
+        folder = model.item(r, 0)
+        worst = 0
+        counts = {"error": 0, "warning": 0, "skipped": 0, "clean": 0, "unchecked": 0}
+        for i in range(folder.rowCount()):
+            scan_text = folder.child(i, 3).text() if folder.child(i, 3) else ""
+            if scan_text.startswith(t("status.error")):
+                worst = max(worst, 4)
+                counts["error"] += 1
+            elif scan_text.startswith(t("status.warning")):
+                worst = max(worst, 3)
+                counts["warning"] += 1
+            elif scan_text.startswith(t("status.skipped")):
+                worst = max(worst, 2)
+                counts["skipped"] += 1
+            elif scan_text.startswith(t("status.clean")):
+                counts["clean"] += 1
+            else:
+                counts["unchecked"] += 1
+        label = {
+            4: t("status.error"),
+            3: t("status.warning"),
+            2: t("status.skipped"),
+        }.get(worst, "")
+        total = folder.rowCount()
+        if label:
+            model.item(r, 3).setText(
+                t(
+                    "status.folder.label",
+                    label=label,
+                    errors=counts["error"],
+                    warnings=counts["warning"],
+                    skipped=counts["skipped"],
+                    clean=counts["clean"],
+                    total=total,
+                )
+            )
+        else:
+            model.item(r, 3).setText(t("status.folder.count", total=total))
+
+
+def build_tree_model(
     rows: list[tuple[str, int, str, str]] | None,
     report: Any = None,
     is_staged: Callable[[str], bool] | None = None,
@@ -196,29 +367,14 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
     model.setHorizontalHeaderLabels([str(c) for c in COLUMNS])
     hs = human_size or _human_size
     coverage = variable_coverage(report)
-    by_path = {}
-    if report is not None:
-        by_path = {f.path: f for f in report.files}
-    inv_by_path = {}
+    by_path = {f.path: f for f in report.files} if report is not None else {}
+    inv_by_path: dict[str, dict[str, Any]] = {}
     if isinstance(inventory, list):
         for e in inventory:
             if isinstance(e, dict) and e.get("path"):
                 inv_by_path[str(e["path"])] = e
 
-    folders: dict[str, list[Any]] = {}
-    for row in rows or []:
-        path = row[0] if len(row) > 0 else ""
-        size = row[1] if len(row) > 1 else 0
-        fmt = row[2] if len(row) > 2 else ""
-        derivative = row[3] if len(row) > 3 else ""
-        parent = path.rpartition("/")[0] if "/" in path else "."
-        folders.setdefault(parent, []).append((path, size, fmt, derivative))
-
-    # Dataset root when everything is flat: skip the "." folder node and
-    # attach files directly so single-dir datasets don't get a wrapper.
-    flat = set(folders) == {"."}
-    parents = ["."] if flat else sorted(folders)
-
+    folders, flat, parents = _group_file_rows(rows)
     for parent in parents:
         parent_item = None
         if not flat:
@@ -229,73 +385,12 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
             except Exception:
                 pass
             parent_item.setData({"kind": "folder", "dir": parent, "base": label}, _KIND_ROLE)
-            size_item = _new_item("")
-            fmt_item = _new_item("")
-            scan_item = _new_item("")
-            model.appendRow([parent_item, size_item, fmt_item, scan_item])
+            model.appendRow([parent_item, _new_item(""), _new_item(""), _new_item("")])
         for path, size, fmt, derivative in sorted(folders[parent]):
             staged = bool(is_staged(path)) if is_staged else False
-            # Tabular originals: name the server derivative behind the file.
-            note = (
-                "\n" + t("checks.tabular_ingest", derivative=derivative)
-                if derivative and derivative != path
-                else ""
-            )
-            # Restricted / embargo / retention / ingest notes from inventory.
-            inv_entry = inv_by_path.get(path)
-            if isinstance(inv_entry, dict):
-                if inv_entry.get("restricted"):
-                    note += "\n" + t("checks.access_restricted")
-                embargo = str(inv_entry.get("embargo_date") or "").strip()
-                if embargo:
-                    note += "\n" + t("checks.embargo_until", date=embargo[:10])
-                retention = str(inv_entry.get("retention") or "").strip()
-                if retention:
-                    note += "\n" + t("checks.retention", retention=retention)
-                ingest_status = str(inv_entry.get("ingest_status") or "").strip()
-                ingest_error = str(inv_entry.get("ingest_error") or "").strip()
-                if ingest_status or ingest_error:
-                    bits = (
-                        [t("checks.ingest_status", status=ingest_status)] if ingest_status else []
-                    )
-                    if ingest_error:
-                        bits.append(t("checks.ingest_error", error=ingest_error))
-                    note += "\n" + t("common.separator").join(bits)
+            note = _inventory_note(inv_by_path.get(path), path, derivative)
             entry = by_path.get(path)
-            checks = list(entry.checks) if entry else []
-            if report is None:
-                scan = t("checks.run_after_download") if not staged else t("common.not_checked")
-                tip = path
-            elif entry is None:
-                scan = t("checks.not_in_report")
-                tip = f"{path}\n{t('checks.not_present')}"
-            elif not checks:
-                scan = t("checks.no_automated")
-                tip = f"{path}\n{t('checks.no_auto_format')}"
-            else:
-                scan = status_text(checks)
-                tip = (
-                    path
-                    + "\n"
-                    + "\n".join(f"[{c.level}] {c.check_id}: {c.message}" for c in checks)[:2000]
-                )
-            # Append restriction/ingest notes to the Scan tooltip too.
-            if note:
-                tip = tip + note
-            # Variable-metadata coverage (dv-tfy): a short suffix on the Scan
-            # column plus the exact counts in the tooltip.
-            cov = coverage.get(path)
-            if isinstance(cov, dict):
-                try:
-                    labeled = int(cov.get("labeled") or 0)
-                    total = int(cov.get("total") or 0)
-                except (TypeError, ValueError):
-                    # A stale/hand-written report may carry non-numeric
-                    # coverage; never take down the manifest-tree build.
-                    labeled = total = 0
-                if total or labeled:
-                    scan = scan + t("checks.var_coverage_suffix", labeled=labeled, total=total)
-                    tip = tip + "\n" + t("checks.var_coverage_tip", labeled=labeled, total=total)
+            scan, tip = _file_scan(path, staged, entry, report, coverage, note)
             base = path.split("/")[-1]
             name_item = _new_item(base, tip)
             try:
@@ -303,109 +398,21 @@ def build_tree_model(  # noqa: C901 - grandfathered; complexity burns down as dv
             except Exception:
                 pass
             name_item.setData({"kind": "file", "path": path, "base": base}, _KIND_ROLE)
-            size_item = _new_item(hs(size), t("checks.size_bytes", size=size))
-            fmt_item = _new_item(fmt, fmt)
-            scan_item = _new_item(scan, tip)
-            file_row = [name_item, size_item, fmt_item, scan_item]
-            for check in checks:
-                kind = {
-                    "passed": "pass",
-                    "failed-warning": "warn",
-                    "failed-error": "fail",
-                    "skipped": "skip",
-                }.get(classify(check), "pass")
-                # Disposition reflection (dv-32x): the label joins the Scan
-                # text so a resolved finding reads as dealt-with at a glance.
-                token = ""
-                try:
-                    token = str(
-                        (dispositions or {})
-                        .get(finding_key(check.check_id, path, check.message), {})
-                        .get("disposition")
-                        or ""
-                    )
-                except Exception:
-                    token = ""
-                # dv-r0z: the row is named for a person ("CSV Openable"), and
-                # the Scan column is a sentence about what was verified — no
-                # check_id, no PASS/WARN badge, no filename the row already
-                # shows. The status still rides on the name cell's icon.
-                scan_text = check_summary(check, path)
-                tip = format_details_tooltip(check, path)
-                if token:
-                    label = disposition_label(token)
-                    scan_text += t("common.separator") + label
-                    tip += "\n" + t("detail.disposition.tree_note", label=label)
-                c_name = _new_item(
-                    check_title(check.check_id),
-                    tip,
-                )
-                try:
-                    c_name.setIcon(status_icon(kind))
-                except Exception:
-                    pass
-                c_name.setData(
-                    {
-                        "kind": "check",
-                        "path": path,
-                        "check_id": check.check_id,
-                        "msg": check.message,
-                    },
-                    _KIND_ROLE,
-                )
-                c_size = _new_item("")
-                c_fmt = _new_item("")
-                c_scan = _new_item(
-                    scan_text,
-                    tip,
-                )
-                name_item.appendRow([c_name, c_size, c_fmt, c_scan])
+            file_row = [
+                name_item,
+                _new_item(hs(size), t("checks.size_bytes", size=size)),
+                _new_item(fmt, fmt),
+                _new_item(scan, tip),
+            ]
+            for check in list(entry.checks) if entry else []:
+                name_item.appendRow(_check_items(check, path, dispositions))
             if parent_item is not None:
                 parent_item.appendRow(file_row)
             else:
                 model.appendRow(file_row)
 
     if not flat:
-        # Folder aggregate scan: worst child rank wins.
-        for r in range(model.rowCount()):
-            folder = model.item(r, 0)
-            worst = 0
-            counts = {"error": 0, "warning": 0, "skipped": 0, "clean": 0, "unchecked": 0}
-            for i in range(folder.rowCount()):
-                scan_text = folder.child(i, 3).text() if folder.child(i, 3) else ""
-                if scan_text.startswith(t("status.error")):
-                    worst = max(worst, 4)
-                    counts["error"] += 1
-                elif scan_text.startswith(t("status.warning")):
-                    worst = max(worst, 3)
-                    counts["warning"] += 1
-                elif scan_text.startswith(t("status.skipped")):
-                    worst = max(worst, 2)
-                    counts["skipped"] += 1
-                elif scan_text.startswith(t("status.clean")):
-                    counts["clean"] += 1
-                else:
-                    counts["unchecked"] += 1
-            label = {
-                4: t("status.error"),
-                3: t("status.warning"),
-                2: t("status.skipped"),
-            }.get(worst, "")
-            total = folder.rowCount()
-            if label:
-                model.item(r, 3).setText(
-                    t(
-                        "status.folder.label",
-                        label=label,
-                        errors=counts["error"],
-                        warnings=counts["warning"],
-                        skipped=counts["skipped"],
-                        clean=counts["clean"],
-                        total=total,
-                    )
-                )
-            else:
-                model.item(r, 3).setText(t("status.folder.count", total=total))
+        _folder_summaries(model)
     return model
 
 

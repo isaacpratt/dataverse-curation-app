@@ -25,18 +25,16 @@ from curation.download_manager import DownloadQuote
 from ui.i18n import t
 from ui.theme import TEXT_WARNING
 from ui.widgets import (
+    human_size,
     make_action_button,
     make_combo,
     make_line_edit,
     make_multiline_input,
 )
 
-
-def _human_size(n: int) -> str:
-    # Re-exported from the shared helper (dv-005): labels are decimal (KB/MB).
-    from ui.widgets import human_size as _shared
-
-    return _shared(n)
+# One decimal (KB/MB) formatter in ui.widgets; keep the local name as a
+# direct alias so every call site shares the same function object.
+_human_size = human_size
 
 
 class DownloadApprovalDialog(QDialog):

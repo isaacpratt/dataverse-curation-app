@@ -59,6 +59,7 @@ from ui.widgets import (
     ElidedLabel,
     RingProgress,
     flush_table_style,
+    human_size,
     make_action_button,
     make_caption_label,
     make_card_title,
@@ -253,12 +254,9 @@ def _system_datetime_text(mtime: float) -> str:
     return QLocale.system().toString(qdt, QLocale.FormatType.ShortFormat)
 
 
-def _human_size(n: int) -> str:
-    # Re-exported from the shared helper (dv-005): labels are decimal (KB/MB),
-    # so the divisor is 1000. The shared helper lives in ui.widgets.
-    from ui.widgets import human_size as _shared
-
-    return _shared(n)
+# One decimal (KB/MB) formatter in ui.widgets; keep the local name as a
+# direct alias so every call site shares the same function object.
+_human_size = human_size
 
 
 def _sanitize(pid: str) -> str:
@@ -2075,91 +2073,149 @@ class DashboardView(QWidget):
                 return -1.0
         return str(raw or "").lower()
 
-    def _apply_filter(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    def _filter_criteria(self) -> tuple[str, str, str, str]:
+        """Read the three filter combos and the search box, defensively."""
+        text = (self._filter_edit.text() or "").strip().lower()
         try:
-            text = (self._filter_edit.text() or "").strip().lower()
-            try:
-                state_key = self._state_filter.currentData() or "All"
-            except Exception:
-                state_key = "All"
-            try:
-                wanted_label = self._label_filter.currentData()
-            except Exception:
-                wanted_label = ""
-            if wanted_label is None:
-                wanted_label = ""
-            try:
-                wanted_collection = self._collection_filter.currentData() or ""
-            except Exception:
-                wanted_collection = ""
-            filtered = []
-            wanted = str(state_key).upper() if state_key != "All" else ""
-            for ds in self._all_datasets:
-                ds_state = (ds.get("state") or "").upper()
-                if state_key != "All":
-                    if wanted == "PENDING":
-                        # Pending metric: plain drafts plus locked in-review.
-                        if ds_state != "DRAFT" and "REVIEW" not in ds_state:
-                            continue
-                    elif (
-                        (wanted == "PUBLISHED" and ds_state not in ("RELEASED", "PUBLISHED"))
-                        or (wanted == "DRAFT" and ds_state != "DRAFT")
-                        or (wanted == "IN REVIEW" and "REVIEW" not in ds_state)
-                        or (wanted == "DEACCESSIONED" and "DEACCESSIONED" not in ds_state)
-                        or (
-                            wanted
-                            not in ("PENDING", "PUBLISHED", "DRAFT", "IN REVIEW", "DEACCESSIONED")
-                            and wanted != ds_state
-                        )
-                    ):
-                        continue
-                # In Progress card: rows with any curation label, any state.
-                if (
-                    getattr(self, "_labelled_only", False)
-                    and not str(ds.get("curation_label") or "").strip()
-                ):
-                    continue
-                if wanted_label == _NO_LABEL_SENTINEL:
-                    if str(ds.get("curation_label") or "").strip():
-                        continue
-                elif wanted_label:
-                    ds_label = str(ds.get("curation_label") or "").strip().lower()
-                    if ds_label != wanted_label.strip().lower():
-                        continue
-                if wanted_collection and str(ds.get("collection") or "") != wanted_collection:
-                    continue
-                if text:
-                    haystack = " ".join(
-                        str(ds.get(k, ""))
-                        for k in (
-                            "title",
-                            "persistent_id",
-                            "contact",
-                            "depositor",
-                            "collection",
-                            "state",
-                            "curation_label",
-                        )
-                    ).lower()
-                    if text not in haystack:
-                        continue
-                filtered.append(ds)
+            state_key = self._state_filter.currentData() or "All"
+        except Exception:
+            state_key = "All"
+        try:
+            wanted_label = self._label_filter.currentData()
+        except Exception:
+            wanted_label = ""
+        if wanted_label is None:
+            wanted_label = ""
+        try:
+            wanted_collection = self._collection_filter.currentData() or ""
+        except Exception:
+            wanted_collection = ""
+        return text, str(state_key), str(wanted_label), str(wanted_collection)
+
+    @staticmethod
+    def _matches_state(ds: dict[str, Any], wanted: str, state_key: str) -> bool:
+        ds_state = (ds.get("state") or "").upper()
+        if state_key == "All":
+            return True
+        if wanted == "PENDING":
+            # Pending metric: plain drafts plus locked in-review.
+            return ds_state == "DRAFT" or "REVIEW" in ds_state
+        if wanted == "PUBLISHED":
+            return ds_state in ("RELEASED", "PUBLISHED")
+        if wanted == "DRAFT":
+            return ds_state == "DRAFT"
+        if wanted == "IN REVIEW":
+            return "REVIEW" in ds_state
+        if wanted == "DEACCESSIONED":
+            return "DEACCESSIONED" in ds_state
+        return wanted == ds_state
+
+    def _matches_filters(self, ds: dict[str, Any], criteria: tuple[str, str, str, str]) -> bool:
+        text, state_key, wanted_label, wanted_collection = criteria
+        wanted = state_key.upper() if state_key != "All" else ""
+        if not self._matches_state(ds, wanted, state_key):
+            return False
+        # In Progress card: rows with any curation label, any state.
+        if (
+            getattr(self, "_labelled_only", False)
+            and not str(ds.get("curation_label") or "").strip()
+        ):
+            return False
+        label = str(ds.get("curation_label") or "").strip().lower()
+        if wanted_label == _NO_LABEL_SENTINEL:
+            if label:
+                return False
+        elif wanted_label and label != wanted_label.strip().lower():
+            return False
+        if wanted_collection and str(ds.get("collection") or "") != wanted_collection:
+            return False
+        if text:
+            haystack = " ".join(
+                str(ds.get(k, ""))
+                for k in (
+                    "title",
+                    "persistent_id",
+                    "contact",
+                    "depositor",
+                    "collection",
+                    "state",
+                    "curation_label",
+                )
+            ).lower()
+            if text not in haystack:
+                return False
+        return True
+
+    def _filter_status(self, filtered: list[dict[str, Any]]) -> None:
+        if not self._all_datasets:
+            self._progress.setText(t("dashboard.progress.no_datasets"))
+        elif not filtered:
+            self._progress.setText(t("dashboard.progress.no_match", total=len(self._all_datasets)))
+        else:
+            # Counts + scope live in the status bar now — the pill keeps
+            # the standing hint instead of repeating them.
+            self._progress.setText(t("dashboard.progress.open_hint"))
+
+    @staticmethod
+    def _decorate_size_cell(ds: dict[str, Any], item: Any, text_val: str) -> None:
+        """Set the size cell tooltip and dim it when access was refused."""
+        if text_val != t("dashboard.display_state.unknown"):
+            if ds.get("size_enriched"):
+                item.setToolTip(t("dashboard.table.size_enriched", value=text_val))
+            elif ds.get("size_from_cache"):
+                item.setToolTip(t("dashboard.table.size_cached", value=text_val))
+            return
+        if ds.get("size_pending"):
+            item.setToolTip(t("dashboard.table.size_pending"))
+        elif size_unavailable(ds):
+            # dv-zhf: the size cannot be had — this account read no
+            # version of the dataset. The em dash is dimmed so the cell
+            # reads as unavailable, and the hover carries the reason.
+            item.setForeground(QBrush(QColor(TEXT_MUTED)))
+            item.setToolTip(_access_tooltip(ds))
+        else:
+            item.setToolTip(t("dashboard.table.size_unknown"))
+
+    def _paint_rows(self, paint_rows: list[dict[str, Any]]) -> None:
+        """Rebuild the capped visible slice (filtering itself is uncapped)."""
+        self._table.setSortingEnabled(False)
+        self._table.setRowCount(len(paint_rows))
+        mono = QFont("JetBrains Mono")
+        for row, ds in enumerate(paint_rows):
+            for col, (key, _h, _v) in enumerate(COLUMNS):
+                text_val = self._cell_text(ds, key)
+                item = _SortItem(text_val)
+                item.setToolTip(text_val)
+                if key == "access":
+                    # The reason the server refused something, in full.
+                    tip = _access_tooltip(ds)
+                    if tip:
+                        item.setToolTip(tip)
+                if key == "total_size_bytes":
+                    self._decorate_size_cell(ds, item, text_val)
+                sort_key = self._cell_sort_key(ds, key)
+                item.setData(Qt.ItemDataRole.UserRole, sort_key)
+                if key in ("date_created", "date_published", "downloaded_at", "persistent_id"):
+                    item.setFont(mono)
+                if key == "title":
+                    f = item.font()
+                    f.setBold(True)
+                    item.setFont(f)
+                self._table.setItem(row, col, item)
+        self._table.setSortingEnabled(True)
+        # Content-width columns first (no-op once fitted/locked); the
+        # columns_fitted signal mirrors sizes onto the display header.
+        self._table.fit_columns_to_content()
+        self._table.viewport().update()
+
+    def _apply_filter(self) -> None:
+        try:
+            criteria = self._filter_criteria()
+            filtered = [ds for ds in self._all_datasets if self._matches_filters(ds, criteria)]
             self._datasets = filtered
             self._update_metrics()
             self._sync_status_bar()
-            if not self._all_datasets:
-                self._progress.setText(t("dashboard.progress.no_datasets"))
-            elif not filtered:
-                self._progress.setText(
-                    t(
-                        "dashboard.progress.no_match",
-                        total=len(self._all_datasets),
-                    )
-                )
-            else:
-                # Counts + scope live in the status bar now — the pill keeps
-                # the standing hint instead of repeating them.
-                self._progress.setText(t("dashboard.progress.open_hint"))
+            self._filter_status(filtered)
 
             # Painting window: the table is a QTableWidget (one heap
             # item per cell), so 25k rows × 12 columns is 300k items
@@ -2175,52 +2231,7 @@ class DashboardView(QWidget):
                         total=len(self._all_datasets),
                     )
                 )
-
-            self._table.setSortingEnabled(False)
-            self._table.setRowCount(len(paint_rows))
-            mono = QFont("JetBrains Mono")
-            for row, ds in enumerate(paint_rows):
-                for col, (key, _h, _v) in enumerate(COLUMNS):
-                    text_val = self._cell_text(ds, key)
-                    item = _SortItem(text_val)
-                    item.setToolTip(text_val)
-                    if key == "access":
-                        # The reason the server refused something, in full.
-                        tip = _access_tooltip(ds)
-                        if tip:
-                            item.setToolTip(tip)
-                    if key == "total_size_bytes":
-                        if text_val == t("dashboard.display_state.unknown"):
-                            if ds.get("size_pending"):
-                                item.setToolTip(t("dashboard.table.size_pending"))
-                            elif size_unavailable(ds):
-                                # dv-zhf: the size cannot be had — this
-                                # account read no version of the dataset.
-                                # The em dash is dimmed so the cell reads
-                                # as unavailable, and the hover carries the
-                                # reason the Access column gives.
-                                item.setForeground(QBrush(QColor(TEXT_MUTED)))
-                                item.setToolTip(_access_tooltip(ds))
-                            else:
-                                item.setToolTip(t("dashboard.table.size_unknown"))
-                        elif ds.get("size_enriched"):
-                            item.setToolTip(t("dashboard.table.size_enriched", value=text_val))
-                        elif ds.get("size_from_cache"):
-                            item.setToolTip(t("dashboard.table.size_cached", value=text_val))
-                    sort_key = self._cell_sort_key(ds, key)
-                    item.setData(Qt.ItemDataRole.UserRole, sort_key)
-                    if key in ("date_created", "date_published", "downloaded_at", "persistent_id"):
-                        item.setFont(mono)
-                    if key == "title":
-                        f = item.font()
-                        f.setBold(True)
-                        item.setFont(f)
-                    self._table.setItem(row, col, item)
-            self._table.setSortingEnabled(True)
-            # Content-width columns first (no-op once fitted/locked); the
-            # columns_fitted signal mirrors sizes onto the display header.
-            self._table.fit_columns_to_content()
-            self._table.viewport().update()
+            self._paint_rows(paint_rows)
         except Exception as exc:
             import traceback
 

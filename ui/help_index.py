@@ -63,9 +63,3 @@ def grouped(query: str = "") -> dict[str, list[tuple[str, str]]]:
             continue
         out[g].append((name, text))
     return {g: items for g, items in out.items() if items}
-
-
-def clear_for_tests() -> None:
-    """Empty the registry (tests only)."""
-    _entries.clear()
-    _seen.clear()

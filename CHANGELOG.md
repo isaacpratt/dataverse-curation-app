@@ -6,6 +6,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed (security and reliability)
+
+- **The API token can no longer be sent over cleartext HTTP** (dv-v2e): every way of setting the Dataverse base URL — `config.json`, `--dataverse`, Settings and `DATAVERSE_BASE_URL` — now goes through one https-only validator, as does client construction. On Windows the config ACL resolves the current principal (`DOMAIN\USER` or `whoami`) and aborts the save if it cannot; it never grants `Everyone` (dv-0qx). The Dataverse client gives each worker thread its own `requests.Session`, and refusal writes are locked (dv-u9i). Parallel headless runs submit work in cancellable chunks, forward `is_cancelled` through `run_report_to_file`, and report a failed verdict on stderr instead of swallowing it (dv-gfk).
+
+### Changed (maintenance)
+
+- **Code-health pass** (dv-29m, dv-a73, dv-dhm, dv-l7x, dv-40m, dv-6j8, dv-o9m): eight unreferenced helpers deleted; four `_human_size` shims became direct aliases; hashing and base-URL key normalisation each have one implementation; the oversized crawl, detail, checks-tree, log-rail, dashboard-filter, verdict and Markdown-renderer functions were split into named helpers; AGENTS.md counts and typing policy match the gates. No report fields, strings, geometry or signals changed.
+
 ### Changed (UI)
 
 - **Dataset header rebuilt in three bands from the approved mockups** (dv-cv3) — the chips/actions, identity/status and navigation bands replace the stacked action rows. The new compact status widget shows running (Lucide spinner + count + bar + Cancel), complete (check + full bar + Dismiss) and error (alert + retry) in the space beside the title instead of three dedicated rows. The stage chip, Lucide icons on actions and rail tabs, and nav result pills all come from the kit and theme roles; the header stays at 196px idle.

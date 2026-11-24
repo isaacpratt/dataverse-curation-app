@@ -40,6 +40,10 @@ public details appear; if you do not receive an acknowledgment within
   equivalents) before display; the app never logs your token, stores it in
   the SQLite state file, or includes it in support copies.
 - **SQLite state** (inventory/caches/actions) never contains credentials.
+- **Transport**: the instance base URL must be HTTPS. Every way of setting it
+  (`config.json`, the `--dataverse` flag, Settings, or `DATAVERSE_BASE_URL`)
+  rejects plain HTTP and other non-HTTPS schemes, because the token travels
+  in the `X-Dataverse-key` request header and cleartext would expose it.
 
 ## Rotation
 

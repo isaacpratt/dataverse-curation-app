@@ -65,7 +65,7 @@ class _Session:
 
 
 def _client(response) -> DataverseClient:
-    client = DataverseClient("http://example.test", "token")
+    client = DataverseClient("https://example.test", "token")
     client._session = _Session(response)  # type: ignore[assignment]
     return client
 

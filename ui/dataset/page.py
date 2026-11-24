@@ -62,27 +62,12 @@ from ui.widgets import (
     make_body_label,
     make_multiline_input,
     make_page_heading,
-    make_section_heading,
 )
 from ui.workers import (
     CheckWorker,
     DownloadWorker,
     MetadataWorker,
 )
-
-
-def _section_header_with_action(title: str, action: AppButton) -> tuple[QLabel, QWidget]:
-    """Build a section heading with one contextual action on its right."""
-    row = QWidget()
-    row.setObjectName("SectionHeaderRow")
-    lay = QHBoxLayout(row)
-    lay.setContentsMargins(0, 0, 0, 0)
-    lay.setSpacing(8)
-    heading = make_section_heading(title)
-    lay.addWidget(heading)
-    lay.addStretch(1)
-    lay.addWidget(action)
-    return heading, row
 
 
 class DatasetDetailView(

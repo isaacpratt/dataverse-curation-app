@@ -70,55 +70,93 @@ def _guidance_lines(result: Any) -> list[str]:
     return lines
 
 
-def render_markdown(report: DatasetReport) -> str:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-    lines: list[str] = []
-    lines.append(f"# Curation report — {report.label}")
-    lines.append("")
-    lines.append(f"- Persistent ID: `{report.persistent_id}`")
-    lines.append(f"- Generated: {report.timestamp} (engine {report.engine_version})")
-    lines.append(f"- Files: {len(report.files)}")
-    lines.append("")
+def _header_lines(report: DatasetReport) -> list[str]:
+    return [
+        f"# Curation report — {report.label}",
+        "",
+        f"- Persistent ID: `{report.persistent_id}`",
+        f"- Generated: {report.timestamp} (engine {report.engine_version})",
+        f"- Files: {len(report.files)}",
+        "",
+    ]
 
+
+def _summary_lines(report: DatasetReport) -> list[str]:
     all_results = list(report.dataset_checks) + [c for f in report.files for c in f.checks]
     summary = summarize(all_results)
-    lines.append("## Summary")
-    lines.append("")
-    lines.append(f"- Passed: {summary['passed']}")
-    lines.append(f"- Warnings: {summary['failed-warning']}")
-    lines.append(f"- Errors: {summary['failed-error']}")
-    lines.append(f"- Skipped: {summary['skipped']}")
+    lines = [
+        "## Summary",
+        "",
+        f"- Passed: {summary['passed']}",
+        f"- Warnings: {summary['failed-warning']}",
+        f"- Errors: {summary['failed-error']}",
+        f"- Skipped: {summary['skipped']}",
+    ]
     unchecked = [c for c in report.dataset_checks if c.check_id == "inventory.unchecked_types"]
     if unchecked:
         lines.append(f"- Unchecked types: {unchecked[0].message}")
     lines.append("")
+    return lines
 
-    lines.append("## Dataset checks")
-    lines.append("")
-    if report.dataset_checks:
-        lines.append("| Check | Result | Message |")
-        lines.append("| --- | --- | --- |")
-        for result in report.dataset_checks:
-            msg = result.message.replace("|", "\\|").replace("\n", " ")
-            lines.append(f"| `{result.check_id}` | {_badge(result)} | {msg} |")
-        lines.append("")
-        for result in report.dataset_checks:
-            sub = _details_lines(result.details or {})
-            guide = _guidance_lines(result)
-            if sub or guide:
-                lines.append(f"### `{result.check_id}` details")
-                lines.append("")
-                lines.extend(sub)
-                lines.extend(guide)
-                lines.append("")
-    else:
-        lines.append("No dataset-level checks ran.")
-        lines.append("")
 
-    lines.append("## Files")
+def _check_table(results: list[Any]) -> list[str]:
+    lines = ["| Check | Result | Message |", "| --- | --- | --- |"]
+    for result in results:
+        msg = result.message.replace("|", "\\|").replace("\n", " ")
+        lines.append(f"| `{result.check_id}` | {_badge(result)} | {msg} |")
+    return lines
+
+
+def _dataset_lines(report: DatasetReport) -> list[str]:
+    lines = ["## Dataset checks", ""]
+    if not report.dataset_checks:
+        return ["No dataset-level checks ran.", ""]
+    lines.extend(_check_table(report.dataset_checks))
     lines.append("")
+    for result in report.dataset_checks:
+        sub = _details_lines(result.details or {})
+        guide = _guidance_lines(result)
+        if sub or guide:
+            lines.append(f"### `{result.check_id}` details")
+            lines.append("")
+            lines.extend(sub)
+            lines.extend(guide)
+            lines.append("")
+    return lines
+
+
+def _file_state(entry: Any, summary: dict[str, int]) -> str:
+    if not entry.checks:
+        return "No automated check"
+    if summary["failed-error"]:
+        return f"FAIL ({summary['failed-error']} error(s))"
+    if summary["failed-warning"]:
+        return f"WARN ({summary['failed-warning']} warning(s))"
+    if summary["skipped"] and not summary["passed"]:
+        return "SKIPPED"
+    return f"PASS ({summary['passed']} passed)"
+
+
+def _file_detail_lines(entry: Any) -> list[str]:
+    lines: list[str] = []
+    for result in entry.checks:
+        sub = _details_lines(result.details or {})
+        guide = _guidance_lines(result)
+        if sub or guide:
+            lines.append(f"- `{result.check_id}`:")
+            lines.extend(sub)
+            lines.extend(guide)
+    if any((c.details or {}) for c in entry.checks) or any(
+        classify(c) in ("failed-error", "failed-warning") for c in entry.checks
+    ):
+        lines.append("")
+    return lines
+
+
+def _file_lines(report: DatasetReport) -> list[str]:
+    lines = ["## Files", ""]
     if not report.files:
-        lines.append("No files staged.")
-        lines.append("")
+        return ["No files staged.", ""]
     by_dir: dict[str, list[Any]] = {}
     for entry in report.files:
         parent = entry.path.rpartition("/")[0] if "/" in entry.path else "."
@@ -129,16 +167,7 @@ def render_markdown(report: DatasetReport) -> str:  # noqa: C901 - grandfathered
             lines.append("")
         for entry in sorted(by_dir[parent], key=lambda e: e.path):
             entry_summary = summarize(entry.checks)
-            if not entry.checks:
-                state = "No automated check"
-            elif entry_summary["failed-error"]:
-                state = f"FAIL ({entry_summary['failed-error']} error(s))"
-            elif entry_summary["failed-warning"]:
-                state = f"WARN ({entry_summary['failed-warning']} warning(s))"
-            elif entry_summary["skipped"] and not entry_summary["passed"]:
-                state = "SKIPPED"
-            else:
-                state = f"PASS ({entry_summary['passed']} passed)"
+            state = _file_state(entry, entry_summary)
             lines.append(
                 f"#### `{entry.path}` — {entry_summary['total']} check(s), "
                 f"{state} — {entry.size_bytes} bytes, {entry.mime_type}"
@@ -148,40 +177,38 @@ def render_markdown(report: DatasetReport) -> str:  # noqa: C901 - grandfathered
                 lines.append("Manual review required (no automated check for this format).")
                 lines.append("")
                 continue
-            lines.append("| Check | Result | Message |")
-            lines.append("| --- | --- | --- |")
-            for result in entry.checks:
-                msg = result.message.replace("|", "\\|").replace("\n", " ")
-                lines.append(f"| `{result.check_id}` | {_badge(result)} | {msg} |")
+            lines.extend(_check_table(entry.checks))
             lines.append("")
-            for result in entry.checks:
-                sub = _details_lines(result.details or {})
-                guide = _guidance_lines(result)
-                if sub or guide:
-                    lines.append(f"- `{result.check_id}`:")
-                    lines.extend(sub)
-                    lines.extend(guide)
-            if any((c.details or {}) for c in entry.checks) or any(
-                classify(c) in ("failed-error", "failed-warning") for c in entry.checks
-            ):
-                lines.append("")
+            lines.extend(_file_detail_lines(entry))
+    return lines
 
+
+def _skipped_lines(report: DatasetReport) -> list[str]:
     missing = [
         (f.path, c.check_id, (c.details or {}).get("required", ""))
         for f in report.files
         for c in f.checks
         if classify(c) == "skipped" and (c.details or {}).get("required")
     ]
-    if missing:
-        lines.append("## Skipped (missing libraries)")
-        lines.append("")
-        for path, check_id, lib in missing:
-            lines.append(f"- `{path}` `{check_id}`: `{lib}` is not available in this build")
-        lines.append("")
+    if not missing:
+        return []
+    lines = ["## Skipped (missing libraries)", ""]
+    for path, check_id, lib in missing:
+        lines.append(f"- `{path}` `{check_id}`: `{lib}` is not available in this build")
+    lines.append("")
+    return lines
 
+
+def render_markdown(report: DatasetReport) -> str:
+    lines: list[str] = []
+    lines.extend(_header_lines(report))
+    lines.extend(_summary_lines(report))
+    lines.extend(_dataset_lines(report))
+    lines.extend(_file_lines(report))
+    lines.extend(_skipped_lines(report))
     lines.append("---")
     lines.append(
-        f"Generated by Dataverse Docent engine {report.engine_version} — "
+        "Generated by Dataverse Docent engine " + report.engine_version + " — "
         "JSON is canonical; this Markdown is a derived view."
     )
     lines.append("")

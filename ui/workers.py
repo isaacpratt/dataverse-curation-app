@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import atexit
-from concurrent.futures import ThreadPoolExecutor
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -24,8 +25,9 @@ from ui.progress import (
 )
 
 # Parallelism for per-dataset confirmation calls (locks, label fallback).
-# The client holds no shared session and applog is lock-guarded, so plain
-# worker threads are safe; 8 keeps small instances fast without hammering.
+# DataverseClient gives each thread its own requests.Session (see
+# curation/client/client.py) and applog is lock-guarded, so plain worker
+# threads are safe; 8 keeps small instances fast without hammering.
 _POOL_SIZE = 8
 
 # Review-inbox scan cache: find_review_submissions re-reads up to 5 inbox
@@ -34,7 +36,7 @@ _POOL_SIZE = 8
 # switch never reuses the prior user's inbox.
 _INBOX_TTL_S = 600.0
 _inbox_cache: dict[tuple[str, str, str], tuple[float, list[dict[str, str]]]] = {}
-_inbox_lock = __import__("threading").Lock()
+_inbox_lock = threading.Lock()
 
 # Every QThread the app starts is tracked here, so the process can stop
 # them before teardown. A QThread destroyed while it is still running
@@ -42,6 +44,11 @@ _inbox_lock = __import__("threading").Lock()
 # still running" and calls abort), which is reachable when the user
 # quits mid-scan and when an offscreen probe ends with a worker live.
 _LIVE_WORKERS: set[QThread] = set()
+
+# One aboutToQuit hook per application, not one per registered worker: a
+# detail page can register dozens during a session. Track the app so a new
+# QApplication in tests/probes gets its own hook.
+_QUIT_HOOK_APP: Any = None
 
 
 def register_worker(worker: QThread) -> None:
@@ -58,8 +65,10 @@ def register_worker(worker: QThread) -> None:
         from PySide6.QtWidgets import QApplication
 
         app = QApplication.instance()
-        if app is not None:
+        global _QUIT_HOOK_APP
+        if app is not None and app is not _QUIT_HOOK_APP:
             app.aboutToQuit.connect(stop_all_workers)
+            _QUIT_HOOK_APP = app
     except Exception:
         pass
 
@@ -185,83 +194,85 @@ class CrawlWorker(QThread):
         except Exception:
             pass
 
-    def run(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-        import traceback
-
+    def _discovery_progress(self, page: int, pages_total: int, collected: int) -> None:
+        """One Search page landed: update the chip and the progress ring."""
         try:
-            from curation.applog import get_app_log
-            from curation.client import STATE_IN_REVIEW, DataverseClient
+            if pages_total > 0:
+                self.progress.emit(
+                    t(
+                        "workers.fetching_page",
+                        page=page,
+                        pages=pages_total,
+                        found=collected,
+                    )
+                )
+                self._emit_fraction(phase_fraction(PHASE_DISCOVERY, page, pages_total))
+            else:
+                self.progress.emit(t("workers.fetching_found", found=collected))
+                self._emit_fraction(phase_fraction(PHASE_DISCOVERY, collected, 0))
+        except Exception:
+            pass
 
-            self.progress.emit(t("workers.connecting", base_url=self._base_url))
-            client = DataverseClient(self._base_url, self._api_token)
-            coll = self._subtree.strip() or t("workers.whole_repository")
-            self.progress.emit(t("workers.fetching_all", collection=coll))
-            self._emit_fraction(phase_fraction(PHASE_DISCOVERY, 0, 0))
-
-            def _on_discovery_page(page: int, pages_total: int, collected: int) -> None:
-                # Discovery is total-driven: pages_total is known after the
-                # first page, so the ring can show real progress.
-                try:
-                    if pages_total > 0:
-                        self.progress.emit(
-                            t(
-                                "workers.fetching_page",
-                                page=page,
-                                pages=pages_total,
-                                found=collected,
-                            )
-                        )
-                        self._emit_fraction(phase_fraction(PHASE_DISCOVERY, page, pages_total))
-                    else:
-                        self.progress.emit(t("workers.fetching_found", found=collected))
-                        self._emit_fraction(phase_fraction(PHASE_DISCOVERY, collected, 0))
-                except Exception:
-                    pass
-
-            datasets = client.list_draft_datasets(
+    def _discover(self, client: Any) -> list[dict[str, Any]]:
+        """Total-driven Search crawl. Cancellation is polled by the client."""
+        coll = self._subtree.strip() or t("workers.whole_repository")
+        self.progress.emit(t("workers.fetching_all", collection=coll))
+        self._emit_fraction(phase_fraction(PHASE_DISCOVERY, 0, 0))
+        return list(
+            client.list_draft_datasets(
                 self._subtree,
-                progress=_on_discovery_page,
+                progress=self._discovery_progress,
                 is_cancelled=self.isInterruptionRequested,
             )
-            if self.isInterruptionRequested():
-                return
-            # Dashboard enrichment: patch thin search rows with live
-            # inventory sums + depositor + authoritative state (drafts
-            # first, capped, cancellable). The locks stage below still owns
-            # the "In Review" state — enrichment never clobbers it.
-            try:
-                total_rows = len(datasets)
-                if total_rows:
-                    self.progress.emit(t("workers.enriching", count=total_rows))
+        )
+
+    def _enrich_progress(
+        self,
+        done: int,
+        total: int,
+        datasets: list[dict[str, Any]],
+        emitted: set[str],
+        pending_batch: list[dict[str, Any]],
+    ) -> None:
+        """One enrichment completion: update the ring and flush fresh rows."""
+        try:
+            self.progress.emit(t("workers.enriching_progress", done=done, total=total))
+            self._emit_fraction(phase_fraction(PHASE_ENRICHMENT, done, total))
+        except Exception:
+            pass
+        # Progressive paint: hand newly enriched rows to the dashboard every
+        # _ENRICH_FLUSH_EVERY completions (plus the tail), as shallow copies —
+        # the worker keeps the live dicts for the final finished() payload.
+        try:
+            for d in datasets:
+                try:
+                    pid = str(d.get("persistent_id") or "")
+                except Exception:
+                    continue
+                if d.get("size_enriched") and pid and pid not in emitted:
+                    pending_batch.append(d)
+                    emitted.add(pid)
+            if pending_batch and (
+                len(pending_batch) >= CrawlWorker._ENRICH_FLUSH_EVERY or done >= total
+            ):
+                self.enriched.emit([dict(d) for d in pending_batch])
+                pending_batch.clear()
+        except Exception:
+            pass
+
+    def _enrich(self, client: Any, datasets: list[dict[str, Any]]) -> bool:
+        """Patch thin rows progressively. Returns False when cancelled."""
+        from curation.applog import get_app_log
+
+        try:
+            total_rows = len(datasets)
+            if total_rows:
+                self.progress.emit(t("workers.enriching", count=total_rows))
                 emitted: set[str] = set()
                 pending_batch: list[dict[str, Any]] = []
 
                 def _on_enrich_progress(done: int, total: int) -> None:
-                    try:
-                        self.progress.emit(t("workers.enriching_progress", done=done, total=total))
-                        self._emit_fraction(phase_fraction(PHASE_ENRICHMENT, done, total))
-                    except Exception:
-                        pass
-                    # Progressive paint: hand newly enriched rows to the
-                    # dashboard every _ENRICH_FLUSH_EVERY completions (plus
-                    # the tail), as shallow copies — the worker keeps the
-                    # live dicts for the final finished() payload.
-                    try:
-                        for d in datasets:
-                            try:
-                                pid = str(d.get("persistent_id") or "")
-                            except Exception:
-                                continue
-                            if d.get("size_enriched") and pid and pid not in emitted:
-                                pending_batch.append(d)
-                                emitted.add(pid)
-                        if pending_batch and (
-                            len(pending_batch) >= CrawlWorker._ENRICH_FLUSH_EVERY or done >= total
-                        ):
-                            self.enriched.emit([dict(d) for d in pending_batch])
-                            pending_batch.clear()
-                    except Exception:
-                        pass
+                    self._enrich_progress(done, total, datasets, emitted, pending_batch)
 
                 enrich_stats = client.enrich_datasets_with_inventory(
                     datasets,
@@ -271,7 +282,7 @@ class CrawlWorker(QThread):
                     is_cancelled=self.isInterruptionRequested,
                 )
                 if self.isInterruptionRequested():
-                    return
+                    return False
                 try:
                     n_attempted = int((enrich_stats or {}).get("attempted", 0))
                     # The cap is a measured value (dv-gj9; see
@@ -306,261 +317,312 @@ class CrawlWorker(QThread):
                             tail=tail,
                         )
                     )
-            except Exception:
-                pass
-            # Search API versionState is only DRAFT/RELEASED — in-review state
-            # lives in the locks endpoint, so confirm per dataset here.
-            # Parallel: one locks call per dataset would take minutes serially.
-            total = len(datasets)
-            in_review_n = 0
+        except Exception:
+            pass
+        return True
 
-            def _check_lock(ds: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-                try:
-                    flag = bool(client.dataset_in_review(ds.get("persistent_id", "")))
-                except Exception:
-                    flag = False
-                return ds, flag
+    def _probe_locks(self, client: Any, datasets: list[dict[str, Any]]) -> int | None:
+        """Confirm In Review from the locks endpoint. None means cancelled."""
+        from curation.client import STATE_IN_REVIEW
 
-            from concurrent.futures import as_completed
+        total = len(datasets)
+        in_review_n = 0
 
-            with ThreadPoolExecutor(max_workers=_POOL_SIZE) as pool:
-                futures: list[Any] = [pool.submit(_check_lock, ds) for ds in datasets]
-                # as_completed avoids head-of-line blocking: one stalled
-                # locks call no longer stalls all later results.
-                for done_n, fut in enumerate(as_completed(futures), start=1):
-                    if self.isInterruptionRequested():
-                        for f in futures:
-                            f.cancel()
-                        return
-                    ds, flag = fut.result()
-                    if flag:
-                        ds["state"] = STATE_IN_REVIEW
-                        in_review_n += 1
-                    if done_n % 10 == 0 or done_n == total:
-                        self.progress.emit(
-                            t(
-                                "workers.checking_locks",
-                                done=done_n,
-                                total=total,
-                                in_review=in_review_n,
-                            )
-                        )
-                        self._emit_fraction(phase_fraction(PHASE_LOCKS, done_n, total))
-            # Curation labels are set at the Dataverse level. Superusers
-            # pull them in bulk via the CSV report (one call for all
-            # drafts). Non-superuser tokens 403 there, so for them the
-            # identity probe (/api/users/:me) decides up front: skip the
-            # doomed report call and read per-draft curationStatus only —
-            # labels/status exist solely for datasets under curation, so
-            # published/deaccessioned rows are never attempted.
-            from curation.client import is_draft_dataset
-
-            labels: list[str] = []
-            report = None
-            # Labels phase starts here; the fraction advances as the
-            # per-dataset reads or the bulk report complete.
-            self._emit_fraction(phase_fraction(PHASE_LABELS, 0, 0))
+        def _check_lock(ds: dict[str, Any]) -> tuple[dict[str, Any], bool]:
             try:
-                superuser = client.user_is_superuser()
+                flag = bool(client.dataset_in_review(ds.get("persistent_id", "")))
             except Exception:
-                superuser = None
-            try:
-                me = client.get_me() or {}
-                who = str(me.get("displayName") or me.get("identifier") or "").strip()
-                if superuser is True:
-                    who_display = who or t("workers.user_fallback")
-                    self.progress.emit(t("workers.connected_superuser", who=who_display))
-                    get_app_log().info(t("workers.identity_superuser", who=who_display))
-                elif superuser is False:
-                    who_display = who or t("workers.user_fallback")
-                    self.progress.emit(t("workers.connected_user", who=who_display))
-                    get_app_log().info(t("workers.identity_user", who=who_display))
-            except Exception:
-                pass
-            if superuser is True:
-                try:
-                    report = client.list_curation_states()
-                except Exception:
-                    report = None
-            elif superuser is False:
-                report = None  # skip the doomed 403 entirely
-            else:
-                # Identity unknown (network): legacy try-then-fallback.
-                try:
-                    report = client.list_curation_states()
-                except Exception:
-                    report = None
-            if report is not None:
-                by_pid = {r["persistent_id"]: r for r in report if r.get("persistent_id")}
-                by_title = {r["title"]: r for r in report if r.get("title")}
-                for ds in datasets:
-                    row = by_pid.get(ds.get("persistent_id", "")) or by_title.get(
-                        ds.get("title", "")
-                    )
-                    if row:
-                        ds["curation_label"] = row.get("label", "")
-                        ds["curation_time"] = row.get("label_time", "")
-                        ds["curation_assigner"] = row.get("assigner", "")
-                    else:
-                        ds["curation_label"] = ""
-                        ds["curation_time"] = ""
-                        ds["curation_assigner"] = ""
-                for r in report:
-                    if r.get("label") and r["label"] not in labels:
-                        labels.append(r["label"])
-                self.progress.emit(
-                    t(
-                        "workers.curation_report",
-                        drafts=len(report),
-                        labels=len(labels),
-                    )
-                )
-                self._emit_fraction(phase_fraction(PHASE_LABELS, 1, 1))
-                try:
-                    get_app_log().info(
-                        t(
-                            "workers.curation_report_log",
-                            labels=", ".join(
-                                t("workers.labels_in_use", labels=lbl) for lbl in labels
-                            )
-                            or t("common.none_in_parentheses"),
-                        )
-                    )
-                except Exception:
-                    pass
-            else:
+                flag = False
+            return ds, flag
 
-                def _read_status(
-                    ds: dict[str, Any],
-                ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-                    # The refusal (if any) is kept: a curation status this
-                    # account may not read is an expected answer, and the
-                    # dashboard says so instead of showing an empty column.
-                    refusal: dict[str, Any] = {}
-                    try:
-                        status = client.get_curation_status(
-                            ds.get("persistent_id", ""), refusal=refusal
-                        )
-                    except Exception:
-                        status = None
-                    return ds, status or {}, refusal
-
-                # Drafts only — non-drafts have no readable curation status.
-                drafts: list[dict[str, Any]] = []
-                for ds in datasets:
-                    if is_draft_dataset(ds):
-                        drafts.append(ds)
-                    else:
-                        ds["curation_label"] = ""
-                        ds["curation_time"] = ""
-                        ds["curation_assigner"] = ""
-                total = len(drafts)
-                if total == 0:
-                    self.progress.emit(t("workers.no_drafts"))
-                with ThreadPoolExecutor(max_workers=_POOL_SIZE) as pool:
-                    futures = [pool.submit(_read_status, ds) for ds in drafts]
-                    for done_n, fut in enumerate(as_completed(futures), start=1):
-                        if self.isInterruptionRequested():
-                            for f in futures:
-                                f.cancel()
-                            return
-                        ds, status, refusal = fut.result()
-                        ds["curation_label"] = status.get("label", "")
-                        ds["curation_time"] = status.get("time", "")
-                        ds["curation_assigner"] = status.get("assigner", "")
-                        if refusal:
-                            # Curation state exists only for datasets under
-                            # curation, and only for accounts in their
-                            # curation scope — record why it is missing.
-                            ds["curation_access"] = {
-                                "state": "unreadable",
-                                "reason": str(refusal.get("code") or "not_under_curation"),
-                                "detail": str(refusal.get("detail") or ""),
-                                "status": int(refusal.get("status") or 0),
-                            }
-                        done_n += 1
-                        if done_n % 10 == 0 or done_n == total:
-                            self.progress.emit(
-                                t("workers.reading_labels", done=done_n, total=total)
-                            )
-                            self._emit_fraction(phase_fraction(PHASE_LABELS, done_n, total))
-            # Union with the allowed set (labels can exist that no draft
-            # currently carries, and vice versa for legacy values). The set
-            # is shared across a first-level collection: a stamped disk
-            # slot (one real probe round, first alias use) serves every
-            # later session with zero calls; otherwise a single probe round
-            # runs here (drafts go first — the endpoint needs
-            # PublishDataset permission, which curator tokens typically
-            # hold only on datasets under curation; published rows
-            # otherwise 403). Sub-collections reuse the top-level entry.
-            try:
-                ordered = [
-                    d.get("persistent_id", "")
-                    for d in datasets
-                    if d.get("persistent_id") and is_draft_dataset(d)
-                ]
-                ordered += [
-                    d.get("persistent_id", "")
-                    for d in datasets
-                    if d.get("persistent_id") and d.get("persistent_id") not in ordered
-                ]
-                from curation.client import get_cached_allowed_labels
-
-                was_cached = get_cached_allowed_labels(self._base_url, self._subtree) is not None
-                if was_cached:
-                    self.progress.emit(t("workers.using_cached_labels"))
-                else:
-                    self.progress.emit(t("workers.fetching_allowed_labels"))
+        with ThreadPoolExecutor(max_workers=_POOL_SIZE) as pool:
+            futures: list[Any] = [pool.submit(_check_lock, ds) for ds in datasets]
+            # as_completed avoids head-of-line blocking: one stalled
+            # locks call no longer stalls all later results.
+            for done_n, fut in enumerate(as_completed(futures), start=1):
                 if self.isInterruptionRequested():
-                    return
-                fetched = client.fetch_allowed_labels_shared(self._subtree, ordered, max_attempts=3)
-                for label in fetched:
-                    if label not in labels:
-                        labels.append(label)
-                # Report the pure probe result (not the union above) so the
-                # dashboard stamps the disk slot only for a real round.
-                # Empty pid lists never stamp: a zero-dataset crawl must not
-                # freeze [] in place before any dataset exists to probe.
-                # Rounds where nothing answered (transport/server errors)
-                # never stamp either: they retry next session instead of
-                # freezing an error [] forever.
-                try:
-                    answered = False
-                    try:
-                        answered = bool(client.last_allowed_probe_answered())
-                    except Exception:
-                        answered = False
-                    self.allowedProbed.emit(
-                        {
-                            "labels": list(fetched),
-                            "probed": (not was_cached) and bool(ordered) and answered,
-                            "collection": self._subtree,
-                        }
+                    for f in futures:
+                        f.cancel()
+                    return None
+                ds, flag = fut.result()
+                if flag:
+                    ds["state"] = STATE_IN_REVIEW
+                    in_review_n += 1
+                if done_n % 10 == 0 or done_n == total:
+                    self.progress.emit(
+                        t(
+                            "workers.checking_locks",
+                            done=done_n,
+                            total=total,
+                            in_review=in_review_n,
+                        )
                     )
-                except Exception:
-                    pass
-            except Exception:
-                pass
-            if labels:
-                shown = ", ".join(labels[:5]) + ("…" if len(labels) > 5 else "")
-                self.progress.emit(t("workers.curation_labels", labels=shown))
+                    self._emit_fraction(phase_fraction(PHASE_LOCKS, done_n, total))
+        return in_review_n
+
+    def _identity_and_report(self, client: Any) -> Any:
+        """Choose the bulk curation report or skip it for a non-superuser."""
+        from curation.applog import get_app_log
+
+        try:
+            superuser = client.user_is_superuser()
+        except Exception:
+            superuser = None
+        try:
+            me = client.get_me() or {}
+            who = str(me.get("displayName") or me.get("identifier") or "").strip()
+            if superuser is True:
+                who_display = who or t("workers.user_fallback")
+                self.progress.emit(t("workers.connected_superuser", who=who_display))
+                get_app_log().info(t("workers.identity_superuser", who=who_display))
+            elif superuser is False:
+                who_display = who or t("workers.user_fallback")
+                self.progress.emit(t("workers.connected_user", who=who_display))
+                get_app_log().info(t("workers.identity_user", who=who_display))
+        except Exception:
+            pass
+        if superuser is False:
+            return None  # skip the doomed 403 entirely
+        try:
+            return client.list_curation_states()
+        except Exception:
+            return None
+
+    def _apply_bulk_report(
+        self, report: list[dict[str, Any]], datasets: list[dict[str, Any]]
+    ) -> list[str]:
+        """Stamp rows from the one-call CSV report and return its labels."""
+        from curation.applog import get_app_log
+
+        labels: list[str] = []
+        by_pid = {r["persistent_id"]: r for r in report if r.get("persistent_id")}
+        by_title = {r["title"]: r for r in report if r.get("title")}
+        for ds in datasets:
+            row = by_pid.get(ds.get("persistent_id", "")) or by_title.get(ds.get("title", ""))
+            if row:
+                ds["curation_label"] = row.get("label", "")
+                ds["curation_time"] = row.get("label_time", "")
+                ds["curation_assigner"] = row.get("assigner", "")
             else:
-                self.progress.emit(t("workers.no_curation_labels"))
+                ds["curation_label"] = ""
+                ds["curation_time"] = ""
+                ds["curation_assigner"] = ""
+        for r in report:
+            if r.get("label") and r["label"] not in labels:
+                labels.append(r["label"])
+        self.progress.emit(
+            t(
+                "workers.curation_report",
+                drafts=len(report),
+                labels=len(labels),
+            )
+        )
+        self._emit_fraction(phase_fraction(PHASE_LABELS, 1, 1))
+        try:
+            get_app_log().info(
+                t(
+                    "workers.curation_report_log",
+                    labels=", ".join(t("workers.labels_in_use", labels=lbl) for lbl in labels)
+                    or t("common.none_in_parentheses"),
+                )
+            )
+        except Exception:
+            pass
+        return labels
+
+    def _read_draft_statuses(
+        self, client: Any, datasets: list[dict[str, Any]]
+    ) -> tuple[list[str], int] | None:
+        """Per-draft curationStatus reads. None means cancelled."""
+        from curation.client import is_draft_dataset
+
+        def _read_status(
+            ds: dict[str, Any],
+        ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+            # The refusal (if any) is kept: a curation status this
+            # account may not read is an expected answer, and the
+            # dashboard says so instead of showing an empty column.
+            refusal: dict[str, Any] = {}
             try:
-                get_app_log().info(
-                    t(
-                        "workers.curation_labels_log",
-                        labels=", ".join(t("workers.labels_in_use", labels=lbl) for lbl in labels)
-                        or t("common.none_in_parentheses"),
-                    )
+                status = client.get_curation_status(ds.get("persistent_id", ""), refusal=refusal)
+            except Exception:
+                status = None
+            return ds, status or {}, refusal
+
+        # Drafts only — non-drafts have no readable curation status.
+        drafts: list[dict[str, Any]] = []
+        for ds in datasets:
+            if is_draft_dataset(ds):
+                drafts.append(ds)
+            else:
+                ds["curation_label"] = ""
+                ds["curation_time"] = ""
+                ds["curation_assigner"] = ""
+        total = len(drafts)
+        if total == 0:
+            self.progress.emit(t("workers.no_drafts"))
+        with ThreadPoolExecutor(max_workers=_POOL_SIZE) as pool:
+            futures = [pool.submit(_read_status, ds) for ds in drafts]
+            for done_n, fut in enumerate(as_completed(futures), start=1):
+                if self.isInterruptionRequested():
+                    for f in futures:
+                        f.cancel()
+                    return None
+                ds, status, refusal = fut.result()
+                ds["curation_label"] = status.get("label", "")
+                ds["curation_time"] = status.get("time", "")
+                ds["curation_assigner"] = status.get("assigner", "")
+                if refusal:
+                    # Curation state exists only for datasets under
+                    # curation, and only for accounts in their
+                    # curation scope — record why it is missing.
+                    ds["curation_access"] = {
+                        "state": "unreadable",
+                        "reason": str(refusal.get("code") or "not_under_curation"),
+                        "detail": str(refusal.get("detail") or ""),
+                        "status": int(refusal.get("status") or 0),
+                    }
+                done_n += 1
+                if done_n % 10 == 0 or done_n == total:
+                    self.progress.emit(t("workers.reading_labels", done=done_n, total=total))
+                    self._emit_fraction(phase_fraction(PHASE_LABELS, done_n, total))
+        return [], total
+
+    def _probe_allowed_labels(
+        self, client: Any, datasets: list[dict[str, Any]], labels: list[str]
+    ) -> bool:
+        """Union the allowed label set. False means cancelled."""
+        from curation.client import get_cached_allowed_labels, is_draft_dataset
+
+        # Union with the allowed set (labels can exist that no draft
+        # currently carries, and vice versa for legacy values). The set
+        # is shared across a first-level collection: a stamped disk
+        # slot (one real probe round, first alias use) serves every
+        # later session with zero calls; otherwise a single probe round
+        # runs here (drafts go first — the endpoint needs
+        # PublishDataset permission, which curator tokens typically
+        # hold only on datasets under curation; published rows
+        # otherwise 403). Sub-collections reuse the top-level entry.
+        try:
+            ordered = [
+                d.get("persistent_id", "")
+                for d in datasets
+                if d.get("persistent_id") and is_draft_dataset(d)
+            ]
+            ordered += [
+                d.get("persistent_id", "")
+                for d in datasets
+                if d.get("persistent_id") and d.get("persistent_id") not in ordered
+            ]
+            was_cached = get_cached_allowed_labels(self._base_url, self._subtree) is not None
+            if was_cached:
+                self.progress.emit(t("workers.using_cached_labels"))
+            else:
+                self.progress.emit(t("workers.fetching_allowed_labels"))
+            if self.isInterruptionRequested():
+                return False
+            fetched = client.fetch_allowed_labels_shared(self._subtree, ordered, max_attempts=3)
+            for label in fetched:
+                if label not in labels:
+                    labels.append(label)
+            # Report the pure probe result (not the union above) so the
+            # dashboard stamps the disk slot only for a real round.
+            # Empty pid lists never stamp: a zero-dataset crawl must not
+            # freeze [] in place before any dataset exists to probe.
+            # Rounds where nothing answered (transport/server errors)
+            # never stamp either: they retry next session instead of
+            # freezing an error [] forever.
+            try:
+                answered = False
+                try:
+                    answered = bool(client.last_allowed_probe_answered())
+                except Exception:
+                    answered = False
+                self.allowedProbed.emit(
+                    {
+                        "labels": list(fetched),
+                        "probed": (not was_cached) and bool(ordered) and answered,
+                        "collection": self._subtree,
+                    }
                 )
             except Exception:
                 pass
-            try:
-                self.labelsDiscovered.emit(labels)
-            except Exception:
-                pass
-            self.progress.emit(t("workers.received", total=total, in_review=in_review_n))
+        except Exception:
+            pass
+        return True
+
+    def _collect_labels(
+        self, client: Any, datasets: list[dict[str, Any]], total: int
+    ) -> tuple[list[str], int] | None:
+        """Curation labels + allowed set. None means cancelled.
+
+        ``total`` is carried in from the locks phase: with a bulk curation
+        report the old inline code left it at the dataset count, which is
+        what the final "received" line reported.
+        """
+        self._emit_fraction(phase_fraction(PHASE_LABELS, 0, 0))
+        report = self._identity_and_report(client)
+        if report is not None:
+            labels = self._apply_bulk_report(report, datasets)
+        else:
+            status_result = self._read_draft_statuses(client, datasets)
+            if status_result is None:
+                return None
+            labels, total = status_result
+        if not self._probe_allowed_labels(client, datasets, labels):
+            return None
+        return labels, total
+
+    def _announce_labels(self, labels: list[str], total: int, in_review_n: int) -> None:
+        """Emit the label summary, log lines and the final report lines."""
+        from curation.applog import get_app_log
+
+        if labels:
+            shown = ", ".join(labels[:5]) + ("…" if len(labels) > 5 else "")
+            self.progress.emit(t("workers.curation_labels", labels=shown))
+        else:
+            self.progress.emit(t("workers.no_curation_labels"))
+        try:
+            get_app_log().info(
+                t(
+                    "workers.curation_labels_log",
+                    labels=", ".join(t("workers.labels_in_use", labels=lbl) for lbl in labels)
+                    or t("common.none_in_parentheses"),
+                )
+            )
+        except Exception:
+            pass
+        try:
+            self.labelsDiscovered.emit(labels)
+        except Exception:
+            pass
+        self.progress.emit(t("workers.received", total=total, in_review=in_review_n))
+
+    def run(self) -> None:
+        import traceback
+
+        try:
+            from curation.client import DataverseClient
+
+            self.progress.emit(t("workers.connecting", base_url=self._base_url))
+            client = DataverseClient(self._base_url, self._api_token)
+            datasets = self._discover(client)
+            if self.isInterruptionRequested():
+                return
+            # Dashboard enrichment never clobbers the locks stage's
+            # "In Review" state; it only patches sums and depositor.
+            if not self._enrich(client, datasets):
+                return
+            if self.isInterruptionRequested():
+                return
+            in_review_n = self._probe_locks(client, datasets)
+            if in_review_n is None:
+                return
+            labels_result = self._collect_labels(client, datasets, len(datasets))
+            if labels_result is None:
+                return
+            labels, total = labels_result
+            self._announce_labels(labels, total, in_review_n)
             self.finished.emit(datasets)
         except Exception as exc:
             self.error.emit(f"{exc}\n\n{traceback.format_exc()}")
@@ -970,163 +1032,226 @@ class MetadataWorker(QThread):
             return [n for n in names if n not in ("curation", "version_diff", "history")]
         return names
 
-    def run(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+    @staticmethod
+    def _record_refusal(
+        name: str,
+        exc: BaseException,
+        refusals: dict[str, Any],
+        refusals_lock: threading.Lock,
+    ) -> None:
+        """Remember why a detail read was refused, for the view's copy."""
+        try:
+            code = str(getattr(exc, "refusal_code", "") or "")
+            if code:
+                with refusals_lock:
+                    refusals[name] = {
+                        "state": "unreadable",
+                        "reason": code,
+                        "detail": str(getattr(exc, "refusal_detail", "") or ""),
+                        "status": int(
+                            getattr(getattr(exc, "response", None), "status_code", 0) or 0
+                        ),
+                    }
+        except Exception:
+            pass
+
+    def _fetch_one(
+        self,
+        client: Any,
+        name: str,
+        refusals: dict[str, Any],
+        refusals_lock: threading.Lock,
+    ) -> tuple[str, Any]:
+        """One detail read, preserving the refusal code on expected denials."""
+        try:
+            if name == "metadata":
+                return ("metadata", client.get_dataset_metadata(self._pid))
+            if name == "inventory":
+                return ("inventory", client.get_file_inventory(self._pid))
+            if name == "curation":
+                refusal: dict[str, Any] = {}
+                status = client.get_curation_status(self._pid, refusal=refusal)
+                if refusal:
+                    with refusals_lock:
+                        refusals["curation"] = refusal
+                return ("curation", status or {})
+            if name == "version_diff":
+                return ("version_diff", client.compare_versions(self._pid) or {})
+            if name == "versions":
+                return ("versions", client.list_versions(self._pid))
+            if name == "history":
+                return ("history", client.get_curation_history(self._pid))
+            if name == "allowed":
+                # Shared top-level cache: zero calls on hit, else one
+                # call for this dataset (its collection's list is the
+                # top-level list). No per-open probing.
+                return (
+                    "allowed",
+                    client.fetch_allowed_labels_shared(
+                        self._collection, [self._pid], max_attempts=1
+                    ),
+                )
+            if name == "in_review":
+                return ("in_review", bool(client.dataset_in_review(self._pid)))
+        except Exception as exc:
+            # Keep the refusal code: "this account may not read the
+            # draft" is an expected answer, not a broken read.
+            self._record_refusal(name, exc, refusals, refusals_lock)
+            return (name, None)
+        return (name, None)
+
+    def _fanout(
+        self, client: Any, refusals: dict[str, Any], refusals_lock: threading.Lock
+    ) -> dict[str, Any] | None:
+        """Run the independent detail reads. None means cancelled."""
+        results: dict[str, Any] = {}
+        names = self._fetch_names()
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = {
+                pool.submit(self._fetch_one, client, n, refusals, refusals_lock): n for n in names
+            }
+            for fut in as_completed(futures):
+                if self.isInterruptionRequested():
+                    for f in futures:
+                        f.cancel()
+                    return None
+                try:
+                    key, value = fut.result()
+                except Exception:
+                    continue
+                results[key] = value
+        return results
+
+    @staticmethod
+    def _normalise_results(results: dict[str, Any]) -> dict[str, Any]:
+        """Coerce every fan-out payload to the shape the view expects."""
+        metadata = results.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+        inventory = results.get("inventory")
+        inventory_failed = False
+        if not isinstance(inventory, list):
+            inventory = []
+            inventory_failed = True
+        # No live ingest-status call: the API has no ingestStatus
+        # endpoint (the dataset file-list payload already carries
+        # ingestStatus/ingestErrorMessage, parsed into the inventory
+        # rows at ingest time). The old best-effort call here hit a
+        # nonexistent endpoint and 404ed once per tabular file.
+        curation = results.get("curation")
+        if not isinstance(curation, dict):
+            curation = {}
+        version_diff = results.get("version_diff")
+        if not isinstance(version_diff, dict):
+            version_diff = {}
+        versions = results.get("versions")
+        if not isinstance(versions, list):
+            versions = []
+        history = results.get("history")
+        if not isinstance(history, list):
+            history = []
+        allowed = results.get("allowed")
+        if not isinstance(allowed, list):
+            allowed = []
+        if isinstance(curation, dict):
+            curation["history"] = history
+            curation["allowed"] = allowed
+        return {
+            "metadata": metadata,
+            "inventory": inventory,
+            "inventory_failed": inventory_failed,
+            "curation": curation,
+            "version_diff": version_diff,
+            "versions": versions,
+            "in_review": bool(results.get("in_review")),
+        }
+
+    def _load_extras(
+        self,
+        client: Any,
+        metadata: dict[str, Any],
+        versions: list[Any],
+        in_review: bool,
+        inventory_failed: bool,
+        refusals: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Follow-up reads: timestamps, inbox cache, guestbook, account."""
         import time as _time
+
+        try:
+            numeric_id = metadata.get("id")
+        except Exception:
+            numeric_id = None
+        try:
+            timestamps = client.get_timestamps(self._pid, numeric_id=numeric_id)
+        except Exception:
+            timestamps = {}
+        try:
+            cache_key = _inbox_key(self._base_url, self._pid, self._api_token)
+            with _inbox_lock:
+                cached = _inbox_cache.get(cache_key)
+            if cached is not None and _time.monotonic() - cached[0] < _INBOX_TTL_S:
+                review_submissions = cached[1]
+            else:
+                review_submissions = client.find_review_submissions(self._pid)
+                with _inbox_lock:
+                    _inbox_cache[cache_key] = (_time.monotonic(), review_submissions)
+        except Exception:
+            review_submissions = []
+        # The dataset record names its guestbook, if any. Fetch the
+        # definition now so the download window can render its fields
+        # before the curator clicks Download (one small extra call).
+        guestbook = None
+        account: dict[str, Any] = {}
+        try:
+            guestbook_id = metadata.get("guestbookId")
+            if guestbook_id:
+                guestbook = client.get_guestbook(guestbook_id) or None
+                # Prefill the window with the curator's account details;
+                # Dataverse still requires any field the account lacks
+                # (e.g. Position) to be filled in.
+                account = client.get_current_user()
+        except Exception:
+            guestbook = None
+        return {
+            "versions": versions,
+            "timestamps": timestamps if isinstance(timestamps, dict) else {},
+            "review_submissions": review_submissions
+            if isinstance(review_submissions, list)
+            else [],
+            "in_review": in_review,
+            "inventory_failed": inventory_failed,
+            "guestbook": guestbook,
+            "account": account,
+            "refusals": refusals,
+        }
+
+    def run(self) -> None:
         import traceback
-        from concurrent.futures import ThreadPoolExecutor, as_completed
 
         try:
             from curation.client import DataverseClient
 
             client = DataverseClient(self._base_url, self._api_token)
-
             # Parallel independent fetches (was serial sum of 8x RTT).
             refusals: dict[str, Any] = {}
-
-            def _fetch(name: str) -> tuple[str, Any]:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-                try:
-                    if name == "metadata":
-                        return ("metadata", client.get_dataset_metadata(self._pid))
-                    if name == "inventory":
-                        return ("inventory", client.get_file_inventory(self._pid))
-                    if name == "curation":
-                        refusal: dict[str, Any] = {}
-                        status = client.get_curation_status(self._pid, refusal=refusal)
-                        if refusal:
-                            refusals["curation"] = refusal
-                        return ("curation", status or {})
-                    if name == "version_diff":
-                        return ("version_diff", client.compare_versions(self._pid) or {})
-                    if name == "versions":
-                        return ("versions", client.list_versions(self._pid))
-                    if name == "history":
-                        return ("history", client.get_curation_history(self._pid))
-                    if name == "allowed":
-                        # Shared top-level cache: zero calls on hit, else one
-                        # call for this dataset (its collection's list is the
-                        # top-level list). No per-open probing.
-                        return (
-                            "allowed",
-                            client.fetch_allowed_labels_shared(
-                                self._collection, [self._pid], max_attempts=1
-                            ),
-                        )
-                    if name == "in_review":
-                        return ("in_review", bool(client.dataset_in_review(self._pid)))
-                except Exception as exc:
-                    # Keep the refusal code: "this account may not read the
-                    # draft" is an expected answer, not a broken read.
-                    try:
-                        code = str(getattr(exc, "refusal_code", "") or "")
-                        if code:
-                            refusals[name] = {
-                                "state": "unreadable",
-                                "reason": code,
-                                "detail": str(getattr(exc, "refusal_detail", "") or ""),
-                                "status": int(
-                                    getattr(getattr(exc, "response", None), "status_code", 0) or 0
-                                ),
-                            }
-                    except Exception:
-                        pass
-                    return (name, None)
-                return (name, None)
-
-            results: dict[str, Any] = {}
-            names = self._fetch_names()
-            with ThreadPoolExecutor(max_workers=5) as pool:
-                futures = {pool.submit(_fetch, n): n for n in names}
-                for fut in as_completed(futures):
-                    if self.isInterruptionRequested():
-                        for f in futures:
-                            f.cancel()
-                        return
-                    try:
-                        key, value = fut.result()
-                    except Exception:
-                        continue
-                    results[key] = value
-            metadata = results.get("metadata") or {}
-            if not isinstance(metadata, dict):
-                metadata = {}
-            inventory = results.get("inventory")
-            inventory_failed = False
-            if not isinstance(inventory, list):
-                inventory = []
-                inventory_failed = True
-            # No live ingest-status call: the API has no ingestStatus
-            # endpoint (the dataset file-list payload already carries
-            # ingestStatus/ingestErrorMessage, parsed into the inventory
-            # rows at ingest time). The old best-effort call here hit a
-            # nonexistent endpoint and 404ed once per tabular file.
-            curation = results.get("curation")
-            if not isinstance(curation, dict):
-                curation = {}
-            version_diff = results.get("version_diff")
-            if not isinstance(version_diff, dict):
-                version_diff = {}
-            versions = results.get("versions")
-            if not isinstance(versions, list):
-                versions = []
-            history = results.get("history")
-            if not isinstance(history, list):
-                history = []
-            allowed = results.get("allowed")
-            if not isinstance(allowed, list):
-                allowed = []
-            if isinstance(curation, dict):
-                curation["history"] = history
-                curation["allowed"] = allowed
-            try:
-                numeric_id = metadata.get("id")
-            except Exception:
-                numeric_id = None
-            try:
-                timestamps = client.get_timestamps(self._pid, numeric_id=numeric_id)
-            except Exception:
-                timestamps = {}
-            try:
-                cache_key = _inbox_key(self._base_url, self._pid, self._api_token)
-                with _inbox_lock:
-                    cached = _inbox_cache.get(cache_key)
-                if cached is not None and _time.monotonic() - cached[0] < _INBOX_TTL_S:
-                    review_submissions = cached[1]
-                else:
-                    review_submissions = client.find_review_submissions(self._pid)
-                    with _inbox_lock:
-                        _inbox_cache[cache_key] = (_time.monotonic(), review_submissions)
-            except Exception:
-                review_submissions = []
-            in_review = bool(results.get("in_review"))
-            # The dataset record names its guestbook, if any. Fetch the
-            # definition now so the download window can render its fields
-            # before the curator clicks Download (one small extra call).
-            guestbook = None
-            account = {}
-            try:
-                guestbook_id = metadata.get("guestbookId")
-                if guestbook_id:
-                    guestbook = client.get_guestbook(guestbook_id) or None
-                    # Prefill the window with the curator's account details;
-                    # Dataverse still requires any field the account lacks
-                    # (e.g. Position) to be filled in.
-                    account = client.get_current_user()
-            except Exception:
-                guestbook = None
-            extra = {
-                "versions": versions,
-                "timestamps": timestamps if isinstance(timestamps, dict) else {},
-                "review_submissions": review_submissions
-                if isinstance(review_submissions, list)
-                else [],
-                "in_review": in_review,
-                "inventory_failed": inventory_failed,
-                "guestbook": guestbook,
-                "account": account,
-                # Expected refusals (a draft this account may not read, a
-                # curation status that does not exist) with their reason.
-                "refusals": refusals,
-            }
+            refusals_lock = threading.Lock()
+            results = self._fanout(client, refusals, refusals_lock)
+            if results is None:
+                return
+            normalised = self._normalise_results(results)
+            metadata = normalised["metadata"]
+            inventory = normalised["inventory"]
+            curation = normalised["curation"]
+            version_diff = normalised["version_diff"]
+            extra = self._load_extras(
+                client,
+                metadata,
+                normalised["versions"],
+                normalised["in_review"],
+                normalised["inventory_failed"],
+                refusals,
+            )
             self.finished.emit(metadata, inventory, curation, version_diff, extra)
         except Exception as exc:
             self.error.emit(f"{exc}\n\n{traceback.format_exc()}")

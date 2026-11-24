@@ -110,21 +110,6 @@ def find_emails(text: str) -> list[str]:
     return sorted(set(EMAIL_RE.findall(text)))
 
 
-def _luhn_ok(value: str) -> bool:
-    digits = [int(c) for c in value if c.isdigit()]
-    if len(digits) < 12 or len(digits) > 19:
-        return False
-    checksum = 0
-    parity = len(digits) % 2
-    for i, d in enumerate(digits):
-        if i % 2 == parity:
-            d *= 2
-            if d > 9:
-                d -= 9
-        checksum += d
-    return checksum % 10 == 0
-
-
 def _ca_sin_luhn_ok(value: str) -> bool:
     digits = [int(c) for c in value if c.isdigit()]
     if len(digits) != 9:

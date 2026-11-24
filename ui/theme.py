@@ -80,26 +80,6 @@ MUTED_BORDER = "#dfe3ea"
 PILL_BLUE_TEXT = "#1a2e4a"  # in-review pill text
 PILL_BLUE_BORDER = "#b9c7df"
 
-# Deterministic identifier-colour palette for the syntax-highlighting log
-# (cyan/amber/blue/violet/pink tints; md5-selected, never random per run).
-LOG_IDENTIFIER_PALETTE = (
-    "#0e7490",  # cyan-700
-    AMBER_700,
-    "#1d4ed8",  # blue-700
-    "#7c3aed",  # violet-600
-    "#be185d",  # pink-700
-    "#0369a1",  # sky-700
-    SUCCESS_DARK,
-    WARNING_DARK,
-    "#6d28d9",  # violet-700
-    "#9d174d",  # pink-800
-    "#155e75",  # cyan-800
-    "#b91c1c",  # red-700
-    "#166534",  # green-800
-    "#92400e",  # amber-800
-    "#1e40af",  # blue-800
-)
-
 # --- Semantic roles: what a colour is FOR -------------------------------
 # The palette above says what a colour IS. The roles below say what it is
 # FOR, so a component names an intent ("muted text", "card surface")
@@ -635,15 +615,6 @@ def _relative_luminance(hex_color: str) -> float:
         channels.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
     r, g, b = channels
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-
-def log_identifier_color(seed: int) -> str:
-    """Pick a deterministic identifier colour for the log's syntax highlighting.
-
-    The identifier palette is a raw palette: it stays inside the theme,
-    and a view asks for a colour by seed rather than naming a hue.
-    """
-    return LOG_IDENTIFIER_PALETTE[seed % len(LOG_IDENTIFIER_PALETTE)]
 
 
 def contrast_ratio(foreground: str, background: str) -> float:

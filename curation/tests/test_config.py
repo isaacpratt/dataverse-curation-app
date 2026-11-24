@@ -372,7 +372,15 @@ def test_icacls_failure_logs_warning_without_token(
         stderr = b"Access denied"
         stdout = b""
 
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _Out())
+    calls: list[list[str]] = []
+
+    def _run(args: list[str], **kwargs: Any) -> Any:
+        calls.append(args)
+        return _Out()
+
+    monkeypatch.setattr(subprocess, "run", _run)
+    monkeypatch.setenv("USERDOMAIN", "TESTDOMAIN")
+    monkeypatch.setenv("USERNAME", "tester")
     applog.clear()
     cfg = Config()
     cfg.dataverse.base_url = "https://example.test"
@@ -381,3 +389,109 @@ def test_icacls_failure_logs_warning_without_token(
     joined = "\n".join(applog.lines())
     assert "could not be locked down" in joined
     assert "tok-secret-marker-999" not in joined
+    assert any(cmd[0] == "icacls" and "TESTDOMAIN\\tester:F" in cmd for cmd in calls)
+    assert not any("Everyone" in arg for cmd in calls for arg in cmd)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="icacls is Windows-only")
+def test_config_save_aborts_when_owner_cannot_be_resolved(
+    store: FakeKeyring, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+
+    monkeypatch.delenv("USERNAME", raising=False)
+    monkeypatch.delenv("USERDOMAIN", raising=False)
+
+    class _Fail:
+        returncode = 1
+        stdout = b""
+        stderr = b"no such user"
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _Fail())
+    cfg = Config()
+    cfg.dataverse.base_url = "https://example.test"
+    cfg.dataverse.api_token = "tok-secret-marker-999"
+    target = tmp_path / "config.json"
+    with pytest.raises(RuntimeError, match="could not resolve the current Windows account"):
+        cfg.save(target)
+    assert not target.exists()
+
+
+# -- base URL validation (dv-v2e) -------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("bad_url", "match"),
+    [
+        ("http://host", "plain HTTP"),
+        ("httpx://host", "https://"),
+        ("ftp://host", "https://"),
+        ("https://", "no host"),
+        ("   ", "DATAVERSE_BASE_URL is empty"),
+        ("host.test", "https://"),
+    ],
+)
+def test_file_base_url_rejected(
+    bad_url: str,
+    match: str,
+    store: FakeKeyring,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _cfg_env(monkeypatch)
+    _write(
+        tmp_path,
+        {
+            "version": 1,
+            "dataverse": {"base_url": bad_url, "api_token": "", "collection": ""},
+            "app": {},
+        },
+    )
+    with pytest.raises(ValueError, match=match):
+        Config.load(tmp_path / "config.json")
+
+
+def test_file_base_url_normalised(
+    store: FakeKeyring, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _cfg_env(monkeypatch)
+    _write(
+        tmp_path,
+        {
+            "version": 1,
+            "dataverse": {"base_url": "https://Demo.Example/ ", "api_token": "", "collection": ""},
+            "app": {},
+        },
+    )
+    assert Config.load(tmp_path / "config.json").dataverse.base_url == "https://Demo.Example"
+
+
+def test_client_rejects_cleartext_base_url() -> None:
+    from curation.client import DataverseClient
+
+    with pytest.raises(ValueError, match="plain HTTP"):
+        DataverseClient("http://host.test", "tok")
+
+
+def test_cli_dataverse_flag_rejects_cleartext(
+    store: FakeKeyring, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import argparse
+
+    from main import main as run_main
+
+    _cfg_env(monkeypatch)
+    monkeypatch.setattr(
+        "curation.config.resolve_config_path", lambda path=None: tmp_path / "config.json"
+    )
+    seen: list[str] = []
+
+    def _error(message: str) -> None:
+        seen.append(message)
+        raise SystemExit(2)
+
+    monkeypatch.setattr(argparse.ArgumentParser, "error", lambda self, message: _error(message))
+    with pytest.raises(SystemExit):
+        run_main(["--dataverse", "http://host.test"])
+    assert seen
+    assert "plain HTTP" in seen[0]

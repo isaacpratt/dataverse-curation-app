@@ -5,7 +5,6 @@ the core session, retry and guestbook plumbing held in client.client. Kept
 separate so client.client stays session/discovery-focused.
 """
 
-import hashlib
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -22,6 +21,7 @@ from curation.client.errors import (
     _RetryOriginal,
     _with_refusal,
 )
+from curation.client.hashing import hash_file as _hash_file
 from curation.client.http import _error_message, _throttle_delay
 from curation.client.parsers import (
     _summarize_version_data,
@@ -680,8 +680,4 @@ class _DownloadsMixin:
 
     @staticmethod
     def hash_file(path: Path, algorithm: str) -> str:
-        digest = hashlib.new(algorithm)
-        with open(path, "rb") as handle:
-            for chunk in iter(lambda: handle.read(_STREAM_CHUNK), b""):
-                digest.update(chunk)
-        return digest.hexdigest()
+        return _hash_file(path, algorithm)

@@ -245,19 +245,31 @@ def run_report(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg d
     total_files = len(indexed)
     done_files = 0
     if max_workers and max_workers > 1:
-        from concurrent.futures import ThreadPoolExecutor
+        from concurrent.futures import ThreadPoolExecutor, as_completed
 
+        # Submit in bounded chunks: pool.map would enqueue every file up
+        # front, so breaking the result loop on cancellation could not stop
+        # work already submitted. A chunk is twice the pool width — enough
+        # to keep every thread busy without a long uncancellable tail.
+        chunk_size = max_workers * 2
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            for result in pool.map(_run_one_file, indexed):
+            for start in range(0, len(indexed), chunk_size):
                 if _cancelled():
                     break
-                done_files += 1
-                _report_fraction(done_files, total_files)
-                if result is None or isinstance(result, Path):
-                    continue
-                entries.append(result)
-        # Restore deterministic sorted order (ThreadPool.map preserves
-        # order already, but sort defensively by path).
+                chunk = indexed[start : start + chunk_size]
+                futures = {pool.submit(_run_one_file, item): item for item in chunk}
+                for fut in as_completed(futures):
+                    if _cancelled():
+                        for f in futures:
+                            f.cancel()
+                        break
+                    result = fut.result()
+                    done_files += 1
+                    _report_fraction(done_files, total_files)
+                    if result is None or isinstance(result, Path):
+                        continue
+                    entries.append(result)
+        # Completion order is not file order; restore deterministic order.
         entries.sort(key=lambda e: e.path)
     else:
         for idx, path in indexed:
@@ -313,6 +325,7 @@ def run_report_to_file(
     metadata: dict[str, Any] | None = None,
     variable_metadata: dict[str, Any] | None = None,
     ruleset: dict[str, Any] | None = None,
+    is_cancelled: Any = None,
 ) -> DatasetReport:
     """Write the report in json, md, or both (sibling extension swap).
 
@@ -327,6 +340,7 @@ def run_report_to_file(
         metadata=metadata,
         variable_metadata=variable_metadata,
         ruleset=ruleset,
+        is_cancelled=is_cancelled,
     )
     out_path = Path(out_path)
     fmt = (fmt or "json").lower()
