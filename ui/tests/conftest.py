@@ -73,6 +73,10 @@ def _no_leaked_windows(qapp):
     forcing deletion here left the worker holding a dangling pointer (seen
     as a silent crash in test_lazy_startup). Hiding is idempotent and is
     enough to stop the cost.
+
+    Hiding also takes a leaked window out of the live-theme walk: a switch
+    repaints the visible top-level windows and their children, so a hidden
+    leaked window is not walked (dv-314).
     """
     from typing import cast
 
@@ -84,6 +88,7 @@ def _no_leaked_windows(qapp):
     if app is None:
         yield
         return
+
     # Only windows that appear during the test are candidates: the session
     # ``win`` fixture is shown before the first test and must stay shown.
     before = set(app.topLevelWidgets())
@@ -95,6 +100,18 @@ def _no_leaked_windows(qapp):
         except Exception:
             pass
     qapp.processEvents()
+
+
+@pytest.fixture
+def gallery_without_app_theme(monkeypatch):
+    """Build the gallery's two palettes without swapping the app stylesheet.
+
+    ``GalleryWindow`` switches ``ACTIVE_THEME`` while it builds each
+    column, and scoped sheets resolve through that. Replacing the
+    application stylesheet as well would re-polish every live widget in
+    the test process for a view the test is not checking (dv-gkt).
+    """
+    monkeypatch.setattr("ui.theme.apply_theme", lambda *a, **k: None)
 
 
 @pytest.fixture(scope="session")

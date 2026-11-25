@@ -65,7 +65,8 @@ def _click(view, widget, button=Qt.MouseButton.LeftButton):
     QTest.mouseClick(widget, button, pos=_center_of(widget))
 
 
-def _pump(qapp: Any, rounds: Any = 6):
+def _pump(qapp: Any, rounds: Any = 3):
+    """Drain posted events; see test_review_config_table._pump for why 3."""
     for _ in range(rounds):
         qapp.processEvents()
 

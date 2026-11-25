@@ -91,9 +91,12 @@ Probes in `tools/probes/` are pixel-and-geometry checks run offscreen against a 
 | `probe_manifest_columns.py` | The manifest fits, persists the user's widths, resets |
 | `probe_headings.py` | Every full-page heading wears the same token |
 | `probe_card_corner.py` | A card's bottom-right corner stays connected |
+| `probe_theme_switch.py` | A live light↔dark switch repaints every scoped sheet in a real window (page backgrounds, cards, bands, pills, search fields, chips, badges, check rows, window chrome) and re-tints Lucide glyphs, model-item glyphs and the painted ring |
 | other probes | Auto-Checks and Metadata rows, Extensions table, finding dispositions, preview card, About updates section, navigation rail, review rules table, gallery input controls, icon sheet, review-row selection, the two rule cards, entry-check params form, the two check sections |
 
 `tools/probes/_common.py:boot()` points `cfg.app.workspace` at a fresh temp directory and applies the theme; every probe goes through it and stubs out anything that would reach the network. Qt messages are classified: two environment messages are allowed (`QFontDatabase: Cannot find font directory`, `This plugin does not support propagateSizeHints()`); anything else fails the run. The same contracts live in `ui/tests/` as pytest suites (`test_table_layout.py`, `test_table_geometry.py`, `test_page_headings.py`, `test_type_scale.py`, `test_contrast.py`, `test_kit_stylesheets.py`, `test_theme_conformance.py`, `test_strings.py`, `test_gallery_contract.py`).
+
+Live-theme coverage is deliberately split. `ui/tests/test_dark_mode.py` makes one light→dark→light switch over a small harness holding one of each scoped sheet kind, plus the non-widget surfaces (widget glyph, model-item glyph, painted ring). `probe_theme_switch.py` keeps the end-to-end check on a real `MainWindow` with the dashboard, settings, about and review pages. Pytest alone does not exercise every view's scoped sheet, so run both gates; when a view gains a new sheet kind, add it to the harness. Gallery-building tests stub application theme application for the same reason — the gallery switches `ACTIVE_THEME` for each column, and re-polishing the whole app adds minutes to the suite without checking anything.
 
 ## Interface text (string catalogue)
 

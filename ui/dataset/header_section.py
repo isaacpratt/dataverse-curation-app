@@ -19,7 +19,6 @@ from ui.dataset.helpers import _pill_state
 from ui.dataset.state import DetailState
 from ui.i18n import t
 from ui.theme import (
-    ACTIVE_THEME,
     BORDER_SUBTLE,
     STATE_ERROR_BG,
     STATE_ERROR_BORDER,
@@ -32,12 +31,12 @@ from ui.theme import (
     TEXT_MUTED,
     TEXT_SUCCESS,
     selectable_labels,
-    surface_frame_qss,
 )
 from ui.widgets import (
     make_action_button,
     make_small_body_label,
     set_badge_label,
+    set_sheet,
 )
 
 
@@ -564,9 +563,20 @@ class HeaderSection(DetailState):
                 "blocked": (STATE_ERROR_BG, STATE_ERROR_BORDER, TEXT_DANGER, "octagon-x"),
                 "unreviewed": (SURFACE_SUBTLE, BORDER_SUBTLE, TEXT_MUTED, "circle-dashed"),
             }
-            bg, border, ink, icon_name = faces.get(verdict.level, faces["unreviewed"])
-            self._verdict_card.setStyleSheet(
-                surface_frame_qss(bg, border, selector="QFrame#VerdictCard", theme=ACTIVE_THEME)
+            face_roles = {
+                "ready": ("SURFACE_TINT", "STATE_SUCCESS_GRAPHIC"),
+                "revisions": ("SURFACE_TINT", "STATE_WARNING_GRAPHIC"),
+                "blocked": ("STATE_ERROR_BG", "STATE_ERROR_BORDER"),
+                "unreviewed": ("SURFACE_SUBTLE", "BORDER_SUBTLE"),
+            }
+            _bg, _border, ink, icon_name = faces.get(verdict.level, faces["unreviewed"])
+            bg_role, border_role = face_roles.get(verdict.level, face_roles["unreviewed"])
+            set_sheet(
+                self._verdict_card,
+                "surface_frame",
+                bg_role,
+                border_role,
+                selector="QFrame#VerdictCard",
             )
             try:
                 self._verdict_icon.setPixmap(_icon(icon_name, color=ink).pixmap(18, 18))

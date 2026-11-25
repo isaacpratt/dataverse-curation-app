@@ -49,22 +49,14 @@ from ui.dialogs import (
 from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
-    ACCENT_PRIMARY,
-    BORDER_SUBTLE,
-    STATE_ERROR_GRAPHIC,
-    SURFACE_CARD,
-    TEXT_DANGER,
-    TEXT_ON_TINT,
     enable_table_copy,
-    page_background_qss,
+    role,
     selectable_labels,
-    surface_frame_qss,
     transparent_surface_qss,
 )
 from ui.widgets import (
     AppTable,
     PaneFooter,
-    flush_table_style,
     make_action_button,
     make_checkbox,
     make_combo,
@@ -72,6 +64,8 @@ from ui.widgets import (
     make_icon_text_button,
     make_line_edit,
     make_page_heading,
+    set_flush_table_style,
+    set_sheet,
 )
 from ui.workers import register_worker
 
@@ -159,7 +153,7 @@ class SettingsPane(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds (e.g. the extensions table).
         self.setObjectName("SettingsDialog")
-        self.setStyleSheet(page_background_qss("SettingsDialog"))
+        set_sheet(self, "page_background", ("SettingsDialog",))
         # Baseline-based dirty tracking: capture the saved values after a
         # reload, compare on every edit, and guard every exit.
         self._loading = False
@@ -295,8 +289,13 @@ class SettingsPane(QWidget):
         # Theme mode selector
         theme_group = QWidget()
         theme_group.setObjectName("Card")
-        theme_group.setStyleSheet(
-            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QWidget#Card", radius="8px")
+        set_sheet(
+            theme_group,
+            "surface_frame",
+            "SURFACE_CARD",
+            "BORDER_SUBTLE",
+            selector="QWidget#Card",
+            radius="8px",
         )
         theme_layout = QVBoxLayout(theme_group)
         theme_layout.setContentsMargins(16, 16, 16, 16)
@@ -367,7 +366,7 @@ class SettingsPane(QWidget):
         # vertical padding here (12px horizontal inset kept, item text stays
         # centered at the same y) lets the cell fill the row; the row
         # separator still comes from the app rule's border-bottom.
-        self.ext_table.setStyleSheet(flush_table_style(last=False, item_padding="0px 12px"))
+        set_flush_table_style(self.ext_table, last=False, item_padding="0px 12px")
         # Remember the user's column widths/order across sessions. The
         # controller owns the persistence: it saves user gestures only.
         try:
@@ -768,7 +767,7 @@ class SettingsPane(QWidget):
         return "—"
 
     def _refresh_extensions(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-        from ui.icons import icon as _ext_icon  # hoisted: also used in TOOLS rows below
+        from ui.icons import set_item_icon
 
         frozen = bool(getattr(sys, "frozen", False))
         # Hide the cells being replaced before repopulating: Qt only
@@ -807,16 +806,16 @@ class SettingsPane(QWidget):
             # the tooltip/accessible text so the state isn't colour-only.
             inst_item = QTableWidgetItem("")
             if is_installed is False:
-                inst_item.setForeground(QColor(TEXT_DANGER))
+                inst_item.setForeground(QColor(role("TEXT_DANGER")))
             elif is_installed:
-                inst_item.setForeground(QColor(ACCENT_PRIMARY))
+                inst_item.setForeground(QColor(role("ACCENT_PRIMARY")))
             try:
                 if is_installed is False:
-                    inst_item.setIcon(_ext_icon("x", color=STATE_ERROR_GRAPHIC))
+                    set_item_icon(inst_item, "x", color="STATE_ERROR_GRAPHIC")
                 elif is_installed:
-                    inst_item.setIcon(_ext_icon("check", color=ACCENT_PRIMARY))
+                    set_item_icon(inst_item, "check", color="ACCENT_PRIMARY")
                 else:
-                    inst_item.setIcon(_ext_icon("minus", color=TEXT_ON_TINT))
+                    set_item_icon(inst_item, "minus", color="TEXT_ON_TINT")
             except Exception:
                 pass
             inst_item.setToolTip(state_tip)
@@ -880,12 +879,12 @@ class SettingsPane(QWidget):
             resolved = self._detect_tool(key, configured)
             self.ext_table.setItem(row, 0, QTableWidgetItem(label))
             status_item = QTableWidgetItem("")
-            status_item.setForeground(QColor(ACCENT_PRIMARY if resolved else TEXT_DANGER))
+            status_item.setForeground(QColor(role("ACCENT_PRIMARY" if resolved else "TEXT_DANGER")))
             try:
-                status_item.setIcon(
-                    _ext_icon("check", color=ACCENT_PRIMARY)
-                    if resolved
-                    else _ext_icon("x", color=STATE_ERROR_GRAPHIC)
+                set_item_icon(
+                    status_item,
+                    "check" if resolved else "x",
+                    color="ACCENT_PRIMARY" if resolved else "STATE_ERROR_GRAPHIC",
                 )
             except Exception:
                 pass
@@ -1498,10 +1497,12 @@ class SettingsPane(QWidget):
             return
 
         # Swap the palette at the dimmest point of a short fade, so the
-        # change reads as a transition rather than a one-frame cut.
+        # change reads as a transition rather than a one-frame cut. The
+        # repaint also re-runs every scoped sheet (cards, buttons, tables),
+        # which is the half Qt does not do for us (dv-4jm.7).
         def _repaint() -> None:
             set_active_theme(theme)
-            apply_theme(app, theme)
+            apply_theme(app, theme, retheme=True)
 
         if theme == ACTIVE_THEME:
             _repaint()

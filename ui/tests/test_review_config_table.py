@@ -21,7 +21,14 @@ LEVEL_COLUMN = 1
 CHECK_COLUMN = 2
 
 
-def _pump(qapp, rounds: int = 8) -> None:
+def _pump(qapp, rounds: int = 3) -> None:
+    """Drain posted events.
+
+    Three rounds, not eight: each round is a full event-loop pass, and the
+    layout work these tests wait for (a resize, a table refresh) settles in
+    one or two. The extra rounds cost ~0.1 s per test across 33 tests and
+    bought nothing - the assertions below are the real check.
+    """
     for _ in range(rounds):
         qapp.processEvents()
 
@@ -34,7 +41,7 @@ def _review(win, qapp, width: int = 1440, height: int = 900):
     rc = win._review_config
     rc._field_tree.updateGeometry()
     rc._field_tree.header().updateGeometry()
-    _pump(qapp)
+    _pump(qapp, 2)
     return rc
 
 

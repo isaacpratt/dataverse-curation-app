@@ -18,6 +18,10 @@ def pane(qapp, tmp_path, monkeypatch):
     from ui.settings_dialog import SettingsPane
 
     monkeypatch.setattr(SettingsPane, "_start_size_worker", lambda self: None)
+    # These tests are about dirty tracking, not theme application. The real
+    # persist() calls _apply_theme(), which swaps the app stylesheet over
+    # every live widget - 30-100s late in the suite for no coverage here.
+    monkeypatch.setattr(SettingsPane, "_apply_theme", lambda self: None)
     cfg = Config()
     cfg.dataverse.base_url = "https://demo.borealisdata.ca"
     cfg.dataverse.api_token = ""

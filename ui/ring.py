@@ -25,13 +25,7 @@ from PySide6.QtWidgets import QWidget
 
 from ui.i18n import t
 from ui.progress import ease_step
-from ui.theme import (
-    ACCENT_PRIMARY,
-    BORDER_SUBTLE,
-    STATE_ERROR_GRAPHIC,
-    STATE_SUCCESS_GRAPHIC,
-    TEXT_PRIMARY,
-)
+from ui.theme import role
 
 __all__ = ["RingProgress", "ease_step"]
 
@@ -188,35 +182,35 @@ class RingProgress(QWidget):
             side = self._diameter - inset * 2
             rect = QRectF(inset, inset, side, side)
             width = max(2.0, self._diameter * 0.10)
-            pen = QPen(QColor(BORDER_SUBTLE), width)
+            pen = QPen(QColor(role("BORDER_SUBTLE")), width)
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             painter.setPen(pen)
             painter.drawArc(rect, 0, 360 * 16)
 
             if self._error:
-                pen = QPen(QColor(STATE_ERROR_GRAPHIC), width)
+                pen = QPen(QColor(role("STATE_ERROR_GRAPHIC")), width)
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 painter.setPen(pen)
                 painter.drawArc(rect, 0, 360 * 16)
-                self._paint_icon(painter, "triangle-alert", STATE_ERROR_GRAPHIC)
+                self._paint_icon(painter, "triangle-alert", role("STATE_ERROR_GRAPHIC"))
                 painter.end()
                 return
 
             if self._complete:
-                pen = QPen(QColor(STATE_SUCCESS_GRAPHIC), width)
+                pen = QPen(QColor(role("STATE_SUCCESS_GRAPHIC")), width)
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 painter.setPen(pen)
                 painter.drawArc(rect, 0, 360 * 16)
                 # The completion mark is the app's Lucide check, not a typed
                 # character: every state mark in the interface is a bundled
                 # glyph tinted from a role (dv-kvb).
-                self._paint_icon(painter, "check", STATE_SUCCESS_GRAPHIC)
+                self._paint_icon(painter, "check", role("STATE_SUCCESS_GRAPHIC"))
                 painter.end()
                 return
 
             if self._target is None or self._is_stalled():
                 # Indeterminate sweep (unknown total or stalled work).
-                pen = QPen(QColor(ACCENT_PRIMARY), width)
+                pen = QPen(QColor(role("ACCENT_PRIMARY")), width)
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 painter.setPen(pen)
                 start = int(self._sweep_deg * 16)
@@ -227,7 +221,7 @@ class RingProgress(QWidget):
                 return
 
             fraction = max(0.0, min(1.0, self._displayed))
-            pen = QPen(QColor(ACCENT_PRIMARY), width)
+            pen = QPen(QColor(role("ACCENT_PRIMARY")), width)
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             painter.setPen(pen)
             painter.drawArc(rect, 90 * 16, int(-360 * 16 * fraction))
@@ -284,7 +278,7 @@ class RingProgress(QWidget):
             font.setPixelSize(self._label_pixel_size(text))
             font.setBold(True)
             painter.setFont(font)
-            painter.setPen(QColor(TEXT_PRIMARY))
+            painter.setPen(QColor(role("TEXT_PRIMARY")))
             painter.drawText(self._inner_rect(), Qt.AlignmentFlag.AlignCenter, text)
         except Exception:
             pass

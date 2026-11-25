@@ -131,6 +131,7 @@ bd dolt push          # Push beads data to remote
 Gate before handoff; run from the repository root when code (not docs-only) changed:
 
 - `uv run pytest -q` — must exit 0. The default run is the repository's own suite: the parity tests that read the sibling `CUR_Res_CurationTools` clone carry the `samples` marker and are deselected, so the same tests run on every machine
+- Live-theme coverage is split: `ui/tests/test_dark_mode.py` makes one light→dark→light switch over a small harness holding one of each scoped sheet kind, while `python tools/probes/probe_theme_switch.py` is the real-window check (page backgrounds, cards, bands, badges, item glyphs, ring). Both are gates — pytest alone does not exercise every view's scoped sheet. Keep the harness in step when a view gains a new sheet kind
 - `uv run poe samples` — the opt-in parity run against that sample data (skipped when the clone is absent). Not part of the gate: CI has no such clone, and a gate whose result depends on a developer's disk is not a gate
 - `uv run poe cover` — engine coverage, compared against the floor in `[tool.coverage.report]` (65). The measure omits `*/tests/*`: test modules used to sit inside the measured packages and counted as covered source, which is how `83%` was reported while the production number was ~65%
 - `uv run poe cover-ui` — UI-only coverage on `ui/tests/` with four workers, against its own ratcheting floor (currently 71; see `pyproject.toml`). Raise the floor with real view tests, never by widening the measure; the CI Gate runs the same task

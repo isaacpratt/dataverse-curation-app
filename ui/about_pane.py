@@ -16,11 +16,7 @@ from PySide6.QtWidgets import (
 from ui.i18n import t
 from ui.theme import (
     ACTIVE_THEME,
-    BORDER_SUBTLE,
-    SURFACE_CARD,
     TEXT_SUBTLE,
-    page_background_qss,
-    surface_frame_qss,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -29,6 +25,8 @@ from ui.widgets import (
     make_body_label,
     make_page_heading,
     make_progress_bar,
+    set_icon,
+    set_sheet,
 )
 
 
@@ -145,7 +143,7 @@ class AboutPane(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds below this pane.
         self.setObjectName("AboutPane")
-        self.setStyleSheet(page_background_qss("AboutPane", theme=ACTIVE_THEME))
+        set_sheet(self, "page_background", ("AboutPane",))
 
         # Updates section state (the feed logic lives in ui/updater.py).
         self._update_state = (
@@ -167,11 +165,7 @@ class AboutPane(QWidget):
 
         card = QFrame()
         card.setObjectName("Card")
-        card.setStyleSheet(
-            surface_frame_qss(
-                SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card", theme=ACTIVE_THEME
-            )
-        )
+        set_sheet(card, "surface_frame", "SURFACE_CARD", "BORDER_SUBTLE", selector="QFrame#Card")
         body = QVBoxLayout(card)
         body.setContentsMargins(20, 20, 20, 20)
         body.setSpacing(10)
@@ -260,9 +254,7 @@ class AboutPane(QWidget):
         back_btn.setAccessibleName(t("about.close_a11y"))
         back_btn.clicked.connect(lambda: self.discarded.emit())
         try:
-            from ui.icons import role_icon as _about_icon
-
-            back_btn.setIcon(_about_icon("back"))
+            set_icon(back_btn, "back")
         except Exception:
             pass
         row.addWidget(back_btn)
@@ -272,7 +264,6 @@ class AboutPane(QWidget):
     def _build_updates_section(self) -> QFrame:
         """Build the Updates block: status, last check, one action button, a bar."""
         import ui.updater as _updater
-        from ui.theme import BORDER_SUBTLE
 
         card = QFrame()
         card.setObjectName("UpdatesCard")
@@ -286,7 +277,7 @@ class AboutPane(QWidget):
         divider.setFixedHeight(1)
         # theme-allow: hairline divider tinted with the shared border role,
         # nothing the kit owns (no card/badge/label mixin matches a bare rule)
-        divider.setStyleSheet(f"background: {BORDER_SUBTLE}; border: none;")
+        set_sheet(divider, "rule", "QFrame", "BORDER_SUBTLE")
         layout.addWidget(divider)
 
         head = QLabel(t("about.updates.title"))

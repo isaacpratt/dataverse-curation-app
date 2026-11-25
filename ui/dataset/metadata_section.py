@@ -23,21 +23,12 @@ from ui.theme import (
     ACCENT_PRIMARY,
     ACTIVE_THEME,
     BORDER_SUBTLE,
-    STATE_ERROR_BG,
-    STATE_ERROR_BORDER,
     STATE_ERROR_GRAPHIC,
-    STATE_ERROR_SURFACE,
-    STATE_ERROR_TEXT,
     STATE_WARNING_GRAPHIC,
-    SURFACE_ALT,
-    SURFACE_SUBTLE,
-    SURFACE_TINT,
     TEXT_AMBER,
     TEXT_DANGER,
     TEXT_MUTED,
-    TEXT_ON_ACCENT,
     TEXT_SUCCESS,
-    surface_frame_qss,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -49,6 +40,8 @@ from ui.widgets import (
     make_combo,
     make_disposition_combo,
     make_small_body_label,
+    set_icon,
+    set_sheet,
 )
 
 
@@ -429,7 +422,6 @@ class MetadataSection(DetailState):
             pass
 
     def _toggle_raw(self) -> None:
-        from ui.icons import icon as _icon
 
         vis = not self._raw_view.isVisible()
         self._raw_view.setVisible(vis)
@@ -437,7 +429,7 @@ class MetadataSection(DetailState):
             t("detail.header.hide_raw_metadata") if vis else t("detail.header.show_raw_metadata")
         )
         try:
-            self._raw_btn.setIcon(_icon("chevron-up" if vis else "chevron-right"))
+            set_icon(self._raw_btn, "chevron-up" if vis else "chevron-right")
         except Exception:
             pass
 
@@ -541,67 +533,64 @@ class MetadataSection(DetailState):
         frame.setProperty("meta_field", label)
         frame.setProperty("meta_block", str(result.get("block") or ""))
         frame.setProperty("meta_rule_id", str(result.get("rule_id") or ""))
-        from ui.icons import icon as _icon
         from ui.icons import icon_label as _icon_label
 
         if pending:
             # Pending = no data yet: muted row, neutral badge, no bar.
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    SURFACE_SUBTLE,
-                    BORDER_SUBTLE,
-                    selector="QFrame#AutoCheckRow",
-                    theme=ACTIVE_THEME,
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "SURFACE_SUBTLE",
+                "BORDER_SUBTLE",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = t("detail.metadata_check.status_pending")
-            badge_bg, badge_fg = SURFACE_ALT, TEXT_MUTED
+            badge_bg, badge_fg = "SURFACE_ALT", "TEXT_MUTED"
         elif status == "complete":
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "SURFACE_TINT",
+                "BORDER_SUBTLE",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "check", ACCENT_PRIMARY
             badge_text = t("detail.metadata_check.status_complete")
-            badge_bg, badge_fg = ACCENT_PRIMARY, TEXT_ON_ACCENT
+            badge_bg, badge_fg = "ACCENT_PRIMARY", "TEXT_ON_ACCENT"
         elif status == "skipped":
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    SURFACE_SUBTLE,
-                    BORDER_SUBTLE,
-                    selector="QFrame#AutoCheckRow",
-                    theme=ACTIVE_THEME,
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "SURFACE_SUBTLE",
+                "BORDER_SUBTLE",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = t("detail.metadata_check.status_unchecked")
-            badge_bg, badge_fg = SURFACE_ALT, TEXT_MUTED
+            badge_bg, badge_fg = "SURFACE_ALT", "TEXT_MUTED"
         elif level_required:
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    STATE_ERROR_BG,
-                    STATE_ERROR_BORDER,
-                    selector="QFrame#AutoCheckRow",
-                    theme=ACTIVE_THEME,
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "STATE_ERROR_BG",
+                "STATE_ERROR_BORDER",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "octagon-x", STATE_ERROR_GRAPHIC
             badge_text = t("detail.metadata_check.status_incomplete")
-            badge_bg, badge_fg = STATE_ERROR_BG, STATE_ERROR_TEXT
+            badge_bg, badge_fg = "STATE_ERROR_BG", "STATE_ERROR_TEXT"
         else:
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    STATE_ERROR_SURFACE,
-                    STATE_ERROR_BORDER,
-                    selector="QFrame#AutoCheckRow",
-                    theme=ACTIVE_THEME,
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "STATE_ERROR_SURFACE",
+                "STATE_ERROR_BORDER",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "octagon-alert", STATE_WARNING_GRAPHIC
             badge_text = t("detail.metadata_check.status_incomplete")
-            badge_bg, badge_fg = STATE_ERROR_BG, STATE_ERROR_TEXT
+            badge_bg, badge_fg = "STATE_ERROR_BG", "STATE_ERROR_TEXT"
 
         lay = QHBoxLayout(frame)
         lay.setContentsMargins(10, 8, 10, 8)
@@ -662,7 +651,7 @@ class MetadataSection(DetailState):
             btn = QToolButton(frame)
             btn.setAutoRaise(True)
             btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-            btn.setIcon(_icon("chevron-right", color=TEXT_MUTED, size=14))
+            set_icon(btn, "chevron-right", color="TEXT_MUTED", size=14)
             btn.setFixedSize(28, 28)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setToolTip(t("detail.metadata_check.drawer_tip"))
@@ -675,8 +664,11 @@ class MetadataSection(DetailState):
                 # Section collapse/expand reads this to restore the drawer's
                 # own open state instead of forcing it open.
                 _d.setProperty("drawer_open", opening)
-                _btn.setIcon(
-                    _icon("chevron-down" if opening else "chevron-right", color=TEXT_MUTED, size=14)
+                set_icon(
+                    _btn,
+                    "chevron-down" if opening else "chevron-right",
+                    color="TEXT_MUTED",
+                    size=14,
                 )
 
             btn.clicked.connect(_toggle_drawer)
@@ -710,8 +702,12 @@ class MetadataSection(DetailState):
         """Build the inline expansion for a compound field, one block per entry."""
         frame = QFrame()
         frame.setObjectName("AutoCheckRow")
-        frame.setStyleSheet(
-            surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+        set_sheet(
+            frame,
+            "surface_frame",
+            "SURFACE_SUBTLE",
+            "BORDER_SUBTLE",
+            selector="QFrame#AutoCheckRow",
         )
         lay = QVBoxLayout(frame)
         lay.setContentsMargins(38, 6, 12, 8)
@@ -771,8 +767,8 @@ class MetadataSection(DetailState):
         """Return the placeholder shown until completeness has been evaluated."""
         frame = QFrame()
         frame.setObjectName("AutoCheckRow")
-        frame.setStyleSheet(
-            surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+        set_sheet(
+            frame, "surface_frame", "SURFACE_TINT", "BORDER_SUBTLE", selector="QFrame#AutoCheckRow"
         )
         lay = QHBoxLayout(frame)
         lay.setContentsMargins(10, 8, 10, 8)

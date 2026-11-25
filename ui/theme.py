@@ -463,6 +463,21 @@ def role(name: str, theme: str | None = None) -> str:
         raise KeyError(f"unknown role {name!r} in theme {theme or ACTIVE_THEME!r}") from None
 
 
+def colour(value: str, theme: str | None = None) -> str:
+    """Return ``value`` as a colour, resolving a role name when it is one.
+
+    Generators that take a fill or an edge accept either a role name
+    (``"SURFACE_CARD"``) or a literal (``"#ffffff"``). The name form is
+    what lets a scoped sheet be rebuilt on a live theme switch: the
+    stored argument is the role, so re-running the generator in the new
+    theme resolves it again. A literal is returned untouched.
+    """
+    if not isinstance(value, str):
+        return value
+    table = role_table(theme)
+    return table.get(value, value)
+
+
 def set_active_theme(name: str) -> None:
     """Select the active role table.
 
@@ -1189,7 +1204,11 @@ def surface_frame_qss(
     The fill and edge arrive as arguments, so the caller decides which
     role they came from; ``theme`` is accepted so a call site can name
     the theme it resolved them against and keep one call shape app-wide.
+    A fill or edge may be a role name, which is resolved here - that is
+    what lets a live switch rebuild the sheet (dv-314).
     """
+    background = colour(background, theme)
+    border = colour(border, theme)
     return (
         f"{selector} {{ background: {background}; "
         f"border: 1px {border_style} {border}; border-radius: {radius}; }}"
@@ -1213,8 +1232,11 @@ def band_qss(
     corners and carries its border along the top.
 
     The fill and edge arrive as arguments; ``theme`` is accepted so every
-    generator shares one call shape.
+    generator shares one call shape. Either may be a role name, resolved
+    here so a live switch can rebuild the band (dv-314).
     """
+    background = colour(background, theme)
+    border = colour(border, theme)
     if edge == "top":
         return (
             f"{selector} {{ background: {background}; "
@@ -1226,6 +1248,44 @@ def band_qss(
         f"{selector} {{ background: {background}; "
         f"border-bottom: 1px solid {border}; "
         f"border-top-left-radius: {radius}; border-top-right-radius: {radius}; }}"
+    )
+
+
+def rule_qss(selector: str, background: str, *, theme: str | None = None) -> str:
+    """Build a one-colour rule with no border (a divider or a separator).
+
+    A hairline is a background and nothing else, but it still has to
+    follow a theme switch, so it takes a role name like the other
+    generators (dv-314).
+    """
+    return f"{selector} {{ background: {colour(background, theme)}; border: none; }}"
+
+
+def caption_button_qss(kind: str, *, theme: str | None = None) -> str:
+    """Build a frameless window-caption button's face (window chrome).
+
+    A caption control keeps the square Windows caption face and the red
+    close hover, which the kit's button kinds cannot express. Built from
+    the role table so a live theme switch repaints it (dv-314).
+    """
+    theme = theme or ACTIVE_THEME
+    base = (
+        f"QPushButton {{ background: transparent; color: {role('TEXT_PRIMARY', theme)}; "
+        "border: none; border-radius: 0px; }"
+        f'QPushButton[focusVisible="true"] {{ background: {role("ACCENT_FOCUS_TINT", theme)}; }}'
+    )
+    if kind == "close":
+        return base + (
+            f'QPushButton:hover, QPushButton[hovered="true"] {{ '
+            f"background: {role('STATE_ERROR_GRAPHIC', theme)}; "
+            f"color: {role('TEXT_ON_ACCENT', theme)}; }}"
+            f"QPushButton:pressed {{ background: {role('STATE_ERROR_BG', theme)}; "
+            f"color: {role('TEXT_ON_ACCENT', theme)}; }}"
+        )
+    return base + (
+        f'QPushButton:hover, QPushButton[hovered="true"] {{ '
+        f"background: {role('SURFACE_RAISED', theme)}; }}"
+        f"QPushButton:pressed {{ background: {role('ACCENT_SECONDARY', theme)}; }}"
     )
 
 
@@ -1385,11 +1445,13 @@ def badge_qss(
     A badge is text on a fill: the fill, the text and the edge are three
     roles, and the badge's contract (a rounded, bordered, bold label)
     is the same everywhere. The three colours arrive as arguments;
-    ``theme`` is accepted so every generator shares one call shape.
+    ``theme`` is accepted so every generator shares one call shape. Each
+    may be a role name, resolved here so a live switch can rebuild the
+    badge (dv-314).
     """
     return (
-        f"QLabel {{ background: {background}; color: {foreground}; "
-        f"border: 1px solid {border}; border-radius: {RADIUS_LG}; "
+        f"QLabel {{ background: {colour(background, theme)}; color: {colour(foreground, theme)}; "
+        f"border: 1px solid {colour(border, theme)}; border-radius: {RADIUS_LG}; "
         f"font-size: {font_size}px; font-weight: 700; padding: {padding}; }}"
     )
 
@@ -1941,12 +2003,52 @@ QSplitter::handle:vertical {{ height: 1px; }}
 """
 
 
-def apply_theme(app: "QApplication", theme: str | None = None) -> None:
+#: Attribute a kit factory sets on a widget to carry its own repaint.
+#: The value is a list of ``(rebuilder_name, args, kwargs)`` tuples of plain
+#: data - never a closure. A closure would capture the widget, and the widget
+#: holding the closure makes a reference cycle; a cycle keeps the Python
+#: wrapper alive after Qt has deleted the C++ object, and the next method call
+#: on that wrapper aborts the process. Plain data cannot do that, and it dies
+#: with the widget. A list, so one widget can carry both a sheet and an icon.
+RETHEME_ATTR = "_retheme_spec"
+
+#: Installed by ``ui.widgets`` at import. ``ui.theme`` must not import the
+#: kit (the kit imports the theme), so the extension point lives here and
+#: the implementation registers itself.
+_retheme_hook: Callable[["QApplication"], int] | None = None
+
+
+def set_retheme_hook(hook: Callable[["QApplication"], int] | None) -> None:
+    """Install the callable that repaints scoped sheets (used by ``ui.widgets``)."""
+    global _retheme_hook
+    _retheme_hook = hook
+
+
+def retheme_widgets(app: "QApplication") -> int:
+    """Repaint every widget that carries a scoped sheet. Returns how many ran.
+
+    Called from :func:`apply_theme` after the application sheet is replaced.
+    Without a hook (the kit not imported) this is a no-op.
+    """
+    if _retheme_hook is None:
+        return 0
+    try:
+        return _retheme_hook(app)
+    except Exception:
+        return 0
+
+
+def apply_theme(app: "QApplication", theme: str | None = None, *, retheme: bool = False) -> None:
     """Apply global QSS and default font.
 
     ``theme`` is the role table to paint; it defaults to the active one,
     so a plain ``apply_theme(app)`` after ``set_active_theme(name)``
     repaints in that theme.
+
+    ``retheme`` also repaints widgets that carry their own scoped sheet
+    (cards, buttons, tables). Pass ``False`` when building a second theme's
+    widgets in one process - the gallery does - so a temporary switch does
+    not repaint the column that is already built.
     """
     from PySide6.QtGui import QFont
 
@@ -1960,6 +2062,8 @@ def apply_theme(app: "QApplication", theme: str | None = None) -> None:
     app.setFont(font)
     app.setStyleSheet(global_qss(theme or ACTIVE_THEME))
     _install_interaction_tracking(app)
+    if retheme:
+        retheme_widgets(app)
     _log_active_role_table()
 
 
@@ -2081,22 +2185,22 @@ def action_button_style(primary: bool = False, theme: str | None = None) -> str:
 # at a glance, and every role is in the contrast contract (the test
 # checks each role's text against its fill).
 _BADGE_ROLES: dict[str, tuple[str, str, str]] = {
-    "neutral": (BADGE_NEUTRAL_BG, BADGE_NEUTRAL_TEXT, BADGE_NEUTRAL_BORDER),
-    "grey": (BADGE_GREY_BG, BADGE_GREY_TEXT, BADGE_GREY_BORDER),
-    "blue": (BADGE_BLUE_BG, BADGE_BLUE_TEXT, BADGE_BLUE_BORDER),
-    "indigo": (BADGE_INDIGO_BG, BADGE_INDIGO_TEXT, BADGE_INDIGO_BORDER),
-    "green": (BADGE_GREEN_BG, BADGE_GREEN_TEXT, BADGE_GREEN_BORDER),
-    "green-soft": (BADGE_GREEN_SOFT_BG, BADGE_GREEN_SOFT_TEXT, BADGE_GREEN_SOFT_BORDER),
-    "red": (BADGE_RED_BG, BADGE_RED_TEXT, BADGE_RED_BORDER),
-    "red-soft": (BADGE_RED_SOFT_BG, BADGE_RED_SOFT_TEXT, BADGE_RED_SOFT_BORDER),
-    "orange": (BADGE_ORANGE_BG, BADGE_ORANGE_TEXT, BADGE_ORANGE_BORDER),
-    "violet": (BADGE_VIOLET_BG, BADGE_VIOLET_TEXT, BADGE_VIOLET_BORDER),
-    "amber": (BADGE_AMBER_BG, BADGE_AMBER_TEXT, BADGE_AMBER_BORDER),
-    "teal": (BADGE_TEAL_BG, BADGE_TEAL_TEXT, BADGE_TEAL_BORDER),
-    "pink": (BADGE_PINK_BG, BADGE_PINK_TEXT, BADGE_PINK_BORDER),
-    "lime": (BADGE_LIME_BG, BADGE_LIME_TEXT, BADGE_LIME_BORDER),
-    "sky": (BADGE_SKY_BG, BADGE_SKY_TEXT, BADGE_SKY_BORDER),
-    "sand": (BADGE_SAND_BG, BADGE_SAND_TEXT, BADGE_SAND_BORDER),
+    "neutral": ("BADGE_NEUTRAL_BG", "BADGE_NEUTRAL_TEXT", "BADGE_NEUTRAL_BORDER"),
+    "grey": ("BADGE_GREY_BG", "BADGE_GREY_TEXT", "BADGE_GREY_BORDER"),
+    "blue": ("BADGE_BLUE_BG", "BADGE_BLUE_TEXT", "BADGE_BLUE_BORDER"),
+    "indigo": ("BADGE_INDIGO_BG", "BADGE_INDIGO_TEXT", "BADGE_INDIGO_BORDER"),
+    "green": ("BADGE_GREEN_BG", "BADGE_GREEN_TEXT", "BADGE_GREEN_BORDER"),
+    "green-soft": ("BADGE_GREEN_SOFT_BG", "BADGE_GREEN_SOFT_TEXT", "BADGE_GREEN_SOFT_BORDER"),
+    "red": ("BADGE_RED_BG", "BADGE_RED_TEXT", "BADGE_RED_BORDER"),
+    "red-soft": ("BADGE_RED_SOFT_BG", "BADGE_RED_SOFT_TEXT", "BADGE_RED_SOFT_BORDER"),
+    "orange": ("BADGE_ORANGE_BG", "BADGE_ORANGE_TEXT", "BADGE_ORANGE_BORDER"),
+    "violet": ("BADGE_VIOLET_BG", "BADGE_VIOLET_TEXT", "BADGE_VIOLET_BORDER"),
+    "amber": ("BADGE_AMBER_BG", "BADGE_AMBER_TEXT", "BADGE_AMBER_BORDER"),
+    "teal": ("BADGE_TEAL_BG", "BADGE_TEAL_TEXT", "BADGE_TEAL_BORDER"),
+    "pink": ("BADGE_PINK_BG", "BADGE_PINK_TEXT", "BADGE_PINK_BORDER"),
+    "lime": ("BADGE_LIME_BG", "BADGE_LIME_TEXT", "BADGE_LIME_BORDER"),
+    "sky": ("BADGE_SKY_BG", "BADGE_SKY_TEXT", "BADGE_SKY_BORDER"),
+    "sand": ("BADGE_SAND_BG", "BADGE_SAND_TEXT", "BADGE_SAND_BORDER"),
 }
 
 # Which role a curation label wears. Order matters: substring match on
@@ -2131,6 +2235,12 @@ _LABEL_BADGE_FALLBACK_ROLES: tuple[str, ...] = (
 )
 
 
+def _resolve_badge(colours: tuple[str, str, str]) -> tuple[str, str, str]:
+    """Resolve a badge's three role names in the active theme (dv-314)."""
+    background, foreground, border = colours
+    return colour(background), colour(foreground), colour(border)
+
+
 def label_badge_colors(label: str) -> tuple[str, str, str]:
     """(background, text, border) for a status/curation label. Never raises."""
     try:
@@ -2139,15 +2249,15 @@ def label_badge_colors(label: str) -> tuple[str, str, str]:
         lowered = ""
     for phrase, role in _LABEL_BADGE_ROLES:
         if phrase and phrase in lowered:
-            return _BADGE_ROLES[role]
+            return _resolve_badge(_BADGE_ROLES[role])
     try:
         import hashlib
 
         digest = hashlib.md5(lowered.encode("utf-8")).digest()
         role = _LABEL_BADGE_FALLBACK_ROLES[digest[0] % len(_LABEL_BADGE_FALLBACK_ROLES)]
-        return _BADGE_ROLES[role]
+        return _resolve_badge(_BADGE_ROLES[role])
     except Exception:
-        return _BADGE_ROLES["teal"]
+        return _resolve_badge(_BADGE_ROLES["teal"])
 
 
 def label_badge_style(label: str) -> str:
