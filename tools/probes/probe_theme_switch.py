@@ -56,6 +56,19 @@ def main() -> int:
                 found.append((w.objectName() or type(w).__name__, hits))
         return found
 
+    # A glyph is a tinted SVG pixmap, so it has to be re-tinted too.
+    from ui.widgets import make_icon_button
+
+    icon_host = QWidget()
+    icon_host.resize(200, 200)
+    icon_host.show()
+    icon_btn = make_icon_button("info")
+    icon_btn.setParent(icon_host)
+    icon_btn.show()
+    for _ in range(4):
+        app.processEvents()
+    light_icon = icon_btn.icon().cacheKey()
+
     theme.set_active_theme("dark")
     theme.apply_theme(app, "dark", retheme=True)
     for _ in range(6):
@@ -65,6 +78,10 @@ def main() -> int:
         not stale_dark,
         "light -> dark leaves no light-only sheet",
         f"stale={stale_dark[:8]}",
+    )
+    report.check(
+        icon_btn.icon().cacheKey() != light_icon,
+        "light -> dark re-tints a Lucide glyph",
     )
 
     theme.set_active_theme("light")
@@ -79,6 +96,7 @@ def main() -> int:
     )
 
     win.close()
+    icon_host.close()
     return report.finish()
 
 

@@ -55,11 +55,8 @@ from curation.config import Config
 from ui.dashboard import DashboardView
 from ui.dialogs import show_warning
 from ui.i18n import t
-from ui.icons import icon as lucide_icon
 from ui.theme import (
-    TEXT_MUTED,
     TEXT_ON_ACCENT,
-    TEXT_ON_SECONDARY,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -67,6 +64,7 @@ from ui.widgets import (
     make_caption_label,
     make_split_chip,
     set_chip_room_limited,
+    set_icon,
     set_sheet,
 )
 
@@ -785,8 +783,8 @@ class MainWindow(QMainWindow):
     def _set_nav_icon(self, btn: QPushButton, name: str, active: bool) -> None:
         """Lucide glyph for a nav button, tinted to its active state."""
         try:
-            color = TEXT_ON_SECONDARY if active else TEXT_MUTED
-            btn.setIcon(lucide_icon(name, color=color, size=16))
+            color = "TEXT_ON_SECONDARY" if active else "TEXT_MUTED"
+            set_icon(btn, name, color=color, size=16)
             btn.setIconSize(QSize(16, 16))
         except Exception:
             pass

@@ -681,5 +681,37 @@ def test_every_scoped_sheet_in_the_window_follows_a_switch(qapp):
         qapp.processEvents()
 
 
+def test_icons_retint_on_a_live_switch(qapp):
+    """A Lucide glyph is a tinted SVG pixmap, so a switch must re-tint it.
+
+    The sheet under an icon changes with the theme, but the pixmap was
+    baked with the old ink; ``set_icon`` registers the re-tint (dv-314).
+    """
+    from PySide6.QtWidgets import QWidget
+
+    from ui import theme
+    from ui.widgets import make_icon_button
+
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light", retheme=True)
+    host = QWidget()
+    host.resize(200, 200)
+    host.show()
+    btn = make_icon_button("info")
+    btn.setParent(host)
+    btn.show()
+    qapp.processEvents()
+    try:
+        light = btn.icon().cacheKey()
+        theme.set_active_theme("dark")
+        theme.apply_theme(qapp, "dark", retheme=True)
+        assert btn.icon().cacheKey() != light, "the glyph kept its light tint"
+    finally:
+        host.close()
+        host.deleteLater()
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

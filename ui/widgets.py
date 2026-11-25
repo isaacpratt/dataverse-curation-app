@@ -95,10 +95,6 @@ from ui.theme import (
     STATE_ERROR_GRAPHIC,
     STATE_SUCCESS_GRAPHIC,
     SURFACE_TINT,
-    TEXT_BLOCKED,
-    TEXT_ON_TINT,
-    TEXT_PRIMARY,
-    TEXT_SUCCESS,
     apply_elevation,
     badge_qss,
     band_qss,
@@ -149,7 +145,14 @@ def _register(widget: QWidget, name: str, *args: object, **kwargs: object) -> No
     (dv-314). A literal is still accepted and simply stays put.
     """
     try:
-        setattr(widget, _theme.RETHEME_ATTR, (name, args, kwargs))
+        specs = getattr(widget, _theme.RETHEME_ATTR, None)
+        if not isinstance(specs, list):
+            specs = []
+        # One spec per builder name: a badge re-dressed twice replaces its
+        # own entry, while a button that also carries an icon keeps both.
+        specs = [s for s in specs if not (isinstance(s, tuple) and len(s) == 3 and s[0] == name)]
+        specs.append((name, args, kwargs))
+        setattr(widget, _theme.RETHEME_ATTR, specs)
     except Exception:
         pass
 
@@ -234,6 +237,28 @@ def _badge_sheet(
     return sheet
 
 
+def _apply_icon(widget: Any, name: str, color: str | None, size: int) -> None:
+    """Set a Lucide glyph on ``widget``, tinted for the active theme.
+
+    ``name`` may be a documented role (``"sidebar_hide"``) or a bundled
+    asset name; ``role_icon`` maps the former and passes the latter through.
+    """
+    from ui.icons import role_icon
+
+    widget.setIcon(role_icon(name, color=colour(color) if color else None, size=size))
+
+
+def set_icon(widget: QWidget, name: str, *, color: str | None = None, size: int = 16) -> None:
+    """Set a Lucide glyph and keep it in step with the theme (dv-314).
+
+    Icons are bundled SVG tinted by replacing ``currentColor``; the tint is
+    baked into a pixmap, so a live switch has to re-tint. ``color`` may be
+    a role name (re-resolved on a switch) or a literal.
+    """
+    _apply_icon(widget, name, color, size)
+    _register(widget, "icon", name, color, size)
+
+
 # Rebuilders, keyed by the name a factory passes to _register. Each takes
 # the widget as its first parameter, so nothing captures it.
 _REBUILDERS: dict[str, Any] = {
@@ -304,8 +329,30 @@ _REBUILDERS: dict[str, Any] = {
     "caption_button": lambda w, kind: w.setStyleSheet(
         caption_button_qss(kind, theme=_active_theme())
     ),
+    "icon": lambda w, name, color, size: _apply_icon(w, name, color, size),
     "workflow_rail": lambda w: w._retheme(),
 }
+
+
+def _retheme_widget(widget: Any) -> int:
+    """Repaint one widget's specs. Returns how many ran."""
+    specs = getattr(widget, _theme.RETHEME_ATTR, None)
+    if not isinstance(specs, list):
+        return 0
+    run = 0
+    for spec in specs:
+        if not isinstance(spec, tuple) or len(spec) != 3:
+            continue
+        name, args, kwargs = spec
+        rebuild = _REBUILDERS.get(str(name))
+        if rebuild is None:
+            continue
+        try:
+            rebuild(widget, *args, **kwargs)
+            run += 1
+        except Exception:
+            continue
+    return run
 
 
 def _retheme_all(app: Any) -> int:
@@ -335,18 +382,7 @@ def _retheme_all(app: Any) -> int:
     try:
         for root in roots:
             for widget in [root, *root.findChildren(QWidget)]:
-                spec = getattr(widget, _theme.RETHEME_ATTR, None)
-                if not isinstance(spec, tuple) or len(spec) != 3:
-                    continue
-                name, args, kwargs = spec
-                rebuild = _REBUILDERS.get(str(name))
-                if rebuild is None:
-                    continue
-                try:
-                    rebuild(widget, *args, **kwargs)
-                    run += 1
-                except Exception:
-                    continue
+                run += _retheme_widget(widget)
     finally:
         for root in roots:
             try:
@@ -408,6 +444,7 @@ __all__ = [
     "make_value_list",
     "set_chip_room_limited",
     "set_flush_table_style",
+    "set_icon",
     "set_sheet",
     "tree_style",
 ]
@@ -1791,9 +1828,7 @@ def make_split_chip(
     close_btn.setAccessibleName(close_tip or t("main.chip_close", label=label))
     close_btn.setFixedSize(32, 32)
     try:
-        from ui.icons import icon as _chip_icon
-
-        close_btn.setIcon(_chip_icon("x", color=TEXT_PRIMARY if active else TEXT_ON_TINT))
+        set_icon(close_btn, "x", color="TEXT_PRIMARY" if active else "TEXT_ON_TINT")
         close_btn.setIconSize(QSize(12, 12))
     except Exception:
         # Fallback glyph only when the SVG cannot be drawn at all; it is
@@ -2077,9 +2112,7 @@ def make_icon_button(
     if accessible_name:
         btn.setAccessibleName(accessible_name)
     try:
-        from ui.icons import icon as _icon
-
-        btn.setIcon(_icon(icon_name))
+        set_icon(btn, icon_name)
     except Exception:
         if fallback_text:
             btn.setText(fallback_text)
@@ -2108,9 +2141,7 @@ def make_icon_text_button(
     """
     btn = AppButton(label, kind=kind, size=size, parent=parent)
     try:
-        from ui.icons import icon as _icon
-
-        btn.setIcon(_icon(icon_name, color=color, size=14))
+        set_icon(btn, icon_name, color=color, size=14)
         btn.setIconSize(QSize(14, 14))
     except Exception:
         pass
@@ -2244,7 +2275,6 @@ def add_info_tip(
     (dv-o8k); ``group=`` places it under a curator task.
     """
     from ui.help_index import register_help
-    from ui.icons import icon as _icon
 
     tip = _wrap_tip(*paragraphs)
     try:
@@ -2254,7 +2284,7 @@ def add_info_tip(
     btn = QToolButton()
     btn.setObjectName("InfoTip")
     try:
-        btn.setIcon(_icon("info", color=TEXT_ON_TINT, size=14))
+        set_icon(btn, "info", color="TEXT_ON_TINT", size=14)
     except Exception:
         btn.setText("i")
     btn.setIconSize(QSize(14, 14))
@@ -2942,15 +2972,13 @@ class WorkflowRail(QWidget):
                     btn.setAccessibleName(label)
                     btn.setStyleSheet(self._style_for("nav", active=False))
                     try:
-                        from ui.icons import role_icon as _nav_icon
-
                         glyph = {
                             "dataset_checks": "section_checks",
                             "file_checks": "folder",
                             "response": "section_response",
                         }.get(key)
                         if glyph:
-                            btn.setIcon(_nav_icon(glyph, size=14))
+                            set_icon(btn, glyph, size=14)
                             btn.setIconSize(QSize(14, 14))
                     except Exception:
                         pass
@@ -3090,12 +3118,10 @@ class WorkflowRail(QWidget):
             # as well as by colour, so it survives a greyscale print and
             # a colour-blind reader.
             try:
-                from ui.icons import icon as _mark_icon
-
                 if done:
-                    btn.setIcon(_mark_icon("check", color=TEXT_SUCCESS, size=14))
+                    set_icon(btn, "check", color="TEXT_SUCCESS", size=14)
                 elif step.state == "blocked":
-                    btn.setIcon(_mark_icon("lock", color=TEXT_BLOCKED, size=12))
+                    set_icon(btn, "lock", color="TEXT_BLOCKED", size=12)
                 else:
                     btn.setIcon(QIcon())
             except Exception:

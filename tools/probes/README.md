@@ -145,7 +145,7 @@ unsubstituted.
 | `probe_review_params.py` | The entry-check params form has one-line labels, a whole Lucide min-length stepper, chip-phrase fields with aligned rows, no raw spin box and no horizontal scrollbar or clipping at 1440x900 or 960x720; screenshots of both widths are saved. |
 | `probe_check_sections.py` | The dataset page shows Dataset checks above File checks, a dataset finding appears only in the former and a per-file finding only in the latter, both files are painted in the tree and no card clips at 1440x900 or 960x720. |
 | `probe_dataset_header.py` | Measures and screenshots the fixed dataset header at 960/1280/1440 — top-bar and canvas heights, row count, action-row width, Run checks geometry and rail widths — the before/after instrument for the header revamp. |
-| `probe_theme_switch.py` | A live light↔dark switch leaves no widget wearing a colour only the previous theme uses: page backgrounds, cards, bands, pills, search fields, chips, badges, check rows and window chrome are all repainted (dv-314). |
+| `probe_theme_switch.py` | A live light↔dark switch leaves no widget wearing a colour only the previous theme uses: page backgrounds, cards, bands, pills, search fields, chips, badges, check rows and window chrome are all repainted, and a Lucide glyph is re-tinted (dv-314). |
 
 ## The same contracts in pytest
 

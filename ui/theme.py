@@ -2004,12 +2004,12 @@ QSplitter::handle:vertical {{ height: 1px; }}
 
 
 #: Attribute a kit factory sets on a widget to carry its own repaint.
-#: The value is a ``(rebuilder_name, *args)`` tuple of plain data - never a
-#: closure. A closure would capture the widget, and the widget holding the
-#: closure makes a reference cycle; a cycle keeps the Python wrapper alive
-#: after Qt has deleted the C++ object, and the next method call on that
-#: wrapper aborts the process. Plain data cannot do that, and it dies with
-#: the widget.
+#: The value is a list of ``(rebuilder_name, args, kwargs)`` tuples of plain
+#: data - never a closure. A closure would capture the widget, and the widget
+#: holding the closure makes a reference cycle; a cycle keeps the Python
+#: wrapper alive after Qt has deleted the C++ object, and the next method call
+#: on that wrapper aborts the process. Plain data cannot do that, and it dies
+#: with the widget. A list, so one widget can carry both a sheet and an icon.
 RETHEME_ATTR = "_retheme_spec"
 
 #: Installed by ``ui.widgets`` at import. ``ui.theme`` must not import the

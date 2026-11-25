@@ -40,6 +40,7 @@ from ui.widgets import (
     make_combo,
     make_disposition_combo,
     make_small_body_label,
+    set_icon,
     set_sheet,
 )
 
@@ -421,7 +422,6 @@ class MetadataSection(DetailState):
             pass
 
     def _toggle_raw(self) -> None:
-        from ui.icons import icon as _icon
 
         vis = not self._raw_view.isVisible()
         self._raw_view.setVisible(vis)
@@ -429,7 +429,7 @@ class MetadataSection(DetailState):
             t("detail.header.hide_raw_metadata") if vis else t("detail.header.show_raw_metadata")
         )
         try:
-            self._raw_btn.setIcon(_icon("chevron-up" if vis else "chevron-right"))
+            set_icon(self._raw_btn, "chevron-up" if vis else "chevron-right")
         except Exception:
             pass
 
@@ -533,7 +533,6 @@ class MetadataSection(DetailState):
         frame.setProperty("meta_field", label)
         frame.setProperty("meta_block", str(result.get("block") or ""))
         frame.setProperty("meta_rule_id", str(result.get("rule_id") or ""))
-        from ui.icons import icon as _icon
         from ui.icons import icon_label as _icon_label
 
         if pending:
@@ -652,7 +651,7 @@ class MetadataSection(DetailState):
             btn = QToolButton(frame)
             btn.setAutoRaise(True)
             btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-            btn.setIcon(_icon("chevron-right", color=TEXT_MUTED, size=14))
+            set_icon(btn, "chevron-right", color="TEXT_MUTED", size=14)
             btn.setFixedSize(28, 28)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setToolTip(t("detail.metadata_check.drawer_tip"))
@@ -665,8 +664,11 @@ class MetadataSection(DetailState):
                 # Section collapse/expand reads this to restore the drawer's
                 # own open state instead of forcing it open.
                 _d.setProperty("drawer_open", opening)
-                _btn.setIcon(
-                    _icon("chevron-down" if opening else "chevron-right", color=TEXT_MUTED, size=14)
+                set_icon(
+                    _btn,
+                    "chevron-down" if opening else "chevron-right",
+                    color="TEXT_MUTED",
+                    size=14,
                 )
 
             btn.clicked.connect(_toggle_drawer)

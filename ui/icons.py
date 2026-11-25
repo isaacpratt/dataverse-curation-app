@@ -14,22 +14,29 @@ from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QLabel
 
-from ui.theme import (
-    ACTIVE_THEME,
-    STATE_ERROR_GRAPHIC,
-    STATE_SUCCESS_GRAPHIC,
-    STATE_WARNING_GRAPHIC,
-    TEXT_ON_TINT,
-    TEXT_PRIMARY,
-    asset_path,
-    transparent_qss,
-)
+from ui.theme import asset_path, role, transparent_qss
 
-INK = TEXT_PRIMARY
-MUTED = TEXT_ON_TINT
-GREEN = STATE_SUCCESS_GRAPHIC
-AMBER = STATE_WARNING_GRAPHIC
-RED = STATE_ERROR_GRAPHIC
+
+def _ink() -> str:
+    """Return the default glyph ink in the active theme (dv-314)."""
+    return role("TEXT_PRIMARY")
+
+
+def _muted() -> str:
+    return role("TEXT_ON_TINT")
+
+
+def _green() -> str:
+    return role("STATE_SUCCESS_GRAPHIC")
+
+
+def _amber() -> str:
+    return role("STATE_WARNING_GRAPHIC")
+
+
+def _red() -> str:
+    return role("STATE_ERROR_GRAPHIC")
+
 
 # One glyph per role, the list the docs, the gallery sheet and
 # ui/tests/test_icon_inventory.py all read (dv-kvb). A role says what a
@@ -97,15 +104,17 @@ def _svg_text(name: str) -> str:
 def icon(name: str, color: str | None = None, size: int = 16) -> QIcon:
     """QIcon for a bundled Lucide icon, tinted + cached.
 
-    color replaces the artwork's currentColor (default INK). size is the
-    rendered pixel size; QIcon scales from the cached pixmap gracefully.
+    color replaces the artwork's currentColor (default: the active theme's
+    ink). size is the rendered pixel size; QIcon scales from the cached
+    pixmap gracefully. The cache key carries the colour, so a light and a
+    dark tint are separate entries and a live switch re-tints (dv-314).
 
     An unknown name returns an empty QIcon *and warns once*: a silent null
     icon is how a mark disappears from the interface with nothing failing
     (dv-kvb). ``ui/tests/test_icon_inventory.py`` turns the warning into a
     CI failure by asserting every name in the app resolves.
     """
-    key = (name, color or INK, int(size))
+    key = (name, color or _ink(), int(size))
     try:
         hit = _ICON_CACHE.get(key)
         if hit is not None:
@@ -116,7 +125,7 @@ def icon(name: str, color: str | None = None, size: int = 16) -> QIcon:
     try:
         text = _svg_text(name)
         if text and "<svg" in text[:800]:
-            tinted = text.replace("currentColor", color or INK)
+            tinted = text.replace("currentColor", color or _ink())
             renderer = QSvgRenderer(bytearray(tinted.encode("utf-8")))
             pixmap = QPixmap(max(1, int(size)), max(1, int(size)))
             pixmap.fill(Qt.GlobalColor.transparent)
@@ -164,7 +173,7 @@ def icon_label(name: str, size: int = 16, color: str | None = None) -> QLabel:
         lbl.setPixmap(icon(name, color=color, size=size).pixmap(QSize(int(size), int(size))))
         lbl.setFixedSize(int(size) + 4, int(size) + 4)
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setStyleSheet(transparent_qss("QLabel", theme=ACTIVE_THEME))
+        lbl.setStyleSheet(transparent_qss("QLabel"))
     except Exception:
         pass
     return lbl
@@ -234,7 +243,7 @@ def file_icon_name(path: str) -> str:
 def file_icon(path: str, staged: bool = True, size: int = 16) -> QIcon:
     """File-type icon; unstaged files render muted (replaces the ✓/○ prefix)."""
     try:
-        return icon(file_icon_name(path), color=(INK if staged else MUTED), size=size)
+        return icon(file_icon_name(path), color=(_ink() if staged else _muted()), size=size)
     except Exception:
         return QIcon()
 
@@ -246,16 +255,16 @@ def status_icon_name(kind: str) -> tuple[str, str]:
     """
     k = str(kind or "").lower()
     if k in ("fail", "error"):
-        return ("octagon-x", RED)
+        return ("octagon-x", _red())
     if k in ("warn", "warning"):
-        return ("octagon-alert", AMBER)
+        return ("octagon-alert", _amber())
     if k in ("pass", "clean", "check"):
-        return ("check", GREEN)
+        return ("check", _green())
     if k in ("skip", "skipped"):
-        return ("circle-dashed", MUTED)
+        return ("circle-dashed", _muted())
     if k in ("unchecked", "minus"):
-        return ("minus", MUTED)
-    return ("circle", MUTED)
+        return ("minus", _muted())
+    return ("circle", _muted())
 
 
 def status_icon(kind: str, size: int = 16) -> QIcon:

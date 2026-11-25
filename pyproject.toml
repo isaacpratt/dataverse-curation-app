@@ -490,4 +490,5 @@ ignore_imports = [
     "tools.probes.probe_dataset_header -> ui.dataset",
     "tools.probes.probe_theme_switch -> ui.main_window",
     "tools.probes.probe_theme_switch -> ui.theme",
+    "tools.probes.probe_theme_switch -> ui.widgets",
 ]

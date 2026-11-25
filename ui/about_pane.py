@@ -25,6 +25,7 @@ from ui.widgets import (
     make_body_label,
     make_page_heading,
     make_progress_bar,
+    set_icon,
     set_sheet,
 )
 
@@ -253,9 +254,7 @@ class AboutPane(QWidget):
         back_btn.setAccessibleName(t("about.close_a11y"))
         back_btn.clicked.connect(lambda: self.discarded.emit())
         try:
-            from ui.icons import role_icon as _about_icon
-
-            back_btn.setIcon(_about_icon("back"))
+            set_icon(back_btn, "back")
         except Exception:
             pass
         row.addWidget(back_btn)
