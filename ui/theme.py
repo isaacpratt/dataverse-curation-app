@@ -2237,7 +2237,8 @@ _LABEL_BADGE_FALLBACK_ROLES: tuple[str, ...] = (
 
 def _resolve_badge(colours: tuple[str, str, str]) -> tuple[str, str, str]:
     """Resolve a badge's three role names in the active theme (dv-314)."""
-    return tuple(colour(c) for c in colours)  # type: ignore[return-value]
+    background, foreground, border = colours
+    return colour(background), colour(foreground), colour(border)
 
 
 def label_badge_colors(label: str) -> tuple[str, str, str]:

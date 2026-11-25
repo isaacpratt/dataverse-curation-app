@@ -363,7 +363,7 @@ class _CaptionButton(QPushButton):
         """Mirror hover into a dynamic property and force the restyle.
 
         Qt's :hover state paint can be left stale when the cursor
-        teleports onto the button (see _WIN_CLOSE_QSS); the property
+        teleports onto the button (see ``caption_button_qss``); the property
         rule repaints deterministically from enter/leaveEvent instead.
         """
         on = bool(on)

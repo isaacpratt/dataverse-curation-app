@@ -616,17 +616,29 @@ def test_retheme_can_be_switched_off_for_a_temporary_build(qapp):
         theme.apply_theme(qapp, "light", retheme=True)
 
 
-def test_every_scoped_sheet_in_the_window_follows_a_switch(win, qapp):
-    """No widget in the real window keeps a colour only the old theme wears.
+def test_every_scoped_sheet_in_the_window_follows_a_switch(qapp):
+    """No widget in a real window keeps a colour only the old theme wears.
 
-    dv-4jm.7 covered the kit factories; this walks the whole window -
+    dv-4jm.7 covered the kit factories; this walks a whole window -
     dashboard, settings, about, review configuration - so a view-level page
     background, card, band, pill, search field, chip, badge, check row or
     caption button that was built before the switch is caught too (dv-314).
+
+    A fresh window, not the session ``win``: that one accumulates the
+    widgets of every earlier test, and walking them says nothing about this
+    contract while costing minutes.
     """
     from PySide6.QtWidgets import QWidget
 
+    from curation.config import Config
     from ui import theme
+    from ui.main_window import MainWindow
+
+    win = MainWindow(Config())
+    win.resize(1280, 860)
+    win.show()
+    for _ in range(10):
+        qapp.processEvents()
 
     light_only = set(theme.LIGHT_ROLE_TABLE.values()) - set(theme.DARK_ROLE_TABLE.values())
     dark_only = set(theme.DARK_ROLE_TABLE.values()) - set(theme.LIGHT_ROLE_TABLE.values())
@@ -664,6 +676,9 @@ def test_every_scoped_sheet_in_the_window_follows_a_switch(win, qapp):
     finally:
         theme.set_active_theme("light")
         theme.apply_theme(qapp, "light", retheme=True)
+        win.close()
+        win.deleteLater()
+        qapp.processEvents()
 
 
 if __name__ == "__main__":

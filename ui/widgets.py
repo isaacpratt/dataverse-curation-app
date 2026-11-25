@@ -16,7 +16,6 @@ Intentional one-offs (NOT kit violations):
 """
 
 import textwrap
-import weakref
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, cast
 
@@ -134,19 +133,13 @@ def _active_theme() -> str:
     return _theme.ACTIVE_THEME
 
 
-#: Widgets that carry a retheme spec, weakly. Iterating this instead of
-#: ``app.allWidgets()`` keeps a switch proportional to what the kit built,
-#: not to everything the process ever created.
-_RETHEME_REGISTRY: "weakref.WeakSet[Any]" = weakref.WeakSet()
-
-
 def _register(widget: QWidget, name: str, *args: object, **kwargs: object) -> None:
     """Attach a scoped-sheet rebuild to ``widget`` for live theme switches.
 
     Every factory that bakes its own sheet calls this, so a switch can
     repaint already-built widgets (dv-4jm.7). The spec is plain data - a
-    rebuilder name plus its arguments - and the rebuilders are module-level
-    functions that take the widget as a parameter. Storing a closure here
+    rebuilder name plus its arguments - stored on the widget itself, so it
+    dies with the widget and cannot outlive it. Storing a closure here
     instead would capture the widget and form a reference cycle, which
     keeps the Python wrapper alive past the C++ object and crashes the
     process on the next call.
@@ -157,7 +150,6 @@ def _register(widget: QWidget, name: str, *args: object, **kwargs: object) -> No
     """
     try:
         setattr(widget, _theme.RETHEME_ATTR, (name, args, kwargs))
-        _RETHEME_REGISTRY.add(widget)
     except Exception:
         pass
 
@@ -167,29 +159,14 @@ def set_sheet(widget: QWidget, name: str, *args: object, **kwargs: object) -> No
 
     The one call a view makes instead of ``widget.setStyleSheet(...)``:
     it paints now and registers the repaint for the next switch (dv-314).
+    An unknown builder name is a programming error and raises, so a typo
+    cannot silently leave a sheet that never repaints.
     """
     rebuild = _REBUILDERS.get(name)
-    if rebuild is not None:
-        try:
-            rebuild(widget, *args, **kwargs)
-        except Exception:
-            pass
+    if rebuild is None:
+        raise KeyError(name)
+    rebuild(widget, *args, **kwargs)
     _register(widget, name, *args, **kwargs)
-
-
-def _is_live(widget: object) -> bool:
-    """Return whether ``widget`` still has a C++ object behind it.
-
-    Qt deletes the C++ object on ``deleteLater``, and a parent's
-    destruction takes its children with it, while the Python wrapper can
-    outlive both. Calling a method on such a wrapper aborts the process.
-    """
-    try:
-        import shiboken6
-
-        return bool(shiboken6.isValid(widget))
-    except Exception:
-        return True
 
 
 def _reapply_card(card: QWidget) -> None:
@@ -236,14 +213,17 @@ def _badge_sheet(
     font_size: int,
     padding: str,
     mono: bool,
-    chip: bool,
 ) -> str:
-    """Build a badge's sheet from the active role table (kit rule, one place)."""
+    """Build a badge's sheet from the active role table (kit rule, one place).
+
+    The colours may be role names; ``badge_qss`` resolves them in the active
+    theme, so a live switch repaints the badge (dv-314).
+    """
     if background and foreground:
         sheet = badge_qss(
-            colour(background, _active_theme()),
-            colour(foreground, _active_theme()),
-            colour(border or BORDER_SUBTLE, _active_theme()),
+            background,
+            foreground,
+            border or BORDER_SUBTLE,
             font_size=font_size,
             padding=padding,
         )
@@ -307,9 +287,9 @@ _REBUILDERS: dict[str, Any] = {
         rule_qss(selector, background, theme=_active_theme())
     ),
     "search_field": lambda w: w.setStyleSheet(_search_field_qss()),
-    "badge": lambda w, label, background, foreground, border, mono, font_size, padding, chip: (
+    "badge": lambda w, label, background, foreground, border, mono, font_size, padding: (
         w.setStyleSheet(
-            _badge_sheet(label, background, foreground, border, font_size, padding, mono, chip)
+            _badge_sheet(label, background, foreground, border, font_size, padding, mono)
         )
     ),
     "split_chip": lambda w, active, part: w.setStyleSheet(_split_chip_qss(active, part)),
@@ -331,46 +311,49 @@ _REBUILDERS: dict[str, Any] = {
 def _retheme_all(app: Any) -> int:
     """Repaint every widget carrying a retheme spec. Returns how many ran.
 
-    Iterates the registry of *registered* widgets, not ``app.allWidgets()``:
-    the suite (and a long-running app) can hold far more widgets than the
-    kit built, and walking all of them on every switch is what made a theme
-    change expensive. The registry is weak, so a widget that is gone drops
-    out of it on its own.
-
-    A widget in a hidden window is skipped: it is not painting, and the
-    leaked hidden windows a long session accumulates are what made the walk
-    expensive. A hidden page inside the visible window is still repainted,
-    so a switch on the dashboard also fixes the detail page for when it is
-    shown.
+    Walks the *visible* top-level windows and their children, not
+    ``app.allWidgets()``: a long session (and the test suite) accumulates
+    hidden leaked windows, and walking those is what made a switch
+    expensive. A hidden page inside a visible window is still reached, so a
+    switch on the dashboard also fixes the detail page for when it is
+    shown. A widget in a hidden window is skipped and repainted by the next
+    switch after that window is shown.
     """
     run = 0
-    for widget in list(_RETHEME_REGISTRY):
-        spec = getattr(widget, _theme.RETHEME_ATTR, None)
-        if not isinstance(spec, tuple) or len(spec) != 3:
-            continue
-        name, args, kwargs = spec
-        rebuild = _REBUILDERS.get(str(name))
-        if rebuild is None:
-            continue
-        if not widget.isVisible():
-            # Repaint what a visible window can show. A widget inside a
-            # hidden window (a closed dialog, a leaked test window) is not
-            # painting; walking those is what made a switch expensive, and
-            # the next switch after they are shown repaints them. A hidden
-            # page inside the *visible* window is repainted, so switching
-            # while on the dashboard still fixes the detail page.
-            window = widget.window()
-            if window is None or not window.isVisible():
-                continue
-            # A visible widget's C++ object is alive by definition; only a
-            # hidden one needs the validity check.
-            if not _is_live(widget):
-                continue
+    try:
+        roots = [w for w in app.topLevelWidgets() if w.isVisible()]
+    except Exception:
+        return run
+    # One paint pass for the whole switch: rebuilding a sheet re-polishes
+    # the widget, and letting each one repaint in turn is a visible freeze
+    # on a window with a real dataset (dv-314).
+    for root in roots:
         try:
-            rebuild(widget, *args, **kwargs)
-            run += 1
+            root.setUpdatesEnabled(False)
         except Exception:
-            continue
+            pass
+    try:
+        for root in roots:
+            for widget in [root, *root.findChildren(QWidget)]:
+                spec = getattr(widget, _theme.RETHEME_ATTR, None)
+                if not isinstance(spec, tuple) or len(spec) != 3:
+                    continue
+                name, args, kwargs = spec
+                rebuild = _REBUILDERS.get(str(name))
+                if rebuild is None:
+                    continue
+                try:
+                    rebuild(widget, *args, **kwargs)
+                    run += 1
+                except Exception:
+                    continue
+    finally:
+        for root in roots:
+            try:
+                root.setUpdatesEnabled(True)
+                root.update()
+            except Exception:
+                pass
     return run
 
 
@@ -1638,7 +1621,6 @@ def set_badge_label(
         mono,
         font_size,
         padding,
-        chip,
     )
     if chip:
         # A chip is the header's counterpart to a button: it takes the
