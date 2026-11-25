@@ -1,9 +1,10 @@
 """Guard for the numbered UI wireframe (dv-6n6).
 
-The SVG and its legend are committed text. This test checks their internal
-contract without booting Qt, so it runs on any machine: every numbered badge
-has exactly one legend row with real technical identifiers, tags are unique,
-and the static state/constraint tables the diagram depends on are present.
+The SVG, its screenshots and their legend are committed text and images. This
+test checks their internal contract without booting Qt, so it runs on any
+machine: every screen has both a captured and a schematic panel, each badge
+points at a widget with a leader and dot, and every tag has exactly one legend
+row with real technical identifiers.
 """
 
 from __future__ import annotations
@@ -13,14 +14,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SVG = ROOT / "docs" / "assets" / "ui-wireframe.svg"
+ASSETS = ROOT / "docs" / "assets" / "wireframe"
 DOC = ROOT / "docs" / "reference" / "ui-wireframe.md"
 
-TAG_IN_SVG = re.compile(r'data-tag="(\[\d+\])"')
+BADGE = re.compile(r'data-tag="(\[\d+\])" data-panel="([a-z]+)"', re.MULTILINE)
 ROW_IN_DOC = re.compile(r"^\| (\[\d+\]) \| (.*?) \|$", re.MULTILINE)
 
 
-def _svg_tags() -> list[str]:
-    return TAG_IN_SVG.findall(SVG.read_text(encoding="utf-8"))
+def _svg() -> str:
+    return SVG.read_text(encoding="utf-8")
+
+
+def _badges() -> list[tuple[str, str]]:
+    return BADGE.findall(_svg())
 
 
 def _legend_rows() -> dict[str, str]:
@@ -30,16 +36,34 @@ def _legend_rows() -> dict[str, str]:
     }
 
 
-def test_every_badge_has_one_unique_legend_row() -> None:
-    tags = _svg_tags()
-    assert tags, "the wireframe has no numbered badges"
-    assert len(tags) == len(set(tags)), f"duplicate badges: {sorted(tags)}"
+def test_every_screen_has_both_panels() -> None:
+    svg = _svg()
+    images = re.findall(r'<image href="wireframe/([a-z-]+)\.png"', svg)
+    assert len(images) >= 8, f"expected all screens captured, got {images}"
+    assert len(images) == len(set(images)), "a screen was captured twice"
+    for name in images:
+        path = ASSETS / f"{name}.png"
+        assert path.exists(), f"missing capture: {path}"
+        assert path.stat().st_size > 1000, f"empty capture: {path}"
+    assert svg.count("— captured") == len(images)
+    assert svg.count("— schematic") == len(images)
+
+
+def test_every_badge_points_at_a_widget_and_has_one_row() -> None:
+    badges = _badges()
+    assert badges, "the wireframe has no numbered badges"
+    tags = [tag for tag, _ in badges]
+    assert len(set(badges)) == len(badges), "duplicate badge in a panel"
+    assert {panel for _, panel in badges} == {"captured", "schematic"}
+    for panel in ("captured", "schematic"):
+        panel_tags = [tag for tag, name in badges if name == panel]
+        assert len(panel_tags) == len(set(panel_tags)), f"duplicate {panel} badges"
     rows = _legend_rows()
-    for tag in tags:
+    for tag in set(tags):
         assert tag in rows, f"{tag} has no legend row"
-    # Tags follow registry order; a conditional widget that is hidden in the
-    # capture keeps its number in the legend but has no badge in the SVG.
-    assert tags == sorted(tags)
+    # A leader line and an anchor dot end on the referenced widget.
+    assert _svg().count('stroke="#b45309" stroke-width="0.9"') >= len(set(tags))
+    assert _svg().count('fill="#b45309"') >= len(set(tags))
     hidden = set(rows) - set(tags)
     for tag in hidden:
         assert "not present in this screen" in rows[tag], (
@@ -48,10 +72,11 @@ def test_every_badge_has_one_unique_legend_row() -> None:
 
 
 def test_legend_rows_name_a_real_widget() -> None:
-    # Only badges that actually appear in the SVG are required to name a
-    # measured widget; hidden conditional rows are documented separately.
+    measured = set(_legend_rows()) - {
+        tag for tag, row in _legend_rows().items() if "not present in this screen" in row
+    }
     for tag, row in _legend_rows().items():
-        if tag not in set(_svg_tags()):
+        if tag not in measured:
             continue
         cells = [cell.strip() for cell in row.split("|")]
         assert len(cells) >= 8, f"{tag}: too few columns ({row})"
@@ -77,11 +102,11 @@ def test_states_and_constraints_are_documented() -> None:
         assert selector in constraints, f"missing constraint for {selector}"
 
 
-def test_svg_has_proportional_boxes_and_no_leaked_paths() -> None:
-    svg = SVG.read_text(encoding="utf-8")
+def test_svg_has_schematic_shapes_and_no_leaked_paths() -> None:
+    svg = _svg()
     assert svg.startswith("<svg ")
     assert 'viewBox="0 0 ' in svg
-    assert svg.count('class="box') == len(_svg_tags())
+    assert svg.count('class="box"') >= len({tag for tag, _ in _badges()}) // 2
     assert "docent-wireframe-workspace" not in svg
     assert "C:\\" not in svg
     assert "/tmp/" not in svg

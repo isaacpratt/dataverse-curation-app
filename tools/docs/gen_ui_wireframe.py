@@ -1,10 +1,11 @@
-"""Generate the numbered UI wireframe and its technical legend.
+"""Generate the numbered UI wireframe: annotated screenshots + clean schematics.
 
 This is a UI harness in the same family as ``tools/probes`` (hence the
-import-linter exception): it boots the real app offscreen, walks the live
-widget tree, and measures actual geometry, ``objectName`` values, layout
-managers and size policies. The published SVG and Markdown are therefore a
-map of the running app, not a hand-maintained guess.
+import-linter exception): it boots the real app offscreen, captures a full
+screenshot of every screen, and measures the live widget tree. The published
+SVG pairs each captured screen with a vector schematic of the same widgets;
+both halves use the same ``[NN]`` numbers, a highlight on the exact bounds and
+a leader line that ends on the widget it names.
 
 Usage::
 
@@ -12,8 +13,8 @@ Usage::
     uv run python tools/docs/gen_ui_wireframe.py --write
 
 The check mode regenerates in memory and compares against the committed
-files; the pytest guard in ``tools/tests/test_ui_wireframe.py`` validates
-the committed pair without needing Qt (so it runs on any machine).
+files; the pytest guard in ``tools/tests/test_ui_wireframe.py`` validates the
+committed pair without needing Qt (so it runs on any machine).
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 SVG_PATH = ROOT / "docs" / "assets" / "ui-wireframe.svg"
+ASSET_DIR = ROOT / "docs" / "assets" / "wireframe"
 DOC_PATH = ROOT / "docs" / "reference" / "ui-wireframe.md"
 BEGIN = "<!-- BEGIN GENERATED UI WIREFRAME -->"
 END = "<!-- END GENERATED UI WIREFRAME -->"
@@ -40,20 +42,55 @@ END = "<!-- END GENERATED UI WIREFRAME -->"
 # and make two otherwise identical runs produce different SVG bytes.
 WORKSPACE = Path(tempfile.gettempdir()) / "docent-wireframe-workspace"
 
-# The canvas is 1280 px wide in the app; the SVG scales it to 576 units so a
-# whole screen fits beside its numbered gutter in a two-column page.
-SCALE = 0.45
+# Page geometry. Each screen owns one row: captured view left, schematic right.
+VIEW_W = 1480
 PANEL_W = 720
-PANEL_H = 410
-CANVAS_W = 576
-CANVAS_H = 387
-GUTTER_X = 600
-GUTTER_W = 110
+PANEL_H = 470
+ROW_H = PANEL_H + 16
+CANVAS_W = 700
+CANVAS_H = 420
+FONT = "Arial, sans-serif"  # Qt's SVG renderer substitutes badly on system-ui
+
+BUTTON_NAMES = frozenset(
+    {
+        "NavActive",
+        "NavItem",
+        "WorkflowStep",
+        "FilterChip",
+        "PrimaryButton",
+        "SecondaryButton",
+        "IconButton",
+        "RefreshButton",
+    }
+)
+CHIP_HINTS = ("Chip", "Pill", "Badge", "StatusPill")
+# Wide wrappers are containers, even when their name contains "Chip".
+CONTAINER_OVERRIDES = frozenset({"ChipsWrap", "CardBodyWrap", "CardTopBar"})
+CARD_NAMES = frozenset({"Card", "MetricCard", "UpdatesCard", "CardTopBar"})
+TEXT_NAMES = frozenset(
+    {
+        "HeadlineLG",
+        "HeadlineMD",
+        "HeadlineSM",
+        "BodyMD",
+        "BodySM",
+        "LabelMD",
+        "LabelSM",
+        "LabelStrongSM",
+        "CaptionSM",
+        "HintSM",
+        "StateMD",
+        "MonoSM",
+        "ValueMD",
+        "CardTitle",
+        "DocentMark",
+    }
+)
 
 
 @dataclass(frozen=True)
 class Landmark:
-    """One numbered [NN] callout in the diagram."""
+    """One numbered [NN] callout, shared by both panels."""
 
     tag: str
     screen: str
@@ -64,15 +101,18 @@ class Landmark:
     size_policy: str
     bounds: str
     note: str
+    kind: str
 
 
 @dataclass(frozen=True)
 class Screen:
-    """A captured screen and the landmarks drawn for it."""
+    """A captured screen, its image and the landmarks drawn on both panels."""
 
+    key: str
     title: str
     width: int
     height: int
+    image: str
     landmarks: tuple[Landmark, ...]
 
 
@@ -85,11 +125,9 @@ class Spec:
     note: str = ""
 
 
-# Curated landmarks per screen. Every number is stable: tags are assigned by
-# registry order after collection, so regenerating cannot renumber a callout
-# that a reader already learned. The names are the roles a curator would use.
-SCREENS: tuple[tuple[str, tuple[Spec, ...]], ...] = (
+SCREENS: tuple[tuple[str, str, tuple[Spec, ...]], ...] = (
     (
+        "dashboard",
         "Main window / dashboard",
         (
             Spec("TopNav", "Top nav bar", "fixed 48 px high chrome; sits above the page stack"),
@@ -108,12 +146,11 @@ SCREENS: tuple[tuple[str, tuple[Spec, ...]], ...] = (
         ),
     ),
     (
-        "Dataset detail",
+        "detail-review",
+        "Dataset detail / review page",
         (
             Spec("DetailView", "Detail page", "root of the detail view"),
-            Spec(
-                "DetailTopBar", "Detail header", "fixed 170 px; scrolls away with the main column"
-            ),
+            Spec("DetailTopBar", "Detail header", "fixed 170 px; scrolls with the main column"),
             Spec("WorkflowRail", "Workflow rail", "step buttons; fixed 36 px high"),
             Spec("WorkflowStep", "Workflow step", "done/active/blocked states"),
             Spec("FilterChip", "Filter chip", "chip family; 36 px high"),
@@ -132,6 +169,22 @@ SCREENS: tuple[tuple[str, tuple[Spec, ...]], ...] = (
         ),
     ),
     (
+        "detail-response",
+        "Dataset detail / response page",
+        (
+            Spec("DetailView", "Detail page", "root of the detail view"),
+            Spec("DetailTopBar", "Detail header", "shared by both pages"),
+            Spec("WorkflowRail", "Workflow rail", "response step active"),
+            Spec("FilterChip", "Filter chip", "chip family"),
+            Spec("StatusWidget", "Status widget", "info/success/error states"),
+            Spec("DetailResponsePage", "Response page", "scrollable draft editor"),
+            Spec("DetailResponseInner", "Response inner", "full content inside the scroll area"),
+            Spec("BodySM", "Response intro", "body copy"),
+            Spec("Card", "Response card", "findings and draft sections"),
+        ),
+    ),
+    (
+        "settings",
         "Settings",
         (
             Spec("SettingsDialog", "Settings pane", "root of the settings form"),
@@ -146,6 +199,7 @@ SCREENS: tuple[tuple[str, tuple[Spec, ...]], ...] = (
         ),
     ),
     (
+        "about",
         "About",
         (
             Spec("AboutPane", "About pane", "root of the About page"),
@@ -158,6 +212,7 @@ SCREENS: tuple[tuple[str, tuple[Spec, ...]], ...] = (
         ),
     ),
     (
+        "log",
         "Log",
         (
             Spec("LogPage", "Log page", "root of the app request log"),
@@ -167,6 +222,7 @@ SCREENS: tuple[tuple[str, tuple[Spec, ...]], ...] = (
         ),
     ),
     (
+        "review-config",
         "Review configuration",
         (
             Spec("ReviewConfigView", "Review config page", "root of the ruleset editor"),
@@ -180,6 +236,7 @@ SCREENS: tuple[tuple[str, tuple[Spec, ...]], ...] = (
         ),
     ),
     (
+        "gallery",
         "Component gallery",
         (
             Spec("GalleryWindow", "Gallery window", "root of the component gallery"),
@@ -191,6 +248,22 @@ SCREENS: tuple[tuple[str, tuple[Spec, ...]], ...] = (
         ),
     ),
 )
+
+
+def _kind(spec: Spec, class_name: str) -> str:
+    """Pick a schematic shape family for one landmark."""
+    name = spec.object_name
+    if name in CONTAINER_OVERRIDES:
+        return "container"
+    if name in BUTTON_NAMES:
+        return "button"
+    if any(hint in name for hint in CHIP_HINTS):
+        return "chip"
+    if name in CARD_NAMES or (class_name in {"QFrame", "QWidget"} and "Card" in name):
+        return "card"
+    if name in TEXT_NAMES or class_name.endswith("Label"):
+        return "text"
+    return "container"
 
 
 def _find(root: Any, object_name: str) -> Any | None:
@@ -224,15 +297,19 @@ def _bounds(widget: Any, root: Any) -> str:
     return f"{x},{y} {geometry.width()},{geometry.height()}"
 
 
-def _capture(root: Any, title: str, specs: tuple[Spec, ...]) -> Screen:
-    """Measure every curated landmark on one screen."""
+def _capture(root: Any, key: str, title: str, specs: tuple[Spec, ...]) -> Screen:
+    """Save the full screen and measure every curated landmark on it."""
     geometry = root.geometry()
+    ASSET_DIR.mkdir(parents=True, exist_ok=True)
+    image_path = ASSET_DIR / f"{key}.png"
+    assert root.grab().save(str(image_path)), f"could not capture {key}"
+
     landmarks: list[Landmark] = []
     for spec in specs:
         widget = _find(root, spec.object_name)
         if widget is None:
-            # A missing landmark is a real gap in the map: say so in the
-            # legend instead of silently dropping a numbered callout.
+            # A hidden conditional widget keeps its number in the legend and
+            # is explicitly marked instead of silently vanishing.
             landmarks.append(
                 Landmark(
                     "",
@@ -244,24 +321,29 @@ def _capture(root: Any, title: str, specs: tuple[Spec, ...]) -> Screen:
                     "—",
                     "not present in this screen",
                     spec.note,
+                    _kind(spec, "—"),
                 )
             )
             continue
         layout = widget.layout()
+        class_name = type(widget).__name__
         landmarks.append(
             Landmark(
                 "",
                 title,
                 spec.name,
-                type(widget).__name__,
+                class_name,
                 spec.object_name,
                 type(layout).__name__ if layout is not None else "—",
                 _policy(widget),
                 _bounds(widget, root),
                 spec.note,
+                _kind(spec, class_name),
             )
         )
-    return Screen(title, geometry.width(), geometry.height(), tuple(landmarks))
+    return Screen(
+        key, title, geometry.width(), geometry.height(), f"wireframe/{key}.png", tuple(landmarks)
+    )
 
 
 def _settle(app: Any, cycles: int = 8) -> None:
@@ -328,14 +410,24 @@ def _renumber(screens: list[Screen]) -> list[Screen]:
                     landmark.size_policy,
                     landmark.bounds,
                     landmark.note,
+                    landmark.kind,
                 )
             )
-        numbered.append(Screen(screen.title, screen.width, screen.height, tuple(landmarks)))
+        numbered.append(
+            Screen(
+                screen.key,
+                screen.title,
+                screen.width,
+                screen.height,
+                screen.image,
+                tuple(landmarks),
+            )
+        )
     return numbered
 
 
 def collect() -> list[Screen]:
-    """Boot the app offscreen and measure every screen in ``SCREENS``."""
+    """Boot the app offscreen, capture every screen and measure its widgets."""
     import shutil
 
     from PySide6.QtWidgets import QApplication
@@ -347,8 +439,6 @@ def collect() -> list[Screen]:
     from ui.theme import apply_theme
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    # Qt 6 ships no fonts; pin the platform face before the app exists so
-    # measured geometry matches what a user sees.
     if not os.environ.get("QT_QPA_FONTDIR"):
         font_dir = (
             os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
@@ -375,34 +465,48 @@ def collect() -> list[Screen]:
         window.show()
         _settle(app, 10)
 
+        detail = _make_detail(config)
         captured: dict[str, Screen] = {}
-        for title, specs in SCREENS:
-            if title == "Dataset detail":
-                root = _make_detail(config)
-            elif title == "Component gallery":
+        for key, title, specs in SCREENS:
+            if key == "dashboard":
+                root = window
+            elif key == "detail-response":
+                detail._show_response_page()
+                root = detail
+            elif key == "detail-review":
+                detail._show_review_page()
+                root = detail
+            elif key == "gallery":
                 root = build_gallery()
                 root.show()
-            elif title == "Main window / dashboard":
-                root = window
             else:
                 root = _open_pane(window, title)
             _settle(app)
-            captured[title] = _capture(root, title, specs)
+            captured[key] = _capture(root, key, title, specs)
 
-        return _renumber([captured[title] for title, _ in SCREENS])
+        return _renumber([captured[key] for key, _, _ in SCREENS])
     finally:
         DatasetDetailView._on_load_metadata = original_load  # type: ignore[method-assign]
         shutil.rmtree(WORKSPACE, ignore_errors=True)
 
 
-def _svg_box(
-    x: int, y: int, width: int, height: int, screen: Screen
-) -> tuple[float, float, float, float]:
-    """Scale a widget's bounds into a panel's canvas, clamped to the screen."""
-    sx = min(max(x, 0), screen.width) * SCALE
-    sy = min(max(y, 0), screen.height) * SCALE
-    sw = max(width, 2) * SCALE
-    sh = max(height, 2) * SCALE
+def _parse_bounds(bounds: str) -> tuple[int, int, int, int] | None:
+    values = bounds.replace(",", " ").split()
+    if len(values) < 4:
+        return None
+    try:
+        return tuple(int(value) for value in values[:4])  # type: ignore[return-value]
+    except ValueError:
+        return None
+
+
+def _scaled(screen: Screen, bounds: tuple[int, int, int, int]) -> tuple[float, float, float, float]:
+    """Map measured widget bounds into one panel's 700x420 canvas."""
+    x, y, width, height = bounds
+    sx = min(max(x, 0), screen.width) / screen.width * CANVAS_W
+    sy = min(max(y, 0), screen.height) / screen.height * CANVAS_H
+    sw = max(width, 2) / screen.width * CANVAS_W
+    sh = max(height, 2) / screen.height * CANVAS_H
     return (
         round(sx, 1),
         round(sy, 1),
@@ -411,92 +515,226 @@ def _svg_box(
     )
 
 
-def render_svg(screens: list[Screen]) -> str:
-    """Return the complete wireframe SVG as diffable text.
+def _schematic_shape(landmark: Landmark, box: tuple[float, float, float, float]) -> str:
+    """Draw a recognisable UI shape, not a bare outline rectangle."""
+    x, y, width, height = box
+    width, height = max(width, 4), max(height, 4)
+    kind = landmark.kind
+    if kind == "button":
+        radius = min(height / 2, 8)
+        return (
+            f'<rect class="box" x="{x}" y="{y}" width="{width}" height="{height}" rx="{radius}" '
+            'fill="#dbeafe" stroke="#2563eb" stroke-width="1"/>'
+            f'<rect x="{x + 8}" y="{y + height / 2 - 1.5}" width="{max(width - 16, 6):.1f}" '
+            'height="3" rx="1.5" fill="#2563eb" fill-opacity="0.55"/>'
+        )
+    if kind == "chip" and width <= 200:
+        radius = height / 2
+        return (
+            f'<rect class="box" x="{x}" y="{y}" width="{width}" height="{height}" rx="{radius:.1f}" '
+            'fill="#dcfce7" stroke="#16a34a" stroke-width="1"/>'
+            f'<rect x="{x + 9}" y="{y + height / 2 - 1.5}" width="{max(width - 18, 6):.1f}" '
+            'height="3" rx="1.5" fill="#16a34a" fill-opacity="0.55"/>'
+        )
+    if kind == "card":
+        return (
+            f'<rect class="box" x="{x}" y="{y}" width="{width}" height="{height}" rx="6" '
+            'fill="#f8fafc" stroke="#475569" stroke-width="1.1"/>'
+            f'<rect x="{x + 8}" y="{y + 7}" width="{width * 0.42:.1f}" height="4" rx="2" fill="#94a3b8"/>'
+            f'<line x1="{x + 6}" y1="{y + 16}" x2="{x + width - 6}" y2="{y + 16}" stroke="#cbd5e1"/>'
+            f'<rect x="{x + 8}" y="{y + 23}" width="{width * 0.7:.1f}" height="3" rx="1.5" fill="#cbd5e1"/>'
+            f'<rect x="{x + 8}" y="{y + 31}" width="{width * 0.55:.1f}" height="3" rx="1.5" fill="#cbd5e1"/>'
+        )
+    if kind == "text":
+        return (
+            f'<rect x="{x}" y="{y + 2}" width="{width * 0.9:.1f}" height="3" rx="1.5" fill="#94a3b8"/>'
+            f'<rect x="{x}" y="{y + 9}" width="{width * 0.6:.1f}" height="3" rx="1.5" fill="#cbd5e1"/>'
+        )
+    # Containers get representative rows so the schematic reads like a page
+    # instead of an empty frame.
+    rows_out: list[str] = [
+        f'<rect class="box" x="{x}" y="{y}" width="{width}" height="{height}" rx="3" '
+        'fill="#eef2f7" stroke="#cbd5e1" stroke-width="1"/>'
+    ]
+    if width >= 80 and height >= 60:
+        rows_out.append(
+            f'<rect x="{x + 7}" y="{y + 7}" width="{width * 0.38:.1f}" height="4" rx="2" fill="#94a3b8"/>'
+        )
+        row_height = 12
+        count = min(6, max(0, int((height - 24) // row_height)))
+        for row in range(count):
+            ry = y + 20 + row * row_height
+            if ry + 5 > y + height - 4:
+                break
+            rows_out.append(
+                f'<rect x="{x + 7}" y="{ry:.1f}" width="{width * (0.72 if row % 2 else 0.86):.1f}" '
+                'height="3" rx="1.5" fill="#cbd5e1"/>'
+            )
+        if height > 120:
+            rows_out.append(
+                f'<rect x="{x + width - 6}" y="{y + 18}" width="4" height="{height - 30:.1f}" '
+                'rx="2" fill="#94a3b8" fill-opacity="0.5"/>'
+            )
+    return "".join(rows_out)
 
-    Presentation attributes are written explicitly rather than relying on a
-    CSS ``<style>`` block: Qt's SVG renderer ignores class selectors, and the
-    diagram must be legible in the docs site *and* in a Qt-rendered preview.
-    """
-    rows = (len(screens) + 1) // 2
-    height = rows * (PANEL_H + 24) + 24
+
+def _badge_label(landmark: Landmark) -> str:
+    label = f"{landmark.tag} {landmark.name}"
+    return label if len(label) <= 18 else label[:17] + "…"
+
+
+def _badge_width(label: str) -> float:
+    return min(max(len(label) * 5.4 + 8, 36), 116)
+
+
+def _place_badge(
+    box: tuple[float, float, float, float],
+    label: str,
+    placed: list[tuple[float, float, float, float]],
+) -> tuple[float, float, float, float]:
+    """Put a badge beside its widget, avoiding badges already placed."""
+    x, y, width, height = box
+    badge_w, badge_h = _badge_width(label), 13
+    candidates = (
+        (x + width + 6, y + height / 2 - badge_h / 2),
+        (x - badge_w - 6, y + height / 2 - badge_h / 2),
+        (x, y - badge_h - 5),
+        (x, y + height + 5),
+        (x + width + 6, y + 2),
+        (x - badge_w - 6, y + 2),
+    )
+    best = (0.0, 0.0)
+    best_score = float("inf")
+    for raw_x, raw_y in candidates:
+        cx = min(max(raw_x, 2), CANVAS_W - badge_w - 2)
+        cy = min(max(raw_y, 2), CANVAS_H - badge_h - 2)
+        overlap = 0.0
+        for px, py, pw, ph in placed:
+            ox = max(0.0, min(cx + badge_w, px + pw) - max(cx, px))
+            oy = max(0.0, min(cy + badge_h, py + ph) - max(cy, py))
+            overlap += ox * oy
+        score = overlap * 20 + abs(cx - (x + width + 6)) * 0.05
+        if score < best_score:
+            best_score, best = score, (cx, cy)
+    badge = (best[0], best[1], badge_w, badge_h)
+    placed.append(badge)
+    return badge
+
+
+def _leader(
+    badge: tuple[float, float, float, float], widget: tuple[float, float, float, float]
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Shortest line from a badge to the nearest point on its widget."""
+    bx, by, bw, bh = badge
+    wx, wy, ww, wh = widget
+    target_x = min(max(bx + bw / 2, wx), wx + ww)
+    target_y = min(max(by + bh / 2, wy), wy + wh)
+    source_x = min(max(target_x, bx), bx + bw)
+    source_y = min(max(target_y, by), by + bh)
+    return (source_x, source_y), (target_x, target_y)
+
+
+def _render_panel(
+    screen: Screen,
+    panel_x: int,
+    panel_y: int,
+    panel_kind: str,
+) -> list[str]:
+    """Render one captured or schematic panel with badges beside their widgets."""
+    title = f"{screen.title} — {panel_kind}"
     lines = [
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1480 '
-        f'{height}" width="1480" height="{height}" role="img" '
+        f'  <g transform="translate({panel_x} {panel_y})">',
+        f'    <rect class="panel" width="{PANEL_W}" height="{PANEL_H}" rx="8" '
+        'fill="#f7f8fa" stroke="#d7dae0" stroke-width="1"/>',
+        f'    <text x="12" y="22" font-family="{FONT}" font-size="14" font-weight="600" '
+        f'fill="#1f2937">{html.escape(title)}</text>',
+    ]
+    if panel_kind == "captured":
+        lines.append(
+            f'    <image href="{screen.image}" x="12" y="38" width="{CANVAS_W}" height="{CANVAS_H}" '
+            'preserveAspectRatio="xMidYMid meet" stroke="#d7dae0" stroke-width="1"/>'
+        )
+    else:
+        lines.append(
+            f'    <rect x="12" y="38" width="{CANVAS_W}" height="{CANVAS_H}" rx="2" '
+            'fill="#ffffff" stroke="#d7dae0" stroke-width="1"/>'
+        )
+
+    measured = [
+        (landmark, _parse_bounds(landmark.bounds))
+        for landmark in screen.landmarks
+        if not landmark.bounds.startswith("not present")
+    ]
+    measured = [(landmark, bounds) for landmark, bounds in measured if bounds is not None]
+
+    if panel_kind == "captured":
+        for landmark, bounds in measured:
+            x, y, width, height = _scaled(screen, bounds)
+            # Dashed outline only: a fill stacks across nested widgets and
+            # washes the screenshot out.
+            lines.append(
+                f'    <rect x="{12 + x}" y="{38 + y}" width="{width}" height="{height}" '
+                'fill="none" stroke="#b45309" stroke-width="1.1" '
+                f'stroke-dasharray="3 2"><title>{html.escape(landmark.tag + " " + landmark.name)}</title></rect>'
+            )
+    else:
+        # Containers first, small controls last: the drawing reads like a UI.
+        ordered = sorted(measured, key=lambda item: item[1][2] * item[1][3], reverse=True)
+        for landmark, bounds in ordered:
+            lines.append("    " + _schematic_shape(landmark, _scaled(screen, bounds)))
+
+    # Badges sit next to the widget they name. A short leader ends in a dot
+    # on the exact bounds, so the reference is never ambiguous.
+    ordered = sorted(measured, key=lambda item: (item[1][1] + item[1][3] / 2, item[1][0]))
+    placed: list[tuple[float, float, float, float]] = []
+    for landmark, bounds in ordered:
+        widget = _scaled(screen, bounds)
+        label = _badge_label(landmark)
+        badge = _place_badge(widget, label, placed)
+        source, target = _leader(badge, widget)
+        tx, ty = 12 + target[0], 38 + target[1]
+        sx, sy = 12 + source[0], 38 + source[1]
+        bx, by, bw, bh = badge
+        lines.append(
+            f'    <line x1="{sx:.1f}" y1="{sy:.1f}" x2="{tx:.1f}" y2="{ty:.1f}" '
+            'stroke="#b45309" stroke-width="0.9" stroke-opacity="0.85"/>'
+        )
+        lines.append(
+            f'    <circle cx="{tx:.1f}" cy="{ty:.1f}" r="2.4" '
+            'fill="#b45309"><title>'
+            + html.escape(landmark.tag + " " + landmark.name)
+            + "</title></circle>"
+        )
+        lines.append(
+            f'    <rect x="{12 + bx:.1f}" y="{38 + by:.1f}" width="{bw:.1f}" height="{bh}" rx="3" '
+            'fill="#fffbeb" fill-opacity="0.95" stroke="#b45309" stroke-width="0.7"/>'
+        )
+        lines.append(
+            f'    <text class="tag" data-tag="{landmark.tag}" data-panel="{panel_kind}" '
+            f'x="{12 + bx + 3:.1f}" y="{38 + by + 9.5:.1f}" font-family="{FONT}" font-size="9" '
+            f'font-weight="600" fill="#7c2d12">{html.escape(label)}</text>'
+        )
+    lines.append("  </g>")
+    return lines
+
+
+def render_svg(screens: list[Screen]) -> str:
+    """Return the complete side-by-side wireframe SVG as diffable text."""
+    height = len(screens) * ROW_H + 8
+    lines = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {VIEW_W} {height}" '
+        f'width="{VIEW_W}" height="{height}" role="img" '
         'aria-labelledby="wireframe-title">',
         '  <title id="wireframe-title">Numbered UI wireframe of Dataverse Docent</title>',
         "  <!-- Generated by tools/docs/gen_ui_wireframe.py; edit the generator, not this file. -->",
+        "  <desc>Each screen appears twice: a full captured view with highlighted widget "
+        "bounds on the left, and a clean vector schematic on the right. Numbered badges "
+        "in both halves use the same [NN] numbers and point at the exact widget.</desc>",
     ]
     for index, screen in enumerate(screens):
-        column, row = index % 2, index // 2
-        px = 8 + column * (PANEL_W + 16)
-        py = 8 + row * (PANEL_H + 24)
-        lines.append(f'  <g transform="translate({px} {py})">')
-        lines.append(
-            f'    <rect class="panel" x="0" y="0" width="{PANEL_W}" height="{PANEL_H}" '
-            'rx="8" fill="#f7f8fa" stroke="#d7dae0" stroke-width="1"/>'
-        )
-        lines.append(
-            '    <text class="title" x="12" y="22" font-family="Arial, sans-serif" '
-            f'font-size="15" font-weight="600" fill="#1f2937">{html.escape(screen.title)}</text>'
-        )
-        lines.append(
-            '    <text class="hint" x="12" y="38" font-family="Arial, sans-serif" '
-            f'font-size="11" fill="#5b6472">canvas {screen.width}x{screen.height} '
-            f"at {int(SCALE * 100)}%</text>"
-        )
-        lines.append(
-            f'    <rect class="canvas" x="12" y="46" width="{CANVAS_W}" '
-            f'height="{CANVAS_H}" rx="2" fill="#ffffff" stroke="#d7dae0" stroke-width="1"/>'
-        )
-        lines.append('    <g transform="translate(12 46)">')
-        kit = screen.title == "Component gallery"
-        seen: set[tuple[float, float, float, float]] = set()
-        for landmark in screen.landmarks:
-            if landmark.bounds.startswith("not present"):
-                continue
-            values = landmark.bounds.replace(",", " ").split()
-            if len(values) < 4:
-                continue
-            try:
-                x, y, width, height = (int(value) for value in values[:4])
-            except ValueError:
-                continue
-            bx, by, bw, bh = _svg_box(x, y, width, height, screen)
-            key = (bx, by, bw, bh)
-            if key in seen:
-                continue
-            seen.add(key)
-            fill, stroke = ("#eaf5ee", "#2f6b43") if kit else ("#e8eef7", "#3d5a80")
-            lines.append(
-                f'      <rect class="box" x="{bx}" y="{by}" width="{bw}" '
-                f'height="{bh}" rx="2" fill="{fill}" stroke="{stroke}" '
-                f'stroke-width="1.2"><title>{html.escape(landmark.tag + " " + landmark.name)}</title></rect>'
-            )
-        lines.append("    </g>")
-        # Tags live in a right-hand gutter, so the label text never changes
-        # the proportions of the boxes it names.
-        visible = [
-            landmark
-            for landmark in screen.landmarks
-            if not landmark.bounds.startswith("not present")
-        ]
-        if visible:
-            spacing = (CANVAS_H - 20) / max(len(visible), 1)
-            for slot, landmark in enumerate(visible):
-                ty = 52 + slot * spacing
-                lines.append(
-                    f'    <line class="leader" x1="{12 + CANVAS_W}" y1="{round(ty + 6, 1)}" '
-                    f'x2="{GUTTER_X}" y2="{round(ty + 6, 1)}" '
-                    'stroke="#8a93a4" stroke-width="0.8"/>'
-                )
-                lines.append(
-                    f'    <text class="tag" data-tag="{landmark.tag}" x="{GUTTER_X + 4}" '
-                    f'y="{round(ty + 6, 1)}" font-family="Arial, sans-serif" '
-                    f'font-size="11" font-weight="600" fill="#1f2937">'
-                    f"{landmark.tag} {html.escape(landmark.name)}</text>"
-                )
-        lines.append("  </g>")
+        panel_y = 8 + index * ROW_H
+        lines.extend(_render_panel(screen, 8, panel_y, "captured"))
+        lines.extend(_render_panel(screen, 752, panel_y, "schematic"))
     lines.append("</svg>")
     return "\n".join(lines) + "\n"
 
@@ -534,7 +772,7 @@ audience: developer
 ---
 # UI wireframe reference
 
-Numbered map of the painted app. Each `[NN]` badge in [the SVG](../assets/ui-wireframe.svg) names one box; the legend below gives its Qt class, `objectName` (the QSS selector and `findChild` key), layout manager, size policy and measured bounds. Tags sit in a gutter beside the boxes so the labels never distort the proportions they describe. For the rules behind the layout, see [UI conventions](../explanation/ui-conventions.md).
+[The wireframe](../assets/ui-wireframe.svg) shows every screen twice: a full captured view on the left and a clean vector schematic on the right. Both halves share the same `[NN]` numbers. A highlight marks the widget's real bounds and a leader line ends in a dot on the widget the badge names, so a label never points at a neighbour. The legend below gives the Qt class, `objectName` (the QSS selector and `findChild` key), layout manager, size policy and measured bounds. For the rules behind the layout, see [UI conventions](../explanation/ui-conventions.md).
 
 {block}
 
@@ -565,11 +803,11 @@ These are the constraints that cause clipping and overlap. They are read from th
 ## Regenerate
 
 ```bash
-uv run python tools/docs/gen_ui_wireframe.py --write   # regenerate SVG + legend
+uv run python tools/docs/gen_ui_wireframe.py --write   # regenerate screenshots, SVG + legend
 uv run python tools/docs/gen_ui_wireframe.py --check   # fail if stale
 ```
 
-The generator boots the app offscreen against a throwaway workspace (never the configured instance), walks the real widget tree, and writes text-only SVG and Markdown. It assigns tags in registry order, so a published tag keeps its number across runs. `tools/tests/test_ui_wireframe.py` checks that every badge in the SVG has exactly one legend row, that no number is reused, and that the state and constraint tables are present — without needing Qt.
+The generator boots the app offscreen against a throwaway workspace (never the configured instance), captures each full screen, walks the real widget tree, and writes text-only SVG and Markdown beside the PNGs in `docs/assets/wireframe/`. It assigns tags in registry order, so a published tag keeps its number across runs. `tools/tests/test_ui_wireframe.py` checks that every badge in both halves of the SVG has exactly one legend row, that no number is reused, and that the state and constraint tables are present — without needing Qt.
 """
 
 
@@ -584,14 +822,13 @@ def check() -> bool:
 
 
 def write() -> tuple[bool, bool]:
-    """Regenerate both files; return (svg_changed, doc_changed)."""
+    """Regenerate screenshots and both files; return (svg_changed, doc_changed)."""
     screens = collect()
     svg = render_svg(screens)
     doc = PAGE_TEMPLATE.format(block=render_legend(screens))
     svg_changed = not SVG_PATH.exists() or SVG_PATH.read_text(encoding="utf-8") != svg
     doc_changed = not DOC_PATH.exists() or DOC_PATH.read_text(encoding="utf-8") != doc
     if svg_changed:
-        SVG_PATH.parent.mkdir(parents=True, exist_ok=True)
         SVG_PATH.write_text(svg, encoding="utf-8", newline="\n")
     if doc_changed:
         DOC_PATH.write_text(doc, encoding="utf-8", newline="\n")
@@ -602,7 +839,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--check", action="store_true", help="fail when a file is stale")
-    group.add_argument("--write", action="store_true", help="regenerate both files")
+    group.add_argument("--write", action="store_true", help="regenerate screenshots and both files")
     args = parser.parse_args(argv)
     if args.write:
         svg_changed, doc_changed = write()
