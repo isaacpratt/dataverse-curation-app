@@ -67,7 +67,7 @@ Adding a component means adding it to the kit and then to the gallery. The galle
 
 ## Why dark mode is a table edit
 
-Dark mode ships with the app. **Settings → General** offers **Light**, **Dark** and **Auto (follow system)**, with an auto-switch checkbox for following the operating system; the component gallery can show both themes side by side. The role layer is why this was a selection rather than a re-skin: the palette stays a palette, the roles decide what each palette entry is for, and `DARK_ROLE_TABLE` decides which entry each role points at in the dark theme. Both tables declare the same role names, and the light mappings are pinned so they cannot move by accident.
+Dark mode ships with the app. **Settings → General** offers **Light**, **Dark** and **Auto (follow system)**, with an auto-switch checkbox for following the operating system; the component gallery can show both themes side by side. Auto reads the OS through Qt's `QStyleHints.colorScheme()` and follows `colorSchemeChanged` live; the registry/`defaults`/`gsettings` probes remain as a fallback where Qt reports `Unknown` (headless runs do). The role layer is why this was a selection rather than a re-skin:
 
 The same layering governs the rest. The contrast floors do not change, but `CONTRAST_PAIRS_DARK` and `BADGE_CONTRAST_PAIRS_DARK` redeclare the pairs and are checked by the same test, so an illegible dark combination fails the build. QSS that hardcoded a surface had to be re-pointed at roles — that was the real work. Painted icons are tinted from roles, and dark variants of the app mark and taskbar icon ship for dark surfaces. Doing this before the role layer existed would have meant rewriting every view.
 

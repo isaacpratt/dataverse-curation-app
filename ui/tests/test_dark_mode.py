@@ -248,6 +248,52 @@ def test_set_active_theme_does_not_change_generator_defaults():
 # --- OS auto-detection (dv-4jm.2) ---------------------------------------
 
 
+def test_qt_color_scheme_is_the_primary_os_source(monkeypatch):
+    """Qt's native scheme wins; platform probes are the fallback only."""
+    from ui import theme
+
+    monkeypatch.setattr(theme, "_qt_color_scheme", lambda: "dark")
+    assert theme.detect_os_theme() == "dark"
+    monkeypatch.setattr(theme, "_qt_color_scheme", lambda: "light")
+    assert theme.detect_os_theme() == "light"
+
+    # When Qt cannot answer (headless/offscreen), the old probes decide.
+    monkeypatch.setattr(theme, "_qt_color_scheme", lambda: None)
+    import subprocess
+    import sys
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: type("R", (), {"stdout": "prefer-dark", "returncode": 0})(),
+    )
+    assert theme.detect_os_theme() == "dark"
+
+
+def test_os_theme_watcher_only_repaints_in_auto_mode(win, monkeypatch):
+    """A live OS scheme change is ignored when the curator picked a theme."""
+    from ui import theme
+
+    calls = []
+    monkeypatch.setattr(theme, "detect_os_theme", lambda: "dark")
+    monkeypatch.setattr(theme, "set_active_theme", lambda name: calls.append(name))
+    monkeypatch.setattr(
+        theme,
+        "apply_theme",
+        lambda app, name, **kw: calls.append((name, kw.get("retheme"))),
+    )
+
+    win._config.app.theme_mode = "dark"
+    win._on_os_theme_changed()
+    assert calls == []
+
+    win._config.app.theme_mode = "auto"
+    win._on_os_theme_changed()
+    assert calls == ["dark", ("dark", True)]
+    win._config.app.theme_mode = "dark"
+
+
 def test_resolve_theme_mode_passes_explicit_modes_through(monkeypatch):
     """An explicit light/dark must never touch the OS."""
     from ui import theme
