@@ -8,7 +8,7 @@ the tests never call (detail loaders fire async and are never awaited).
 """
 
 import os
-from typing import Any, cast
+from typing import cast
 
 import pytest
 
@@ -42,12 +42,6 @@ if not os.environ.get("QT_QPA_FONTDIR"):
         os.environ["QT_QPA_FONTDIR"] = _font_dir
 
 
-#: The session MainWindow, published by the ``win`` fixture so the leak
-#: guard can spare it without requesting that fixture (which would create
-#: a scope mismatch with modules that override ``qapp``).
-_SESSION_WIN: Any = None
-
-
 @pytest.fixture(scope="session")
 def qapp():
     from PySide6.QtWidgets import QApplication
@@ -64,47 +58,21 @@ def qapp():
 
 @pytest.fixture(autouse=True)
 def _no_leaked_windows(qapp):
-    """Take top-level windows a test left open out of the paint path.
+    """Drain posted events between tests.
 
-    A widget built without a parent is a top-level window: left visible it
-    stays for the rest of the session and keeps taking part in style
-    recalculation and event delivery. That is not a correctness failure in
-    the test that leaked, but it makes every *later* test slower - the
-    gallery test measured 1.3 s alone and 80 s after a few hundred leaked
-    windows.
-
-    Deliberately non-destructive: hide and close, never delete. A leaked
-    window may still be owned by a fixture that tears down after this one,
-    or have a queued signal or background load still aimed at it, and
-    forcing deletion here left the worker holding a dangling pointer (seen
-    as a silent crash in test_lazy_startup). Hiding is idempotent and is
-    enough to stop the cost.
-
-    Hiding also takes a leaked window out of the live-theme walk: a switch
-    repaints the visible top-level windows and their children, so a hidden
-    leaked window is not walked (dv-314).
+    Hiding leaked windows by enumerating ``topLevelWidgets()`` is no longer
+    done: on Windows xdist workers that enumeration faulted (heap corruption
+    0xc0000374) once enough wrappers had accumulated. Leaked windows are
+    harmless now that the app stylesheet is palette-based and installed once.
     """
-    from typing import cast
-
-    from PySide6.QtWidgets import QApplication
-
     # instance() is typed as QCoreApplication | None; only QApplication has
     # topLevelWidgets().
-    app = cast("QApplication | None", QApplication.instance())
-    if app is None:
-        yield
-        return
+    # Enumerating top-level widgets used to hide leaked windows between
+    # tests. On Windows xdist workers that enumeration faulted (heap
+    # corruption 0xc0000374) once enough wrappers had accumulated, so it is
+    # gone. Leaked windows no longer cost a theme switch now that the app
+    # sheet is palette-based and installed once.
     yield
-    try:
-        leaked = [w for w in app.topLevelWidgets() if w is not _SESSION_WIN]
-    except Exception:
-        return
-    for widget in leaked:
-        try:
-            widget.hide()
-            widget.close()
-        except Exception:
-            pass
     qapp.processEvents()
 
 
@@ -130,8 +98,6 @@ def win(qapp):
     except Exception:
         cfg = Config()
     window = MainWindow(cfg)
-    global _SESSION_WIN
-    _SESSION_WIN = window
     try:
         # A detail view constructed without cached metadata fires its load
         # on a 100 ms timer as soon as the event loop runs. Tests never
