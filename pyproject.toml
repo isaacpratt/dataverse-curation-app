@@ -241,9 +241,17 @@ type = "simple"
   help = "Fail when the generated CLI reference is stale"
   cmd = "python tools/docs/gen_cli_reference.py --check"
 
+  [tool.poe.tasks.docs-gen-tech-stack]
+  help = "Regenerate the tech-stack reference in docs/reference/tech-stack.md from pyproject.toml, uv.lock and the toolchain pins"
+  cmd = "python tools/docs/gen_tech_stack.py --write"
+
+  [tool.poe.tasks.docs-gen-tech-stack-check]
+  help = "Fail when the generated tech-stack reference is stale"
+  cmd = "python tools/docs/gen_tech_stack.py --check"
+
   [tool.poe.tasks.docs-check]
   help = "Full docs gate: markdown lint + offline links + generated sections + strict build"
-  sequence = ["docs-lint", "docs-links", "docs-gen-checks-check", "docs-gen-cli-check", "docs"]
+  sequence = ["docs-lint", "docs-links", "docs-gen-checks-check", "docs-gen-cli-check", "docs-gen-tech-stack-check", "docs"]
 
   [tool.poe.tasks.docs-serve]
   help = "Preview the Zensical docs with live reload"
