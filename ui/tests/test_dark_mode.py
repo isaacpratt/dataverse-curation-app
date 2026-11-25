@@ -616,42 +616,65 @@ def test_retheme_can_be_switched_off_for_a_temporary_build(qapp):
         theme.apply_theme(qapp, "light", retheme=True)
 
 
-def test_every_scoped_sheet_in_the_window_follows_a_switch(qapp):
-    """No widget in a real window keeps a colour only the old theme wears.
+def test_every_surface_retints_on_a_live_switch(qapp):
+    """Every scoped surface follows one live light→dark→light cycle.
 
-    dv-4jm.7 covered the kit factories; this walks a whole window -
-    dashboard, settings, about, review configuration - so a view-level page
-    background, card, band, pill, search field, chip, badge, check row or
-    caption button that was built before the switch is caught too (dv-314).
+    One cycle covers what used to be four separate tests: view sheets,
+    widget glyphs, model-item glyphs and the painted ring. Each of them
+    used to swap the application stylesheet three times; doing it once
+    keeps the same contract without walking the app's whole widget tree
+    twelve times (dv-314).
 
-    A fresh window, not the session ``win``: that one accumulates the
-    widgets of every earlier test, and walking them says nothing about this
-    contract while costing minutes.
+    The real-window sheet walk stays here; the probes hold the same
+    contract with a full gallery as well.
     """
-    from PySide6.QtWidgets import QWidget
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPixmap
+    from PySide6.QtWidgets import QListWidget, QListWidgetItem, QWidget
 
     from curation.config import Config
     from ui import theme
+    from ui import widgets as _widgets  # installs the retheme hook
+    from ui.icons import set_item_icon
     from ui.main_window import MainWindow
+    from ui.ring import RingProgress
+    from ui.widgets import make_icon_button
+
+    assert _widgets is not None
+    light_only = set(theme.LIGHT_ROLE_TABLE.values()) - set(theme.DARK_ROLE_TABLE.values())
+    dark_only = set(theme.DARK_ROLE_TABLE.values()) - set(theme.LIGHT_ROLE_TABLE.values())
+
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light", retheme=True)
 
     win = MainWindow(Config())
     win.resize(1280, 860)
     win.show()
-    for _ in range(10):
-        qapp.processEvents()
-
-    light_only = set(theme.LIGHT_ROLE_TABLE.values()) - set(theme.DARK_ROLE_TABLE.values())
-    dark_only = set(theme.DARK_ROLE_TABLE.values()) - set(theme.LIGHT_ROLE_TABLE.values())
-
     win._ensure_settings()
     win._ensure_about()
     win._show_review_config()
-    for _ in range(8):
+
+    host = QWidget()
+    host.resize(200, 200)
+    host.show()
+    button = make_icon_button("info")
+    button.setParent(host)
+    button.show()
+    listing = QListWidget(host)
+    item = QListWidgetItem("probe")
+    set_item_icon(item, "info")
+    listing.addItem(item)
+    listing.show()
+    ring = RingProgress()
+    ring.setParent(host)
+    ring.resize(40, 40)
+    ring.show()
+    for _ in range(10):
         qapp.processEvents()
 
-    def stale(colours: set[str]) -> list[tuple[str, list[str]]]:
+    def stale(root: QWidget, colours: set[str]) -> list[tuple[str, list[str]]]:
         found = []
-        for widget in [win, *win.findChildren(QWidget)]:
+        for widget in [root, *root.findChildren(QWidget)]:
             try:
                 sheet = widget.styleSheet()
             except Exception:
@@ -663,122 +686,38 @@ def test_every_scoped_sheet_in_the_window_follows_a_switch(qapp):
                 found.append((widget.objectName() or type(widget).__name__, hits))
         return found
 
-    theme.set_active_theme("light")
-    theme.apply_theme(qapp, "light", retheme=True)
-    try:
-        theme.set_active_theme("dark")
-        theme.apply_theme(qapp, "dark", retheme=True)
-        assert not stale(light_only), stale(light_only)
-
-        theme.set_active_theme("light")
-        theme.apply_theme(qapp, "light", retheme=True)
-        assert not stale(dark_only), stale(dark_only)
-    finally:
-        theme.set_active_theme("light")
-        theme.apply_theme(qapp, "light", retheme=True)
-        win.close()
-        win.deleteLater()
-        qapp.processEvents()
-
-
-def test_icons_retint_on_a_live_switch(qapp):
-    """A Lucide glyph is a tinted SVG pixmap, so a switch must re-tint it.
-
-    The sheet under an icon changes with the theme, but the pixmap was
-    baked with the old ink; ``set_icon`` registers the re-tint (dv-314).
-    """
-    from PySide6.QtWidgets import QWidget
-
-    from ui import theme
-    from ui.widgets import make_icon_button
-
-    theme.set_active_theme("light")
-    theme.apply_theme(qapp, "light", retheme=True)
-    host = QWidget()
-    host.resize(200, 200)
-    host.show()
-    btn = make_icon_button("info")
-    btn.setParent(host)
-    btn.show()
-    qapp.processEvents()
-    try:
-        light = btn.icon().cacheKey()
-        theme.set_active_theme("dark")
-        theme.apply_theme(qapp, "dark", retheme=True)
-        assert btn.icon().cacheKey() != light, "the glyph kept its light tint"
-    finally:
-        host.close()
-        host.deleteLater()
-        theme.set_active_theme("light")
-        theme.apply_theme(qapp, "light", retheme=True)
-
-
-def test_item_icons_retint_on_a_live_switch(qapp):
-    """A model item's glyph is re-tinted too (dv-314).
-
-    Items are not widgets, so the widget walk cannot reach them; the spec
-    rides on the item and ``_retheme_item_icons`` re-applies it.
-    """
-    from PySide6.QtWidgets import QListWidget, QListWidgetItem, QWidget
-
-    from ui import theme
-    from ui import widgets as _widgets  # installs the retheme hook
-    from ui.icons import set_item_icon
-
-    assert _widgets is not None
-    theme.set_active_theme("light")
-    theme.apply_theme(qapp, "light", retheme=True)
-    host = QWidget()
-    host.resize(200, 200)
-    host.show()
-    listing = QListWidget(host)
-    listing.show()
-    item = QListWidgetItem("probe")
-    set_item_icon(item, "info")
-    listing.addItem(item)
-    qapp.processEvents()
-    try:
-        light = item.icon().cacheKey()
-        theme.set_active_theme("dark")
-        theme.apply_theme(qapp, "dark", retheme=True)
-        assert item.icon().cacheKey() != light, "the item glyph kept its light tint"
-    finally:
-        host.close()
-        host.deleteLater()
-        theme.set_active_theme("light")
-        theme.apply_theme(qapp, "light", retheme=True)
-
-
-def test_ring_paints_from_the_active_theme(qapp):
-    """The ring's painted arc and mark use roles, not frozen constants."""
-    from PySide6.QtCore import Qt
-    from PySide6.QtGui import QPixmap
-
-    from ui import theme
-    from ui.ring import RingProgress
-
-    theme.set_active_theme("light")
-    theme.apply_theme(qapp, "light", retheme=True)
-    ring = RingProgress()
-    ring.resize(40, 40)
-
-    def render() -> object:
+    def render_ring() -> object:
         pixmap = QPixmap(40, 40)
         pixmap.fill(Qt.GlobalColor.transparent)
         ring.render(pixmap)
         return pixmap.toImage()
 
-    light = render()
     try:
+        light_icon = button.icon().cacheKey()
+        light_item = item.icon().cacheKey()
+        light_ring = render_ring()
+
         theme.set_active_theme("dark")
         theme.apply_theme(qapp, "dark", retheme=True)
-        dark = render()
-        assert light != dark, "the ring kept the light arc"
+        for _ in range(4):
+            qapp.processEvents()
+
+        assert not stale(win, light_only), stale(win, light_only)
+        assert button.icon().cacheKey() != light_icon, "the widget glyph kept its light tint"
+        assert item.icon().cacheKey() != light_item, "the item glyph kept its light tint"
+        assert render_ring() != light_ring, "the ring kept the light arc"
+
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+        assert not stale(win, dark_only), stale(win, dark_only)
     finally:
         theme.set_active_theme("light")
         theme.apply_theme(qapp, "light", retheme=True)
-        ring.close()
-        ring.deleteLater()
+        win.close()
+        win.deleteLater()
+        host.close()
+        host.deleteLater()
+        qapp.processEvents()
 
 
 if __name__ == "__main__":
