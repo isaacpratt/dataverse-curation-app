@@ -105,7 +105,7 @@ def test_disabled_primary_label_stays_readable():
     assert text == TEXT_PRIMARY, "disabled label wears the primary text role"
 
 
-def test_gallery_builds_and_exhibits_every_kind(qapp):
+def test_gallery_builds_and_exhibits_every_kind(gallery_without_app_theme, qapp):
     """Promotion of probe_gallery: the kit on one page, offscreen."""
     from ui.gallery import build_gallery
     from ui.theme import SURFACE_PAGE

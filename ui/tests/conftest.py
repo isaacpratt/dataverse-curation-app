@@ -102,6 +102,18 @@ def _no_leaked_windows(qapp):
     qapp.processEvents()
 
 
+@pytest.fixture
+def gallery_without_app_theme(monkeypatch):
+    """Build the gallery's two palettes without swapping the app stylesheet.
+
+    ``GalleryWindow`` switches ``ACTIVE_THEME`` while it builds each
+    column, and scoped sheets resolve through that. Replacing the
+    application stylesheet as well would re-polish every live widget in
+    the test process for a view the test is not checking (dv-gkt).
+    """
+    monkeypatch.setattr("ui.theme.apply_theme", lambda *a, **k: None)
+
+
 @pytest.fixture(scope="session")
 def win(qapp):
     from curation.config import Config

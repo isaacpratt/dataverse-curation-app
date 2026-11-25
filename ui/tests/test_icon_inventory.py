@@ -160,7 +160,7 @@ def test_an_unknown_name_warns_instead_of_failing_silently(qapp):
         icon("no-such-name-for-the-inventory-test", size=16)
 
 
-def test_the_gallery_shows_every_role_glyph(qapp):
+def test_the_gallery_shows_every_role_glyph(gallery_without_app_theme, qapp):
     """The icon sheet is the place a missing or ugly mark shows up."""
     from PySide6.QtWidgets import QLabel
 

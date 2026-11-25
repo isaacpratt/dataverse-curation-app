@@ -362,7 +362,7 @@ def test_gallery_mode_round_trips_through_the_config(tmp_path):
     assert Config.load(path).app.gallery_theme_mode == "dark"
 
 
-def test_gallery_window_opens_on_the_saved_mode(qapp, tmp_path):
+def test_gallery_window_opens_on_the_saved_mode(gallery_without_app_theme, qapp, tmp_path):
     """The selector shows the remembered view, not always 'Both'."""
     from curation.config import Config
     from ui.gallery import GalleryWindow
@@ -379,7 +379,7 @@ def test_gallery_window_opens_on_the_saved_mode(qapp, tmp_path):
         window.deleteLater()
 
 
-def test_gallery_window_persists_a_new_choice(qapp, tmp_path):
+def test_gallery_window_persists_a_new_choice(gallery_without_app_theme, qapp, tmp_path):
     """Picking a view writes it, so reopening starts there."""
     from curation.config import Config
     from ui.gallery import GalleryWindow
@@ -400,7 +400,7 @@ def test_gallery_window_persists_a_new_choice(qapp, tmp_path):
         window.deleteLater()
 
 
-def test_gallery_window_without_config_still_opens(qapp):
+def test_gallery_window_without_config_still_opens(gallery_without_app_theme, qapp):
     """The gallery is reachable from `--gallery` with no config to write."""
     from ui.gallery import GalleryWindow
 
@@ -619,26 +619,45 @@ def test_retheme_can_be_switched_off_for_a_temporary_build(qapp):
 def test_every_surface_retints_on_a_live_switch(qapp):
     """Every scoped surface follows one live light→dark→light cycle.
 
-    One cycle covers what used to be four separate tests: view sheets,
-    widget glyphs, model-item glyphs and the painted ring. Each of them
-    used to swap the application stylesheet three times; doing it once
-    keeps the same contract without walking the app's whole widget tree
-    twelve times (dv-314).
+    A small harness holds one of each sheet kind - page, card, band, rule,
+    button, search field, line edit, checkbox, progress bar, list, table,
+    badge and chip - plus the three non-widget surfaces: a widget glyph, a
+    model-item glyph and the painted ring. One cycle, three app-stylesheet
+    swaps, ~30 widgets instead of the whole main window (dv-314).
 
-    The real-window sheet walk stays here; the probes hold the same
-    contract with a full gallery as well.
+    The real-window walk lives in ``probe_theme_switch.py``, which runs in
+    the same gate. Keep this harness in step when a view gains a new kind
+    of scoped sheet.
     """
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QPixmap
-    from PySide6.QtWidgets import QListWidget, QListWidgetItem, QWidget
+    from PySide6.QtWidgets import (
+        QFrame,
+        QListWidget,
+        QListWidgetItem,
+        QVBoxLayout,
+        QWidget,
+    )
 
-    from curation.config import Config
     from ui import theme
     from ui import widgets as _widgets  # installs the retheme hook
     from ui.icons import set_item_icon
-    from ui.main_window import MainWindow
     from ui.ring import RingProgress
-    from ui.widgets import make_icon_button
+    from ui.widgets import (
+        AppTable,
+        make_action_button,
+        make_badge,
+        make_card,
+        make_checkbox,
+        make_icon_button,
+        make_line_edit,
+        make_list,
+        make_progress_bar,
+        make_search_field,
+        make_split_chip,
+        set_flush_table_style,
+        set_sheet,
+    )
 
     assert _widgets is not None
     light_only = set(theme.LIGHT_ROLE_TABLE.values()) - set(theme.DARK_ROLE_TABLE.values())
@@ -647,34 +666,48 @@ def test_every_surface_retints_on_a_live_switch(qapp):
     theme.set_active_theme("light")
     theme.apply_theme(qapp, "light", retheme=True)
 
-    win = MainWindow(Config())
-    win.resize(1280, 860)
-    win.show()
-    win._ensure_settings()
-    win._ensure_about()
-    win._show_review_config()
-
     host = QWidget()
-    host.resize(200, 200)
+    host.setObjectName("ThemeHarness")
+    set_sheet(host, "page_background", ("ThemeHarness",))
+    host.resize(360, 320)
     host.show()
+    column = QVBoxLayout(host)
+    card, _body, _title, _header = make_card("probe")
+    column.addWidget(card)
+    column.addWidget(make_action_button("probe"))
+    column.addWidget(make_search_field("probe"))
+    column.addWidget(make_line_edit("probe"))
+    column.addWidget(make_checkbox("probe"))
+    column.addWidget(make_progress_bar())
+    column.addWidget(make_list(flush=True))
+    table = AppTable(["a", "b"])
+    set_flush_table_style(table)
+    column.addWidget(table)
+    column.addWidget(make_badge("Draft"))
+    column.addWidget(make_split_chip("probe"))
+    band = QFrame()
+    band.setObjectName("HarnessBand")
+    set_sheet(band, "band", "SURFACE_TINT", "BORDER_SUBTLE", selector="QFrame#HarnessBand")
+    column.addWidget(band)
+    divider = QFrame()
+    set_sheet(divider, "rule", "QFrame", "BORDER_SUBTLE")
+    column.addWidget(divider)
     button = make_icon_button("info")
-    button.setParent(host)
-    button.show()
-    listing = QListWidget(host)
+    column.addWidget(button)
+    listing = QListWidget()
     item = QListWidgetItem("probe")
     set_item_icon(item, "info")
     listing.addItem(item)
-    listing.show()
+    column.addWidget(listing)
     ring = RingProgress()
-    ring.setParent(host)
     ring.resize(40, 40)
-    ring.show()
-    for _ in range(10):
+    column.addWidget(ring)
+    for _ in range(6):
         qapp.processEvents()
 
-    def stale(root: QWidget, colours: set[str]) -> list[tuple[str, list[str]]]:
+    def stale(colours: set[str]) -> list[tuple[str, list[str]]]:
         found = []
-        for widget in [root, *root.findChildren(QWidget)]:
+        for widget in [host, *host.findChildren(QWidget)]:
             try:
                 sheet = widget.styleSheet()
             except Exception:
@@ -699,22 +732,18 @@ def test_every_surface_retints_on_a_live_switch(qapp):
 
         theme.set_active_theme("dark")
         theme.apply_theme(qapp, "dark", retheme=True)
-        for _ in range(4):
-            qapp.processEvents()
 
-        assert not stale(win, light_only), stale(win, light_only)
+        assert not stale(light_only), stale(light_only)
         assert button.icon().cacheKey() != light_icon, "the widget glyph kept its light tint"
         assert item.icon().cacheKey() != light_item, "the item glyph kept its light tint"
         assert render_ring() != light_ring, "the ring kept the light arc"
 
         theme.set_active_theme("light")
         theme.apply_theme(qapp, "light", retheme=True)
-        assert not stale(win, dark_only), stale(win, dark_only)
+        assert not stale(dark_only), stale(dark_only)
     finally:
         theme.set_active_theme("light")
         theme.apply_theme(qapp, "light", retheme=True)
-        win.close()
-        win.deleteLater()
         host.close()
         host.deleteLater()
         qapp.processEvents()
