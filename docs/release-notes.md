@@ -30,6 +30,8 @@ The entries below are condensed from `CHANGELOG.md`; see that file for the full 
 - **Documentation is built from Markdown by Zensical** (ADR 0009) and [published on GitHub Pages](https://isaacpratt.github.io/dataverse-curation-app/); CI builds it strictly on every pull request and deploys on master pushes.
 - **Dark mode ships** — Settings → **General** offers Light, Dark and Auto (follow system), with auto-switching driven by the operating system. The theme has separate light/dark role and contrast tables, the app mark and taskbar icon have dark variants, and the component gallery can show both themes side by side.
 - **UI fixes** cover check-box appearance, unclassified Qt warnings failing the build, review-rule selection by click, two review rule cards, entry-check parameter layout, and the split into Dataset checks and File checks sections.
+- **Typography is bundled** — Inter for 12/13px body text, Fraunces for all 16/22px display styles and JetBrains Mono only for the raw metadata field; each face ships with its OFL licence, so the app no longer depends on host fonts. The type scale has four steps (12/13/16/22px) and monospace is opt-in.
+- **The review UI was tightened** — one tabbed sidebar replaces the stacked log column, the two check sections share one progress/verdict vocabulary, and fixes cover the rail, sidebar tabs, header scroll, card tools, version reset, dashboard fit, settings responsiveness and authentication, check filters and summary, the warning face, disposition logging, note button, combo popups and fractional display scaling.
 
 ### 0.2.0 (2026-11-16)
 
