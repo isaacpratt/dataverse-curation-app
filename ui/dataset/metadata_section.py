@@ -23,21 +23,12 @@ from ui.theme import (
     ACCENT_PRIMARY,
     ACTIVE_THEME,
     BORDER_SUBTLE,
-    STATE_ERROR_BG,
-    STATE_ERROR_BORDER,
     STATE_ERROR_GRAPHIC,
-    STATE_ERROR_SURFACE,
-    STATE_ERROR_TEXT,
     STATE_WARNING_GRAPHIC,
-    SURFACE_ALT,
-    SURFACE_SUBTLE,
-    SURFACE_TINT,
     TEXT_AMBER,
     TEXT_DANGER,
     TEXT_MUTED,
-    TEXT_ON_ACCENT,
     TEXT_SUCCESS,
-    surface_frame_qss,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -49,6 +40,7 @@ from ui.widgets import (
     make_combo,
     make_disposition_combo,
     make_small_body_label,
+    set_sheet,
 )
 
 
@@ -546,62 +538,60 @@ class MetadataSection(DetailState):
 
         if pending:
             # Pending = no data yet: muted row, neutral badge, no bar.
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    SURFACE_SUBTLE,
-                    BORDER_SUBTLE,
-                    selector="QFrame#AutoCheckRow",
-                    theme=ACTIVE_THEME,
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "SURFACE_SUBTLE",
+                "BORDER_SUBTLE",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = t("detail.metadata_check.status_pending")
-            badge_bg, badge_fg = SURFACE_ALT, TEXT_MUTED
+            badge_bg, badge_fg = "SURFACE_ALT", "TEXT_MUTED"
         elif status == "complete":
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "SURFACE_TINT",
+                "BORDER_SUBTLE",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "check", ACCENT_PRIMARY
             badge_text = t("detail.metadata_check.status_complete")
-            badge_bg, badge_fg = ACCENT_PRIMARY, TEXT_ON_ACCENT
+            badge_bg, badge_fg = "ACCENT_PRIMARY", "TEXT_ON_ACCENT"
         elif status == "skipped":
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    SURFACE_SUBTLE,
-                    BORDER_SUBTLE,
-                    selector="QFrame#AutoCheckRow",
-                    theme=ACTIVE_THEME,
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "SURFACE_SUBTLE",
+                "BORDER_SUBTLE",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = t("detail.metadata_check.status_unchecked")
-            badge_bg, badge_fg = SURFACE_ALT, TEXT_MUTED
+            badge_bg, badge_fg = "SURFACE_ALT", "TEXT_MUTED"
         elif level_required:
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    STATE_ERROR_BG,
-                    STATE_ERROR_BORDER,
-                    selector="QFrame#AutoCheckRow",
-                    theme=ACTIVE_THEME,
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "STATE_ERROR_BG",
+                "STATE_ERROR_BORDER",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "octagon-x", STATE_ERROR_GRAPHIC
             badge_text = t("detail.metadata_check.status_incomplete")
-            badge_bg, badge_fg = STATE_ERROR_BG, STATE_ERROR_TEXT
+            badge_bg, badge_fg = "STATE_ERROR_BG", "STATE_ERROR_TEXT"
         else:
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    STATE_ERROR_SURFACE,
-                    STATE_ERROR_BORDER,
-                    selector="QFrame#AutoCheckRow",
-                    theme=ACTIVE_THEME,
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "STATE_ERROR_SURFACE",
+                "STATE_ERROR_BORDER",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "octagon-alert", STATE_WARNING_GRAPHIC
             badge_text = t("detail.metadata_check.status_incomplete")
-            badge_bg, badge_fg = STATE_ERROR_BG, STATE_ERROR_TEXT
+            badge_bg, badge_fg = "STATE_ERROR_BG", "STATE_ERROR_TEXT"
 
         lay = QHBoxLayout(frame)
         lay.setContentsMargins(10, 8, 10, 8)
@@ -710,8 +700,12 @@ class MetadataSection(DetailState):
         """Build the inline expansion for a compound field, one block per entry."""
         frame = QFrame()
         frame.setObjectName("AutoCheckRow")
-        frame.setStyleSheet(
-            surface_frame_qss(SURFACE_SUBTLE, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+        set_sheet(
+            frame,
+            "surface_frame",
+            "SURFACE_SUBTLE",
+            "BORDER_SUBTLE",
+            selector="QFrame#AutoCheckRow",
         )
         lay = QVBoxLayout(frame)
         lay.setContentsMargins(38, 6, 12, 8)
@@ -771,8 +765,8 @@ class MetadataSection(DetailState):
         """Return the placeholder shown until completeness has been evaluated."""
         frame = QFrame()
         frame.setObjectName("AutoCheckRow")
-        frame.setStyleSheet(
-            surface_frame_qss(SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow")
+        set_sheet(
+            frame, "surface_frame", "SURFACE_TINT", "BORDER_SUBTLE", selector="QFrame#AutoCheckRow"
         )
         lay = QHBoxLayout(frame)
         lay.setContentsMargins(10, 8, 10, 8)

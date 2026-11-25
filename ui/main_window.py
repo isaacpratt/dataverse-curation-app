@@ -57,23 +57,18 @@ from ui.dialogs import show_warning
 from ui.i18n import t
 from ui.icons import icon as lucide_icon
 from ui.theme import (
-    ACCENT_FOCUS_TINT,
-    ACCENT_SECONDARY,
-    ACTIVE_THEME,
-    BORDER_SUBTLE,
-    STATE_ERROR_BG,
-    STATE_ERROR_GRAPHIC,
-    SURFACE_CARD,
-    SURFACE_RAISED,
     TEXT_MUTED,
     TEXT_ON_ACCENT,
     TEXT_ON_SECONDARY,
-    TEXT_PRIMARY,
-    page_background_qss,
-    surface_frame_qss,
     transparent_surface_qss,
 )
-from ui.widgets import AppButton, make_caption_label, make_split_chip, set_chip_room_limited
+from ui.widgets import (
+    AppButton,
+    make_caption_label,
+    make_split_chip,
+    set_chip_room_limited,
+    set_sheet,
+)
 
 if TYPE_CHECKING:
     from ui.settings_dialog import SettingsPane
@@ -265,27 +260,6 @@ def _maximized_client_rect(hwnd: int) -> tuple[int, int, int, int] | None:
 # control keeps the square Windows caption face and the red close hover,
 # which the kit's button kinds cannot express (the marker at the call
 # site records that exception).
-_WIN_BTN_QSS = (
-    f"QPushButton {{ background: transparent; color: {TEXT_PRIMARY}; border: none; "
-    "border-radius: 0px; }"
-    # Keyboard-focus tint: before hover so hover feedback wins when both apply.
-    f'QPushButton[focusVisible="true"] {{ background: {ACCENT_FOCUS_TINT}; }}'
-    f'QPushButton:hover, QPushButton[hovered="true"] {{ '
-    f"background: {SURFACE_RAISED}; }}"
-    f"QPushButton:pressed {{ background: {ACCENT_SECONDARY}; }}"
-)
-_WIN_CLOSE_QSS = (
-    f"QPushButton {{ background: transparent; color: {TEXT_PRIMARY}; border: none; "
-    "border-radius: 0px; }"
-    f'QPushButton[focusVisible="true"] {{ background: {ACCENT_FOCUS_TINT}; }}'
-    f'QPushButton:hover, QPushButton[hovered="true"] {{ '
-    f"background: {STATE_ERROR_GRAPHIC}; color: {TEXT_ON_ACCENT}; }}"
-    f"QPushButton:pressed {{ background: {STATE_ERROR_BG}; color: {TEXT_ON_ACCENT}; }}"
-)
-
-# The nav's hairline separators: a 1px frame in the subtle border colour.
-_SEPARATOR_QSS = surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, radius="0px", theme=ACTIVE_THEME)
-
 # QStyle standard pixmaps: the exact glyphs Windows paints in a native
 # caption (text characters never matched them, especially restore).
 _CAPTION_GLYPHS = {
@@ -359,7 +333,7 @@ class _CaptionButton(QPushButton):
         # theme-allow: a frameless window's caption button is window chrome,
         # not an app button (square caption face, red close hover) — the kit's
         # button kinds cannot express it.
-        self.setStyleSheet(_WIN_CLOSE_QSS if kind == "close" else _WIN_BTN_QSS)
+        set_sheet(self, "caption_button", kind)
         self._apply_icon()
 
     def set_glyph(self, kind: str) -> None:
@@ -487,7 +461,7 @@ class MainWindow(QMainWindow):
 
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setStyleSheet(_SEPARATOR_QSS)
+        set_sheet(sep, "rule", "QFrame", "BORDER_SUBTLE")
         sep.setFixedWidth(1)
         nav_lay.addWidget(sep)
 
@@ -540,7 +514,7 @@ class MainWindow(QMainWindow):
 
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.Shape.VLine)
-        sep2.setStyleSheet(_SEPARATOR_QSS)
+        set_sheet(sep2, "rule", "QFrame", "BORDER_SUBTLE")
         sep2.setFixedWidth(1)
         nav_lay.addWidget(sep2)
 
@@ -673,7 +647,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet(page_background_qss(theme=ACTIVE_THEME))
+        set_sheet(scroll, "page_background", ())
         scroll.setWidget(pane)
         return scroll
 

@@ -20,13 +20,9 @@ from ui.help_index import GROUP_ORDER, grouped, help_entries
 from ui.i18n import t
 from ui.theme import (
     ACTIVE_THEME,
-    BORDER_SUBTLE,
-    SURFACE_CARD,
-    page_background_qss,
-    surface_frame_qss,
     transparent_surface_qss,
 )
-from ui.widgets import make_caption_label, make_page_heading, make_search_field
+from ui.widgets import make_caption_label, make_page_heading, make_search_field, set_sheet
 
 # Literal keys: the strings test validates that every catalogue key is used
 # and every t() literal exists — no t(f"...") constructions here.
@@ -46,7 +42,7 @@ class HelpPane(QWidget):
         super().__init__(parent)
         # Scoped to self (same contract as the other stack pages).
         self.setObjectName("HelpPane")
-        self.setStyleSheet(page_background_qss("HelpPane", theme=ACTIVE_THEME))
+        set_sheet(self, "page_background", ("HelpPane",))
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 24, 24, 24)
@@ -90,11 +86,7 @@ class HelpPane(QWidget):
     def _entry_block(self, name: str, text: str) -> QFrame:
         block = QFrame()
         block.setObjectName("Card")
-        block.setStyleSheet(
-            surface_frame_qss(
-                SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card", theme=ACTIVE_THEME
-            )
-        )
+        set_sheet(block, "surface_frame", "SURFACE_CARD", "BORDER_SUBTLE", selector="QFrame#Card")
         lay = QVBoxLayout(block)
         lay.setContentsMargins(14, 10, 14, 10)
         lay.setSpacing(4)

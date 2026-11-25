@@ -79,9 +79,7 @@ from ui import theme as _theme
 from ui.i18n import t
 from ui.ring import RingProgress
 from ui.theme import (
-    ACCENT_FOCUS_RING,
     ACCENT_PRIMARY,
-    BORDER_CONTROL,
     BORDER_SUBTLE,
     BUTTON_OBJECTS,
     CHIP_SHADOW_ALPHA,
@@ -92,33 +90,32 @@ from ui.theme import (
     FONT_MICRO,
     FONT_SMALL,
     MONO_FAMILY,
-    ON_PRIMARY,
     ON_SURFACE_VARIANT,
-    PRIMARY_FIXED,
     RADIUS_LG,
     RADIUS_SM,
     STATE_ERROR_GRAPHIC,
     STATE_SUCCESS_GRAPHIC,
-    SURFACE_CARD,
-    SURFACE_SUBTLE,
     SURFACE_TINT,
     TEXT_BLOCKED,
-    TEXT_DANGER,
-    TEXT_DISABLED,
     TEXT_ON_TINT,
-    TEXT_PLACEHOLDER,
     TEXT_PRIMARY,
     TEXT_SUCCESS,
     apply_elevation,
     badge_qss,
+    band_qss,
     button_qss,
+    caption_button_qss,
+    colour,
     enable_table_copy,
     header_section_qss,
     input_qss,
     label_badge_style,
+    page_background_qss,
     role,
+    rule_qss,
     scrollbar_lane_qss,
     selection_qss,
+    surface_frame_qss,
     transparent_qss,
     transparent_surface_qss,
     workflow_rail_qss,
@@ -143,7 +140,7 @@ def _active_theme() -> str:
 _RETHEME_REGISTRY: "weakref.WeakSet[Any]" = weakref.WeakSet()
 
 
-def _register(widget: QWidget, name: str, *args: object) -> None:
+def _register(widget: QWidget, name: str, *args: object, **kwargs: object) -> None:
     """Attach a scoped-sheet rebuild to ``widget`` for live theme switches.
 
     Every factory that bakes its own sheet calls this, so a switch can
@@ -153,12 +150,31 @@ def _register(widget: QWidget, name: str, *args: object) -> None:
     instead would capture the widget and form a reference cycle, which
     keeps the Python wrapper alive past the C++ object and crashes the
     process on the next call.
+
+    Colour arguments are passed as **role names** (``"SURFACE_CARD"``), not
+    resolved values, so the rebuilder resolves them in the new theme
+    (dv-314). A literal is still accepted and simply stays put.
     """
     try:
-        setattr(widget, _theme.RETHEME_ATTR, (name, args))
+        setattr(widget, _theme.RETHEME_ATTR, (name, args, kwargs))
         _RETHEME_REGISTRY.add(widget)
     except Exception:
         pass
+
+
+def set_sheet(widget: QWidget, name: str, *args: object, **kwargs: object) -> None:
+    """Apply a scoped sheet to ``widget`` and keep it in step with the theme.
+
+    The one call a view makes instead of ``widget.setStyleSheet(...)``:
+    it paints now and registers the repaint for the next switch (dv-314).
+    """
+    rebuild = _REBUILDERS.get(name)
+    if rebuild is not None:
+        try:
+            rebuild(widget, *args, **kwargs)
+        except Exception:
+            pass
+    _register(widget, name, *args, **kwargs)
 
 
 def _is_live(widget: object) -> bool:
@@ -190,6 +206,52 @@ def _reapply_card(card: QWidget) -> None:
             f"border-bottom: 1px solid {role('SURFACE_SUBTLE', theme)}; "
             "border-top-left-radius: 8px; border-top-right-radius: 8px; }"
         )
+
+
+def _search_field_qss() -> str:
+    """Build the shared search/line-edit face from the active role table."""
+    theme = _active_theme()
+    return (
+        f"QLineEdit#SearchField {{ background: {role('SURFACE_CARD', theme)}; "
+        f"border: 1px solid {role('BORDER_CONTROL', theme)}; border-radius: 8px; "
+        f"padding-left: 12px; font-size: {FONT_BODY}px; "
+        f"selection-background-color: {role('ACCENT_TINT', theme)}; }} "
+        f"QLineEdit#SearchField:focus {{ border: 1px solid {role('ACCENT_FOCUS_RING', theme)}; }} "
+        f"QLineEdit#SearchField::placeholder-text {{ color: {role('TEXT_PLACEHOLDER', theme)}; }}"
+    )
+
+
+def _text_label_qss(color: str, object_name: str) -> str:
+    """Build a recoloured label rule; ``color`` may be a role name."""
+    if not color:
+        return ""
+    return f"QLabel#{object_name} {{ color: {colour(color, _active_theme())}; }}"
+
+
+def _badge_sheet(
+    label: str,
+    background: str | None,
+    foreground: str | None,
+    border: str | None,
+    font_size: int,
+    padding: str,
+    mono: bool,
+    chip: bool,
+) -> str:
+    """Build a badge's sheet from the active role table (kit rule, one place)."""
+    if background and foreground:
+        sheet = badge_qss(
+            colour(background, _active_theme()),
+            colour(foreground, _active_theme()),
+            colour(border or BORDER_SUBTLE, _active_theme()),
+            font_size=font_size,
+            padding=padding,
+        )
+    else:
+        sheet = label_badge_style(label)
+    if mono:
+        sheet += f" QLabel {{ font-family: {MONO_FAMILY}; }}"
+    return sheet
 
 
 # Rebuilders, keyed by the name a factory passes to _register. Each takes
@@ -231,6 +293,38 @@ _REBUILDERS: dict[str, Any] = {
             item_padding=item_padding,
         )
     ),
+    # --- View-level sheets (dv-314). Colour args are role names. ---
+    "page_background": lambda w, names: w.setStyleSheet(
+        page_background_qss(*names, theme=_active_theme())
+    ),
+    "surface_frame": lambda w, background, border, **kw: w.setStyleSheet(
+        surface_frame_qss(background, border, theme=_active_theme(), **kw)
+    ),
+    "band": lambda w, background, border, **kw: w.setStyleSheet(
+        band_qss(background, border, theme=_active_theme(), **kw)
+    ),
+    "rule": lambda w, selector, background: w.setStyleSheet(
+        rule_qss(selector, background, theme=_active_theme())
+    ),
+    "search_field": lambda w: w.setStyleSheet(_search_field_qss()),
+    "badge": lambda w, label, background, foreground, border, mono, font_size, padding, chip: (
+        w.setStyleSheet(
+            _badge_sheet(label, background, foreground, border, font_size, padding, mono, chip)
+        )
+    ),
+    "split_chip": lambda w, active, part: w.setStyleSheet(_split_chip_qss(active, part)),
+    "text_label": lambda w, color, object_name: w.setStyleSheet(
+        _text_label_qss(color, object_name)
+    ),
+    "info_tip": lambda w: w.setStyleSheet(
+        "QToolButton#InfoTip { background: transparent; border: none; "
+        "border-radius: 16px; padding: 0; }"
+        f"QToolButton#InfoTip:hover {{ background: {role('SURFACE_TINT', _active_theme())}; }}"
+    ),
+    "caption_button": lambda w, kind: w.setStyleSheet(
+        caption_button_qss(kind, theme=_active_theme())
+    ),
+    "workflow_rail": lambda w: w._retheme(),
 }
 
 
@@ -242,25 +336,38 @@ def _retheme_all(app: Any) -> int:
     kit built, and walking all of them on every switch is what made a theme
     change expensive. The registry is weak, so a widget that is gone drops
     out of it on its own.
+
+    A widget in a hidden window is skipped: it is not painting, and the
+    leaked hidden windows a long session accumulates are what made the walk
+    expensive. A hidden page inside the visible window is still repainted,
+    so a switch on the dashboard also fixes the detail page for when it is
+    shown.
     """
     run = 0
     for widget in list(_RETHEME_REGISTRY):
         spec = getattr(widget, _theme.RETHEME_ATTR, None)
-        if not isinstance(spec, tuple) or len(spec) != 2:
+        if not isinstance(spec, tuple) or len(spec) != 3:
             continue
-        name, args = spec
+        name, args, kwargs = spec
         rebuild = _REBUILDERS.get(str(name))
-        if rebuild is None or not _is_live(widget):
+        if rebuild is None:
             continue
         if not widget.isVisible():
-            # Repaint what is on screen. A hidden widget is not painting, and
-            # a long session can accumulate many; skipping them keeps a switch
-            # proportional to the visible UI rather than to every widget ever
-            # built. One hidden at switch time and shown later keeps its old
-            # face until the next switch.
-            continue
+            # Repaint what a visible window can show. A widget inside a
+            # hidden window (a closed dialog, a leaked test window) is not
+            # painting; walking those is what made a switch expensive, and
+            # the next switch after they are shown repaints them. A hidden
+            # page inside the *visible* window is repainted, so switching
+            # while on the dashboard still fixes the detail page.
+            window = widget.window()
+            if window is None or not window.isVisible():
+                continue
+            # A visible widget's C++ object is alive by definition; only a
+            # hidden one needs the validity check.
+            if not _is_live(widget):
+                continue
         try:
-            rebuild(widget, *args)
+            rebuild(widget, *args, **kwargs)
             run += 1
         except Exception:
             continue
@@ -318,6 +425,7 @@ __all__ = [
     "make_value_list",
     "set_chip_room_limited",
     "set_flush_table_style",
+    "set_sheet",
     "tree_style",
 ]
 
@@ -1359,15 +1467,34 @@ class AppCheckBox(QCheckBox):
         One place decides the three faces, so the painted indicator and the
         contrast tests read the same tokens: the edge is always a control
         boundary (3:1 on a card) except when the face is already the accent.
+        Resolved from the active role table so the painted indicator follows
+        a live theme switch (dv-314).
         """
+        theme = _active_theme()
         if not enabled:
             # Muted, never the accent: a disabled check is not a decision.
-            return SURFACE_SUBTLE, BORDER_SUBTLE, TEXT_DISABLED
+            return (
+                role("SURFACE_SUBTLE", theme),
+                role("BORDER_SUBTLE", theme),
+                role("TEXT_DISABLED", theme),
+            )
         if checked:
-            return ACCENT_PRIMARY, ACCENT_PRIMARY, ON_PRIMARY
+            return (
+                role("ACCENT_PRIMARY", theme),
+                role("ACCENT_PRIMARY", theme),
+                role("TEXT_ON_ACCENT", theme),
+            )
         if hovered:
-            return SURFACE_CARD, ACCENT_PRIMARY, ON_PRIMARY
-        return SURFACE_CARD, BORDER_CONTROL, ON_PRIMARY
+            return (
+                role("SURFACE_CARD", theme),
+                role("ACCENT_PRIMARY", theme),
+                role("TEXT_ON_ACCENT", theme),
+            )
+        return (
+            role("SURFACE_CARD", theme),
+            role("BORDER_CONTROL", theme),
+            role("TEXT_ON_ACCENT", theme),
+        )
 
     def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
         super().__init__(text, parent)
@@ -1388,7 +1515,7 @@ class AppCheckBox(QCheckBox):
             f"QCheckBox:disabled {{ color: {role('TEXT_DISABLED', theme)}; }} "
             # A widget sheet can shadow the app-wide focus rule, so carry it.
             f'QCheckBox[focusVisible="true"] {{ outline: 2px solid '
-            f"{ACCENT_FOCUS_RING}; outline-offset: 2px; }}"
+            f"{role('ACCENT_FOCUS_RING', theme)}; outline-offset: 2px; }}"
         )
 
     def indicatorRect(self) -> QRect:
@@ -1499,20 +1626,20 @@ def set_badge_label(
     its own metrics.
     """
     badge.setText(text)
-    if background and foreground:
-        badge.setStyleSheet(
-            badge_qss(
-                background,
-                foreground,
-                border or BORDER_SUBTLE,
-                font_size=font_size,
-                padding=padding,
-            )
-        )
-    else:
-        badge.setStyleSheet(label_badge_style(label or text))
-    if mono:
-        badge.setStyleSheet(badge.styleSheet() + f" QLabel {{ font-family: {MONO_FAMILY}; }}")
+    # Role names (or literals) are stored, so a live switch repaints the
+    # badge with the same label (dv-314).
+    set_sheet(
+        badge,
+        "badge",
+        label or text,
+        background,
+        foreground,
+        border,
+        mono,
+        font_size,
+        padding,
+        chip,
+    )
     if chip:
         # A chip is the header's counterpart to a button: it takes the
         # standard button height (centring its text inside) and must not be
@@ -1671,7 +1798,7 @@ def make_split_chip(
     # elides when the chip row runs out of width (dv-dvu). The old 240px
     # cap cut ordinary titles even in an empty nav bar.
     open_btn.setMinimumWidth(72)
-    open_btn.setStyleSheet(_split_chip_qss(active, "left"))
+    set_sheet(open_btn, "split_chip", active, "left")
     if on_open is not None:
         open_btn.clicked.connect(on_open)
     lay.addWidget(open_btn)
@@ -1690,7 +1817,7 @@ def make_split_chip(
         # Fallback glyph only when the SVG cannot be drawn at all; it is
         # still centred by the right half's face (dv-ap7).
         close_btn.setText("×")
-    close_btn.setStyleSheet(_split_chip_qss(active, "right"))
+    set_sheet(close_btn, "split_chip", active, "right")
     if on_close is not None:
         close_btn.clicked.connect(on_close)
     lay.addWidget(close_btn)
@@ -1707,26 +1834,40 @@ def make_split_chip(
 
 
 def _split_chip_qss(active: bool, part: str) -> str:
-    """Build the face of one half of the dataset chip."""
+    """Build the face of one half of the dataset chip.
+
+    Colours come from the active role table, so a live switch repaints the
+    chip (dv-314).
+    """
+    theme = _active_theme()
     if active:
-        bg, fg, border = SURFACE_TINT, TEXT_PRIMARY, ACCENT_PRIMARY
+        bg, fg, border = (
+            role("SURFACE_TINT", theme),
+            role("TEXT_PRIMARY", theme),
+            role("ACCENT_PRIMARY", theme),
+        )
     else:
-        bg, fg, border = SURFACE_CARD, TEXT_PRIMARY, BORDER_SUBTLE
+        bg, fg, border = (
+            role("SURFACE_CARD", theme),
+            role("TEXT_PRIMARY", theme),
+            role("BORDER_SUBTLE", theme),
+        )
     if part == "left":
         edges = "border-top-left-radius: 8px; border-bottom-left-radius: 8px;"
         padding = "padding: 0 12px;"
         align = "left"
     else:
         edges = "border-left: none; border-top-right-radius: 8px; border-bottom-right-radius: 8px;"
-        fg = TEXT_PRIMARY if active else TEXT_ON_TINT
+        fg = role("TEXT_PRIMARY", theme) if active else role("TEXT_ON_TINT", theme)
         padding = "padding: 0;"
         # The x icon must sit dead-centre in the 32px square (dv-ap7):
         # left alignment (right for the title half) pushed it to the edge.
         align = "center"
+    danger = role("TEXT_DANGER", theme)
     hover = (
-        f"QPushButton:hover {{ color: {TEXT_DANGER}; border-color: {TEXT_DANGER}; }}"
+        f"QPushButton:hover {{ color: {danger}; border-color: {danger}; }}"
         if part == "right"
-        else f"QPushButton:hover {{ border-color: {ACCENT_PRIMARY}; }}"
+        else f"QPushButton:hover {{ border-color: {role('ACCENT_PRIMARY', theme)}; }}"
     )
     return (
         f"QPushButton {{ background: {bg}; color: {fg}; text-align: {align}; "
@@ -1816,7 +1957,7 @@ def make_text_label(
     if selectable:
         lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     if color:
-        lbl.setStyleSheet(f"QLabel#{object_name} {{ color: {color}; }}")
+        set_sheet(lbl, "text_label", color, object_name)
     if tip:
         lbl.setToolTip(tip)
     return lbl
@@ -2148,6 +2289,7 @@ def add_info_tip(
         "border-radius: 16px; padding: 0; }"
         f"QToolButton#InfoTip:hover {{ background: {SURFACE_TINT}; }}"
     )
+    _register(btn, "info_tip")
     btn.clicked.connect(
         lambda: QToolTip.showText(btn.mapToGlobal(btn.rect().bottomLeft()), tip, btn)
     )
@@ -2168,17 +2310,11 @@ def make_search_field(
     field.setFixedHeight(height)
     field.setMinimumWidth(min_width)
     field.setClearButtonEnabled(True)
-    field.setStyleSheet(
-        # The field's own sheet replaces the app-level input rules, so it
-        # repeats them: the control edge (3:1, not the decorative card
-        # edge) and the placeholder colour (4.5:1).
-        f"QLineEdit#SearchField {{ background: {SURFACE_CARD}; "
-        f"border: 1px solid {BORDER_CONTROL}; border-radius: 8px; "
-        f"padding-left: 12px; font-size: {FONT_BODY}px; "
-        f"selection-background-color: {PRIMARY_FIXED}; }} "
-        f"QLineEdit#SearchField:focus {{ border: 1px solid {ACCENT_FOCUS_RING}; }} "
-        f"QLineEdit#SearchField::placeholder-text {{ color: {TEXT_PLACEHOLDER}; }}"
-    )
+    # The field's own sheet replaces the app-level input rules, so it
+    # repeats them: the control edge (3:1, not the decorative card
+    # edge) and the placeholder colour (4.5:1). Registered so a live
+    # switch repaints it (dv-314).
+    set_sheet(field, "search_field")
     return field
 
 
@@ -2196,14 +2332,7 @@ def make_line_edit(
     field.setFixedHeight(height)
     if password:
         field.setEchoMode(QLineEdit.EchoMode.Password)
-    field.setStyleSheet(
-        f"QLineEdit#SearchField {{ background: {SURFACE_CARD}; "
-        f"border: 1px solid {BORDER_CONTROL}; border-radius: 8px; "
-        f"padding-left: 12px; font-size: {FONT_BODY}px; "
-        f"selection-background-color: {PRIMARY_FIXED}; }} "
-        f"QLineEdit#SearchField:focus {{ border: 1px solid {ACCENT_FOCUS_RING}; }} "
-        f"QLineEdit#SearchField::placeholder-text {{ color: {TEXT_PLACEHOLDER}; }}"
-    )
+    set_sheet(field, "search_field")
     return field
 
 
@@ -2799,6 +2928,9 @@ class WorkflowRail(QWidget):
         self.buttons: dict[str, QPushButton] = {}
         self._indexes: dict[str, int] = {}
         self._active_key = ""
+        # The state each step was last painted in, so a theme switch can
+        # repaint the rail without re-deriving the workflow (dv-314).
+        self._step_states: dict[str, str] = {}
         self.hint = QLabel("")
         self.hint.setObjectName("CaptionSM")
         self.hint.setWordWrap(False)
@@ -2814,6 +2946,7 @@ class WorkflowRail(QWidget):
         self._toggle.setAccessibleName(t("workflow.curated.toggle_tip"))
         self._toggle.clicked.connect(lambda _c: self.viewToggled.emit())
         self._rebuild_steps([key for key, _label in nav_steps] if nav_steps else list(STEP_ORDER))
+        _register(self, "workflow_rail")
         if nav_steps:
             # Fixed navigation mode (the dataset page's three section buttons):
             # no state badge, no hint and no curated toggle — just the buttons.
@@ -2894,14 +3027,13 @@ class WorkflowRail(QWidget):
             btn.clicked.connect(lambda _c, k=key: self.stepClicked.emit(k))
             lay.addWidget(btn)
             self.buttons[key] = btn
+            self._step_states[key] = "available"
             if i < len(keys) - 1 and self._nav_steps:
                 # Hairline separator between nav tabs (dv-3d0.2)
                 sep = QFrame()
                 sep.setFrameShape(QFrame.Shape.VLine)
                 sep.setFixedWidth(1)
-                sep.setStyleSheet(
-                    f"QFrame {{ background: {role('BORDER_SUBTLE', _active_theme())}; border: none; }}"
-                )
+                set_sheet(sep, "rule", "QFrame", "BORDER_SUBTLE")
                 lay.addWidget(sep)
         # The buttons and hint should share space; we remove the hard stretch
         # to allow the MinimumExpanding buttons to actually expand.
@@ -2929,6 +3061,13 @@ class WorkflowRail(QWidget):
             return workflow_step_qss("nav", active=active, theme=_active_theme())
         return workflow_step_qss(state, active=active, theme=_active_theme())
 
+    def _retheme(self) -> None:
+        """Repaint the rail and every step from the active role table (dv-314)."""
+        self.setStyleSheet(workflow_rail_qss(theme=_active_theme()))
+        for key, btn in self.buttons.items():
+            state = self._step_states.get(key, "available")
+            btn.setStyleSheet(self._style_for(state, active=key == self._active_key))
+
     def set_active_step(self, key: str) -> None:
         """Shade the step whose section is on screen (dv-gfx.4).
 
@@ -2942,6 +3081,7 @@ class WorkflowRail(QWidget):
         self._active_key = key
         for step_key, btn in self.buttons.items():
             state = "current" if step_key == key else "available"
+            self._step_states[step_key] = state
             btn.setStyleSheet(self._style_for(state, active=step_key == key))
         self.setStyleSheet(workflow_rail_qss(theme=_active_theme()))
 
@@ -2979,6 +3119,7 @@ class WorkflowRail(QWidget):
             except Exception:
                 btn.setIcon(QIcon())
             btn.setStyleSheet(self._style_for(step.state))
+            self._step_states[step.key] = step.state
             btn.setToolTip(step.hint)
             btn.setAccessibleName(step.accessible)
             btn.setAccessibleDescription(step.hint)

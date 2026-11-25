@@ -50,15 +50,11 @@ from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
     ACCENT_PRIMARY,
-    BORDER_SUBTLE,
     STATE_ERROR_GRAPHIC,
-    SURFACE_CARD,
     TEXT_DANGER,
     TEXT_ON_TINT,
     enable_table_copy,
-    page_background_qss,
     selectable_labels,
-    surface_frame_qss,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -72,6 +68,7 @@ from ui.widgets import (
     make_line_edit,
     make_page_heading,
     set_flush_table_style,
+    set_sheet,
 )
 from ui.workers import register_worker
 
@@ -159,7 +156,7 @@ class SettingsPane(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds (e.g. the extensions table).
         self.setObjectName("SettingsDialog")
-        self.setStyleSheet(page_background_qss("SettingsDialog"))
+        set_sheet(self, "page_background", ("SettingsDialog",))
         # Baseline-based dirty tracking: capture the saved values after a
         # reload, compare on every edit, and guard every exit.
         self._loading = False
@@ -295,8 +292,13 @@ class SettingsPane(QWidget):
         # Theme mode selector
         theme_group = QWidget()
         theme_group.setObjectName("Card")
-        theme_group.setStyleSheet(
-            surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, selector="QWidget#Card", radius="8px")
+        set_sheet(
+            theme_group,
+            "surface_frame",
+            "SURFACE_CARD",
+            "BORDER_SUBTLE",
+            selector="QWidget#Card",
+            radius="8px",
         )
         theme_layout = QVBoxLayout(theme_group)
         theme_layout.setContentsMargins(16, 16, 16, 16)

@@ -73,6 +73,11 @@ def _no_leaked_windows(qapp):
     forcing deletion here left the worker holding a dangling pointer (seen
     as a silent crash in test_lazy_startup). Hiding is idempotent and is
     enough to stop the cost.
+
+    The live-theme registry is pruned to widgets in a visible top-level
+    window for the same reason: a leaked hidden window keeps its widgets in
+    the WeakSet, and a switch would walk every one of them (dv-314). The
+    session window is shown, so its widgets stay registered.
     """
     from typing import cast
 
@@ -84,6 +89,21 @@ def _no_leaked_windows(qapp):
     if app is None:
         yield
         return
+
+    # Prune the live-theme registry to widgets a visible window can show.
+    # A leaked hidden window keeps its widgets alive, and a switch would
+    # walk every one of them (dv-314).
+    from ui import widgets as _widgets
+
+    visible = {w for w in app.topLevelWidgets() if w.isVisible()}
+    registry = _widgets._RETHEME_REGISTRY
+    for widget in list(registry):
+        try:
+            if widget.window() not in visible:
+                registry.discard(widget)
+        except Exception:
+            registry.discard(widget)
+
     # Only windows that appear during the test are candidates: the session
     # ``win`` fixture is shown before the first test and must stay shown.
     before = set(app.topLevelWidgets())

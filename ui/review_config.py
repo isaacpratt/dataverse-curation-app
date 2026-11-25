@@ -46,7 +46,7 @@ except Exception:  # the built-in catalog is best-effort at import time
 
 from ui.dialogs import show_critical, show_info, show_warning
 from ui.i18n import t
-from ui.theme import ACTIVE_THEME, page_background_qss, selectable_labels, transparent_surface_qss
+from ui.theme import ACTIVE_THEME, selectable_labels, transparent_surface_qss
 from ui.widgets import (
     AppTreeWidget,
     PaneFooter,
@@ -64,6 +64,7 @@ from ui.widgets import (
     make_page_heading,
     make_search_field,
     make_value_list,
+    set_sheet,
 )
 
 _LEVELS = ["required", "optional", "unchecked"]
@@ -253,7 +254,7 @@ class ReviewConfigView(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds below this view.
         self.setObjectName("ReviewConfigView")
-        self.setStyleSheet(page_background_qss("ReviewConfigView", theme=ACTIVE_THEME))
+        set_sheet(self, "page_background", ("ReviewConfigView",))
 
         # Shared page-heading contract (HeadlineLG theme token) - same
         # title look as Settings, Log and About.

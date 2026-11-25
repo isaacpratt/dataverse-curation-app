@@ -25,16 +25,10 @@ from ui.dataset.state import DetailState
 from ui.download_dialog import DownloadApprovalDialog
 from ui.i18n import t
 from ui.theme import (
-    ACTIVE_THEME,
-    BORDER_SUBTLE,
     FONT_SMALL,
-    STATE_WARNING_GRAPHIC,
-    SURFACE_SUBTLE,
-    SURFACE_TINT,
     TEXT_AMBER,
     TEXT_MUTED,
     TEXT_SUCCESS,
-    surface_frame_qss,
 )
 from ui.widgets import (
     add_info_tip,
@@ -45,6 +39,7 @@ from ui.widgets import (
     make_field_label,
     make_multiline_input,
     make_small_body_label,
+    set_sheet,
 )
 from ui.workers import DownloadWorker
 
@@ -614,13 +609,12 @@ class ActionsSection(DetailState):
             )
         except Exception:
             pass
-        self._follow_up_card.setStyleSheet(
-            surface_frame_qss(
-                SURFACE_TINT if updated else SURFACE_SUBTLE,
-                STATE_WARNING_GRAPHIC if updated else BORDER_SUBTLE,
-                selector="QFrame#FollowUpCard",
-                theme=ACTIVE_THEME,
-            )
+        set_sheet(
+            self._follow_up_card,
+            "surface_frame",
+            "SURFACE_TINT" if updated else "SURFACE_SUBTLE",
+            "STATE_WARNING_GRAPHIC" if updated else "BORDER_SUBTLE",
+            selector="QFrame#FollowUpCard",
         )
         self._follow_up_label.setText(
             t(

@@ -27,13 +27,13 @@ from ui.theme import (
 from ui.widgets import (
     AppTable,
     add_info_tip,
-    flush_list_style,
     make_card,
     make_field_label,
     make_list,
     make_reset_columns_button,
     make_small_body_label,
     set_flush_table_style,
+    set_sheet,
 )
 
 
@@ -106,7 +106,7 @@ class VersionsSection(DetailState):
                     if kind == "table" and isinstance(w, QTableWidget):
                         set_flush_table_style(w, last=last)
                     else:
-                        w.setStyleSheet(flush_list_style(last=last))
+                        set_sheet(w, "list", last, True)
                 except Exception:
                     pass
 

@@ -44,7 +44,6 @@ from ui.theme import (
     ACTIVE_THEME,
     FONT_CAPTION,
     enable_list_copy,
-    page_background_qss,
     selectable_labels,
     transparent_surface_qss,
 )
@@ -57,6 +56,7 @@ from ui.widgets import (
     make_body_label,
     make_multiline_input,
     make_page_heading,
+    set_sheet,
 )
 from ui.workers import (
     CheckWorker,
@@ -175,8 +175,10 @@ class DatasetDetailView(
         # One page-background rule for the view and every page surface it
         # hosts (top bar, stacked pages, canvases); the scroll areas that
         # carry them come with the rule.
-        self.setStyleSheet(
-            page_background_qss(
+        set_sheet(
+            self,
+            "page_background",
+            (
                 "DetailView",
                 "DetailTopBar",
                 "DetailPages",
@@ -184,8 +186,7 @@ class DatasetDetailView(
                 "DetailResponsePage",
                 "DetailResponseInner",
                 "Canvas",
-                theme=ACTIVE_THEME,
-            )
+            ),
         )
         self.setAutoFillBackground(False)
 

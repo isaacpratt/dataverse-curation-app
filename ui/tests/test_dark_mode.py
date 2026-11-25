@@ -616,5 +616,55 @@ def test_retheme_can_be_switched_off_for_a_temporary_build(qapp):
         theme.apply_theme(qapp, "light", retheme=True)
 
 
+def test_every_scoped_sheet_in_the_window_follows_a_switch(win, qapp):
+    """No widget in the real window keeps a colour only the old theme wears.
+
+    dv-4jm.7 covered the kit factories; this walks the whole window -
+    dashboard, settings, about, review configuration - so a view-level page
+    background, card, band, pill, search field, chip, badge, check row or
+    caption button that was built before the switch is caught too (dv-314).
+    """
+    from PySide6.QtWidgets import QWidget
+
+    from ui import theme
+
+    light_only = set(theme.LIGHT_ROLE_TABLE.values()) - set(theme.DARK_ROLE_TABLE.values())
+    dark_only = set(theme.DARK_ROLE_TABLE.values()) - set(theme.LIGHT_ROLE_TABLE.values())
+
+    win._ensure_settings()
+    win._ensure_about()
+    win._show_review_config()
+    for _ in range(8):
+        qapp.processEvents()
+
+    def stale(colours: set[str]) -> list[tuple[str, list[str]]]:
+        found = []
+        for widget in [win, *win.findChildren(QWidget)]:
+            try:
+                sheet = widget.styleSheet()
+            except Exception:
+                continue
+            if not sheet:
+                continue
+            hits = sorted({c for c in colours if c in sheet})
+            if hits:
+                found.append((widget.objectName() or type(widget).__name__, hits))
+        return found
+
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light", retheme=True)
+    try:
+        theme.set_active_theme("dark")
+        theme.apply_theme(qapp, "dark", retheme=True)
+        assert not stale(light_only), stale(light_only)
+
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+        assert not stale(dark_only), stale(dark_only)
+    finally:
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
