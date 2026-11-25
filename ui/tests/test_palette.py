@@ -40,3 +40,5 @@ def test_app_sheet_is_static_and_palette_based(qapp):
     used = set(re.findall(r"""role\(\s*["']([A-Z0-9_]+)""", source))
     mapped = set(theme.PALETTE_ROLE_MAP) | set(theme.PALETTE_QSS_FALLBACK)
     assert used <= mapped, f"app-sheet roles without a palette mapping: {sorted(used - mapped)}"
+    assert "palette(tool-tip-base)" not in sheet
+    assert "palette(tooltip-base)" in sheet

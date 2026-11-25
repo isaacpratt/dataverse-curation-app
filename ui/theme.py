@@ -516,7 +516,8 @@ PALETTE_QSS_FALLBACK: dict[str, str] = {
 
 def _qt_qss_token(qt_role: str) -> str:
     """Return Qt's hyphenated stylesheet name for a QPalette role."""
-    return re.sub(r"(?<!^)(?=[A-Z])", "-", qt_role).lower()
+    special = {"ToolTipBase": "tooltip-base", "ToolTipText": "tooltip-text"}
+    return special.get(qt_role, re.sub(r"(?<!^)(?=[A-Z])", "-", qt_role).lower())
 
 
 def palette_qss() -> str:
