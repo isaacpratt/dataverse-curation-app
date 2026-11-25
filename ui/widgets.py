@@ -61,6 +61,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSpinBox,
+    QSpacerItem,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
@@ -87,8 +88,6 @@ from ui.theme import (
     CHIP_SHADOW_BLUR,
     CHIP_SHADOW_DY,
     FONT_BODY,
-    FONT_CAPTION,
-    FONT_MICRO,
     FONT_SMALL,
     MONO_FAMILY,
     ON_PRIMARY,
@@ -603,6 +602,21 @@ class AppTable(QTableWidget):
         self._auto_fit = True
         self._fitted = False
 
+    def refit_columns_to_content(self) -> None:
+        """Clear the one-shot fit latch and fit again on the next layout.
+
+        A first paint can populate rows before the view has its final
+        width (cached dashboard rows during startup, a filter applied while
+        the window is still being laid out); the fit then measures against
+        a too-small viewport and leaves columns squished. Re-arming here
+        makes ``fit_columns_to_content`` retry once the real width is known
+        (showEvent / the deferred pass), without touching a layout the
+        curator saved or resized by hand.
+        """
+        if not self._auto_fit:
+            return
+        self._fitted = False
+
     def fit_columns_to_content(  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
         self,
         *,
@@ -1080,13 +1094,16 @@ def make_plain_text_view(
     font_size: int = FONT_SMALL,
     parent: QWidget | None = None,
 ) -> QPlainTextEdit:
-    """Build the standard read-only plain-text view (the log page)."""
+    """Build the standard read-only plain-text view (log, preview, gallery).
+
+    Prose at body size in Inter. The one mono read-only field left in the
+    app is the raw metadata view, which opts in through
+    ``make_multiline_input(mono=True)``.
+    """
     view = QPlainTextEdit(parent)
     view.setPlaceholderText(placeholder)
     view.setReadOnly(True)
-    view.setStyleSheet(
-        input_qss("QPlainTextEdit", font_size=font_size, family=MONO_FAMILY, theme=_active_theme())
-    )
+    view.setStyleSheet(input_qss("QPlainTextEdit", font_size=font_size, theme=_active_theme()))
     return view
 
 
@@ -1280,8 +1297,7 @@ def set_badge_label(
     background: str | None = None,
     foreground: str | None = None,
     border: str | None = None,
-    mono: bool = False,
-    font_size: int = FONT_MICRO,
+    font_size: int = FONT_SMALL,
     padding: str = "0 6px",
     chip: bool = True,
 ) -> QLabel:
@@ -1311,8 +1327,6 @@ def set_badge_label(
         )
     else:
         badge.setStyleSheet(label_badge_style(label or text))
-    if mono:
-        badge.setStyleSheet(badge.styleSheet() + f" QLabel {{ font-family: {MONO_FAMILY}; }}")
     if chip:
         # A chip is the header's counterpart to a button: it takes the
         # standard button height (centring its text inside) and must not be
@@ -1338,8 +1352,7 @@ def make_badge(
     background: str | None = None,
     foreground: str | None = None,
     border: str | None = None,
-    mono: bool = False,
-    font_size: int = FONT_MICRO,
+    font_size: int = FONT_SMALL,
     padding: str = "0 6px",
     chip: bool = True,
     parent: QWidget | None = None,
@@ -1362,7 +1375,6 @@ def make_badge(
         background=background,
         foreground=foreground,
         border=border,
-        mono=mono,
         font_size=font_size,
         padding=padding,
         chip=chip,
@@ -1531,7 +1543,7 @@ def _split_chip_qss(active: bool, part: str) -> str:
     return (
         f"QPushButton {{ background: {bg}; color: {fg}; text-align: {align}; "
         f"border: 1px solid {border}; {edges} {padding} "
-        f"font-size: {FONT_CAPTION}px; font-weight: 700; }}" + hover
+        f"font-size: {FONT_SMALL}px; font-weight: 700; }}" + hover
     )
 
 
@@ -1586,9 +1598,9 @@ def make_body_label(text: str = "", *, wrap: bool = True) -> QLabel:
 
 
 def make_caption_label(text: str = "", *, wrap: bool = True) -> QLabel:
-    """Small caption text (``CaptionSM`` token: 11px, muted).
+    """Small caption text (``CaptionSM`` token: 13px, muted).
 
-    The quietest text in the app: status strips, hints, footers.
+    Prose beside a row or under a card: status strips, hints, footers.
     """
     lbl = QLabel(text)
     lbl.setObjectName("CaptionSM")
@@ -1637,7 +1649,7 @@ def make_field_label(text: str = "", *, wrap: bool = True) -> QLabel:
 
 
 def make_small_body_label(text: str = "", *, wrap: bool = True) -> QLabel:
-    """Small body text (``BodySM`` token: 12px, muted)."""
+    """Small body text (``BodySM`` token: 13px, muted)."""
     lbl = QLabel(text)
     lbl.setObjectName("BodySM")
     lbl.setWordWrap(wrap)
@@ -1645,7 +1657,7 @@ def make_small_body_label(text: str = "", *, wrap: bool = True) -> QLabel:
 
 
 def make_card_title(text: str = "") -> QLabel:
-    """Card title (``CardTitle`` token: 15px, semibold)."""
+    """Card title (``CardTitle`` token: 16px, semibold)."""
     lbl = QLabel(text)
     lbl.setObjectName("CardTitle")
     return lbl
@@ -2030,7 +2042,13 @@ class _NoWheelCombo(QComboBox):
     opened (e.g. the Required/Optional level combos while scrolling the
     page) would otherwise flip the value. First click arms the wheel
     (and opens the popup); focus-out disarms it again.
+
+    The popup also keeps a small vertical gap below the field (2026-11-24):
+    a flush popup made the field's bottom corners look square while open.
     """
+
+    # Gap between the field's bottom edge and the popup's top edge.
+    _POPUP_GAP = 4
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -2059,6 +2077,22 @@ class _NoWheelCombo(QComboBox):
             pass
         try:
             super().wheelEvent(event)
+        except Exception:
+            pass
+
+    def showPopup(self) -> None:
+        """Show the popup with a small gap under the field.
+
+        Qt places the popup flush against the field by default, which made
+        the field's rounded bottom corners read as square while open. The
+        gap keeps both shapes rounded and visually separates the menu from
+        the control that opened it.
+        """
+        try:
+            super().showPopup()
+            popup = self.view()
+            if popup is not None:
+                popup.move(popup.x(), popup.y() + self._POPUP_GAP)
         except Exception:
             pass
 
@@ -2551,6 +2585,11 @@ class PaneFooter(QFrame):
         self.revert_btn.setEnabled(bool(dirty))
 
 
+# Horizontal gap between two nav-mode rail links, matching the nav bar's
+# dataset-item rhythm (2026-11-24).
+_NAV_ITEM_SPACING = 8
+
+
 class WorkflowRail(QWidget):
     """Compact six-step progress rail for a dataset.
 
@@ -2578,7 +2617,9 @@ class WorkflowRail(QWidget):
         # Left margin aligns with the main column's content margin (16px card
         # inset + 8px = 24px from page edge). Buttons are fixed-width tabs.
         layout.setContentsMargins(24, 0, 24, 0)
-        layout.setSpacing(0)
+        # The nav bar spaces its items; the rail matches that rhythm instead
+        # of gluing the links together (2026-11-24).
+        layout.setSpacing(_NAV_ITEM_SPACING if nav_steps else 0)
         self.buttons: dict[str, QPushButton] = {}
         self._indexes: dict[str, int] = {}
         self._active_key = ""
@@ -2626,6 +2667,9 @@ class WorkflowRail(QWidget):
             # In nav mode this is a no-op; the hint is hidden.
             self.hint.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
             self.hint.setMinimumWidth(180)
+            # Pack the links on the left with the nav bar's spacing instead
+            # of letting them spread across the page (2026-11-24).
+            layout.addStretch(1)
         else:
             layout.addWidget(self.hint)
             layout.addWidget(self._toggle)
@@ -2669,7 +2713,7 @@ class WorkflowRail(QWidget):
             btn.setMinimumWidth(0)
             if self._nav_steps:
                 # Nav mode: fixed-height tabs, no expanding (dv-3d0.2)
-                btn.setFixedHeight(36)
+                btn.setFixedHeight(32)
                 btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             else:
                 # Workflow mode: buttons expand to fill available space
@@ -2686,6 +2730,12 @@ class WorkflowRail(QWidget):
                     f"QFrame {{ background: {role('BORDER_SUBTLE', _active_theme())}; border: none; }}"
                 )
                 lay.addWidget(sep)
+                # The nav bar spaces its items; the rail matches that rhythm
+                # instead of spreading the links across the page (2026-11-24).
+                gap = QSpacerItem(
+                    _NAV_ITEM_SPACING, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+                )
+                lay.addItem(gap)
         # The buttons and hint should share space; we remove the hard stretch
         # to allow the MinimumExpanding buttons to actually expand.
         lay.addWidget(self.hint)
@@ -2717,15 +2767,18 @@ class WorkflowRail(QWidget):
 
         The section rail replaces "which step of the workflow" with "which
         card am I looking at", so the current view is carried by a shaded
-        block behind its button rather than by a workflow state.
+        block behind its button. In nav mode every state uses the same
+        ``nav`` face (only ``active`` differs) so the clicked link keeps
+        its size and position (2026-11-24).
         """
         key = str(key or "")
         if key == self._active_key:
             return
         self._active_key = key
         for step_key, btn in self.buttons.items():
-            state = "current" if step_key == key else "available"
-            btn.setStyleSheet(self._style_for(state, active=step_key == key))
+            is_active = step_key == key
+            state = "nav" if self._nav_steps else ("current" if is_active else "available")
+            btn.setStyleSheet(self._style_for(state, active=is_active))
         self.setStyleSheet(workflow_rail_qss(theme=_active_theme()))
 
     def set_workflow(self, workflow: Workflow) -> None:
@@ -2817,6 +2870,11 @@ class StatusWidget(QFrame):
         line.addWidget(self._icon)
         line.addWidget(self._title)
         line.addWidget(self._detail, 1)
+        # The verdict's action chips (required/recommended changes) share the
+        # status line's right side when the run is over (2026-11-24).
+        self._chips = QHBoxLayout()
+        self._chips.setSpacing(6)
+        line.addLayout(self._chips)
         # No action button (x/retry/cancel) — the chip is informational only.
         self._rows.addLayout(line)
         self._rows.addWidget(self._bar)
@@ -2890,6 +2948,23 @@ class StatusWidget(QFrame):
         self._title.setText("")
         self._detail.setText("")
         self._bar.hide()
+        self.clear_chips()
+
+    def set_chips(self, chips: list[QWidget]) -> None:
+        """Show the given action chips on the status line (verdict actions)."""
+        self.clear_chips()
+        for chip in chips:
+            self._chips.addWidget(chip)
+        self.show()
+
+    def clear_chips(self) -> None:
+        """Drop the action chips from the status line."""
+        while self._chips.count():
+            item = self._chips.takeAt(0)
+            w = item.widget() if item is not None else None
+            if w is not None:
+                w.setParent(None)
+                w.deleteLater()
 
     def text(self) -> str:
         """Return the current status title text (for tests)."""

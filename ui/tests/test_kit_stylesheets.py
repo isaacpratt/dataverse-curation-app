@@ -84,7 +84,7 @@ def _builders() -> list[tuple[str, Callable[[], str]]]:
         (
             "input_qss mono",
             lambda: theme.input_qss(
-                "QPlainTextEdit", font_size=theme.FONT_CAPTION, family="Consolas"
+                "QPlainTextEdit", font_size=theme.FONT_SMALL, family="Consolas"
             ),
         ),
         (
@@ -97,7 +97,7 @@ def _builders() -> list[tuple[str, Callable[[], str]]]:
                 theme.SURFACE_SUBTLE,
                 theme.TEXT_PRIMARY,
                 theme.BORDER_SUBTLE,
-                font_size=theme.FONT_CAPTION,
+                font_size=theme.FONT_SMALL,
                 padding="2px 8px",
             ),
         ),

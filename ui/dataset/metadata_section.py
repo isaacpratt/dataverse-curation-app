@@ -38,7 +38,6 @@ from ui.theme import (
     TEXT_ON_ACCENT,
     TEXT_SUCCESS,
     surface_frame_qss,
-    transparent_surface_qss,
 )
 from ui.widgets import (
     add_info_tip,
@@ -91,15 +90,10 @@ class MetadataSection(DetailState):
         self._meta_summary.setTextFormat(Qt.TextFormat.RichText)
         self._meta_summary.setToolTip(t("detail.metadata_check.not_loaded_tip"))
         header_lay.insertWidget(2, self._meta_summary)
-        # The two menus and the reset button live on their own row under
-        # the title bar, like the File Manifest's filter row. In the title
-        # row the card needed 791px - wider than the column it sits in -
-        # so the page scrolled sideways at the app's own minimum width.
-        meta_tools = QWidget()
-        meta_tools.setObjectName("MetadataCheckTools")
-        meta_tools.setStyleSheet(transparent_surface_qss("MetadataCheckTools", theme=ACTIVE_THEME))
-        meta_tools_lay = QHBoxLayout(meta_tools)
-        meta_tools_lay.setContentsMargins(16, 8, 16, 8)
+        # The two menus live on the card header row, next to the title and
+        # Reload metadata (2026-11-24): one header line per card.
+        meta_tools_lay = QHBoxLayout()
+        meta_tools_lay.setContentsMargins(0, 0, 0, 0)
         meta_tools_lay.setSpacing(8)
         # One filter for the whole card (dv-3d0.3): the metadata rows and
         # the automated results below share this set of status names, so
@@ -113,7 +107,7 @@ class MetadataSection(DetailState):
                 (t("detail.checks.filter_error"), "error"),
                 (t("detail.checks.filter_skipped"), "skipped"),
             ],
-            min_width=130,
+            min_width=110,
             tip=t("detail.checks.filter_tip"),
         )
         self._check_filter.currentIndexChanged.connect(self._on_check_filter_changed)
@@ -124,14 +118,15 @@ class MetadataSection(DetailState):
         # made this menu's rows read differently-sized vs the rest).
         self._profile_combo = make_combo(
             [(info["label"], key) for key, info in PROFILES.items()],
-            min_width=140,
+            min_width=120,
         )
         idx = list(PROFILES.keys()).index(DEFAULT_PROFILE) if DEFAULT_PROFILE in PROFILES else 0
         self._profile_combo.setCurrentIndex(idx)
         self._profile_combo.currentIndexChanged.connect(self._on_profile_changed)
         meta_tools_lay.addWidget(self._profile_combo)
-        meta_tools_lay.addStretch()
-        body.addWidget(meta_tools)
+        # The tools ride on the card header row, after Reload metadata. The
+        # widgets move into the header layout (a layout has one parent).
+        header_lay.addLayout(meta_tools_lay)
         # One card per check (dv-h70), the Auto-Checks idiom: icon + bold
         # title + one-line verdict sentence + right-aligned badge, with an
         # expandable drawer for compound entries and block section headers.
@@ -185,13 +180,11 @@ class MetadataSection(DetailState):
                 and str(r.get("level") or "required") != "required"
             ]
         elif mode == "error":
-            results = [
-                r
-                for r in results
-                if r.get("status") == "incomplete"
-                and not r.get("pending")
-                and str(r.get("level") or "required") == "required"
-            ]
+            # Error is automated checks only (user decision 2026-11-24):
+            # an incomplete metadata field is never an automated error, so
+            # this filter leaves every metadata row out. The incomplete
+            # fields stay available under Incomplete.
+            results = []
         elif mode == "skipped":
             results = list(unchecked)
         else:  # "all": every row, checked and not checked
@@ -446,10 +439,24 @@ class MetadataSection(DetailState):
         lay = self._meta_body_lay
         self._clear_meta_body()
         self._meta_row_results = list(results)
+        # Remember what this filter last showed, so a test (and a reader)
+        # can see which metadata rows the active mode contributed.
+        try:
+            mode = self._check_filter.currentData() or "all"
+        except Exception:
+            mode = "all"
+        self._last_meta_filter_mode = mode
 
         if not results:
             if getattr(self, "_meta_loaded", False):
-                lay.addWidget(make_small_body_label(t("detail.metadata_check.no_results")))
+                if mode == "error":
+                    # Error is automated checks only: an empty metadata
+                    # set here is the correct answer, not "no results".
+                    lay.addWidget(
+                        make_small_body_label(t("detail.checks.filter_error_metadata_hint"))
+                    )
+                else:
+                    lay.addWidget(make_small_body_label(t("detail.metadata_check.no_results")))
             else:
                 lay.addWidget(self._meta_pending_row())
             return

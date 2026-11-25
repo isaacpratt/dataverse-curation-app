@@ -28,6 +28,23 @@ def test_initial_rows_are_named(win):
     assert all(t and t != DASH for t in rows), rows
 
 
+def test_theme_controls_live_on_the_general_tab(win):
+    """No separate Appearance tab; the theme controls are on General (2026-11-24)."""
+    from PySide6.QtWidgets import QTabWidget
+
+    pane = win._ensure_settings()
+    tab_widgets = pane.findChildren(QTabWidget)
+    assert tab_widgets, "settings has a tab widget"
+    labels = [tab_widgets[0].tabText(i) for i in range(tab_widgets[0].count())]
+    assert "Appearance" not in labels, labels
+    general_index = labels.index("General")
+    general_page = tab_widgets[0].widget(general_index)
+    combos = general_page.findChildren(type(pane.theme_mode_combo))
+    checks = general_page.findChildren(type(pane.auto_theme_checkbox))
+    assert pane.theme_mode_combo in combos, "theme combo is on the General tab"
+    assert pane.auto_theme_checkbox in checks, "auto theme checkbox is on the General tab"
+
+
 def test_checked_but_empty_reads_no_user_returned(win):
     pane = win._ensure_settings()
     pane._set_user_info(

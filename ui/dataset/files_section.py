@@ -58,8 +58,14 @@ class FilesSection(DetailState):
         )
         _body_unused.setContentsMargins(0, 0, 0, 0)
         _body_unused.setSpacing(0)
-        # All tools live on one row under the title bar (dv-3d0.5): search,
-        # status filter, Verify files, Open folder, Collapse all, Draft dict, Reset.
+        # The Fraunces title is wider than the old Inter one; tighten this
+        # header so the tools row still fits the 960px floor (no sideways
+        # scroll) without dropping a control or shortening a title.
+        header_lay.setContentsMargins(8, 12, 8, 12)
+        header_lay.setSpacing(8)
+        # The title bar carries the title + (i) and every tool (2026-11-24):
+        # search, status filter, Verify files, Open folder, Collapse all,
+        # Draft dict and Reset all live on the card header row.
         self._open_folder_btn = make_action_button(
             t("detail.files.open_folder"), kind="secondary", size="md"
         )
@@ -79,15 +85,13 @@ class FilesSection(DetailState):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
-        # The title bar carries title + (i) only; every tool sits on this row.
-        tools = QWidget()
-        tools.setObjectName("FileManifestTools")
-        tools.setStyleSheet(transparent_surface_qss("FileManifestTools", theme=ACTIVE_THEME))
-        tools_lay = QHBoxLayout(tools)
-        tools_lay.setContentsMargins(16, 8, 16, 8)
-        tools_lay.setSpacing(8)
+        # The title bar carries the title + (i); every tool sits on this row.
+        # Compact widths keep the row inside the column at the 960px floor.
+        tools_lay = QHBoxLayout()
+        tools_lay.setContentsMargins(0, 0, 0, 0)
+        tools_lay.setSpacing(6)
         self._file_filter = make_search_field(
-            t("detail.files.filter_placeholder"), height=36, min_width=120
+            t("detail.files.filter_placeholder"), height=36, min_width=90
         )
         self._file_filter.setAccessibleName(t("detail.files.filter_placeholder"))
         self._file_filter.textChanged.connect(self._on_file_filter)
@@ -106,7 +110,7 @@ class FilesSection(DetailState):
                 ]
             ],
             height=36,
-            min_width=130,
+            min_width=110,
         )
         self._scan_filter.currentIndexChanged.connect(lambda _i: self._apply_file_filter_internal())
         tools_lay.addWidget(self._scan_filter)
@@ -130,14 +134,14 @@ class FilesSection(DetailState):
         self._file_reset_btn.setAccessibleName(t("detail.files.reset_columns_a11y"))
         self._file_reset_btn.clicked.connect(self._on_reset_file_view)
         tools_lay.addWidget(self._file_reset_btn)
-        tools_lay.addStretch(1)
-        lay.addWidget(tools)
+        # The tools row rides on the card header; the trailing stretch is
+        # the header's own, so no second stretch is added here.
+        # The tools row IS the card header's trailing content: reparent the
+        # widgets into the header layout (a layout can only have one parent).
+        header_lay.addLayout(tools_lay)
         # NOTE: tree + footer live in a flush sub-layout so the header keeps
         # its top radius and the footer keeps its bottom radius.
         cast(QVBoxLayout, card.layout()).addLayout(lay)
-        # The section's action buttons are now on the tools row; header has
-        # only title + (i) + stretch.
-        header_lay.addStretch(1)
 
         # Tree: folder > file > check hierarchy (Carbon-inspired, native QTreeView).
         # Column 0 carries the tree (caret + indent + icons); Size/Format/Scan
@@ -198,15 +202,25 @@ class FilesSection(DetailState):
                 self._file_checks_summary.setText("")
                 return
             summary = summarize(checks)
-            self._file_checks_summary.setText(
-                t(
-                    "detail.auto_checks.summary_counts",
-                    passed=summary["passed"],
-                    warnings=summary["failed-warning"],
-                    errors=summary["failed-error"],
-                    skipped=summary["skipped"],
-                )
+            total_checks = (
+                summary["passed"]
+                + summary["failed-warning"]
+                + summary["failed-error"]
+                + summary["skipped"]
             )
+            file_base = t(
+                "detail.auto_checks.summary_counts",
+                passed=summary["passed"],
+                total=total_checks,
+            )
+            file_detail = t(
+                "detail.auto_checks.summary_breakdown",
+                warnings=summary["failed-warning"],
+                errors=summary["failed-error"],
+                skipped=summary["skipped"],
+            )
+            self._file_checks_summary.setText(file_base)
+            self._file_checks_summary.setToolTip(file_base + " · " + file_detail)
         except Exception:
             self._file_checks_summary.setText("")
 

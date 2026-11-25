@@ -488,4 +488,9 @@ ignore_imports = [
     "tools.probes.probe_review_params -> ui.widgets",
     "tools.probes.probe_check_sections -> ui.dataset",
     "tools.probes.probe_dataset_header -> ui.dataset",
+    "tools.probes.probe_text_fit -> ui.dataset",
+    "tools.probes.probe_text_fit -> ui.gallery",
+    "tools.probes.probe_text_fit -> ui.main_window",
+    "tools.probes.probe_text_fit -> ui.settings_dialog",
+    "tools.probes.probe_text_fit -> ui.widgets",
 ]

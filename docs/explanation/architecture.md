@@ -49,7 +49,7 @@ A dashboard refresh pages the Search API at `per_page=1000`, driven by the first
 
 Opening a dataset schedules a metadata load: citation blocks, inventory, curation state, version comparison and timestamps arrive on a worker, and the detail page fills in as they land. **Download Dataset** quotes the transfer first, using original size for tabular files, and waits for approval. Once approved, the bundle streams to a partial file and is renamed atomically; originals are fetched and `.tab` siblings removed for an originals-only deposit; `verify()` returns `(ok, problems, warnings)` rather than a single pass/fail, because a checksum mismatch and a recoverable warning are different curator facts. Both streaming loops poll a cancellation flag so the detail page's Cancel is real.
 
-Checks then dispatch per file and at dataset level, writing reports under the staged dataset's workspace folder. The curator's attention lands on the main column — metadata completeness, dataset checks, file checks, version history — and on a sidebar that holds the response and the curation label. A verdict and per-finding dispositions live alongside the report, and the label push travels back through the client to Dataverse. The workflow rail only navigates between these sections; it deliberately never starts a download or an export.
+Checks then dispatch per file and at dataset level, writing reports under the staged dataset's workspace folder. The curator's attention lands on the main column — the page header, metadata completeness, dataset checks and file checks — and on a sidebar that is one tabbed panel (Preview, Version log, Dataset log) rather than a stacked column. A verdict and per-finding dispositions live alongside the report, and the label push travels back through the client to Dataverse. The workflow rail only navigates between these sections; it deliberately never starts a download or an export.
 
 ## Local state is a cache, not the source of truth
 
@@ -67,7 +67,7 @@ The palette in `ui/theme.py` says what a colour is — `PRIMARY`, `SURFACE_CONTA
 
 Only `ui/theme.py` and `ui/widgets.py` may name a palette entry. A view names a role, the kit builds the component, and the theme owns the rules. This is checked, not reviewed: `ui/tests/test_theme_conformance.py` fails the build when a view paints for itself, names a raw colour, builds a raw input widget or writes a button sheet by hand. The guards parse source with `ast`, so they are cheap, exact and need no window.
 
-The role names are stable; what they resolve to is not. `ui/theme.py` holds one table per theme — `LIGHT_ROLE_TABLE` and `DARK_ROLE_TABLE` over the same 94 role names — plus a resolver and `set_active_theme()`. **Settings → Appearance** selects Light, Dark or Auto (follow system), so a theme change swaps tables instead of repainting views. The role groups give an idea of the vocabulary:
+The role names are stable; what they resolve to is not. `ui/theme.py` holds one table per theme — `LIGHT_ROLE_TABLE` and `DARK_ROLE_TABLE` over the same role names — plus a resolver and `set_active_theme()`. **Settings → General** selects Light, Dark or Auto (follow system), so a theme change swaps tables instead of repainting views. The role groups give an idea of the vocabulary:
 
 | Group | Purpose |
 | --- | --- |
@@ -75,7 +75,7 @@ The role names are stable; what they resolve to is not. `ui/theme.py` holds one 
 | Surface | The plane a component sits on — page, card, header band, disabled face. |
 | Border | An edge that separates, an edge that carries meaning, an edge of an unusable control. |
 | Accent | The brand fill and its states; a component asks for "the accent", not for blue. |
-| State | How an error, a pass and a caution look; text and graphic roles are separate because their contrast floors differ. |
+| State | How an error, a pass and a caution look: a face (surface, border), an ink that sits on it, and a mark. Text and graphic roles are separate because their contrast floors differ. |
 
 Legibility is data too. `theme.CONTRAST_PAIRS` and `theme.BADGE_CONTRAST_PAIRS` list every painted foreground/background pair with its floor, and `ui/tests/test_contrast.py` reads that table:
 
@@ -107,7 +107,7 @@ self._layout.reset()  # clears the saved entry, restores the snapshot
 
 Programmatic resizes run inside `suppressed()` because a content fit, a viewport refit or a state restore must never overwrite a width the user chose. Four copies of wiring `sectionResized` straight to a save are how the file manifest once lost its widths on every refresh. The kit reports a gesture only when the user could have caused it, since Qt reports layout-owned and stretched sections the same way it reports a drag.
 
-Geometry is part of the contract. The queue has no horizontal scrollbar, so its visible widths must add up to the viewport exactly; the fit shaves the difference off the widest sections. The queue uses the table's own header as its column bar — an older split header needed two-way size and order sync and produced clipped columns and an off-centre label. A table flush inside a card paints square end caps and transparent scrollbar lanes, because Qt never clips a child to a parent's border radius and a filled lane paints over the card's rounded corner. All text sizes come from the theme's `FONT_*` constants and object-name tokens; a raw `font-size: Npx` outside the theme fails the type-scale test.
+Geometry is part of the contract. The queue has no horizontal scrollbar, so its visible widths must add up to the viewport exactly; the fit shaves the difference off the widest sections. The queue uses the table's own header as its column bar — an older split header needed two-way size and order sync and produced clipped columns and an off-centre label. A table flush inside a card paints square end caps and transparent scrollbar lanes, because Qt never clips a child to a parent's border radius and a filled lane paints over the card's rounded corner. All text sizes come from the theme's four `FONT_*` constants (12/13/16/22px) and object-name tokens; a raw `font-size: Npx` anywhere fails the type-scale test.
 
 ## Reports and extensibility
 

@@ -125,9 +125,23 @@ def test_queue_refine_toggle_is_gone(win):
 # -- dataset detail cards --------------------------------------------------
 
 
-def test_file_manifest_actions_live_on_the_tools_row(detail):
+def _layout_holds_deep(layout, widget) -> bool:
+    """True when the widget is in this layout or any nested child layout."""
+    for i in range(layout.count()):
+        item = layout.itemAt(i)
+        if item is None:
+            continue
+        if item.widget() is widget:
+            return True
+        child = item.layout()
+        if child is not None and _layout_holds_deep(child, widget):
+            return True
+    return False
+
+
+def test_file_manifest_actions_live_on_the_header_row(detail):
     card = detail._file_card
-    tools = _tools_row(card, "FileManifestTools")
+    title_row = _title_row(card)
     for widget in (
         detail._file_filter,
         detail._scan_filter,
@@ -137,18 +151,12 @@ def test_file_manifest_actions_live_on_the_tools_row(detail):
         detail._dictionary_btn,
         detail._file_reset_btn,
     ):
-        assert _layout_holds(tools.layout(), widget), (
-            f"{type(widget).__name__} must live on the File Manifest tools row"
+        assert _layout_holds_deep(title_row, widget), (
+            f"{type(widget).__name__} must live on the File Manifest header row"
         )
-    # One header line per card (dv-gfx.5): only title + (i) + stretch.
-    title_row = _title_row(card)
-    actions = _buttons_in(title_row)
-    assert [b.objectName() for b in actions] == ["InfoTip"], (
-        "File Manifest title row must hold no action buttons"
-    )
 
 
-def test_metadata_title_row_keeps_title_tip_and_summary(detail):
+def test_metadata_title_row_keeps_title_tip_summary_and_menus(detail):
     card = detail._meta_card
     title_row = _title_row(card)
     assert _layout_holds(title_row, detail._meta_summary), (
@@ -157,14 +165,19 @@ def test_metadata_title_row_keeps_title_tip_and_summary(detail):
     assert _layout_holds(title_row, detail._load_meta_btn), (
         "Load metadata belongs on the card's title row"
     )
-    tools = _tools_row(card, "MetadataCheckTools")
     for widget in (detail._meta_filter, detail._profile_combo):
-        assert _layout_holds(tools.layout(), widget)
+        assert _layout_holds_deep(title_row, widget), (
+            f"{type(widget).__name__} must live on the card header row"
+        )
 
 
-def test_version_reset_lives_on_the_title_row(detail):
+def test_version_card_has_no_reset_button(detail):
+    # User decision 2026-11-24: the version log table restores the saved
+    # layout on load, so the card carries no reset control.
     card = detail._version_card
-    assert _layout_holds(_title_row(card), detail._version_reset_btn)
+    assert not hasattr(detail, "_version_reset_btn")
+    assert not hasattr(detail, "_on_reset_version_view")
+    assert card.findChild(QWidget, "VersionReset") is None
 
 
 def test_auto_checks_title_row_keeps_the_summary(detail):

@@ -78,13 +78,13 @@ def main() -> int:
             f"stored={stored}",
         )
         report.check(
-            any(a == "disposition" for a, _n in getattr(view, "_logged", [])),
-            "the change is logged as a curation action",
+            "1 of 1 findings resolved" in (view._auto_summary.toolTip() or ""),
+            "the header tooltip shows the resolved roll-up",
+            view._auto_summary.toolTip(),
         )
         report.check(
-            "1 of 1 findings resolved" in view._auto_summary.text(),
-            "the header shows the resolved roll-up",
-            view._auto_summary.text(),
+            not any(a == "disposition" for a, _n in getattr(view, "_logged", [])),
+            "a disposition change is not written to the dataset log (2026-11-24)",
         )
         # Reopen: a fresh state read must still see it (restart survival).
         del view._dispositions_cache  # drop the cache so the map reloads

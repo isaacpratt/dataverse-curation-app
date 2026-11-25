@@ -86,16 +86,16 @@ __all__ = ["GalleryWindow", "build_gallery"]
 # The label tokens the theme defines, in the order they scale down. The
 # token is the object name; the note says what the token is for.
 _TYPE_SCALE = (
-    ("DisplayLG", "22px bold"),
-    ("HeadlineLG", "22px semibold"),
-    ("HeadlineMD", "17px semibold"),
-    ("CardTitle", "15px semibold"),
-    ("BodyMD", "13px"),
-    ("BodySM", "12px muted"),
-    ("HintSM", "12px subtle"),
-    ("LabelMD", "11px semibold tracked"),
-    ("LabelStrongSM", "11px semibold strong"),
-    ("CaptionSM", "11px muted"),
+    ("DisplayLG", "22px Fraunces bold"),
+    ("HeadlineLG", "22px Fraunces semibold"),
+    ("HeadlineMD", "16px Fraunces semibold"),
+    ("CardTitle", "16px Fraunces semibold"),
+    ("BodyMD", "13px Inter"),
+    ("BodySM", "13px Inter muted"),
+    ("HintSM", "13px Inter muted"),
+    ("LabelMD", "12px semibold tracked"),
+    ("LabelStrongSM", "12px semibold strong"),
+    ("CaptionSM", "13px muted"),
     ("AccentSM", "12px brand"),
     ("SuccessSM", "12px success"),
     ("WarningSM", "12px warning"),
@@ -279,7 +279,7 @@ def _badge_section() -> QWidget:
                 background=STATE_SUCCESS_GRAPHIC,
                 foreground=SURFACE_CARD,
             ),
-            make_badge(t("gallery.badges.identifier"), label="identifier", mono=True),
+            make_badge(t("gallery.badges.identifier"), label="identifier"),
         )
     )
     return host

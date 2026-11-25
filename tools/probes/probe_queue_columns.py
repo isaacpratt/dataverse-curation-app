@@ -90,6 +90,41 @@ def main() -> int:
         app.processEvents()
     check_fit("after widening the window")
 
+    # First-load regression (dv-81l): a fresh workspace with no saved
+    # layout must still fit its columns on the first paint, not leave them
+    # squished until a manual reset. Measure on a fresh view so the checks
+    # above (a drag and a move lock the layout by design) cannot interfere.
+    from curation.config import Config as _Config
+
+    fresh_cfg = _Config()
+    fresh_cfg.app.workspace = dash._config.app.workspace
+    from ui.main_window import MainWindow as _MainWindow
+
+    fresh_win = _MainWindow(fresh_cfg)
+    fresh_win.resize(1000, 800)
+    fresh_win.show()
+    for _ in range(10):
+        app.processEvents()
+    fresh = fresh_win._dashboard
+    fresh._all_datasets = [
+        {
+            "title": "A Study With A Long Descriptive Title",
+            "persistent_id": "doi:10.5072/FK2/ABCDEFG",
+            "state": "DRAFT",
+        }
+    ]
+    fresh._paint_rows(fresh._all_datasets)
+    for _ in range(8):
+        app.processEvents()
+    fresh_hdr = fresh._table.horizontalHeader()
+    title_width = fresh_hdr.sectionSize(0)
+    report.check(
+        title_width >= 120,
+        "first paint: the title column is content-fitted, not squished",
+        f"width={title_width}",
+    )
+    fresh_win.close()
+
     win.close()
     return report.finish()
 

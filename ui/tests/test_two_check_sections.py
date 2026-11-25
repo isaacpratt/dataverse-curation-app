@@ -167,11 +167,30 @@ def test_each_section_has_its_own_summary(qapp, tmp_path):
         file_summary = summarize([c for f in report.files for c in f.checks])
         assert view._auto_summary.text()
         assert view._file_checks_summary.text()
-        # Dataset checks counts the dataset-level results only.
-        assert str(dataset_summary["passed"]) in view._auto_summary.text() or "will run" in (
-            view._auto_summary.text()
+        # Dataset checks counts dataset-level + per-file results (the
+        # summary covers every automated check), as N/M.
+        auto_text = view._auto_summary.text()
+        if "will run" not in auto_text and "not run" not in auto_text:
+            all_results = list(report.dataset_checks) + [
+                c for f in report.files for c in f.checks
+            ]
+            combined = summarize(all_results)
+            total = (
+                combined["passed"]
+                + combined["failed-warning"]
+                + combined["failed-error"]
+                + combined["skipped"]
+            )
+            assert auto_text.startswith(f"{combined['passed']}/{total} complete"), auto_text
+        # File checks counts the per-file results only, as N/M.
+        file_total = (
+            file_summary["passed"]
+            + file_summary["failed-warning"]
+            + file_summary["failed-error"]
+            + file_summary["skipped"]
         )
-        # File checks counts the per-file results only.
-        assert str(file_summary["passed"]) in view._file_checks_summary.text()
+        assert view._file_checks_summary.text().startswith(
+            f"{file_summary['passed']}/{file_total} complete"
+        )
     finally:
         view.deleteLater()

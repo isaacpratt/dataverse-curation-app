@@ -33,42 +33,13 @@ _ROLE_MARKER = "# --- Semantic roles: what a colour is FOR"
 # The role names the app paints, in the order the theme declares them.
 _ROLE_NAMES = theme._ROLE_NAMES
 
-# The pairs the app paints, as role NAMES: the light contract in
-# ui/theme.py carries the same list as colours, and the dark table has
-# to clear the same floors on its own surfaces.
-_TEXT_PAIRS: tuple[tuple[str, str, str, float], ...] = (
-    ("body text on a card", "TEXT_PRIMARY", "SURFACE_CARD", 4.5),
-    ("body text on the page", "TEXT_PRIMARY", "SURFACE_PAGE", 4.5),
-    ("muted text on a card", "TEXT_MUTED", "SURFACE_CARD", 4.5),
-    ("muted text on the page", "TEXT_MUTED", "SURFACE_PAGE", 4.5),
-    ("muted text on a tinted panel", "TEXT_MUTED", "SURFACE_TINT", 4.5),
-    ("muted text on a raised panel", "TEXT_MUTED", "SURFACE_RAISED", 4.5),
-    ("subtle hint text on a card", "TEXT_SUBTLE", "SURFACE_CARD", 4.5),
-    ("subtle hint text on the page", "TEXT_SUBTLE", "SURFACE_PAGE", 4.5),
-    ("subtle hint text on a raised panel", "TEXT_SUBTLE", "SURFACE_RAISED", 4.5),
-    ("text on the brand fill", "TEXT_ON_ACCENT", "ACCENT_PRIMARY", 4.5),
-    ("text on a tint", "TEXT_ON_TINT", "SURFACE_TINT", 4.5),
-    ("text on the secondary fill", "TEXT_ON_SECONDARY", "ACCENT_SECONDARY", 4.5),
-    ("text on the error fill", "TEXT_ON_ERROR", "STATE_ERROR_GRAPHIC", 4.5),
-    ("error text on a card", "TEXT_DANGER", "SURFACE_CARD", 4.5),
-    ("error text on the error surface", "STATE_ERROR_TEXT", "STATE_ERROR_SURFACE", 4.5),
-    ("success text on a card", "TEXT_SUCCESS", "SURFACE_CARD", 4.5),
-    ("warning text on a card", "TEXT_WARNING", "SURFACE_CARD", 4.5),
-    ("amber text on a card", "TEXT_AMBER", "SURFACE_CARD", 4.5),
-    ("brand text on a card", "ACCENT_PRIMARY", "SURFACE_CARD", 4.5),
-    ("brand text on the page", "ACCENT_PRIMARY", "SURFACE_PAGE", 4.5),
-    ("blocked step text on a card", "TEXT_BLOCKED", "SURFACE_CARD", 4.5),
-    ("blocked step text on the page", "TEXT_BLOCKED", "SURFACE_PAGE", 4.5),
-    ("disabled text on a card", "TEXT_DISABLED", "SURFACE_CARD", 3.0),
-    ("disabled text on the page", "TEXT_DISABLED", "SURFACE_PAGE", 3.0),
-    ("success icon on a card", "STATE_SUCCESS_GRAPHIC", "SURFACE_CARD", 3.0),
-    ("warning icon on a card", "STATE_WARNING_GRAPHIC", "SURFACE_CARD", 3.0),
-    ("error icon on a card", "STATE_ERROR_GRAPHIC", "SURFACE_CARD", 3.0),
-    ("brand icon on a card", "ACCENT_PRIMARY", "SURFACE_CARD", 3.0),
-    ("tertiary icon on a card", "ACCENT_TERTIARY", "SURFACE_CARD", 3.0),
-    ("control edge on a card", "BORDER_CONTROL", "SURFACE_CARD", 3.0),
-    ("control edge on the page", "BORDER_CONTROL", "SURFACE_PAGE", 3.0),
-    ("focus ring on a card", "ACCENT_FOCUS_RING", "SURFACE_CARD", 3.0),
+# The pairs the app paints, as role NAMES, read straight from the theme's
+# own dark contract. This used to be a hand-kept copy of the same list; a
+# copy drifts the moment a pair is added (the warning-surface pairs were
+# missing from it), so the contract is now the single source.
+_TEXT_PAIRS: tuple[tuple[str, str, str, float], ...] = tuple(
+    (label, foreground, background, minimum)
+    for label, foreground, background, _kind, minimum in theme.CONTRAST_PAIRS_DARK
 )
 
 _BADGE_FAMILIES: tuple[str, ...] = (

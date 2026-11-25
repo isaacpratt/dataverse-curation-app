@@ -31,7 +31,6 @@ from ui.widgets import (
     make_card,
     make_field_label,
     make_list,
-    make_reset_columns_button,
     make_small_body_label,
 )
 
@@ -55,17 +54,9 @@ class VersionsSection(DetailState):
         # Named not-loaded state, never "—" (2026-10-02 P2).
         self._version_summary = make_field_label(t("detail.version_log.not_loaded"))
         header_lay.addWidget(self._version_summary)
-        # The reset is a table tool: it rides on the card's title bar so
-        # there is one header line per card (dv-gfx.5, item 8).
-        self._version_reset_btn = make_reset_columns_button(
-            "",
-            tip=t("detail.version_log.reset_columns_tip"),
-            accessible_name=t("detail.version_log.reset_columns_a11y"),
-            fallback_text=t("common.reset"),
-        )
-        self._version_reset_btn.clicked.connect(self._on_reset_version_view)
-        header_lay.addStretch(1)
-        header_lay.addWidget(self._version_reset_btn)
+        # No reset control (user decision 2026-11-24): the version log's
+        # table restores the curator's saved layout on load, so there is
+        # nothing the reset button needs to offer here.
         self._version_body = _body_host
         return card
 
@@ -306,14 +297,3 @@ class VersionsSection(DetailState):
             self._version_body.addWidget(flist)
             flush_widgets.append((flist, "list"))
         _apply_flush_corners()
-
-    def _on_reset_version_view(self) -> None:
-        try:
-            from PySide6.QtWidgets import QTableWidget
-
-            table = self._version_body.findChild(QTableWidget)
-            if table is not None:
-                self._reset_table_view("dataset_version", table.horizontalHeader())
-            self._populate_version_diff()
-        except Exception:
-            pass

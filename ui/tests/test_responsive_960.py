@@ -109,11 +109,20 @@ def test_detail_page_does_not_scroll_sideways(small_window, detail, qapp):
     """The detail canvas fits the column it sits in - no sideways scroll."""
     small_window._stack.setCurrentWidget(detail)
     _pump(qapp)
+    # Force the canvas to its minimum width so an overflowing child (the
+    # card header rows) is measured, not hidden by the current width.
+    detail._canvas.setMinimumWidth(detail._canvas.layout().minimumSize().width())
+    detail._canvas.updateGeometry()
+    _pump(qapp)
     bar = detail._scroll.horizontalScrollBar()
     assert bar.maximum() == 0, (
         "the dataset page scrolls sideways at 960px "
-        f"(canvas wants {detail._canvas.layout().minimumSize().width()}px)"
+        f"(canvas wants {detail._canvas.layout().minimumSize().width()}px, "
+        f"viewport {detail._scroll.viewport().width()}px)"
     )
+    detail._canvas.setMinimumWidth(0)
+    detail._canvas.updateGeometry()
+    _pump(qapp)
 
 
 def test_file_manifest_card_fits_its_column(small_window, detail, qapp):
@@ -164,9 +173,9 @@ def test_sidebar_folds_away_on_a_narrow_window(small_window, detail, qapp):
     # The single slim toggle restores the sidebar.
     assert not detail._sidebar_toggle_btn.isHidden(), "the sidebar toggle must stay visible"
     # The dataset log stays in the sidebar (hidden with it) - it does not
-    # move to the main column (dv-3d0.1).
-    assert _layout_holds(detail._side_wrap, detail._dataset_log_card), (
-        "the dataset log must stay in the sidebar when the sidebar folds"
+    # move to the main column (dv-3d0.1). It is a tab of the sidebar panel.
+    assert detail._side_tabs.indexOf(detail._dataset_log_card) >= 0, (
+        "the dataset log must stay a sidebar tab when the sidebar folds"
     )
     assert not _layout_holds(detail._main_wrap, detail._dataset_log_card)
 
@@ -195,6 +204,34 @@ def test_sidebar_comes_back_on_a_wide_window(small_window, detail, qapp):
     _pump(qapp)
     assert not detail._side_scroll.isHidden(), "the sidebar must return when there is room"
     small_window.resize(*SMALL)
+    _pump(qapp)
+
+
+def test_header_scrolls_with_the_main_column(small_window, detail, qapp):
+    """The title/actions sit in the scrolling canvas; only the rail is fixed (2026-11-24)."""
+    from PySide6.QtWidgets import QScrollArea
+
+    small_window._stack.setCurrentWidget(detail)
+    _pump(qapp)
+    canvas = detail._canvas
+    assert detail._title_lbl.parent() is not None
+    # The title is inside the canvas widget, not in the fixed top bar.
+    from PySide6.QtWidgets import QWidget
+
+    top_bar = detail.findChild(QWidget, "DetailTopBar")
+    assert top_bar is not None
+    assert detail._title_lbl not in top_bar.findChildren(type(detail._title_lbl)), (
+        "title must not be in the fixed bar"
+    )
+    assert canvas.findChild(type(detail._title_lbl)) is not None, "title must be in the canvas"
+    scroll = detail._scroll
+    assert isinstance(scroll, QScrollArea)
+    before = detail._title_lbl.mapTo(detail, detail._title_lbl.rect().topLeft()).y()
+    scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
+    _pump(qapp)
+    after = detail._title_lbl.mapTo(detail, detail._title_lbl.rect().topLeft()).y()
+    assert after < before, f"title did not scroll up: {before} -> {after}"
+    scroll.verticalScrollBar().setValue(0)
     _pump(qapp)
 
 

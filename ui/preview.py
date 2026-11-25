@@ -26,7 +26,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ui.i18n import t
-from ui.theme import ACTIVE_THEME, FONT_CAPTION, transparent_surface_qss
+from ui.theme import ACTIVE_THEME, FONT_SMALL, transparent_surface_qss
 from ui.widgets import (
     add_info_tip,
     make_action_button,
@@ -456,7 +456,7 @@ def _clamp(text: Any, limit: int = _COL_CLAMP) -> str:
 
 
 def render_tabular(result: dict[str, Any]) -> str:
-    """Monospace table for the tabular preview kinds."""
+    """Pipe-delimited table text for the tabular preview kinds."""
     cols = [_clamp(c, _COL_CLAMP) for c in (result.get("columns") or [])]
     types = [_clamp(c, _COL_CLAMP) for c in (result.get("types") or [])]
     rows = result.get("rows") or []
@@ -496,7 +496,7 @@ class PreviewCard(QFrame):
     """Bounded preview of one staged file (dv-koz).
 
     The card itself owns a ``make_card`` chrome; the body swaps between a
-    placeholder, a monospace view, an image and an Open-folder fallback
+    placeholder, a plain-text view, an image and an Open-folder fallback
     depending on the preview ``kind``.
     """
 
@@ -525,10 +525,10 @@ class PreviewCard(QFrame):
         self._placeholder.setMinimumHeight(120)
         body.addWidget(self._placeholder)
 
-        self._mono = make_plain_text_view("", font_size=FONT_CAPTION)
-        self._mono.setMinimumHeight(150)
-        self._mono.setVisible(False)
-        body.addWidget(self._mono, 1)
+        self._view = make_plain_text_view("", font_size=FONT_SMALL)
+        self._view.setMinimumHeight(150)
+        self._view.setVisible(False)
+        body.addWidget(self._view, 1)
 
         self._image = QLabel()
         self._image.setObjectName("PreviewImage")
@@ -589,18 +589,18 @@ class PreviewCard(QFrame):
         self._rel = rel or Path(path).name
         try:
             if kind == "tabular":
-                self._mono.setPlainText(self._with_footer(render_tabular(result), result))
-                self._mono.setVisible(True)
+                self._view.setPlainText(self._with_footer(render_tabular(result), result))
+                self._view.setVisible(True)
             elif kind in ("text", "json", "structure"):
                 text = result.get("text") or "\n".join(result.get("lines") or [])
-                self._mono.setPlainText(self._with_footer(text, result))
-                self._mono.setVisible(True)
+                self._view.setPlainText(self._with_footer(text, result))
+                self._view.setVisible(True)
             elif kind == "pdf":
                 pages = result.get("pages", 0)
                 head = t("detail.preview.pdf_pages", pages=pages)
                 snippet = result.get("snippet") or t("detail.preview.no_pdf_text")
-                self._mono.setPlainText(f"{head}\n\n{snippet}")
-                self._mono.setVisible(True)
+                self._view.setPlainText(f"{head}\n\n{snippet}")
+                self._view.setVisible(True)
             elif kind == "archive":
                 entries = result.get("entries") or []
                 total = result.get("total", len(entries))
@@ -611,8 +611,8 @@ class PreviewCard(QFrame):
                         extra=total - len(entries),
                         total=total,
                     )
-                self._mono.setPlainText(body_text)
-                self._mono.setVisible(True)
+                self._view.setPlainText(body_text)
+                self._view.setVisible(True)
             elif kind == "image":
                 self._show_image(result)
             elif kind == "too_large":
@@ -621,8 +621,8 @@ class PreviewCard(QFrame):
                 self._note.setVisible(True)
                 self._open_btn.setVisible(True)
             elif kind == "missing":
-                self._mono.setPlainText(str(result.get("message", "")))
-                self._mono.setVisible(True)
+                self._view.setPlainText(str(result.get("message", "")))
+                self._view.setVisible(True)
             elif kind == "unsupported":
                 ext = str(result.get("extension", "")).lstrip(".") or "?"
                 self._note.setText(t("detail.preview.unsupported", ext=ext))
@@ -639,8 +639,8 @@ class PreviewCard(QFrame):
     # -- internals ----------------------------------------------------------
     def _reset(self) -> None:
         self._placeholder.setVisible(False)
-        self._mono.setVisible(False)
-        self._mono.setPlainText("")
+        self._view.setVisible(False)
+        self._view.setPlainText("")
         self._image.setVisible(False)
         self._image.clear()
         self._note.setVisible(False)

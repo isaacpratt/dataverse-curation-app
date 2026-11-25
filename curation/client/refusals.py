@@ -36,6 +36,13 @@ def _refusal(path: str, status: int, body: str = "") -> tuple[str, str]:  # noqa
     says_missing = "not found" in text or "does not exist" in text
 
     if status in (401, 403):
+        # A 401/403 whose body is about the TOKEN being rejected is an auth
+        # failure, not a curation-scope refusal: "User with token ... not
+        # found" means the token itself was rejected (2026-11-24). A body
+        # that merely starts with "User ..." but talks about permission
+        # stays the expected curation-scope answer.
+        if "token" in text:
+            return "", ""
         if says_missing and is_versions:
             # The version is gone (not hidden): answer as the 404 case.
             if is_draft:

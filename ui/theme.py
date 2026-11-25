@@ -2,7 +2,8 @@
 
 Palette is Material 3-like: primary #004ccd, tertiary #4142cf, error #ba1a1a,
 surface #faf8ff, backgrounds #f2f3ff/#eaedff, outline-variant #c3c6d8.
-Typography is Inter (body) + JetBrains Mono (monospace).
+Typography is bundled: Inter for 12/13px body text, Fraunces for the
+16/22px display steps, and JetBrains Mono for identifiers and raw payloads.
 
 The colour layer is split in two: the palette says what a colour IS,
 the role layer says what it is FOR, and the role layer is a table per
@@ -71,6 +72,12 @@ SUCCESS = "#16a34a"
 SUCCESS_DARK = "#15803d"  # green-700 — "string" tone in the log
 WARNING = "#d97706"  # amber-600
 WARNING_DARK = "#b45309"  # amber-700 — large-download caution
+# Warning state face: amber-tinted row + edge + ink, the counterpart of
+# ERROR_SURFACE/ERROR_OUTLINE/ON_ERROR_CONTAINER (dv-gc9: a warning row
+# must not wear the error's red face).
+WARNING_SURFACE = "#fff4e0"  # fail-warning row face
+WARNING_OUTLINE = "#fdba74"  # warning-row edge
+ON_WARNING_CONTAINER = "#713f12"  # warning copy on the warning surface
 AMBER_700 = "#a16207"  # log java tokens, identifier palette
 PRIMARY_DEEP = "#00174c"  # deepest brand blue — live badge text
 PRIMARY_PRESSED = "#002a78"
@@ -123,7 +130,6 @@ SURFACE_PAGE = BACKGROUND  # the page behind everything
 SURFACE_CARD = SURFACE_CONTAINER_LOWEST  # cards, tables, sheets
 SURFACE_TINT = SURFACE_CONTAINER  # a tinted panel (header band, hover)
 SURFACE_SUBTLE = SURFACE_CONTAINER_LOW  # quiet rows, inset panels
-SURFACE_ROW = SURFACE_CONTAINER_LOW  # alternating / separated rows
 SURFACE_HEADER = SURFACE_CONTAINER  # table and tree header bands
 SURFACE_RAISED = SURFACE_CONTAINER_HIGH  # a raised panel (hover, metric card)
 SURFACE_ALT = SURFACE_VARIANT  # an alternate surface (divider band)
@@ -131,7 +137,6 @@ SURFACE_DISABLED = MUTED_BG  # a disabled control's face
 
 # --- Border roles ---
 BORDER_SUBTLE = OUTLINE_VARIANT  # card and section edges
-BORDER_STRONG = OUTLINE  # dividers that carry meaning
 BORDER_CONTROL = CONTROL_OUTLINE  # input / button edges (>= 3:1)
 BORDER_DISABLED = MUTED_BORDER  # a disabled control's edge
 
@@ -156,10 +161,11 @@ STATE_ERROR_SURFACE = ERROR_SURFACE
 STATE_ERROR_BORDER = ERROR_OUTLINE
 STATE_ERROR_TEXT = ON_ERROR_CONTAINER
 STATE_ERROR_GRAPHIC = ERROR  # an error icon or mark (6.5:1 on a card)
-STATE_SUCCESS_TEXT = SUCCESS_DARK
 STATE_SUCCESS_GRAPHIC = SUCCESS  # a success icon or mark (3.3:1 on a card)
-STATE_WARNING_TEXT = WARNING_DARK
-STATE_WARNING_GRAPHIC = WARNING  # a warning icon or mark (3.2:1 on a card)
+STATE_WARNING_GRAPHIC = WARNING_DARK  # a warning icon or mark (4.5:1 on a card)
+STATE_WARNING_SURFACE = WARNING_SURFACE  # a warning row's face
+STATE_WARNING_BORDER = WARNING_OUTLINE  # a warning row's edge
+STATE_WARNING_INK = ON_WARNING_CONTAINER  # warning copy on that face
 
 # --- Badge roles (a status label's fill, text and border) ---
 BADGE_NEUTRAL_BG = "#e4e7f2"
@@ -248,13 +254,11 @@ _ROLE_NAMES: tuple[str, ...] = (
     "SURFACE_CARD",
     "SURFACE_TINT",
     "SURFACE_SUBTLE",
-    "SURFACE_ROW",
     "SURFACE_HEADER",
     "SURFACE_RAISED",
     "SURFACE_ALT",
     "SURFACE_DISABLED",
     "BORDER_SUBTLE",
-    "BORDER_STRONG",
     "BORDER_CONTROL",
     "BORDER_DISABLED",
     "ACCENT_PRIMARY",
@@ -275,10 +279,11 @@ _ROLE_NAMES: tuple[str, ...] = (
     "STATE_ERROR_BORDER",
     "STATE_ERROR_TEXT",
     "STATE_ERROR_GRAPHIC",
-    "STATE_SUCCESS_TEXT",
     "STATE_SUCCESS_GRAPHIC",
-    "STATE_WARNING_TEXT",
     "STATE_WARNING_GRAPHIC",
+    "STATE_WARNING_SURFACE",
+    "STATE_WARNING_BORDER",
+    "STATE_WARNING_INK",
     "BADGE_NEUTRAL_BG",
     "BADGE_NEUTRAL_TEXT",
     "BADGE_NEUTRAL_BORDER",
@@ -356,13 +361,11 @@ DARK_ROLE_TABLE: dict[str, str] = {
     "SURFACE_CARD": "#191c25",
     "SURFACE_TINT": "#232735",
     "SURFACE_SUBTLE": "#1f2330",
-    "SURFACE_ROW": "#1f2330",
     "SURFACE_HEADER": "#242938",
     "SURFACE_RAISED": "#2a3040",
     "SURFACE_ALT": "#20242f",
     "SURFACE_DISABLED": "#252936",
     "BORDER_SUBTLE": "#343a4b",
-    "BORDER_STRONG": "#4a5165",
     "BORDER_CONTROL": "#6b7488",
     "BORDER_DISABLED": "#333849",
     "ACCENT_PRIMARY": "#6ea8ff",
@@ -381,10 +384,11 @@ DARK_ROLE_TABLE: dict[str, str] = {
     "STATE_ERROR_BORDER": "#ffb4ab",
     "STATE_ERROR_TEXT": "#ffdad6",
     "STATE_ERROR_GRAPHIC": "#d92d20",
-    "STATE_SUCCESS_TEXT": "#7ee2a8",
     "STATE_SUCCESS_GRAPHIC": "#4ade80",
-    "STATE_WARNING_TEXT": "#ffcf7a",
     "STATE_WARNING_GRAPHIC": "#fbbf24",
+    "STATE_WARNING_SURFACE": "#3d2c12",
+    "STATE_WARNING_BORDER": "#a16207",
+    "STATE_WARNING_INK": "#fde68a",
     "BADGE_NEUTRAL_BG": "#2b3040",
     "BADGE_NEUTRAL_TEXT": "#d6dae6",
     "BADGE_NEUTRAL_BORDER": "#454c60",
@@ -570,8 +574,19 @@ def resolve_theme_mode(mode: str) -> str:
 
 
 # --- Typography (Qt QSS uses px) ---
+# All three faces are bundled in ui/assets/fonts and registered by
+# register_fonts(); the trailing names are system fallbacks if a file cannot
+# be loaded. Fraunces is the display face for the 16px and 22px steps.
 FONT_FAMILY = "Inter, 'Segoe UI', sans-serif"
+HEADING_FAMILY = "Fraunces, Georgia, serif"
 MONO_FAMILY = "'JetBrains Mono', Consolas, monospace"
+
+# (family, file) pairs; the files are shipped by PyInstaller with ui/assets.
+BUNDLED_FONTS: tuple[tuple[str, str], ...] = (
+    ("Inter", "Inter.ttf"),
+    ("Fraunces", "Fraunces.ttf"),
+    ("JetBrains Mono", "JetBrainsMono.ttf"),
+)
 
 # --- Radii / Sizes ---
 # Unified app-wide corner radius: everything (cards, inputs, tables, panes,
@@ -597,13 +612,10 @@ MARGIN_CARD_H = 16  # card header/body horizontal padding
 MARGIN_CARD_V = 12  # card header/body vertical padding
 
 # --- Type scale (px) ---
-FONT_MICRO = 11  # log level badges (the smallest text in the app; dv-vw0)
 FONT_HEADLINE = 22
 FONT_TITLE = 16
-FONT_SECTION = 15
 FONT_BODY = 13
 FONT_SMALL = 12
-FONT_CAPTION = 11
 
 # --- Shadows (simulated via border) ---
 CARD_BORDER = f"1px solid {OUTLINE_VARIANT}"
@@ -670,10 +682,18 @@ CONTRAST_PAIRS: tuple[tuple[str, str, str, str, float], ...] = (
     ("muted text on a card", TEXT_MUTED, SURFACE_CARD, "text", 4.5),
     ("muted text on the page", TEXT_MUTED, SURFACE_PAGE, "text", 4.5),
     ("muted text on a tinted panel", TEXT_MUTED, SURFACE_TINT, "text", 4.5),
+    ("body text on a tinted panel", TEXT_PRIMARY, SURFACE_TINT, "text", 4.5),
+    ("body text on a subtle panel", TEXT_PRIMARY, SURFACE_SUBTLE, "text", 4.5),
+    ("body text on the error surface", TEXT_PRIMARY, STATE_ERROR_BG, "text", 4.5),
+    ("success mark on a tinted panel", TEXT_SUCCESS, SURFACE_TINT, "graphic", 3.0),
+    ("caution mark on a tinted panel", TEXT_AMBER, SURFACE_TINT, "graphic", 3.0),
+    ("error mark on the error surface", TEXT_DANGER, STATE_ERROR_BG, "graphic", 3.0),
     ("subtle hint text on a card", TEXT_SUBTLE, SURFACE_CARD, "text", 4.5),
     ("text on the brand fill", TEXT_ON_ACCENT, ACCENT_PRIMARY, "text", 4.5),
     ("text on a tint", TEXT_ON_TINT, SURFACE_TINT, "text", 4.5),
     ("error text on a card", TEXT_DANGER, SURFACE_CARD, "text", 4.5),
+    ("warning ink on warning fill", STATE_WARNING_INK, STATE_WARNING_SURFACE, "text", 4.5),
+    ("warning mark on warning fill", STATE_WARNING_GRAPHIC, STATE_WARNING_SURFACE, "graphic", 3.0),
     ("error text on the error surface", STATE_ERROR_TEXT, STATE_ERROR_SURFACE, "text", 4.5),
     ("success text on a card", TEXT_SUCCESS, SURFACE_CARD, "text", 4.5),
     ("warning text on a card", TEXT_WARNING, SURFACE_CARD, "text", 4.5),
@@ -713,11 +733,19 @@ CONTRAST_PAIRS_DARK: tuple[tuple[str, str, str, str, float], ...] = (
     ("muted text on a card", "TEXT_MUTED", "SURFACE_CARD", "text", 4.5),
     ("muted text on the page", "TEXT_MUTED", "SURFACE_PAGE", "text", 4.5),
     ("muted text on a tinted panel", "TEXT_MUTED", "SURFACE_TINT", "text", 4.5),
+    ("body text on a tinted panel", "TEXT_PRIMARY", "SURFACE_TINT", "text", 4.5),
+    ("body text on a subtle panel", "TEXT_PRIMARY", "SURFACE_SUBTLE", "text", 4.5),
+    ("body text on the error surface", "TEXT_PRIMARY", "STATE_ERROR_BG", "text", 4.5),
+    ("success mark on a tinted panel", "TEXT_SUCCESS", "SURFACE_TINT", "graphic", 3.0),
+    ("caution mark on a tinted panel", "TEXT_AMBER", "SURFACE_TINT", "graphic", 3.0),
+    ("error mark on the error surface", "TEXT_DANGER", "STATE_ERROR_BG", "graphic", 3.0),
     ("subtle hint text on a card", "TEXT_SUBTLE", "SURFACE_CARD", "text", 4.5),
     ("text on the brand fill", "TEXT_ON_ACCENT", "ACCENT_PRIMARY", "text", 4.5),
     ("text on a tint", "TEXT_ON_TINT", "SURFACE_TINT", "text", 4.5),
     ("error text on a card", "TEXT_DANGER", "SURFACE_CARD", "text", 4.5),
     ("error text on the error surface", "STATE_ERROR_TEXT", "STATE_ERROR_SURFACE", "text", 4.5),
+    ("warning ink on warning fill", "STATE_WARNING_INK", "STATE_WARNING_SURFACE", "text", 4.5),
+    ("warning mark on warning fill", "STATE_WARNING_GRAPHIC", "STATE_WARNING_SURFACE", "graphic", 3.0),
     ("success text on a card", "TEXT_SUCCESS", "SURFACE_CARD", "text", 4.5),
     ("warning text on a card", "TEXT_WARNING", "SURFACE_CARD", "text", 4.5),
     ("brand text on a card", "ACCENT_PRIMARY", "SURFACE_CARD", "text", 4.5),
@@ -912,7 +940,7 @@ def header_section_qss(*, flush: bool = False, theme: str | None = None) -> str:
         # vertical bar between sections, which reads as a column divider
         # and crept back into the review-config and dataset tables.
         f"border: none; border-bottom: 1px solid {role('BORDER_SUBTLE', theme)}; "
-        f"font-size: {FONT_CAPTION}px; "
+        f"font-size: {FONT_SMALL}px; "
         # No text-transform here: Qt applies it when it *paints* a label
         # but not when it *measures* one, so the painted header was wider
         # than the text Qt elided against and a narrow section lost its
@@ -997,6 +1025,7 @@ BUTTON_OBJECTS = {
     "link": "LinkButton",
     "nav-active": "NavActive",
     "nav": "NavItem",
+    "nav-dataset": "NavDataset",
 }
 
 
@@ -1112,6 +1141,16 @@ def button_qss(
             f"font-weight: 600; font-size: {FONT_SMALL}px; }} "
             f'{sel}[focusVisible="true"] {{ background: {role("ACCENT_FOCUS_TINT", theme)}; '
             f"color: {role('TEXT_PRIMARY', theme)}; }}"
+        )
+    if kind == "nav-dataset":
+        # A dataset chip in the nav: the nav surface, so the rail band can
+        # match it (2026-11-24).
+        return (
+            f"{sel} {{ background: {role('SURFACE_CARD', theme)}; color: {role('TEXT_PRIMARY', theme)}; "
+            f"border: none; border-radius: {RADIUS_LG}; padding: 6px 12px; "
+            f"font-weight: 600; font-size: {FONT_SMALL}px; }} "
+            f'{sel}[focusVisible="true"] {{ background: {role("ACCENT_FOCUS_TINT", theme)}; }} '
+            f"{sel}:hover {{ background: {role('SURFACE_RAISED', theme)}; }}"
         )
     # nav
     return (
@@ -1234,7 +1273,7 @@ def status_strip_qss(
     border: str,
     text_color: str,
     *,
-    font_size: int = FONT_CAPTION,
+    font_size: int = FONT_SMALL,
     padding: str = "6px 10px",
     selector: str = "QLabel",
     weight: int | None = None,
@@ -1274,42 +1313,45 @@ def workflow_step_qss(
     theme = theme or ACTIVE_THEME
     hover = f"QPushButton#WorkflowStep:hover {{ background: {role('SURFACE_TINT', theme)}; border-radius: 8px; }}"
     if state == "nav":
-        # Tab face: 36px fixed height, padding for text, no border by default
-        # Active tab gets a shaded background
+        # Tab face: 36px fixed height, padding for text, no border by default.
+        # The active face keeps the SAME box metrics AND the same font
+        # weight as the resting face, so clicking a link never changes its
+        # size or position (2026-11-24). The current view is carried by the
+        # tint and the accent colour alone.
         if active:
             return (
-                f"QPushButton#WorkflowStep {{ color: {role('ACCENT_PRIMARY', theme)}; font-size: 12px; "
-                f"font-weight: 700; background: {role('ACCENT_TINT', theme)}; "
+                f"QPushButton#WorkflowStep {{ color: {role('ACCENT_PRIMARY', theme)}; font-size: {FONT_SMALL}px; "
+                f"font-weight: 500; background: {role('ACCENT_TINT', theme)}; "
                 f"border: none; border-radius: {RADIUS_MD}; "
-                f"padding: 0 12px; min-width: 0; height: 36px; }} "
+                f"padding: 0 12px; min-width: 0; height: 32px; }} "
                 f"QPushButton#WorkflowStep:hover {{ background: {role('ACCENT_TINT', theme)}; }}"
             )
         return (
-            f"QPushButton#WorkflowStep {{ color: {role('TEXT_MUTED', theme)}; font-size: 12px; "
+            f"QPushButton#WorkflowStep {{ color: {role('TEXT_MUTED', theme)}; font-size: {FONT_SMALL}px; "
             f"font-weight: 500; background: transparent; border: none; "
-            f"padding: 0 12px; min-width: 0; height: 36px; }} {hover}"
+            f"padding: 0 12px; min-width: 0; height: 32px; }} {hover}"
         )
     if active:
         return (
-            f"QPushButton#WorkflowStep {{ color: {role('ACCENT_PRIMARY', theme)}; font-size: 12px; "
+            f"QPushButton#WorkflowStep {{ color: {role('ACCENT_PRIMARY', theme)}; font-size: {FONT_SMALL}px; "
             f"font-weight: 700; background: {role('ACCENT_TINT', theme)}; "
             f"border: 1px solid {role('ACCENT_FOCUS_TINT', theme)}; border-radius: {RADIUS_MD}; "
-            f"padding: 3px 10px; }} "
+            f"padding: 2px 8px; height: 30px; }} "
             f"QPushButton#WorkflowStep:hover {{ background: {role('ACCENT_TINT', theme)}; "
             f"border: 1px solid {role('ACCENT_PRIMARY', theme)}; }}"
         )
     if state == "done":
         return (
-            f"QPushButton#WorkflowStep {{ color: {role('TEXT_SUCCESS', theme)}; font-size: 12px; "
+            f"QPushButton#WorkflowStep {{ color: {role('TEXT_SUCCESS', theme)}; font-size: {FONT_SMALL}px; "
             f"font-weight: 600; background: transparent; border: none; "
             f"padding: 3px 6px; }} {hover}"
         )
     if state == "current":
         return (
-            f"QPushButton#WorkflowStep {{ color: {role('ACCENT_PRIMARY', theme)}; font-size: 12px; "
+            f"QPushButton#WorkflowStep {{ color: {role('ACCENT_PRIMARY', theme)}; font-size: {FONT_SMALL}px; "
             f"font-weight: 700; background: {role('ACCENT_TINT', theme)}; "
             f"border: 1px solid {role('ACCENT_FOCUS_TINT', theme)}; border-radius: 8px; "
-            f"padding: 2px 8px; }} "
+            f"padding: 2px 8px; height: 30px; }} "
             f"QPushButton#WorkflowStep:hover {{ background: {role('SURFACE_RAISED', theme)}; "
             f"border: 1px solid {role('ACCENT_PRIMARY', theme)}; }}"
         )
@@ -1317,27 +1359,26 @@ def workflow_step_qss(
         # A blocked step is guidance, not a disabled control: it stays
         # clickable and stays legible (the lock mark carries the state).
         return (
-            f"QPushButton#WorkflowStep {{ color: {role('TEXT_BLOCKED', theme)}; font-size: 12px; "
+            f"QPushButton#WorkflowStep {{ color: {role('TEXT_BLOCKED', theme)}; font-size: {FONT_SMALL}px; "
             f"background: transparent; border: none; padding: 3px 6px; }} {hover}"
         )
     return (
-        f"QPushButton#WorkflowStep {{ color: {role('TEXT_MUTED', theme)}; font-size: 12px; "
-        f"background: transparent; border: none; padding: 3px 6px; }} {hover}"
+        f"QPushButton#WorkflowStep {{ color: {role('TEXT_MUTED', theme)}; font-size: {FONT_SMALL}px; "
+        f"background: transparent; border: none; padding: 2px 6px; height: 30px; }} {hover}"
     )
 
 
 def workflow_rail_qss(theme: str | None = None) -> str:
-    """Build the section rail's band: nav-bar hairlines, full width (dv-gfx.4).
+    """Build the section rail's band: nav-bar surface, one bottom rule.
 
-    The rail sits directly under the app nav bar and above the header
-    chips, so it takes the nav bar's own separator rule and reads as part
-    of that stack rather than as another card. In nav mode (dv-3d0.2) the
-    rail is a row of tabs with a bottom hairline spanning the page width.
+    The rail sits directly under the app nav bar and reads as part of that
+    stack: the same surface, a single 1px bottom hairline, and no other
+    border (2026-11-24).
     """
     theme = theme or ACTIVE_THEME
     return (
-        f"QWidget#WorkflowRail {{ background: {role('SURFACE_PAGE', theme)}; "
-        f"border-bottom: 1px solid {role('BORDER_SUBTLE', theme)}; }}"
+        f"QWidget#WorkflowRail {{ background: {role('SURFACE_CARD', theme)}; "
+        f"border: none; border-bottom: 1px solid {role('BORDER_SUBTLE', theme)}; }}"
     )
 
 
@@ -1376,7 +1417,7 @@ def badge_qss(
     foreground: str,
     border: str,
     *,
-    font_size: int = FONT_MICRO,
+    font_size: int = FONT_SMALL,
     padding: str = "0 6px",
     theme: str | None = None,
 ) -> str:
@@ -1434,7 +1475,8 @@ QMainWindow, QStackedWidget, QScrollArea {{
     font-weight: 600;
 }}
 #TopNav QLabel#Brand {{
-    font-size: 16px;
+    font-family: {HEADING_FAMILY};
+    font-size: {FONT_TITLE}px;
     font-weight: 700;
     color: {role("ACCENT_PRIMARY", theme)};
 }}
@@ -1569,15 +1611,15 @@ QComboBox::drop-down {{
     subcontrol-position: top right;
 }}
 {_chevron_qss(theme=theme)}
-/* Popup descends straight from the button: square top corners meet the
-   (squared when open) button flush, 8px rounds only the bottom. Item
-   metrics are pinned (not font-implied) so every menu spaces choices
+/* Popup floats just below the button (the kit offsets it ~4px): fully
+   rounded on every corner, so opening it never changes the field's shape.
+   Item metrics are pinned (not font-implied) so every menu spaces choices
    identically no matter which card hosts the combo. */
 QComboBox QAbstractItemView {{
     background: {role("SURFACE_CARD", theme)};
     border: 1px solid {role("BORDER_SUBTLE", theme)};
-    border-top-left-radius: 0px;
-    border-top-right-radius: 0px;
+    border-top-left-radius: {RADIUS_LG};
+    border-top-right-radius: {RADIUS_LG};
     border-bottom-left-radius: {RADIUS_LG};
     border-bottom-right-radius: {RADIUS_LG};
     selection-background-color: {role("ACCENT_SECONDARY", theme)};
@@ -1594,12 +1636,8 @@ QComboBox QAbstractItemView::item:selected {{
     color: {role("TEXT_PRIMARY", theme)};
     border: none;
 }}
-/* While open, the field's bottom corners go square so they meet the
-   popup flush — no notch/gap artifacts at the junction. */
-QComboBox:on {{
-    border-bottom-left-radius: 0px;
-    border-bottom-right-radius: 0px;
-}}
+/* The field keeps its rounded corners while open: the popup floats below
+   it (see the kit's showPopup gap), so there is no junction to square off. */
 
 /* ===== Table ===== */
 /* Item views mark the current cell/row with the secondary fill (the
@@ -1629,23 +1667,26 @@ QToolTip {{
     border: 1px solid {role("BORDER_SUBTLE", theme)};
     border-radius: {RADIUS_LG};
     padding: 6px 8px;
-    font-size: 12px;
+    font-size: {FONT_SMALL}px;
 }}
 
 /* ===== Labels ===== */
 /* The type scale (FONT_* above) is the only place a size is written. */
 QLabel#DisplayLG {{
+    font-family: {HEADING_FAMILY};
     font-size: {FONT_HEADLINE}px;
     font-weight: 700;
     color: {role("TEXT_PRIMARY", theme)};
 }}
 QLabel#HeadlineLG {{
+    font-family: {HEADING_FAMILY};
     font-size: {FONT_HEADLINE}px;
     font-weight: 600;
     color: {role("TEXT_PRIMARY", theme)};
     letter-spacing: -0.2px;
 }}
 QLabel#HeadlineMD {{
+    font-family: {HEADING_FAMILY};
     font-size: {FONT_TITLE}px;
     font-weight: 600;
     color: {role("TEXT_PRIMARY", theme)};
@@ -1655,29 +1696,30 @@ QLabel#BodyMD {{
     color: {role("TEXT_MUTED", theme)};
 }}
 QLabel#LabelMD {{
-    font-size: {FONT_CAPTION}px;
+    font-size: {FONT_SMALL}px;
     font-weight: 600;
     color: {role("TEXT_MUTED", theme)};
     letter-spacing: 0.5px;
 }}
 QLabel#CardTitle {{
-    font-size: {FONT_SECTION}px;
+    font-family: {HEADING_FAMILY};
+    font-size: {FONT_TITLE}px;
     font-weight: 600;
     color: {role("TEXT_PRIMARY", theme)};
 }}
 /* The separator between two steps of the dataset step rail. */
 QLabel#WorkflowSeparator {{
-    font-size: 13px;
+    font-size: {FONT_BODY}px;
     color: {role("BORDER_SUBTLE", theme)};
 }}
 QLabel#CaptionSM {{
-    font-size: {FONT_CAPTION}px;
+    font-size: {FONT_BODY}px;
     color: {role("TEXT_MUTED", theme)};
 }}
 /* A field or section label on the primary text colour (11px, semibold,
    tracked) - "Decision State", "Internal Notes". */
 QLabel#LabelStrongSM {{
-    font-size: {FONT_CAPTION}px;
+    font-size: {FONT_SMALL}px;
     font-weight: 600;
     color: {role("TEXT_PRIMARY", theme)};
     letter-spacing: 0.5px;
@@ -1723,7 +1765,7 @@ QLabel#ValueMD {{
     color: {role("TEXT_PRIMARY", theme)};
 }}
 QLabel#BodySM {{
-    font-size: {FONT_SMALL}px;
+    font-size: {FONT_BODY}px;
     color: {role("TEXT_MUTED", theme)};
 }}
 /* A loaded value (a signed-in user's checked identity): the same size
@@ -1734,21 +1776,19 @@ QLabel#ValueSM {{
     font-size: {FONT_SMALL}px;
     color: {role("TEXT_PRIMARY", theme)};
 }}
-/* A de-emphasised hint: the explanatory sentence under a field. */
+/* A field hint: body size and muted ink. TEXT_ON_TINT was intentionally
+   de-emphasised and read as smaller than its size, so the hint now uses
+   the same muted ink as body copy while keeping the 12px value tokens
+   distinct. */
 QLabel#HintSM {{
-    font-size: {FONT_SMALL}px;
-    color: {role("TEXT_ON_TINT", theme)};
+    font-size: {FONT_BODY}px;
+    color: {role("TEXT_MUTED", theme)};
 }}
 QLabel#StateMD {{
     font-size: {FONT_SMALL}px;
     font-weight: 600;
     color: {role("TEXT_MUTED", theme)};
     letter-spacing: 0.5px;
-}}
-QLabel#MonoSM {{
-    font-family: {MONO_FAMILY};
-    font-size: {FONT_SMALL}px;
-    color: {role("TEXT_MUTED", theme)};
 }}
 
 /* ===== Status pills (QLabel with objectName) ===== */
@@ -1758,7 +1798,7 @@ QLabel#PillInReview {{
     border: 1px solid {role("BADGE_BLUE_BORDER", theme)};
     border-radius: {RADIUS_LG};
     padding: 2px 8px;
-    font-size: 11px;
+    font-size: {FONT_SMALL}px;
     font-weight: 700;
 }}
 QLabel#PillDraft {{
@@ -1767,7 +1807,7 @@ QLabel#PillDraft {{
     border: 1px solid {role("BORDER_SUBTLE", theme)};
     border-radius: {RADIUS_LG};
     padding: 2px 8px;
-    font-size: 11px;
+    font-size: {FONT_SMALL}px;
     font-weight: 700;
 }}
 QLabel#PillAuthorContacted {{
@@ -1776,7 +1816,7 @@ QLabel#PillAuthorContacted {{
     border: 1px solid {role("STATE_ERROR_BORDER", theme)};
     border-radius: {RADIUS_LG};
     padding: 2px 8px;
-    font-size: 11px;
+    font-size: {FONT_SMALL}px;
     font-weight: 700;
 }}
 QLabel#PillReady {{
@@ -1785,17 +1825,17 @@ QLabel#PillReady {{
     border: 1px solid {role("ACCENT_TERTIARY", theme)};
     border-radius: {RADIUS_LG};
     padding: 2px 8px;
-    font-size: 11px;
+    font-size: {FONT_SMALL}px;
     font-weight: 700;
 }}
 QLabel#PillClean {{
     color: {role("ACCENT_PRIMARY", theme)};
-    font-size: 12px;
+    font-size: {FONT_SMALL}px;
     font-weight: 600;
 }}
 QLabel#PillFlagged {{
     color: {role("STATE_ERROR_GRAPHIC", theme)};
-    font-size: 12px;
+    font-size: {FONT_SMALL}px;
     font-weight: 600;
 }}
 
@@ -1872,7 +1912,7 @@ QTabBar::tab {{
     padding: 8px 14px;
     border: 1px solid transparent;
     border-bottom: 2px solid transparent;
-    font-size: 12px;
+    font-size: {FONT_SMALL}px;
     font-weight: 600;
 }}
 QTabBar::tab:selected {{
@@ -1903,11 +1943,9 @@ QMenuBar::item:selected {{ background: {role("SURFACE_TINT", theme)}; }}
 QMenu {{
     background: {role("SURFACE_CARD", theme)};
     border: 1px solid {role("BORDER_SUBTLE", theme)};
-    /* Square top corners: a menu opens directly under its button, so the
-       popup connects flush into the element that opened it (same junction
-       contract as QComboBox popups above). Only the bottom rounds. */
-    border-top-left-radius: 0px;
-    border-top-right-radius: 0px;
+    /* Fully rounded: a menu never changes shape when it opens (2026-11-24). */
+    border-top-left-radius: {RADIUS_LG};
+    border-top-right-radius: {RADIUS_LG};
     border-bottom-left-radius: {RADIUS_LG};
     border-bottom-right-radius: {RADIUS_LG};
     padding: 4px;
@@ -1919,7 +1957,7 @@ QStatusBar {{
     background: {role("SURFACE_CARD", theme)};
     border-top: 1px solid {role("BORDER_SUBTLE", theme)};
     color: {role("TEXT_MUTED", theme)};
-    font-size: 11px;
+    font-size: {FONT_SMALL}px;
 }}
 QStatusBar::item {{ border: none; }}
 
@@ -1941,19 +1979,48 @@ QSplitter::handle:vertical {{ height: 1px; }}
 """
 
 
+# addApplicationFont returns a NEW id on every call even for the same file,
+# so repeated registration leaks font entries. Register once per process.
+_REGISTERED_FONTS: dict[str, int] = {}
+
+
+def register_fonts() -> dict[str, bool]:
+    """Load the three bundled variable faces into Qt's font database.
+
+    Called from :func:`apply_theme` (before the app font and stylesheet are
+    set), and safe to call again: a file already registered is skipped.
+    Returns ``{family: loaded}`` so a probe/test can assert the bundle.
+    """
+    from PySide6.QtGui import QFontDatabase
+
+    loaded: dict[str, bool] = {}
+    for family, filename in BUNDLED_FONTS:
+        path = asset_path(f"fonts/{filename}")
+        if not path:
+            loaded[family] = False
+            continue
+        if path not in _REGISTERED_FONTS:
+            _REGISTERED_FONTS[path] = QFontDatabase.addApplicationFont(path)
+        font_id = _REGISTERED_FONTS[path]
+        loaded[family] = font_id >= 0 and family in QFontDatabase.applicationFontFamilies(font_id)
+    return loaded
+
+
 def apply_theme(app: "QApplication", theme: str | None = None) -> None:
-    """Apply global QSS and default font.
+    """Register the bundled faces, then apply global QSS and default font.
 
     ``theme`` is the role table to paint; it defaults to the active one,
     so a plain ``apply_theme(app)`` after ``set_active_theme(name)``
     repaints in that theme.
     """
-    from PySide6.QtGui import QFont
+    from PySide6.QtGui import QFont, QFontDatabase
 
-    # Prefer Inter if installed; fall back to Segoe UI
-    font = QFont("Inter")
-    if font.family() != "Inter":
-        font = QFont("Segoe UI")
+    fonts = register_fonts()
+    # A QFont keeps its requested name even when the family is absent, so
+    # `QFont("Inter").family()` cannot detect a fallback. Ask the database
+    # instead; with the bundle loaded this branch always takes Inter.
+    base = "Inter" if "Inter" in QFontDatabase.families() else "Segoe UI"
+    font = QFont(base)
     # Pixel size (not point size) so Qt measures what the QSS paints:
     # tokens are px (FONT_BODY=13) while a 9pt app font is ~12px.
     font.setPixelSize(FONT_BODY)

@@ -231,7 +231,7 @@ class AboutPane(QWidget):
         diag = QLabel(_diag_text())
         diag.setTextFormat(Qt.TextFormat.PlainText)
         diag.setWordWrap(True)
-        diag.setObjectName("MonoSM")
+        diag.setObjectName("BodySM")
         right.addWidget(diag)
         copy_btn = make_action_button(t("about.copy"), kind="secondary")
         copy_btn.setToolTip(t("about.copy_tip"))
