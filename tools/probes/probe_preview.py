@@ -60,10 +60,10 @@ def main() -> int:
         f"card={card.width()} window={win.width()}",
     )
     report.check(
-        card._mono.isVisible(),
-        "the monospace view carries the preview",
+        card._view.isVisible(),
+        "the plain-text view carries the preview",
     )
-    mono_text = card._mono.toPlainText()
+    mono_text = card._view.toPlainText()
     report.check(
         "region" in mono_text and "north" in mono_text,
         "the CSV head renders inside the card",

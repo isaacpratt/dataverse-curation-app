@@ -991,6 +991,26 @@ def test_get_me_denied_is_none_without_caching(monkeypatch: pytest.MonkeyPatch) 
     assert _dc._ME_CACHE == {}
 
 
+def test_get_file_inventory_falls_back_on_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A refused draft falls through to the published version (2026-11-24)."""
+    calls: list[tuple[str, bool]] = []
+
+    def fake_fetch(
+        self: Any,
+        identifier: str,
+        version: str = "draft",
+        fall_back_on_auth: bool = False,
+        order: Any = None,
+    ):
+        calls.append((version, fall_back_on_auth))
+        return {"files": []}, ":latest-published", [":draft=403"]
+
+    monkeypatch.setattr(DataverseClient, "_fetch_version_data", fake_fetch)
+    client = DataverseClient("https://demo.test", "tok")
+    client.get_file_inventory("doi:10.5072/FK2/A")
+    assert calls == [("draft", True)], calls
+
+
 def test_get_collection_roles_matches_me_identifier(monkeypatch: pytest.MonkeyPatch) -> None:
     from curation.client import caches as _dc
 

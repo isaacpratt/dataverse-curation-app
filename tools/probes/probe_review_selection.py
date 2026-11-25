@@ -22,7 +22,7 @@ def _rgb(hex_color: str) -> tuple[int, int, int]:
 
 def main() -> int:
     app, cfg = boot()
-    from PySide6.QtCore import Qt
+    from PySide6.QtCore import QPoint, Qt
     from PySide6.QtTest import QTest
 
     from ui.theme import SECONDARY_CONTAINER, SURFACE_SUBTLE
@@ -57,6 +57,9 @@ def main() -> int:
         return report.finish()
     page._select_row(selected)
     chosen = page._sel_key
+    # The selected row may be below the fold; the pixel check samples a
+    # grab of the viewport, so bring it into view before measuring.
+    tree.scrollToItem(selected)
     for _ in range(4):
         app.processEvents()
 
@@ -91,10 +94,17 @@ def main() -> int:
     hover_color = _rgb(SURFACE_SUBTLE)
     selected_color = _rgb(SECONDARY_CONTAINER)
 
+    # visualItemRect is in viewport coordinates; tree.grab() captures the
+    # whole widget (header included), so translate before sampling pixels.
+    origin = tree.viewport().mapTo(tree, QPoint(0, 0))
+
     def _band_pixels(rect):
+        # The combo widgets covering a field row paint over its vertical
+        # middle, so sample the exposed gutter at top+2 / bottom-2 where the
+        # real selection band shows through.
         out = []
-        for x in (rect.left() + 4, rect.left() + rect.width() // 2):
-            y = rect.top() + rect.height() // 2
+        x = origin.x() + rect.left() + 4
+        for y in (origin.y() + rect.top() + 2, origin.y() + rect.bottom() - 2):
             if 0 <= x < image.width() and 0 <= y < image.height():
                 c = image.pixelColor(x, y)
                 out.append((c.red(), c.green(), c.blue()))

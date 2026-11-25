@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QWidget,
 )
 
 from curation.storage import finding_key
@@ -285,15 +286,28 @@ class HeaderSection(DetailState):
                     c for f in self._report.files for c in f.checks
                 ]
                 summary = summarize(all_results)
-                self._set_auto_summary(
-                    t(
-                        "detail.auto_checks.summary_counts",
-                        passed=summary["passed"],
-                        warnings=summary["failed-warning"],
-                        errors=summary["failed-error"],
-                        skipped=summary["skipped"],
-                    )
+                total_checks = (
+                    summary["passed"]
+                    + summary["failed-warning"]
+                    + summary["failed-error"]
+                    + summary["skipped"]
                 )
+                base = t(
+                    "detail.auto_checks.summary_counts",
+                    passed=summary["passed"],
+                    total=total_checks,
+                )
+                detail = t(
+                    "detail.auto_checks.summary_breakdown",
+                    warnings=summary["failed-warning"],
+                    errors=summary["failed-error"],
+                    skipped=summary["skipped"],
+                )
+                self._auto_summary_detail = detail
+                self._set_auto_summary(base)
+                # The one-line summary is N/M; the full breakdown and the
+                # resolved roll-up stay reachable in the tooltip.
+                self._auto_summary.setToolTip(base + " · " + detail)
                 from engine.status import classify
 
                 # Findings carry a stable disposition key (dv-32x): failed
@@ -539,10 +553,11 @@ class HeaderSection(DetailState):
         self._verdict_label.setTextFormat(Qt.TextFormat.RichText)
         self._verdict_label.setWordWrap(True)
         lay.addWidget(self._verdict_label)
-        lay.addStretch(1)
+        # The action chips (required/recommended changes) are the right-hand
+        # content; no extra stretch, so they sit next to the label.
         self._verdict_chips = QHBoxLayout()
         self._verdict_chips.setSpacing(6)
-        lay.addLayout(self._verdict_chips)
+        lay.addLayout(self._verdict_chips, 1)
         card.setToolTip(t("detail.verdict.banner_tip"))
         return card
 
@@ -582,10 +597,12 @@ class HeaderSection(DetailState):
                 self._verdict_icon.setPixmap(_icon(icon_name, color=ink).pixmap(18, 18))
             except Exception:
                 pass
+            # The label is body ink, not the state colour: the state reads
+            # from the border and the mark, and coloured label text on the
+            # tint measured 4.31:1 (ready) and 4.23:1 (revisions) against
+            # the 4.5:1 floor. Body ink on the same tints is 13-15:1.
             self._verdict_label.setText(
-                f"<span style='color: {ink};'>"
-                + t(_VERDICT_LEVEL_KEYS.get(verdict.level, "detail.verdict.level_unreviewed"))
-                + "</span>"
+                t(_VERDICT_LEVEL_KEYS.get(verdict.level, "detail.verdict.level_unreviewed"))
             )
             while self._verdict_chips.count():
                 item = self._verdict_chips.takeAt(0)
@@ -593,6 +610,7 @@ class HeaderSection(DetailState):
                 if w is not None:
                     w.setParent(None)  # unparent now; deleteLater is async
                     w.deleteLater()
+            chips: list[QWidget] = []
             for reason in verdict.reasons:
                 key = _VERDICT_REASON_KEYS.get(reason.key)
                 if not key:
@@ -601,6 +619,14 @@ class HeaderSection(DetailState):
                 chip.setToolTip(t("detail.verdict.banner_tip"))
                 chip.clicked.connect(lambda _c=False, tgt=reason.target: self._on_verdict_chip(tgt))
                 self._verdict_chips.addWidget(chip)
+                chips.append(chip)
+            # The unified status element shows the required/recommended
+            # actions once the run is over, with the bar folded away
+            # (2026-11-24).
+            status = getattr(self, "_status_widget", None)
+            if status is not None:
+                status.set_chips(chips)
+                status._bar.hide()
         except Exception:
             pass
 

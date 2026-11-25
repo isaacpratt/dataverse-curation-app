@@ -205,33 +205,38 @@ class ChecksSection(DetailState):
             badge_bg = "SURFACE_ALT"
             badge_fg = "TEXT_MUTED"
         elif not passed and level in ("error", "warning"):
+            # A warning row wears the warning face; only a real error
+            # wears red (dv-gc9: "Unknown File Types" must read as a
+            # warning, never as an error). Role names, not resolved values,
+            # so a live theme switch repaints with the new palette (dv-314).
+            is_error = level == "error"
             set_sheet(
                 frame,
                 "surface_frame",
-                "STATE_ERROR_BG",
-                "STATE_ERROR_BORDER",
+                "STATE_ERROR_BG" if is_error else "STATE_WARNING_SURFACE",
+                "STATE_ERROR_BORDER" if is_error else "STATE_WARNING_BORDER",
                 selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = (
                 ("octagon-x", STATE_ERROR_GRAPHIC)
-                if level == "error"
+                if is_error
                 else ("octagon-alert", STATE_WARNING_GRAPHIC)
             )
-            badge_text = badge or t("status.badges.error")
-            badge_bg = "STATE_ERROR_BG"
-            badge_fg = "STATE_ERROR_TEXT"
+            badge_text = badge or t("status.badges.error" if is_error else "status.badges.warning")
+            badge_bg = "STATE_ERROR_BG" if is_error else "STATE_WARNING_SURFACE"
+            badge_fg = "STATE_ERROR_TEXT" if is_error else "STATE_WARNING_INK"
         elif passed and level == "warning" and "Missing" in (badge or desc):
             set_sheet(
                 frame,
                 "surface_frame",
-                "STATE_ERROR_SURFACE",
-                "STATE_ERROR_BORDER",
+                "STATE_WARNING_SURFACE",
+                "STATE_WARNING_BORDER",
                 selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "octagon-alert", STATE_WARNING_GRAPHIC
             badge_text = badge or t("status.badges.warning")
-            badge_bg = "STATE_ERROR_BG"
-            badge_fg = "STATE_ERROR_TEXT"
+            badge_bg = "STATE_WARNING_SURFACE"
+            badge_fg = "STATE_WARNING_INK"
         elif passed:
             set_sheet(
                 frame,
@@ -282,7 +287,7 @@ class ChecksSection(DetailState):
             )
         lay.addLayout(txt, 1)
         # Inline disposition controls for findings (dv-32x): the combo
-        # writes through _on_disposition_changed; Note… edits the stored
+        # writes through _on_disposition_changed; Note edits the stored
         # note (tooltip carries it once one exists).
         if disposition_key:
             current = self._dispositions_map().get(disposition_key, {})
@@ -604,7 +609,12 @@ class ChecksSection(DetailState):
         return out
 
     def _set_disposition(self, key: str, token: str, note: str = "", refresh: bool = False) -> None:
-        """Persist one disposition, update the cache, the log, and views."""
+        """Persist one disposition, update the cache, and refresh views.
+
+        A disposition is curator working state, not a dataset action, so it
+        is deliberately NOT written to the dataset log (user decision
+        2026-11-24); the persistence call below is what records it.
+        """
         try:
             st = self._state()
             if st is not None:
@@ -619,12 +629,6 @@ class ChecksSection(DetailState):
                 cache.pop(key, None)
         self._refresh_finding_summary()
         self._refresh_workflow()
-        self._log_action(
-            "disposition",
-            (disposition_label(token) if token else t("detail.disposition.cleared"))
-            + (t("detail.dataset_log.action_notes", notes=(note or "")[:120]) if note else ""),
-            {"finding_key": key, "disposition": token},
-        )
         if refresh:
             # Reflection surfaces: manifest tint + response exclusion.
             try:
@@ -703,9 +707,20 @@ class ChecksSection(DetailState):
         self._show_disposition_menu(key, tree.viewport().mapToGlobal(pos))
 
     def _set_auto_summary(self, text: str) -> None:
-        """Set the Auto-Checks header text, re-applying the roll-up suffix."""
+        """Set the Auto-Checks header text; detail moves to the tooltip.
+
+        The one-line summary reads as `N/M complete` (user decision
+        2026-11-24); the per-class breakdown and the resolved roll-up stay
+        reachable in the tooltip so nothing is lost.
+        """
         self._auto_summary_base = text
-        self._auto_summary.setText(text + self._disposition_suffix())
+        self._auto_summary.setText(text)
+        detail = getattr(self, "_auto_summary_detail", None)
+        suffix = self._disposition_suffix()
+        if detail:
+            self._auto_summary.setToolTip(text + " · " + detail + suffix)
+        else:
+            self._auto_summary.setToolTip(text + suffix)
 
     def _disposition_suffix(self) -> str:
         keys = getattr(self, "_finding_keys", [])
@@ -720,4 +735,4 @@ class ChecksSection(DetailState):
         base = getattr(self, "_auto_summary_base", None)
         if base is None:
             return
-        self._auto_summary.setText(base + self._disposition_suffix())
+        self._set_auto_summary(base)

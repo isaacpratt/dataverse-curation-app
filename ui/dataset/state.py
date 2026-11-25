@@ -232,8 +232,6 @@ class DetailState(QWidget):
     # -- the version log card -----------------------------------------------
     _version_card: QFrame
     _version_summary: QLabel
-    _version_tools: QWidget
-    _version_reset_btn: AppButton
     _version_body: Any
 
     # -- the dataset log card -----------------------------------------------

@@ -244,6 +244,11 @@ class RingProgress(QWidget):
         The old fixed point size drew two- and three-digit percentages
         across the arc at the small sizes the app uses, so the ring
         itself hid the number it was supposed to annotate.
+
+        This is the one text size outside the theme's four-step scale:
+        the clear circle is a runtime geometry, not a fixed token. The
+        type-scale test pins this as the only computed font size and
+        keeps the 6px floor so the label cannot shrink into illegibility.
         """
         inner = self._inner_rect().width()
         if inner <= 0:

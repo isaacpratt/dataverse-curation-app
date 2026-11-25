@@ -445,7 +445,6 @@
     "subtitle": "Dataverse connection, workspace, and optional curation libraries.",
     "tabs": {
       "general": "General",
-      "appearance": "Appearance",
       "extensions": "Extensions"
     },
     "fields": {
@@ -804,7 +803,8 @@
       "assessment_action": "Assessment Action",
       "dataset_log": "Dataset log",
       "version_log": "Version log",
-      "file_manifest": "File checks"
+      "file_manifest": "File checks",
+      "preview": "Preview"
     },
     "status": {
       "saved_metadata_refreshing": "Loaded saved metadata ({count} file(s)) — refreshing… ",
@@ -856,7 +856,8 @@
       "no_file_list": "No file list yet — load metadata to see which checks will run.",
       "no_file_checks": "No file checks",
       "no_files_in_dataverse": "This dataset contains no files in Dataverse",
-      "summary_counts": "{passed} complete · {warnings} warnings · {errors} errors · {skipped} skipped",
+      "summary_counts": "{passed}/{total} complete",
+      "summary_breakdown": "{warnings} warnings · {errors} errors · {skipped} skipped",
       "all_passed": "All checks complete — no findings.",
       "will_run": "{count} check(s) will run",
       "no_matching_checks": "No automated checks match the files in this dataset.",
@@ -937,8 +938,7 @@
       "wontfix": "Won't fix",
       "blocked": "Blocked",
       "clear": "Clear disposition",
-      "cleared": "Disposition cleared",
-      "note_action": "Note…",
+      "note_action": "Note",
       "note_title": "Finding note",
       "note_label": "Note for this finding (stored with the disposition):",
       "summary_suffix": " · {resolved} of {total} findings resolved",
@@ -1046,8 +1046,6 @@
     "version_log": {
       "tip": "Every published version plus the draft, with field-level changes and files added, removed or replaced between the previous version and the draft. A first submission shows “Initial draft”.",
       "not_loaded": "Not loaded yet",
-      "reset_columns_a11y": "Reset version log columns",
-      "reset_columns_tip": "Reset columns, sort and widths to default",
       "draft_current": "Draft — created {date} (current)",
       "date_unknown": "date unknown",
       "deaccessioned": "v{num} — deaccessioned {date}",
@@ -1153,7 +1151,8 @@
       "filter_warning": "Warning",
       "filter_error": "Error",
       "filter_skipped": "Skipped",
-      "filter_tip": "Show every row, or only rows with one status"
+      "filter_tip": "Show every row, or only rows with one status. Error is automated checks only; incomplete metadata fields are under Incomplete.",
+      "filter_error_metadata_hint": "Error shows automated check errors only — incomplete metadata fields are under Incomplete."
     },
     "export": {
       "title": "Export",

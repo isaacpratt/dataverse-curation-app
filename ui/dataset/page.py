@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QScrollArea,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -42,7 +43,7 @@ from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
     ACTIVE_THEME,
-    FONT_CAPTION,
+    FONT_SMALL,
     enable_list_copy,
     selectable_labels,
     transparent_surface_qss,
@@ -195,12 +196,14 @@ class DatasetDetailView(
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ---- Fixed page header (title, actions, status) ----
+        # ---- Fixed page header: the section rail only ----
+        # The title, chips and actions live at the top of the scrolling main
+        # column (2026-11-24), so only the rail stays pinned here.
         top = QWidget()
         top.setObjectName("DetailTopBar")
         top_lay = QVBoxLayout(top)
-        top_lay.setContentsMargins(24, 16, 24, 8)
-        top_lay.setSpacing(8)
+        top_lay.setContentsMargins(0, 0, 0, 0)
+        top_lay.setSpacing(0)
         root.addWidget(top)
 
         # ---- Pages: Review (existing assessment layout) + Response (draft) ----
@@ -229,6 +232,8 @@ class DatasetDetailView(
         canvas_lay = QVBoxLayout(canvas)
         canvas_lay.setContentsMargins(24, 12, 12, 24)
         canvas_lay.setSpacing(20)
+        # The page header (title, chips, actions) scrolls with the column.
+        self._canvas_lay = canvas_lay
         # Main column takes the lion's share so the File Manifest tree
         # gets real horizontal room (sidebar stays 280–400 on its own).
         content_row.addWidget(main_scroll, 5)
@@ -359,7 +364,7 @@ class DatasetDetailView(
         self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
         actions_row.addWidget(self._sidebar_toggle_btn)
         header_row.addLayout(actions_row, 0)
-        top_lay.addLayout(header_row)
+        self._canvas_lay.addLayout(header_row)
 
         # Middle band: identity left, compact status widget right. The widget
         # is hidden while idle, so this band costs the same as the old title
@@ -377,7 +382,10 @@ class DatasetDetailView(
         middle_row.addLayout(identity_col, 1)
         self._status_widget = StatusWidget()
         middle_row.addWidget(self._status_widget, 0)
-        top_lay.addLayout(middle_row)
+        self._canvas_lay.addLayout(middle_row)
+        # The unified element lives in the scrolling header; the verdict
+        # refresh feeds its action chips (2026-11-24).
+        self._refresh_verdict()
         # Called last: needs _depositor_lbl/_title_lbl to exist, and cached
         # metadata makes `meta` truthy immediately.
         self._update_header_link(None)
@@ -399,14 +407,20 @@ class DatasetDetailView(
         main_wrap.setSpacing(20)
         main_wrap.setContentsMargins(0, 0, 0, 0)
         self._main_wrap = main_wrap
+        # The header (title/actions) scrolls with the column, above the
+        # cards (2026-11-24).
+        self._canvas_lay.addLayout(main_wrap)
 
         # Depositor follow-up banner (dv-5eg): shown while a revisions
         # decision is awaiting the depositor, and again once the draft moves.
         self._follow_up_card = self._build_follow_up_card()
         main_wrap.addWidget(self._follow_up_card)
 
+        # The verdict is folded into the unified status element in the page
+        # header (2026-11-24); the card is kept only as a hidden handle for
+        # callers that reach for it.
         self._verdict_card = self._build_verdict_card()
-        main_wrap.addWidget(self._verdict_card)
+        self._verdict_card.setVisible(False)
 
         # Dataset checks section: Load/Reload Metadata sits on the card's
         # own header line, and the metadata checklist and the automated
@@ -457,42 +471,44 @@ class DatasetDetailView(
             read_only=True,
             mono=True,
             min_height=180,
-            font_size=FONT_CAPTION,
+            font_size=FONT_SMALL,
         )
         self._raw_view.setVisible(False)
         main_wrap.addWidget(self._raw_view)
 
         main_container = QWidget()
-        main_container.setLayout(main_wrap)
         main_container.setObjectName("DetailMainContainer")
         main_container.setStyleSheet(
             transparent_surface_qss("DetailMainContainer", theme=ACTIVE_THEME)
         )
-        canvas_lay.addWidget(main_container)
+        # main_wrap was added to the canvas above; the container is only a
+        # handle for the section (kept for callers that reach for it).
 
-        # SIDEBAR (right, sticky): the sticky rail is the navigation map;
-        # the sidebar keeps only chrome (preview, dataset log) + fold toggle.
-        # (Assessment Action moved to the Response page.)
+        # SIDEBAR (right): one overlay panel with three tabs — Preview,
+        # Version log, Dataset log — so the sidebar needs no scrollbar of
+        # its own (2026-11-24).
         side_wrap = QVBoxLayout()
-        side_wrap.setSpacing(20)
-        side_wrap.setContentsMargins(12, 12, 24, 24)
+        side_wrap.setSpacing(0)
+        side_wrap.setContentsMargins(0, 0, 0, 0)
         self._side_wrap = side_wrap
+
+        self._side_tabs = QTabWidget()
+        self._side_tabs.setObjectName("DetailSideTabs")
 
         # In-app file preview (dv-koz): shows the head of the file the
         # curator clicked in the manifest; degrades to Missing-library
         # notices or an Open-folder fallback when it can't render.
         self._preview_card = self._build_preview_card()
-        side_wrap.addWidget(self._preview_card)
+        self._side_tabs.addTab(self._preview_card, t("detail.sections.preview"))
 
         # Version log between the preview and the dataset log (dv-gfx.6):
         # the sidebar reads preview → versions → log, most context first.
         self._version_card = self._build_version_card()
-        side_wrap.addWidget(self._version_card)
+        self._side_tabs.addTab(self._version_card, t("detail.sections.version_log"))
 
         self._dataset_log_card = self._build_dataset_log_card()
-        # Stretch factor 1: the log owns the sidebar's free vertical space
-        # so the timeline reads without constant scrolling.
-        side_wrap.addWidget(self._dataset_log_card, 1)
+        self._side_tabs.addTab(self._dataset_log_card, t("detail.sections.dataset_log"))
+        side_wrap.addWidget(self._side_tabs)
 
         side_container = QWidget()
         side_container.setLayout(side_wrap)
@@ -500,7 +516,10 @@ class DatasetDetailView(
         side_container.setStyleSheet(
             transparent_surface_qss("DetailSideContainer", theme=ACTIVE_THEME)
         )
+        # The tab widget owns the panel; no outer scroll area, so the
+        # sidebar has no scrollbar of its own (2026-11-24).
         side_scroll.setWidget(side_container)
+        side_scroll.setWidgetResizable(True)
 
         # Response page (second page per dataset) + register both pages.
         self._response_page = self._build_response_page()

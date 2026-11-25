@@ -28,7 +28,7 @@ The entries below are condensed from `CHANGELOG.md`; see that file for the full 
 - **The application core moved to `curation/`**, and the dataset detail page was split into sections under `ui/dataset/`.
 - **All application code is type-checked under full `--strict`** (ADR 0008); only the four test packages relax the "annotate everything" rules.
 - **Documentation is built from Markdown by Zensical** (ADR 0009) and [published on GitHub Pages](https://isaacpratt.github.io/dataverse-curation-app/); CI builds it strictly on every pull request and deploys on master pushes.
-- **Dark mode ships** — Settings → **Appearance** offers Light, Dark and Auto (follow system), with auto-switching driven by the operating system. The theme has separate light/dark role and contrast tables, the app mark and taskbar icon have dark variants, and the component gallery can show both themes side by side.
+- **Dark mode ships** — Settings → **General** offers Light, Dark and Auto (follow system), with auto-switching driven by the operating system. The theme has separate light/dark role and contrast tables, the app mark and taskbar icon have dark variants, and the component gallery can show both themes side by side.
 - **UI fixes** cover check-box appearance, unclassified Qt warnings failing the build, review-rule selection by click, two review rule cards, entry-check parameter layout, and the split into Dataset checks and File checks sections.
 
 ### 0.2.0 (2026-11-16)

@@ -377,8 +377,13 @@ def test_set_disposition_persists(detail: Any) -> None:
 
     st = open_state(detail._config.app.workspace)
     try:
-        rows = st.list_actions(detail._pid, limit=50)
-        assert any(r.get("action") == "disposition" for r in rows)
+        saved = st.list_finding_dispositions(detail._pid).get(key, {})
+        assert saved.get("disposition") == "acknowledged"
+        assert saved.get("note") == "done"
+        # Curator working state is not a dataset action (2026-11-24).
+        assert not any(
+            r.get("action") == "disposition" for r in st.list_actions(detail._pid, limit=50)
+        )
     finally:
         st.close()
     detail._set_disposition(key, "")
@@ -406,8 +411,13 @@ def test_disposition_callbacks(detail: Any) -> None:
 
     st = open_state(detail._config.app.workspace)
     try:
-        rows = st.list_actions(detail._pid, limit=50)
-        assert sum(r.get("action") == "disposition" for r in rows) >= 2
+        saved = st.list_finding_dispositions(detail._pid).get(key, {})
+        # The combo writes a new token but keeps the existing note (dv-32x).
+        assert saved.get("disposition") == "acknowledged"
+        assert saved.get("note") == "accepted"
+        assert not any(
+            r.get("action") == "disposition" for r in st.list_actions(detail._pid, limit=50)
+        )
     finally:
         st.close()
 

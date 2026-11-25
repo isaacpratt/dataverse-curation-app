@@ -136,6 +136,49 @@ def test_per_file_findings_stay_in_file_checks(qapp, tmp_path):
     view.deleteLater()
 
 
+def test_unknown_file_types_row_wears_the_warning_face(qapp, tmp_path):
+    """inventory.unchecked_types must read as a warning, never an error (dv-gc9)."""
+    from engine.status import classify
+
+    view = _view(qapp, tmp_path)
+    try:
+        view.show()
+        for _ in range(5):
+            qapp.processEvents()
+        view._refresh_curation_preview()
+        rows = _rows(view)
+        # Locate the row by its title label instead of message text matching.
+        target = None
+        for r in rows:
+            labels = [lbl.text() for lbl in r.findChildren(QLabel)]
+            if any("Unknown File Types" in text for text in labels):
+                target = r
+                break
+        assert target is not None, "the unknown-file-types row must be present"
+        sheet = target.styleSheet()
+        from ui.theme import (
+            STATE_WARNING_BORDER,
+            STATE_WARNING_SURFACE,
+        )
+
+        assert STATE_WARNING_SURFACE in sheet, sheet
+        assert STATE_WARNING_BORDER in sheet, sheet
+        badges = [
+            lbl.text()
+            for lbl in target.findChildren(QLabel)
+            if lbl.text() in ("Warning", "Error", "Passed")
+        ]
+        assert "Warning" in badges, badges
+        assert "Error" not in badges, badges
+        # The engine result itself is a warning.
+        result = next(
+            c for c in view._report.dataset_checks if c.check_id == "inventory.unchecked_types"
+        )
+        assert classify(result) == "failed-warning"
+    finally:
+        view.deleteLater()
+
+
 def test_findings_filter_narrows_and_restores(qapp, tmp_path):
     view = _view(qapp, tmp_path)
     view.show()

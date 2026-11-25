@@ -90,6 +90,13 @@ def test_draft_refusal_is_classified_as_expected():
     assert refusal_code(_DRAFT_PATH, 401) == "draft_not_readable"
 
 
+def test_token_rejection_is_not_blamed_on_curation_scope():
+    """A 400 'User with token ... not found' is a token problem, not scope (2026-11-24)."""
+    body = json.dumps({"status": "ERROR", "message": "User with token abc123 not found."})
+    assert expected_api_reason(_DRAFT_PATH, 400, body) == ""
+    assert refusal_code(_DRAFT_PATH, 400, body) == ""
+
+
 def test_published_version_refusal_is_classified_as_expected():
     assert refusal_code(_PUBLISHED_PATH, 404) == "no_published_version"
     assert expected_api_reason(_PUBLISHED_PATH, 404)

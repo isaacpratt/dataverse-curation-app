@@ -312,6 +312,44 @@ def test_complete_filter_rebuilds_the_rows(detail):
     assert _rows(detail), "the All filter must restore the rows"
 
 
+def test_error_filter_excludes_incomplete_metadata(detail):
+    """Error is automated checks only: no metadata row is an error (2026-11-24)."""
+    detail._meta_results = [
+        {
+            "rule_id": "field:citation.title",
+            "kind": "field",
+            "field": "Title",
+            "requirement": "required",
+            "value": "",
+            "status": "incomplete",
+            "level": "required",
+            "pending": False,
+            "response_template": "",
+            "block": "citation",
+            "name": "title",
+        },
+        {
+            "rule_id": "field:citation.description",
+            "kind": "field",
+            "field": "Description",
+            "requirement": "recommended",
+            "value": "",
+            "status": "incomplete",
+            "level": "recommended",
+            "pending": False,
+            "response_template": "",
+            "block": "citation",
+            "name": "description",
+        },
+    ]
+    detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("error"))
+    assert _rows(detail) == [], "an incomplete field must not appear under Error"
+    detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("incomplete"))
+    fields = [widget.property("meta_field") for widget in _rows(detail)]
+    assert set(fields) == {"Title", "Description"}, "Incomplete still shows both"
+    detail._meta_filter.setCurrentIndex(detail._meta_filter.findData("all"))
+
+
 def test_unchecked_filter_shows_ghost_rows(detail):
     detail._unchecked_results = [
         {

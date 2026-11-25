@@ -65,9 +65,12 @@ def _order(layout: Any) -> list[Any]:
 def test_sidebar_order_is_preview_versions_log(qapp, tmp_path):
     view = _view(qapp, tmp_path)
     try:
-        widgets = _order(view._side_wrap)
-        assert widgets.index(view._preview_card) < widgets.index(view._version_card)
-        assert widgets.index(view._version_card) < widgets.index(view._dataset_log_card)
+        # The sidebar is one tabbed panel: Preview, Version log, Dataset log.
+        labels = [view._side_tabs.tabText(i) for i in range(view._side_tabs.count())]
+        assert labels == ["Preview", "Version log", "Dataset log"], labels
+        assert view._side_tabs.indexOf(view._preview_card) == 0
+        assert view._side_tabs.indexOf(view._version_card) == 1
+        assert view._side_tabs.indexOf(view._dataset_log_card) == 2
     finally:
         view.deleteLater()
 
@@ -113,6 +116,9 @@ def _fake_state(actions: list[dict[str, Any]]) -> Any:
         def list_actions(self, pid, limit=50):
             return list(actions)
 
+        def set_finding_disposition(self, pid, key, token, note):
+            pass
+
         def close(self):
             pass
 
@@ -141,5 +147,24 @@ def test_dataset_log_drops_chrome_events(qapp, tmp_path, monkeypatch):
         assert "jumped" not in joined
         assert joined.count("automated checks run") == 1
         assert "report saved to folder" in joined
+    finally:
+        view.deleteLater()
+
+
+def test_disposition_change_writes_no_dataset_log_entry(qapp, tmp_path, monkeypatch):
+    """A disposition change persists but must not append to the log (2026-11-24)."""
+    view = _view(qapp, tmp_path)
+    try:
+        logged: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            view, "_log_action", lambda *a, **k: logged.append((a[0], a[1] if len(a) > 1 else ""))
+        )
+        monkeypatch.setattr(view, "_refresh_finding_summary", lambda: None)
+        monkeypatch.setattr(view, "_refresh_workflow", lambda: None)
+        monkeypatch.setattr(view, "_state", lambda: _fake_state([]))
+        key = "k1"
+        view._set_disposition(key, "wontfix", "a note", refresh=False)
+        assert view._dispositions_map().get(key, {}).get("disposition") == "wontfix"
+        assert logged == [], f"a disposition must not log: {logged}"
     finally:
         view.deleteLater()

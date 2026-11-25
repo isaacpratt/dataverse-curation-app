@@ -306,6 +306,9 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         "<a href='": "rich-text link markup",
         "; text-decoration:none;'>": "rich-text link markup",
     },
+    "ui/dataset/metadata_section.py": {
+        "error": "filter mode token compared against the combo's item data",
+    },
     "ui/dataset/checks_section.py": {
         "not executed": "needle matched against an engine check description",
         "DatasetReport | None": "quoted forward-reference return annotation (TYPE_CHECKING import)",
@@ -351,6 +354,8 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
     "ui/theme.py": {
         "Inter, 'Segoe UI', sans-serif": "font stack for the UI face",
         "'JetBrains Mono', Consolas, monospace": "font stack for the mono face",
+        "Fraunces, Georgia, serif": "font stack for the display face",
+        "JetBrains Mono": "font family name from the bundled font table",
         "Segoe UI": "font family name",
         "unknown theme ": "developer-facing error message (unknown theme name)",
         "; known themes: ": "developer-facing error message (unknown theme name)",
@@ -369,6 +374,14 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         "text on a tint": "the contrast contract names the pair it checks",
         "error text on a card": "the contrast contract names the pair it checks",
         "error text on the error surface": "the contrast contract names the pair it checks",
+        "warning ink on warning fill": "the contrast contract names the pair it checks",
+        "warning mark on warning fill": "the contrast contract names the pair it checks",
+        "body text on a tinted panel": "the contrast contract names the pair it checks",
+        "body text on a subtle panel": "the contrast contract names the pair it checks",
+        "body text on the error surface": "the contrast contract names the pair it checks",
+        "success mark on a tinted panel": "the contrast contract names the pair it checks",
+        "caution mark on a tinted panel": "the contrast contract names the pair it checks",
+        "error mark on the error surface": "the contrast contract names the pair it checks",
         "success text on a card": "the contrast contract names the pair it checks",
         "warning text on a card": "the contrast contract names the pair it checks",
         "brand text on a card": "the contrast contract names the pair it checks",

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QBrush, QColor, QFont, QKeyEvent, QMouseEvent
+from PySide6.QtGui import QAction, QBrush, QColor, QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -2176,7 +2176,6 @@ class DashboardView(QWidget):
         """Rebuild the capped visible slice (filtering itself is uncapped)."""
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(paint_rows))
-        mono = QFont("JetBrains Mono")
         for row, ds in enumerate(paint_rows):
             for col, (key, _h, _v) in enumerate(COLUMNS):
                 text_val = self._cell_text(ds, key)
@@ -2191,8 +2190,11 @@ class DashboardView(QWidget):
                     self._decorate_size_cell(ds, item, text_val)
                 sort_key = self._cell_sort_key(ds, key)
                 item.setData(Qt.ItemDataRole.UserRole, sort_key)
-                if key in ("date_created", "date_published", "downloaded_at", "persistent_id"):
-                    item.setFont(mono)
+                # PID/date cells used to carry a raw JetBrains Mono QFont.
+                # Table items are not widgets, so QSS never reached them and
+                # they rendered in an arbitrary system substitution at 12pt.
+                # Leaving the item font unset makes the table's own Inter face
+                # apply, like every other cell.
                 if key == "title":
                     f = item.font()
                     f.setBold(True)
@@ -2201,6 +2203,11 @@ class DashboardView(QWidget):
         self._table.setSortingEnabled(True)
         # Content-width columns first (no-op once fitted/locked); the
         # columns_fitted signal mirrors sizes onto the display header.
+        # Re-arm the one-shot latch before fitting: cached rows can land
+        # before the view has its final width, and the fit would otherwise
+        # latch at that too-small width and leave the columns squished
+        # until the user reset them (dv-81l).
+        self._table.refit_columns_to_content()
         self._table.fit_columns_to_content()
         self._table.viewport().update()
 

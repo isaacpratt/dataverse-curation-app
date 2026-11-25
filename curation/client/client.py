@@ -1266,7 +1266,9 @@ class DataverseClient(_DownloadsMixin):
         return data if isinstance(data, dict) else {}
 
     def get_file_inventory(self, identifier: str, version: str = "draft") -> list[dict[str, Any]]:
-        data, api_version, tried = self._fetch_version_data(identifier, version)
+        data, api_version, tried = self._fetch_version_data(
+            identifier, version, fall_back_on_auth=True
+        )
         if api_version != f":{version.lstrip(':').lower()}":
             get_app_log().error(
                 f"Inventory for {identifier}: requested :{version} "

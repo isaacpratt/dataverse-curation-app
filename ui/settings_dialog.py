@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import requests
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -279,31 +279,11 @@ class SettingsPane(QWidget):
 
         tabs.addTab(general, t("settings.tabs.general"))
 
-        # Appearance tab
-        appearance = QWidget()
-        appearance.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        appearance_layout = QVBoxLayout(appearance)
-        appearance_layout.setContentsMargins(16, 16, 16, 16)
-        appearance_layout.setSpacing(16)
-
-        # Theme mode selector
-        theme_group = QWidget()
-        theme_group.setObjectName("Card")
-        set_sheet(
-            theme_group,
-            "surface_frame",
-            "SURFACE_CARD",
-            "BORDER_SUBTLE",
-            selector="QWidget#Card",
-            radius="8px",
-        )
-        theme_layout = QVBoxLayout(theme_group)
-        theme_layout.setContentsMargins(16, 16, 16, 16)
-        theme_layout.setSpacing(12)
+        # Theme controls live on the General tab (2026-11-24): a separate
+        # Appearance tab was one more click for a single switch.
 
         theme_label = make_field_label(t("settings.appearance.theme_label"))
-        theme_layout.addWidget(theme_label)
-
+        form.addRow(theme_label)
         self.theme_mode_combo = make_combo(
             [
                 (t("settings.appearance.theme_light"), "light"),
@@ -313,19 +293,13 @@ class SettingsPane(QWidget):
             min_width=200,
         )
         self.theme_mode_combo.currentIndexChanged.connect(self._on_theme_mode_changed)
-        theme_layout.addWidget(self.theme_mode_combo)
+        form.addRow("", self.theme_mode_combo)
 
         # Auto-switch checkbox
         self.auto_theme_checkbox = make_checkbox(t("settings.appearance.auto_switch"))
         self.auto_theme_checkbox.setToolTip(t("settings.appearance.auto_switch_tip"))
         self.auto_theme_checkbox.toggled.connect(self._on_auto_theme_toggled)
-        theme_layout.addWidget(self.auto_theme_checkbox)
-
-        theme_layout.addStretch(1)
-        appearance_layout.addWidget(theme_group)
-        appearance_layout.addStretch(1)
-
-        tabs.addTab(appearance, t("settings.tabs.appearance"))
+        form.addRow("", self.auto_theme_checkbox)
 
         # Extensions tab: optional libs + external binaries.
         # Flush tab page (card pattern): zero layout margins; the table
@@ -473,18 +447,27 @@ class SettingsPane(QWidget):
         # First paint shows "…" and fills in from a background worker so the
         # GUI thread never blocks on importlib.metadata + os.walk.
         self._size_cache: dict[str, str] = {}
+        # Build the widgets now, but defer the slow first fill (package
+        # metadata + the size walk) so opening Settings is not blocked
+        # (2026-11-24). The size worker already runs off the GUI thread;
+        # this only moves its start past the first paint.
         self.reload()
-        self._start_size_worker()
         try:
             selectable_labels(self)
             enable_table_copy(self.ext_table)
         except Exception:
             pass
+        QTimer.singleShot(0, self._start_size_worker)
 
     def _start_size_worker(self) -> None:
         """Compute package sizes off the GUI thread; patch rows when done."""
         if self._size_worker is not None and self._size_worker.isRunning():
             return
+        # The first fill already ran at construction; a refresh re-walks.
+        if getattr(self, "_sizes_started", False):
+            self._refresh_sizes()
+            return
+        self._sizes_started = True
         rows = list(self.EXTENSIONS)
 
         # The scan is interruptible: the process may need to stop it

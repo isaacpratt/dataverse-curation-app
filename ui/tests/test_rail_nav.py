@@ -96,3 +96,42 @@ class TestNavModelsRemoved:
         src = self._dataset_package_source()
         assert "_history_btn" not in src
         assert "export_reports" not in src
+
+
+def test_rail_links_are_left_packed_and_stable(qapp):
+    """Nav-mode links stay left-packed and keep their size when clicked (2026-11-24)."""
+    from ui.theme import workflow_rail_qss
+    from ui.widgets import WorkflowRail
+
+    rail = WorkflowRail(
+        nav_steps=[
+            ("dataset_checks", "Dataset Checks"),
+            ("file_checks", "File Checks"),
+            ("response", "Response"),
+        ]
+    )
+    rail.resize(1200, 40)
+    rail.show()
+    for _ in range(5):
+        qapp.processEvents()
+
+    lay = rail.layout()
+    assert lay is not None
+    # A trailing stretch packs the links on the left instead of spreading them.
+    assert lay.count() >= 4
+    last = lay.itemAt(lay.count() - 1)
+    assert last is not None, "the rail has a final item"
+    assert last.spacerItem() is not None, "the rail ends with a stretch"
+
+    sizes_before = {k: b.sizeHint() for k, b in rail.buttons.items()}
+    positions_before = {k: b.pos() for k, b in rail.buttons.items()}
+    rail.set_active_step("file_checks")
+    for _ in range(5):
+        qapp.processEvents()
+    for k, b in rail.buttons.items():
+        assert b.sizeHint() == sizes_before[k], f"{k} changed size when activated"
+        assert b.pos() == positions_before[k], f"{k} moved when another tab was activated"
+
+    sheet = workflow_rail_qss()
+    assert "border-bottom: 1px solid" in sheet
+    assert "border: none" in sheet

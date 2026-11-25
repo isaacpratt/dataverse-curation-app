@@ -187,20 +187,41 @@ def test_the_status_widget_bar_sits_under_its_text(det):
         det._set_status("")
 
 
+def test_progress_and_verdict_share_one_element(det):
+    """Running shows the bar; finishing swaps to the verdict action chips (2026-11-24)."""
+    from PySide6.QtWidgets import QPushButton
+
+    widget = det._status_widget
+    det._show_status_running("Checking…", "7/21", 7 / 21)
+    assert widget._bar.isVisible(), "a measured run shows the bar"
+    assert widget._chips.count() == 0, "no verdict chips while running"
+
+    det._completeness_full = [
+        {
+            "field": "Affiliation",
+            "rule_id": "authorAffiliation",
+            "requirement": "req",
+            "status": "incomplete",
+            "level": "required",
+            "pending": False,
+        }
+    ]
+    det._refresh_verdict()
+    chips = list(widget.findChildren(QPushButton))
+    assert chips, "the finished run shows the required/recommended actions"
+    assert widget._bar.isHidden(), "the bar folds away once the run is over"
+    det._completeness_full = []
+    det._refresh_verdict()
+    det._set_status("")
+
+
 def test_the_completion_text_is_body_size(det):
-    """The status title reads at small-body size, not caption size.
-
-    The chip is a compact line beside the dataset identity, so its title
-    wears ``BodySM`` (12px): a step above ``CaptionSM`` (11px), which the
-    old message strip's caption-sized commentary failed.
-    """
-    from ui.theme import FONT_CAPTION, FONT_SMALL
-
+    """The status title wears BodySM, now promoted to the 13px body size."""
     det._show_status_complete("All checks complete")
     try:
         title = det._status_widget._title
         assert title.objectName() == "BodySM"
-        assert FONT_SMALL > FONT_CAPTION, "the title token must out-size a caption"
+        assert title.font().pixelSize() == 13
     finally:
         det._set_status("")
 

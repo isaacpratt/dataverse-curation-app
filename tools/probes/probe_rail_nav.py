@@ -65,12 +65,10 @@ def main() -> int:
         found_in_main = any(
             view._main_wrap.itemAt(i).widget() is log_card for i in range(view._main_wrap.count())
         )
-        found_in_side = any(
-            view._side_wrap.itemAt(i).widget() is log_card for i in range(view._side_wrap.count())
-        )
+        found_in_side = view._side_tabs.indexOf(log_card) >= 0
         report.check(
             not found_in_main and found_in_side,
-            "the dataset log stays in the sidebar when folded (hidden with it)",
+            "the dataset log stays a sidebar tab when folded (hidden with it)",
         )
 
     # Unfold: the sidebar returns; the rail stays.

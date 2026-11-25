@@ -187,7 +187,19 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - grandfathered; c
         # Warnings alone do not fail the run.
         return 1 if errors else 0
 
+    from PySide6.QtCore import Qt as _Qt
+    from PySide6.QtGui import QGuiApplication as _QGuiApplication
     from PySide6.QtWidgets import QApplication
+
+    # Fractional display scaling must NOT be rounded to a whole factor:
+    # 125%/150% would render at 100%/200% and then be resampled, which is
+    # what makes the 1px card borders and 12px text look pixelated. Qt
+    # requires this before the QApplication exists; tests and embedders may
+    # already have one, in which case the app keeps its current policy.
+    if _QGuiApplication.instance() is None:
+        _QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
+            _Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+        )
 
     from curation.config import Config, normalise_base_url
     from ui.main_window import MainWindow
