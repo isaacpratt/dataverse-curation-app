@@ -83,20 +83,17 @@ def test_metadata_pane_combos_meet_the_menu_contract(view):
         assert row >= 34
 
 
-def test_combo_popup_keeps_rounded_corners_and_a_gap(qapp):
-    """Opening a dropdown must not change its shape (2026-11-24)."""
+def test_combo_popup_keeps_rounded_corners_and_no_gap(qapp):
+    """A dropdown opens flush: no white strip, no shape change (2026-11-25)."""
     from ui.theme import RADIUS_LG, global_qss
-    from ui.widgets import make_combo
+    from ui.widgets import _NoWheelCombo, make_combo
 
     make_combo(["Alpha", "Beta"])
     sheet = global_qss()
     assert "QComboBox:on" not in sheet, "the field must not square off while open"
     assert f"border-top-left-radius: {RADIUS_LG}" in sheet
     assert f"border-bottom-left-radius: {RADIUS_LG}" in sheet
-    # The kit declares the gap and applies it in showPopup; the offscreen
-    # platform does not move the popup window, so the source contract is
-    # what is asserted here (the style assertions above cover the shape).
-    from ui.widgets import _NoWheelCombo
-
-    assert _NoWheelCombo._POPUP_GAP > 0, "the kit declares a vertical gap"
-    assert "QComboBox:on" not in sheet, "the open field keeps its rounded corners"
+    # The old kit moved the popup down 4px in showPopup, which left an odd
+    # white strip above the options. There is no override now.
+    assert "showPopup" not in _NoWheelCombo.__dict__
+    assert not hasattr(_NoWheelCombo, "_POPUP_GAP")

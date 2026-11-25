@@ -346,6 +346,7 @@ class MetadataSection(DetailState):
                 self._inventory,
                 self._staged_dir_or_none(),
                 include_unchecked=True,
+                title=getattr(self, "_title", None) or None,
             )
             self._completeness_full = [r for r in full if r.get("status") != "skipped"]
             self._unchecked_results = [r for r in full if r.get("status") == "skipped"]
@@ -355,7 +356,10 @@ class MetadataSection(DetailState):
             from curation.metadata_check import check_metadata_completeness
 
             results = check_metadata_completeness(
-                metadata, profile=self._profile, inventory=self._inventory
+                metadata,
+                profile=self._profile,
+                inventory=self._inventory,
+                title=getattr(self, "_title", None) or None,
             )
             self._unchecked_results = []
             self._completeness_full = [

@@ -307,6 +307,9 @@ def test_load_metadata_with_stub_worker(detail: Any, monkeypatch: Any) -> None:
     monkeypatch.setattr(type(detail), "_on_load_metadata", MetadataLoadSection._on_load_metadata)
     monkeypatch.setattr(metadata_load, "MetadataWorker", _Worker)
     monkeypatch.setattr(workers, "MetadataWorker", _Worker)
+    # The real handler refuses anonymous reads; this test exercises the
+    # worker plumbing, so give it a token to get past that guard.
+    detail._config.dataverse.api_token = "test-token"
     detail._meta_worker = None
     detail._on_load_metadata()
     assert isinstance(detail._meta_worker, _Worker), (

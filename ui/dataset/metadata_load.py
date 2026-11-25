@@ -26,6 +26,12 @@ class MetadataLoadSection(DetailState):
         )
 
     def _on_load_metadata(self) -> None:
+        # Guard the detail view like the dashboard does: never send a
+        # metadata/inventory request as :guest and report the refusal as a
+        # curation-scope problem (2026-11-25).
+        if not str(getattr(self._config.dataverse, "api_token", "") or "").strip():
+            self._set_status(t("detail.status.api_token_required"), tone="error")
+            return
         # The worker deletes itself (deleteLater) when it finishes or
         # errors, which can leave a stale Python reference to a dead C++
         # object; calling isRunning() on it raised

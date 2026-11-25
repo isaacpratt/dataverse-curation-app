@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame,
@@ -49,6 +50,9 @@ class VersionsSection(DetailState):
         # edge and paint their own corners in _populate_version_diff.
         _body_host.setContentsMargins(0, 0, 0, 0)
         _body_host.setSpacing(0)
+        # The log's rows hang from the header, never float in the middle of
+        # a stretched card (2026-11-25).
+        _body_host.setAlignment(Qt.AlignmentFlag.AlignTop)
         # Named not-loaded state, never "—" (2026-10-02 P2).
         self._version_summary = make_field_label(t("detail.version_log.not_loaded"))
         header_lay.addWidget(self._version_summary)

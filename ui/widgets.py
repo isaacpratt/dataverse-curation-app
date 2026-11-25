@@ -46,6 +46,7 @@ from PySide6.QtGui import (
     QWheelEvent,
 )
 from PySide6.QtWidgets import (
+    QAbstractButton,
     QAbstractItemView,
     QCheckBox,
     QComboBox,
@@ -336,6 +337,7 @@ _REBUILDERS: dict[str, Any] = {
     "caption_button": lambda w, kind: _apply_caption_button(w, kind),
     "icon": lambda w, name, color, size: _apply_icon(w, name, color, size),
     "workflow_rail": lambda w: w._retheme(),
+    "toggle_switch": lambda w: w._retheme(),
 }
 
 
@@ -470,6 +472,7 @@ __all__ = [
     "RingProgress",
     "SortArrowHeaderView",
     "StatusWidget",
+    "ToggleSwitch",
     "WorkflowRail",
     "add_info_tip",
     "fit_tree_height",
@@ -845,6 +848,7 @@ class AppTable(QTableWidget):
         self._auto_fit = True
         self._fitting = False
         self._fitted = False
+        self._fit_retries = 0
         hdr.sectionResized.connect(self._on_user_section_resized)
         hdr.sectionMoved.connect(self._on_user_section_moved)
         enable_table_copy(self)
@@ -905,10 +909,20 @@ class AppTable(QTableWidget):
         self.setSortingEnabled(was)
 
     def _on_user_section_resized(self, logical: int, *_args: Any) -> None:
-        """Lock content auto-fit once the user drags a column edge."""
+        """Lock content auto-fit once the user drags a column edge.
+
+        Qt emits ``sectionResized`` when a column is *hidden* at construction
+        (the dashboard hides four by default). That is a programmatic
+        visibility change, not a curator gesture — treating it as one
+        disabled auto-fit before any rows arrived and left the first paint
+        squished until a manual reset (dv-81l follow-up, 2026-11-25).
+        """
         if self._fitting:
             return
-        if not _section_is_user_resizable(self.horizontalHeader(), logical):
+        hdr = self.horizontalHeader()
+        if hdr.isSectionHidden(logical):
+            return
+        if not _section_is_user_resizable(hdr, logical):
             return
         self._auto_fit = False
         self.user_layout_changed.emit()
@@ -964,6 +978,24 @@ class AppTable(QTableWidget):
             return
         if not self.isVisible():
             return
+        if self.viewport().width() < 240:
+            # A placeholder viewport (hidden window / first layout pass)
+            # would bake a permanently squished layout. Retry briefly
+            # instead of latching it (dv-81l follow-up).
+            retries = int(getattr(self, "_fit_retries", 0))
+            if retries < 10:
+                self._fit_retries = retries + 1
+                QTimer.singleShot(16, self.fit_columns_to_content)
+            return
+        self._fit_retries = 0
+        # Qt caches per-column size hints from the last layout pass. Rows
+        # painted in this event-loop turn have not been measured yet, so a
+        # fit straight after populating would size to stale (squished)
+        # hints; force one geometry pass first (dv-81l follow-up).
+        try:
+            self.updateGeometries()
+        except Exception:
+            pass
         hdr = self.horizontalHeader()
         was_sorting = self.isSortingEnabled()
         was_stretch_last = hdr.stretchLastSection()
@@ -1498,6 +1530,50 @@ def make_list(
     _apply()
     _register(lst, "list", last, flush)
     return lst
+
+
+class ToggleSwitch(QAbstractButton):
+    """A Tailwind-style on/off switch: a rounded track and a sliding knob.
+
+    The kit's one stateful toggle, used for the light/dark theme. Both the
+    track and the knob come from the active role table, so a live theme
+    switch repaints it like every other component.
+    """
+
+    _WIDTH = 48
+    _HEIGHT = 26
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("ThemeToggle")
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedSize(self._WIDTH, self._HEIGHT)
+        self.setAccessibleName(t("settings.appearance.theme_label"))
+        _register(self, "toggle_switch")
+
+    def sizeHint(self) -> QSize:
+        return QSize(self._WIDTH, self._HEIGHT)
+
+    def paintEvent(self, _event: QPaintEvent) -> None:
+        theme = _active_theme()
+        track = role("ACCENT_PRIMARY" if self.isChecked() else "BORDER_CONTROL", theme)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        radius = self._HEIGHT / 2
+        painter.setBrush(QColor(track))
+        painter.drawRoundedRect(
+            QRectF(0.5, 0.5, self.width() - 1, self.height() - 1), radius, radius
+        )
+        knob = self._HEIGHT - 6
+        x = self.width() - knob - 3 if self.isChecked() else 3
+        painter.setBrush(QColor(role("SURFACE_CARD", theme)))
+        painter.drawEllipse(QRectF(x, 3, knob, knob))
+
+    def _retheme(self) -> None:
+        """Repaint the track and knob for the new palette."""
+        self.update()
 
 
 def make_checkbox(
@@ -2452,12 +2528,10 @@ class _NoWheelCombo(QComboBox):
     page) would otherwise flip the value. First click arms the wheel
     (and opens the popup); focus-out disarms it again.
 
-    The popup also keeps a small vertical gap below the field (2026-11-24):
-    a flush popup made the field's bottom corners look square while open.
+    The popup opens flush beneath the field: an artificial gap read as an
+    odd white strip at the top of the menu and made the options appear to
+    shift down every time it opened (2026-11-25).
     """
-
-    # Gap between the field's bottom edge and the popup's top edge.
-    _POPUP_GAP = 4
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -2486,22 +2560,6 @@ class _NoWheelCombo(QComboBox):
             pass
         try:
             super().wheelEvent(event)
-        except Exception:
-            pass
-
-    def showPopup(self) -> None:
-        """Show the popup with a small gap under the field.
-
-        Qt places the popup flush against the field by default, which made
-        the field's rounded bottom corners read as square while open. The
-        gap keeps both shapes rounded and visually separates the menu from
-        the control that opened it.
-        """
-        try:
-            super().showPopup()
-            popup = self.view()
-            if popup is not None:
-                popup.move(popup.x(), popup.y() + self._POPUP_GAP)
         except Exception:
             pass
 
@@ -3252,30 +3310,29 @@ class WorkflowRail(QWidget):
 
 
 class StatusWidget(QFrame):
-    """One compact inline status chip: icon + words + bar (dv-3d0.4).
+    """One full-width status block: words, then bar, then findings buttons.
 
-    Replaces the old three-row stack (message strip, progress bar, ring)
-    with a single line that sits beside the dataset identity. Three faces:
+    Three faces:
 
-    * ``set_running`` — spinner, title, "n/N" detail, determinate/indeterminate
-      bar;
+    * ``set_running`` — spinner, title, detail, determinate/indeterminate bar;
     * ``set_complete`` — check, "All checks complete", counts, full bar;
     * ``set_error`` — alert, short reason, full bar in the error role.
 
     The widget is hidden until there is something to report, so an idle
     header reserves no vertical space for it. Every glyph is a bundled
-    Lucide icon; every colour comes from a theme role. The chip is wide
-    enough for its text to stay on one line; there is no close/retry/cancel
-    action button.
+    Lucide icon; every colour comes from a theme role.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("StatusWidget")
         self.setVisible(False)
-        outer = QHBoxLayout(self)
-        outer.setContentsMargins(12, 6, 12, 6)
-        outer.setSpacing(0)
+        # One stacked column: the words own a full-width line, the bar sits
+        # full-width directly below them, and the findings buttons form a
+        # third line under the bar (2026-11-25).
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(12, 8, 12, 8)
+        outer.setSpacing(4)
         self._icon = QLabel()
         self._icon.setFixedSize(18, 18)
         self._icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -3299,15 +3356,15 @@ class StatusWidget(QFrame):
         line.addWidget(self._icon)
         line.addWidget(self._title)
         line.addWidget(self._detail, 1)
-        # The verdict's action chips (required/recommended changes) share the
-        # status line's right side when the run is over (2026-11-24).
-        self._chips = QHBoxLayout()
-        self._chips.setSpacing(6)
-        line.addLayout(self._chips)
         # No action button (x/retry/cancel) — the chip is informational only.
         self._rows.addLayout(line)
         self._rows.addWidget(self._bar)
         self._bar.hide()
+        # Findings buttons get their own full-width line below the bar.
+        self._chips = QHBoxLayout()
+        self._chips.setContentsMargins(0, 0, 0, 0)
+        self._chips.setSpacing(6)
+        self._rows.addLayout(self._chips)
         outer.addLayout(self._rows, 1)
         self._apply_sheet()
         _register(self, "status_widget")
@@ -3319,6 +3376,17 @@ class StatusWidget(QFrame):
             f"QFrame#StatusWidget {{ background: {role('SURFACE_SUBTLE', theme)}; "
             f"border: 1px solid {role('BORDER_SUBTLE', theme)}; border-radius: {RADIUS_LG}; }}"
         )
+
+    @staticmethod
+    def _clean_detail(text: str) -> str:
+        """Drop the placeholder count a half-built state used to leak.
+
+        A status rendered before the staged-file counts are known used to
+        show a literal ``*/*``; there is nothing to report at that point,
+        so the line stays empty instead (2026-11-25).
+        """
+        value = str(text or "").strip()
+        return "" if value in {"*/*", "* / *"} else str(text or "")
 
     def _paint_icon(self, name: str, color: str) -> None:
         from ui.icons import icon as _icon
@@ -3345,7 +3413,9 @@ class StatusWidget(QFrame):
         """
         self._paint_icon("loader-circle", ACCENT_PRIMARY)
         self._title.setText(title)
-        self._detail.setText(detail)
+        self._detail.setText(self._clean_detail(detail))
+        # A new run starts fresh: last pass's verdict buttons are stale.
+        self.clear_chips()
         if fraction is None:
             self._bar.setRange(0, 1)
             self._bar.setValue(0)
@@ -3360,7 +3430,7 @@ class StatusWidget(QFrame):
         """Check + full success bar (no action button)."""
         self._paint_icon("circle-check", STATE_SUCCESS_GRAPHIC)
         self._title.setText(title)
-        self._detail.setText(detail)
+        self._detail.setText(self._clean_detail(detail))
         self._bar.setRange(0, 100)
         self._bar.setValue(100)
         self._bar.show()
@@ -3370,7 +3440,7 @@ class StatusWidget(QFrame):
         """Alert + full error bar (no action button)."""
         self._paint_icon("circle-alert", STATE_ERROR_GRAPHIC)
         self._title.setText(title)
-        self._detail.setText(detail)
+        self._detail.setText(self._clean_detail(detail))
         self._bar.setRange(0, 100)
         self._bar.setValue(100)
         self._bar.show()

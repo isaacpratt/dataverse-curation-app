@@ -29,8 +29,10 @@ def test_initial_rows_are_named(win):
 
 
 def test_theme_controls_live_on_the_general_tab(win):
-    """No separate Appearance tab; the theme controls are on General (2026-11-24)."""
+    """One light/dark switch on General, no dropdown or auto checkbox."""
     from PySide6.QtWidgets import QTabWidget
+
+    from ui.widgets import ToggleSwitch
 
     pane = win._ensure_settings()
     tab_widgets = pane.findChildren(QTabWidget)
@@ -39,10 +41,10 @@ def test_theme_controls_live_on_the_general_tab(win):
     assert "Appearance" not in labels, labels
     general_index = labels.index("General")
     general_page = tab_widgets[0].widget(general_index)
-    combos = general_page.findChildren(type(pane.theme_mode_combo))
-    checks = general_page.findChildren(type(pane.auto_theme_checkbox))
-    assert pane.theme_mode_combo in combos, "theme combo is on the General tab"
-    assert pane.auto_theme_checkbox in checks, "auto theme checkbox is on the General tab"
+    assert pane.theme_toggle in general_page.findChildren(ToggleSwitch)
+    # The old dropdown + auto checkbox are gone (2026-11-25).
+    assert not hasattr(pane, "theme_mode_combo")
+    assert not hasattr(pane, "auto_theme_checkbox")
 
 
 def test_checked_but_empty_reads_no_user_returned(win):

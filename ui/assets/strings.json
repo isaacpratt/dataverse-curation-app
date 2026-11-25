@@ -544,9 +544,7 @@
       "theme_label": "Theme",
       "theme_light": "Light",
       "theme_dark": "Dark",
-      "theme_auto": "Auto (follow system)",
-      "auto_switch": "Auto-switch based on system theme",
-      "auto_switch_tip": "When enabled, the app will automatically switch between light and dark mode based on your system settings"
+      "theme_toggle_tip": "Switch between the light and dark theme"
     },
     "connection": {
       "enter_url": "Enter a base URL first.",
@@ -817,6 +815,7 @@
       "file_list_failed": "Could not load the file list (network or auth error) — metadata above may be partial. Check the log, then press Load metadata to retry.",
       "file_list_failed_footer": "File list failed to load — retry with Load metadata.",
       "file_list_failed_short": "file list failed to load",
+      "api_token_required": "No Dataverse API token is configured — add one in Settings, then retry.",
       "file_list_not_readable": "This account may not read the draft version of this dataset — Dataverse grants draft access only inside the dataset's curation scope. The metadata above may be partial.",
       "file_list_not_readable_footer": "File list not readable for this account — ask a curator with access, or open a published version.",
       "file_list_not_readable_short": "file list not readable for this account",

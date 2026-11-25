@@ -6,6 +6,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed (UI and auth)
+
+- **UI defect sweep (dv-g404, dv-2tf7, dv-u07x, dv-cbxv, dv-834w, dv-ws95, dv-1jdn, dv-gya6, dv-lhlk, dv-q7ly, dv-be4m, dv-hdhz):** the dashboard's first paint now content-fits its columns (hiding default columns was disabling auto-fit); the dataset rail is a spaced white band with a rule and a persistent shadow; the status block stacks words, bar and findings buttons at full width with no bogus `*/*`; the sidebar is a card with left/right air that stops halfway down and no longer overlaps the main column; sidebar logs are top aligned; the Log highlighter follows the live theme; Settings uses one light/dark toggle with no forced page scrollbar; dropdown menus open flush; and the displayed dataset title feeds the metadata check across versions.
+- **Anonymous reads are refused before they happen (dv-6rdy):** a `User :guest is not permitted` 401 means the client had no API token, not a permissions problem. The app now loads a stored credential even without `config.json`, warns on a keyring miss, refuses dataset/inventory reads with a clear "add a token in Settings" message instead of sending a guest request, and no longer paints guest/bad-key 401s as EXPECTED scope refusals.
+
 ### Changed (docs)
 
 - **SECURITY.md reconciled with the code** — signing is now described as a decided but unwired policy (`dv-4t6.6` remains open) rather than an implemented step, and the in-app update check/feeds replace the old "no update mechanism" and "no automatic update check" claims. Artefact names, the checksum example and the published installation-guide link are current; ADR 0005 carries the same signing qualification.

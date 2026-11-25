@@ -21,6 +21,15 @@ class DownloadCancelled(Exception):  # noqa: N818 - public API name; renaming br
     """
 
 
+class ApiTokenRequired(Exception):  # noqa: N818 - public API name; renaming breaks existing callers
+    """Raised before an authenticated read when the client has no token.
+
+    Prevents a guest request from being logged as a permissions/scope
+    problem: without a token Dataverse answers ``User :guest is not
+    permitted`` and the old refusal classifier blamed curation scope.
+    """
+
+
 class GuestbookRequired(Exception):  # noqa: N818 - public API name; renaming breaks existing callers
     """The Access API refused the bundle because a guestbook must be answered.
 
