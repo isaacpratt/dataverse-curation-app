@@ -49,11 +49,8 @@ from ui.dialogs import (
 from ui.i18n import t
 from ui.table_layout import TableLayout
 from ui.theme import (
-    ACCENT_PRIMARY,
-    STATE_ERROR_GRAPHIC,
-    TEXT_DANGER,
-    TEXT_ON_TINT,
     enable_table_copy,
+    role,
     selectable_labels,
     transparent_surface_qss,
 )
@@ -770,7 +767,7 @@ class SettingsPane(QWidget):
         return "—"
 
     def _refresh_extensions(self) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
-        from ui.icons import icon as _ext_icon  # hoisted: also used in TOOLS rows below
+        from ui.icons import set_item_icon
 
         frozen = bool(getattr(sys, "frozen", False))
         # Hide the cells being replaced before repopulating: Qt only
@@ -809,16 +806,16 @@ class SettingsPane(QWidget):
             # the tooltip/accessible text so the state isn't colour-only.
             inst_item = QTableWidgetItem("")
             if is_installed is False:
-                inst_item.setForeground(QColor(TEXT_DANGER))
+                inst_item.setForeground(QColor(role("TEXT_DANGER")))
             elif is_installed:
-                inst_item.setForeground(QColor(ACCENT_PRIMARY))
+                inst_item.setForeground(QColor(role("ACCENT_PRIMARY")))
             try:
                 if is_installed is False:
-                    inst_item.setIcon(_ext_icon("x", color=STATE_ERROR_GRAPHIC))
+                    set_item_icon(inst_item, "x", color="STATE_ERROR_GRAPHIC")
                 elif is_installed:
-                    inst_item.setIcon(_ext_icon("check", color=ACCENT_PRIMARY))
+                    set_item_icon(inst_item, "check", color="ACCENT_PRIMARY")
                 else:
-                    inst_item.setIcon(_ext_icon("minus", color=TEXT_ON_TINT))
+                    set_item_icon(inst_item, "minus", color="TEXT_ON_TINT")
             except Exception:
                 pass
             inst_item.setToolTip(state_tip)
@@ -882,12 +879,12 @@ class SettingsPane(QWidget):
             resolved = self._detect_tool(key, configured)
             self.ext_table.setItem(row, 0, QTableWidgetItem(label))
             status_item = QTableWidgetItem("")
-            status_item.setForeground(QColor(ACCENT_PRIMARY if resolved else TEXT_DANGER))
+            status_item.setForeground(QColor(role("ACCENT_PRIMARY" if resolved else "TEXT_DANGER")))
             try:
-                status_item.setIcon(
-                    _ext_icon("check", color=ACCENT_PRIMARY)
-                    if resolved
-                    else _ext_icon("x", color=STATE_ERROR_GRAPHIC)
+                set_item_icon(
+                    status_item,
+                    "check" if resolved else "x",
+                    color="ACCENT_PRIMARY" if resolved else "STATE_ERROR_GRAPHIC",
                 )
             except Exception:
                 pass

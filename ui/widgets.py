@@ -259,6 +259,14 @@ def set_icon(widget: QWidget, name: str, *, color: str | None = None, size: int 
     _register(widget, "icon", name, color, size)
 
 
+def _apply_caption_button(widget: Any, kind: str) -> None:
+    """Repaint a caption button's sheet and its glyph (dv-314)."""
+    widget.setStyleSheet(caption_button_qss(kind, theme=_active_theme()))
+    apply_icon = getattr(widget, "_apply_icon", None)
+    if callable(apply_icon):
+        apply_icon()
+
+
 # Rebuilders, keyed by the name a factory passes to _register. Each takes
 # the widget as its first parameter, so nothing captures it.
 _REBUILDERS: dict[str, Any] = {
@@ -326,9 +334,7 @@ _REBUILDERS: dict[str, Any] = {
         "border-radius: 16px; padding: 0; }"
         f"QToolButton#InfoTip:hover {{ background: {role('SURFACE_TINT', _active_theme())}; }}"
     ),
-    "caption_button": lambda w, kind: w.setStyleSheet(
-        caption_button_qss(kind, theme=_active_theme())
-    ),
+    "caption_button": lambda w, kind: _apply_caption_button(w, kind),
     "icon": lambda w, name, color, size: _apply_icon(w, name, color, size),
     "workflow_rail": lambda w: w._retheme(),
 }
@@ -355,6 +361,50 @@ def _retheme_widget(widget: Any) -> int:
     return run
 
 
+def _collect_item_icons(widget: Any, items: list[Any]) -> None:
+    """Append a tree/list/table's model items to ``items``."""
+    if isinstance(widget, QTreeWidget):
+        from PySide6.QtWidgets import QTreeWidgetItemIterator
+
+        iterator = QTreeWidgetItemIterator(widget)
+        while iterator.value():
+            items.append(iterator.value())
+            iterator += 1
+    elif isinstance(widget, QListWidget):
+        items.extend(widget.item(i) for i in range(widget.count()))
+    elif isinstance(widget, QTableWidget):
+        items.extend(
+            widget.item(row, col)
+            for row in range(widget.rowCount())
+            for col in range(widget.columnCount())
+        )
+
+
+def _retheme_item_icons(widget: Any) -> int:
+    """Re-tint the Lucide glyphs on a tree/list/table's model items."""
+    from ui.icons import ITEM_ICON_ROLE, set_item_icon
+
+    items: list[Any] = []
+    try:
+        _collect_item_icons(widget, items)
+    except Exception:
+        # A dead or half-built model must not abort the whole switch.
+        return 0
+    run = 0
+    for item in items:
+        if item is None:
+            continue
+        spec = item.data(ITEM_ICON_ROLE)
+        if not (isinstance(spec, tuple) and len(spec) == 3):
+            continue
+        try:
+            set_item_icon(item, *spec)
+            run += 1
+        except Exception:
+            continue
+    return run
+
+
 def _retheme_all(app: Any) -> int:
     """Repaint every widget carrying a retheme spec. Returns how many ran.
 
@@ -367,10 +417,18 @@ def _retheme_all(app: Any) -> int:
     switch after that window is shown.
     """
     run = 0
+    roots: list[Any] = []
     try:
-        roots = [w for w in app.topLevelWidgets() if w.isVisible()]
+        top_levels = app.topLevelWidgets()
     except Exception:
         return run
+    for top in top_levels:
+        # One dead leaked window must not abort the whole switch.
+        try:
+            if top.isVisible():
+                roots.append(top)
+        except Exception:
+            continue
     # One paint pass for the whole switch: rebuilding a sheet re-polishes
     # the widget, and letting each one repaint in turn is a visible freeze
     # on a window with a real dataset (dv-314).
@@ -382,7 +440,12 @@ def _retheme_all(app: Any) -> int:
     try:
         for root in roots:
             for widget in [root, *root.findChildren(QWidget)]:
-                run += _retheme_widget(widget)
+                try:
+                    run += _retheme_widget(widget)
+                    run += _retheme_item_icons(widget)
+                except Exception:
+                    # One dead widget must not abort the whole switch.
+                    continue
     finally:
         for root in roots:
             try:

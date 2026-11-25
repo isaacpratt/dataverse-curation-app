@@ -713,5 +713,73 @@ def test_icons_retint_on_a_live_switch(qapp):
         theme.apply_theme(qapp, "light", retheme=True)
 
 
+def test_item_icons_retint_on_a_live_switch(qapp):
+    """A model item's glyph is re-tinted too (dv-314).
+
+    Items are not widgets, so the widget walk cannot reach them; the spec
+    rides on the item and ``_retheme_item_icons`` re-applies it.
+    """
+    from PySide6.QtWidgets import QListWidget, QListWidgetItem, QWidget
+
+    from ui import theme
+    from ui import widgets as _widgets  # installs the retheme hook
+    from ui.icons import set_item_icon
+
+    assert _widgets is not None
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light", retheme=True)
+    host = QWidget()
+    host.resize(200, 200)
+    host.show()
+    listing = QListWidget(host)
+    listing.show()
+    item = QListWidgetItem("probe")
+    set_item_icon(item, "info")
+    listing.addItem(item)
+    qapp.processEvents()
+    try:
+        light = item.icon().cacheKey()
+        theme.set_active_theme("dark")
+        theme.apply_theme(qapp, "dark", retheme=True)
+        assert item.icon().cacheKey() != light, "the item glyph kept its light tint"
+    finally:
+        host.close()
+        host.deleteLater()
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+
+
+def test_ring_paints_from_the_active_theme(qapp):
+    """The ring's painted arc and mark use roles, not frozen constants."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPixmap
+
+    from ui import theme
+    from ui.ring import RingProgress
+
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light", retheme=True)
+    ring = RingProgress()
+    ring.resize(40, 40)
+
+    def render() -> object:
+        pixmap = QPixmap(40, 40)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        ring.render(pixmap)
+        return pixmap.toImage()
+
+    light = render()
+    try:
+        theme.set_active_theme("dark")
+        theme.apply_theme(qapp, "dark", retheme=True)
+        dark = render()
+        assert light != dark, "the ring kept the light arc"
+    finally:
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+        ring.close()
+        ring.deleteLater()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

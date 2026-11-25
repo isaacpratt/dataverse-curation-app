@@ -56,7 +56,7 @@ from ui.dashboard import DashboardView
 from ui.dialogs import show_warning
 from ui.i18n import t
 from ui.theme import (
-    TEXT_ON_ACCENT,
+    role,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -351,9 +351,14 @@ class _CaptionButton(QPushButton):
     def _apply_icon(self) -> None:
         try:
             glyph = self.style().standardIcon(_CAPTION_GLYPHS[self._kind])
-            if self._kind == "close" and (self._hovered or self.underMouse() or self.isDown()):
-                glyph = _tinted_icon(glyph, TEXT_ON_ACCENT, 14)
-            self.setIcon(glyph)
+            # Tint the native glyph for the active theme: a frameless
+            # window's caption control otherwise keeps the platform's dark
+            # ink on a dark sheet (dv-314).
+            hovering = self._kind == "close" and (
+                self._hovered or self.underMouse() or self.isDown()
+            )
+            ink = role("TEXT_ON_ACCENT") if hovering else role("TEXT_PRIMARY")
+            self.setIcon(_tinted_icon(glyph, ink, 14))
         except Exception:
             pass
 

@@ -14,7 +14,7 @@ from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QLabel
 
-from ui.theme import asset_path, role, transparent_qss
+from ui.theme import asset_path, colour, role, transparent_qss
 
 
 def _ink() -> str:
@@ -162,6 +162,22 @@ def role_icon(role: str, color: str | None = None, size: int = 16) -> QIcon:
     different glyphs.
     """
     return icon(ICON_ROLES.get(str(role), str(role)), color=color, size=size)
+
+
+#: Model-item data role carrying an item's re-tint spec (dv-314).
+ITEM_ICON_ROLE = 32001
+
+
+def set_item_icon(item: object, name: str, color: str | None = None, size: int = 16) -> None:
+    """Set a Lucide glyph on a model item and remember how to re-tint it.
+
+    ``QTreeWidgetItem`` / ``QListWidgetItem`` / ``QTableWidgetItem`` are
+    model entries, not widgets, so the widget walk cannot reach them. The
+    spec rides on the item; ``ui.widgets._retheme_item_icons`` re-applies it
+    on a live switch (dv-314).
+    """
+    item.setIcon(role_icon(name, color=colour(color) if color else None, size=size))  # type: ignore[attr-defined]
+    item.setData(ITEM_ICON_ROLE, (name, color, size))  # type: ignore[attr-defined]
 
 
 def icon_label(name: str, size: int = 16, color: str | None = None) -> QLabel:
