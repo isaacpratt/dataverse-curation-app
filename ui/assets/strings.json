@@ -1250,6 +1250,10 @@
       "subtitle": "One size per role: the theme owns the type scale, a view names the role.",
       "sample": "The quick brown fox jumps over the lazy dog"
     },
+    "detail_controls": {
+      "title": "Detail controls",
+      "subtitle": "Fine-print labels, cell hosts and row actions from the shared kit."
+    },
     "buttons": {
       "title": "Buttons",
       "subtitle": "One system: the app-level rules and the scoped copies come from one generator.",

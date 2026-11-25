@@ -88,7 +88,7 @@ testpaths = ["engine/tests", "curation/tests", "tools/tests", "ui/tests"]
 # Serial by default: a local run is easier to read and to debug. CI passes
 # `-n auto` (pytest-xdist) for the wall-clock win; the suite is
 # order-independent, verified by repeated parallel runs (dv-hcg.41).
-addopts = "-q --strict-markers -m 'not samples'"
+addopts = "-q --strict-markers -m 'not samples and not goldens'"
 # The default run must mean the same thing on every machine. Parity tests that
 # read the CUR_Res_CurationTools sample data (a sibling clone, never vendored)
 # carry the `samples` marker and are deselected here; `uv run poe samples`
@@ -97,6 +97,7 @@ addopts = "-q --strict-markers -m 'not samples'"
 # to the repository.
 markers = [
     "samples: parity tests that read the external CUR_Res_CurationTools sample data (opt in: uv run poe samples)",
+    "goldens: pixel-diff screenshots; deselected by default, opt in with `pytest -m goldens` (dv-ufu.1)",
 ]
 qt_api = "pyside6"
 # A Qt warning is a defect until someone classifies it (dv-bjj). pytest-qt
@@ -260,6 +261,16 @@ type = "simple"
   [tool.poe.tasks.probes]
   help = "UI probes (offscreen Qt safe)"
   cmd = "python tools/probes/run_all.py"
+
+  # Pixel goldens need the native Windows platform and a human blessing step;
+  # they are opt-in so an offscreen CI run cannot fail on substitute glyphs.
+  [tool.poe.tasks.goldens]
+  help = "Diff painted UI against blessed baselines (QT_QPA_PLATFORM=windows)"
+  cmd = "pytest -m goldens"
+
+  [tool.poe.tasks.golden-update]
+  help = "Human-only: bless golden candidates and pin the render environment"
+  cmd = "pytest -m goldens --update-golden"
 
   [tool.poe.tasks.check]
   help = "Lint + format-check + typecheck + contracts + tests"
@@ -488,4 +499,11 @@ ignore_imports = [
     "tools.probes.probe_review_params -> ui.widgets",
     "tools.probes.probe_check_sections -> ui.dataset",
     "tools.probes.probe_dataset_header -> ui.dataset",
+    # The wireframe generator is the same kind of harness: it boots the app
+    # offscreen and measures the real tree to publish docs/assets/ui-wireframe.svg
+    # and docs/reference/ui-wireframe.md (dv-6n6).
+    "tools.docs.gen_ui_wireframe -> ui.dataset",
+    "tools.docs.gen_ui_wireframe -> ui.gallery",
+    "tools.docs.gen_ui_wireframe -> ui.main_window",
+    "tools.docs.gen_ui_wireframe -> ui.theme",
 ]

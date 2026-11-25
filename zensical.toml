@@ -48,6 +48,7 @@ nav = [
       { "CLI" = "reference/cli.md" },
       { "Entry checks" = "reference/entry-checks.md" },
       { "Project layout" = "reference/project-layout.md" },
+      { "UI wireframe" = "reference/ui-wireframe.md" },
       { "Glossary" = "reference/glossary.md" },
   ]},
   { "Explanation" = [

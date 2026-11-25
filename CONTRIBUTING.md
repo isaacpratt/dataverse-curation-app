@@ -63,6 +63,7 @@ CI runs the same gate on every pull request. A docs-only change still needs the 
 1. Write a short imperative commit subject, for example "Add scope declaration to new check".
 2. Keep unrelated changes out of the same commit. Do not stage `config.json`, build output, or generated caches.
 3. Reference the bead or issue in the pull request description and state what you ran to verify the change.
+4. For a component-kit change, land the builder, its gallery exhibit, its golden and its test in the same pull request — `ui/tests/test_gallery_coverage.py` fails on an exported builder with no exhibit, and the gallery golden fails on a paint change. A probe lives at most two pull requests before it becomes a pytest test or is deleted.
 4. Expect CI to run pre-commit, lint, type checks, contracts, the test suite with coverage, the headless smoke, UI probes, a docs build, and an OSV dependency audit. Resolve failures before requesting review.
 
 ## Issue tracking with bd

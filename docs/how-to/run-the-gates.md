@@ -76,6 +76,8 @@ Run the local checks that CI enforces before you open a pull request. [The proje
 | `poe typecheck` | `mypy` | Strict type check |
 | `poe contracts` | `lint-imports` | Dependency direction |
 | `poe probes` | `python tools/probes/run_all.py` | Offscreen UI probes |
+| `poe goldens` | `pytest -m goldens` | Pixel-diff painted UI against blessed baselines (opt-in, native Windows platform) |
+| `poe golden-update` | `pytest -m goldens --update-golden` | Human-only blessing of candidate baselines and the render-environment pin |
 | `poe test` | `pytest -q` | Test suite |
 | `poe docs-check` | `docs-lint`, `docs-links`, `docs` | Full docs gate |
 | `poe docs-lint` | `pymarkdown --strict-config --config .pymarkdown.json scan -r docs CONTRIBUTING.md README.md` | Markdown lint |

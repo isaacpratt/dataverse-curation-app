@@ -42,6 +42,21 @@ if not os.environ.get("QT_QPA_FONTDIR"):
         os.environ["QT_QPA_FONTDIR"] = _font_dir
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--update-golden",
+        action="store_true",
+        default=False,
+        help="Bless the current golden candidates (dv-ufu.1, human only)",
+    )
+    parser.addoption(
+        "--propose-golden",
+        action="store_true",
+        default=False,
+        help="Render golden candidates without judging them",
+    )
+
+
 @pytest.fixture(scope="session")
 def qapp():
     from PySide6.QtWidgets import QApplication

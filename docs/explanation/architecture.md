@@ -5,7 +5,7 @@ audience: developer          # curator | developer | contributor | all
 ---
 # Architecture
 
-Dataverse Docent is a single PySide6 desktop process: the Dataverse API feeds approved downloads, the downloads feed a Python check engine, and the engine's report plus metadata completeness feed the GUI and a live request log. This page explains where the boundaries sit, what runs where, and the trade-offs behind those choices. It is background for changing the app, not a sequence of tasks.
+Dataverse Docent is a single PySide6 desktop process: the Dataverse API feeds approved downloads, the downloads feed a Python check engine, and the engine's report plus metadata completeness feed the GUI and a live request log. This page explains where the boundaries sit, what runs where, and the trade-offs behind those choices. It is background for changing the app, not a sequence of tasks. For a spatial view of the view layer, the [UI wireframe](../reference/ui-wireframe.md) maps painted boxes to widget classes, `objectName` values, layouts and bounds.
 
 ## One process, strict boundaries
 
