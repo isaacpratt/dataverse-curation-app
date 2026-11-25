@@ -8,7 +8,7 @@ the tests never call (detail loaders fire async and are never awaited).
 """
 
 import os
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -40,6 +40,12 @@ if not os.environ.get("QT_QPA_FONTDIR"):
     _font_dir = _platform_font_dir()
     if _font_dir:
         os.environ["QT_QPA_FONTDIR"] = _font_dir
+
+
+#: The session MainWindow, published by the ``win`` fixture so the leak
+#: guard can spare it without requesting that fixture (which would create
+#: a scope mismatch with modules that override ``qapp``).
+_SESSION_WIN: Any = None
 
 
 @pytest.fixture(scope="session")
@@ -88,12 +94,12 @@ def _no_leaked_windows(qapp):
     if app is None:
         yield
         return
-
-    # Only windows that appear during the test are candidates: the session
-    # ``win`` fixture is shown before the first test and must stay shown.
-    before = set(app.topLevelWidgets())
     yield
-    for widget in set(app.topLevelWidgets()) - before:
+    try:
+        leaked = [w for w in app.topLevelWidgets() if w is not _SESSION_WIN]
+    except Exception:
+        return
+    for widget in leaked:
         try:
             widget.hide()
             widget.close()
@@ -124,6 +130,8 @@ def win(qapp):
     except Exception:
         cfg = Config()
     window = MainWindow(cfg)
+    global _SESSION_WIN
+    _SESSION_WIN = window
     try:
         # A detail view constructed without cached metadata fires its load
         # on a 100 ms timer as soon as the event loop runs. Tests never

@@ -2243,6 +2243,9 @@ def retheme_widgets(app: "QApplication") -> int:
 #: The palette-based application sheet is installed once; a switch only
 #: swaps the palette, which Qt applies without re-polishing every widget.
 _APP_QSS_INSTALLED = False
+#: Avoid repeated setPalette calls: Qt re-policies on every one, and the
+#: suite applies the same theme many times per worker.
+_APPLIED_PALETTE_THEME: str | None = None
 
 
 def apply_theme(app: "QApplication", theme: str | None = None, *, retheme: bool = False) -> None:
@@ -2274,11 +2277,14 @@ def apply_theme(app: "QApplication", theme: str | None = None, *, retheme: bool 
     # Switching themes replaces the palette (~0s) instead of the stylesheet
     # (~1ms per live widget). Role-specific faces keep their exact colours
     # in scoped sheets, re-tinted below.
-    global _APP_QSS_INSTALLED
+    global _APP_QSS_INSTALLED, _APPLIED_PALETTE_THEME
     if not _APP_QSS_INSTALLED:
         app.setStyleSheet(palette_qss())
         _APP_QSS_INSTALLED = True
-    app.setPalette(palette_for(theme or ACTIVE_THEME))
+    name = theme or ACTIVE_THEME
+    if name != _APPLIED_PALETTE_THEME:
+        app.setPalette(palette_for(name))
+        _APPLIED_PALETTE_THEME = name
     _install_interaction_tracking(app)
     if retheme:
         retheme_widgets(app)
