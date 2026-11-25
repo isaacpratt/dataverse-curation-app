@@ -120,7 +120,8 @@ def test_rail_links_are_left_packed_and_stable(qapp):
     # A trailing stretch packs the links on the left instead of spreading them.
     assert lay.count() >= 4
     last = lay.itemAt(lay.count() - 1)
-    assert last is not None and last.spacerItem() is not None, "the rail ends with a stretch"
+    assert last is not None, "the rail has a final item"
+    assert last.spacerItem() is not None, "the rail ends with a stretch"
 
     sizes_before = {k: b.sizeHint() for k, b in rail.buttons.items()}
     positions_before = {k: b.pos() for k, b in rail.buttons.items()}

@@ -132,7 +132,7 @@ def test_no_raw_font_sizes_anywhere():
 
 
 def test_computed_font_sizes_are_the_ring_only():
-    """setPixelSize belongs to the theme; the ring is the one exception.
+    """SetPixelSize belongs to the theme; the ring is the one exception.
 
     The ring's percentage has to fit a circle whose size is decided at
     runtime, so it computes a size instead of taking a token. Pinning the
@@ -149,9 +149,7 @@ def test_computed_font_sizes_are_the_ring_only():
             if "setPixelSize(" in line:
                 rel = path.relative_to(_UI_DIR).as_posix()
                 found.setdefault(rel, []).append((number, line.strip()))
-    assert {name: len(calls) for name, calls in found.items()} == {
-        name: 1 for name in expected
-    }, found
+    assert {name: len(calls) for name, calls in found.items()} == dict.fromkeys(expected, 1), found
     for name, call in expected.items():
         assert found[name][0][1] == call, (name, found[name])
 

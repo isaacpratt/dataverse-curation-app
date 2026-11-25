@@ -207,7 +207,7 @@ def test_progress_and_verdict_share_one_element(det):
         }
     ]
     det._refresh_verdict()
-    chips = [w for w in widget.findChildren(QPushButton)]
+    chips = list(widget.findChildren(QPushButton))
     assert chips, "the finished run shows the required/recommended actions"
     assert widget._bar.isHidden(), "the bar folds away once the run is over"
     det._completeness_full = []

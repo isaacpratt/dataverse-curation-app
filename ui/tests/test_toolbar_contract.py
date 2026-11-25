@@ -126,7 +126,7 @@ def test_queue_refine_toggle_is_gone(win):
 
 
 def _layout_holds_deep(layout, widget) -> bool:
-    """True when the widget is in this layout or any nested child layout."""
+    """Return True when the widget is in this layout or a nested child layout."""
     for i in range(layout.count()):
         item = layout.itemAt(i)
         if item is None:

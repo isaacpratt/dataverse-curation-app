@@ -302,10 +302,6 @@ _STRUCTURAL_PROSE: dict[str, dict[str, str]] = {
         "dashboard: crawl started": "startup-probe label (opt-in temp file)",
         "JetBrains Mono": "font family name for the mono face",
     },
-    "ui/theme.py": {
-        "warning ink on warning fill": "contrast-contract pair label (not shown in the UI)",
-        "warning mark on warning fill": "contrast-contract pair label (not shown in the UI)",
-    },
     "ui/dataset/header_section.py": {
         "<a href='": "rich-text link markup",
         "; text-decoration:none;'>": "rich-text link markup",

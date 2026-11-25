@@ -23,6 +23,8 @@ def test_fractional_scaling_is_not_rounded_before_the_app_is_created():
     assert "_QGuiApplication.instance() is None" in setup
     assert "setHighDpiScaleFactorRoundingPolicy" in setup
     assert "HighDpiScaleFactorRoundingPolicy.PassThrough" in setup
-    assert setup.index("instance() is None") < setup.index(
-        "setHighDpiScaleFactorRoundingPolicy"
-    ) < app_at
+    assert (
+        setup.index("instance() is None")
+        < setup.index("setHighDpiScaleFactorRoundingPolicy")
+        < app_at
+    )

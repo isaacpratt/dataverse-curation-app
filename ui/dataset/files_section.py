@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QPushButton,
     QVBoxLayout,
-    QWidget,
 )
 
 from ui import dialogs
@@ -25,10 +24,6 @@ if TYPE_CHECKING:
     from ui.preview import PreviewCard
 
 from ui.status_text import status_text
-from ui.theme import (
-    ACTIVE_THEME,
-    transparent_surface_qss,
-)
 from ui.widgets import (
     AppTree,
     add_info_tip,

@@ -80,7 +80,9 @@ def test_mono_is_opt_in_and_only_the_raw_metadata_view_uses_it(qapp):
         view.show()
     qapp.processEvents()
     assert QFontInfo(views[0].font()).family() == "Inter", QFontInfo(views[0].font()).family()
-    assert QFontInfo(views[1].font()).family() == "JetBrains Mono", QFontInfo(views[1].font()).family()
+    assert QFontInfo(views[1].font()).family() == "JetBrains Mono", QFontInfo(
+        views[1].font()
+    ).family()
     for view in views:
         view.close()
         view.deleteLater()

@@ -172,9 +172,7 @@ def test_unknown_file_types_row_wears_the_warning_face(qapp, tmp_path):
         assert "Error" not in badges, badges
         # The engine result itself is a warning.
         result = next(
-            c
-            for c in view._report.dataset_checks
-            if c.check_id == "inventory.unchecked_types"
+            c for c in view._report.dataset_checks if c.check_id == "inventory.unchecked_types"
         )
         assert classify(result) == "failed-warning"
     finally:

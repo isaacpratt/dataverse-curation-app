@@ -43,7 +43,12 @@ def _metadata() -> dict[str, Any]:
                             "typeName": "datasetContact",
                             "value": [{"datasetContactName": fv("Ada Lovelace")}],
                         },
-                        {"typeName": "dsDescription", "value": [{"dsDescriptionValue": fv("A study of persisted review state")}]},
+                        {
+                            "typeName": "dsDescription",
+                            "value": [
+                                {"dsDescriptionValue": fv("A study of persisted review state")}
+                            ],
+                        },
                     ]
                 }
             }
@@ -116,7 +121,7 @@ def _check_widget(app: Any, report: Report, widget: Any, tag: str) -> None:
 
 
 def _prove_the_detector(app: Any, report: Report) -> None:
-    """A tiny label with long text must be flagged, or the gate is theatre."""
+    """Prove a tiny label with long text is flagged, or the gate is theatre."""
     from PySide6.QtWidgets import QLabel, QWidget
 
     host = QWidget()

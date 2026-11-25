@@ -21,7 +21,6 @@ from ui.dataset.state import DetailState
 from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,
-    ACTIVE_THEME,
     BORDER_SUBTLE,
     STATE_ERROR_GRAPHIC,
     STATE_WARNING_GRAPHIC,

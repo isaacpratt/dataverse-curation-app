@@ -27,9 +27,6 @@ from ui.theme import (
     BORDER_SUBTLE,
     STATE_ERROR_GRAPHIC,
     STATE_WARNING_GRAPHIC,
-    SURFACE_ALT,
-    SURFACE_SUBTLE,
-    SURFACE_TINT,
     TEXT_MUTED,
     transparent_surface_qss,
 )
@@ -225,9 +222,7 @@ class ChecksSection(DetailState):
                 if is_error
                 else ("octagon-alert", STATE_WARNING_GRAPHIC)
             )
-            badge_text = badge or t(
-                "status.badges.error" if is_error else "status.badges.warning"
-            )
+            badge_text = badge or t("status.badges.error" if is_error else "status.badges.warning")
             badge_bg = "STATE_ERROR_BG" if is_error else "STATE_WARNING_SURFACE"
             badge_fg = "STATE_ERROR_TEXT" if is_error else "STATE_WARNING_INK"
         elif passed and level == "warning" and "Missing" in (badge or desc):

@@ -995,7 +995,13 @@ def test_get_file_inventory_falls_back_on_auth(monkeypatch: pytest.MonkeyPatch) 
     """A refused draft falls through to the published version (2026-11-24)."""
     calls: list[tuple[str, bool]] = []
 
-    def fake_fetch(self: Any, identifier: str, version: str = "draft", fall_back_on_auth: bool = False, order: Any = None):
+    def fake_fetch(
+        self: Any,
+        identifier: str,
+        version: str = "draft",
+        fall_back_on_auth: bool = False,
+        order: Any = None,
+    ):
         calls.append((version, fall_back_on_auth))
         return {"files": []}, ":latest-published", [":draft=403"]
 

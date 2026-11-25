@@ -88,7 +88,7 @@ def test_combo_popup_keeps_rounded_corners_and_a_gap(qapp):
     from ui.theme import RADIUS_LG, global_qss
     from ui.widgets import make_combo
 
-    combo = make_combo(["Alpha", "Beta"])
+    make_combo(["Alpha", "Beta"])
     sheet = global_qss()
     assert "QComboBox:on" not in sheet, "the field must not square off while open"
     assert f"border-top-left-radius: {RADIUS_LG}" in sheet

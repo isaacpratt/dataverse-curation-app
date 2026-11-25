@@ -66,9 +66,7 @@ def test_sidebar_order_is_preview_versions_log(qapp, tmp_path):
     view = _view(qapp, tmp_path)
     try:
         # The sidebar is one tabbed panel: Preview, Version log, Dataset log.
-        labels = [
-            view._side_tabs.tabText(i) for i in range(view._side_tabs.count())
-        ]
+        labels = [view._side_tabs.tabText(i) for i in range(view._side_tabs.count())]
         assert labels == ["Preview", "Version log", "Dataset log"], labels
         assert view._side_tabs.indexOf(view._preview_card) == 0
         assert view._side_tabs.indexOf(view._version_card) == 1
@@ -158,7 +156,9 @@ def test_disposition_change_writes_no_dataset_log_entry(qapp, tmp_path, monkeypa
     view = _view(qapp, tmp_path)
     try:
         logged: list[tuple[str, str]] = []
-        monkeypatch.setattr(view, "_log_action", lambda *a, **k: logged.append((a[0], a[1] if len(a) > 1 else "")))
+        monkeypatch.setattr(
+            view, "_log_action", lambda *a, **k: logged.append((a[0], a[1] if len(a) > 1 else ""))
+        )
         monkeypatch.setattr(view, "_refresh_finding_summary", lambda: None)
         monkeypatch.setattr(view, "_refresh_workflow", lambda: None)
         monkeypatch.setattr(view, "_state", lambda: _fake_state([]))

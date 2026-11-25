@@ -163,7 +163,7 @@ def test_each_section_has_its_own_summary(qapp, tmp_path):
     try:
         report = view._report
         assert report is not None
-        dataset_summary = summarize(list(report.dataset_checks))
+        summarize(list(report.dataset_checks))
         file_summary = summarize([c for f in report.files for c in f.checks])
         assert view._auto_summary.text()
         assert view._file_checks_summary.text()
@@ -171,9 +171,7 @@ def test_each_section_has_its_own_summary(qapp, tmp_path):
         # summary covers every automated check), as N/M.
         auto_text = view._auto_summary.text()
         if "will run" not in auto_text and "not run" not in auto_text:
-            all_results = list(report.dataset_checks) + [
-                c for f in report.files for c in f.checks
-            ]
+            all_results = list(report.dataset_checks) + [c for f in report.files for c in f.checks]
             combined = summarize(all_results)
             total = (
                 combined["passed"]

@@ -760,7 +760,13 @@ CONTRAST_PAIRS_DARK: tuple[tuple[str, str, str, str, float], ...] = (
     ("error text on a card", "TEXT_DANGER", "SURFACE_CARD", "text", 4.5),
     ("error text on the error surface", "STATE_ERROR_TEXT", "STATE_ERROR_SURFACE", "text", 4.5),
     ("warning ink on warning fill", "STATE_WARNING_INK", "STATE_WARNING_SURFACE", "text", 4.5),
-    ("warning mark on warning fill", "STATE_WARNING_GRAPHIC", "STATE_WARNING_SURFACE", "graphic", 3.0),
+    (
+        "warning mark on warning fill",
+        "STATE_WARNING_GRAPHIC",
+        "STATE_WARNING_SURFACE",
+        "graphic",
+        3.0,
+    ),
     ("success text on a card", "TEXT_SUCCESS", "SURFACE_CARD", "text", 4.5),
     ("warning text on a card", "TEXT_WARNING", "SURFACE_CARD", "text", 4.5),
     ("brand text on a card", "ACCENT_PRIMARY", "SURFACE_CARD", "text", 4.5),
@@ -2117,7 +2123,7 @@ def apply_theme(app: "QApplication", theme: str | None = None, *, retheme: bool 
     """
     from PySide6.QtGui import QFont, QFontDatabase
 
-    fonts = register_fonts()
+    register_fonts()
     # A QFont keeps its requested name even when the family is absent, so
     # `QFont("Inter").family()` cannot detect a fallback. Ask the database
     # instead; with the bundle loaded this branch always takes Inter.
