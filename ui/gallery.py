@@ -63,9 +63,15 @@ from ui.widgets import (
     make_body_label,
     make_caption_label,
     make_card,
+    make_card_title,
+    make_cell_control,
     make_checkbox,
     make_combo,
+    make_disposition_combo,
+    make_elided_label,
     make_field_label,
+    make_icon_button,
+    make_icon_text_button,
     make_line_edit,
     make_list,
     make_metric_value,
@@ -74,9 +80,13 @@ from ui.widgets import (
     make_page_heading,
     make_plain_text_view,
     make_progress_bar,
+    make_refresh_button,
+    make_reset_columns_button,
     make_search_field,
     make_section_heading,
+    make_small_body_label,
     make_split_chip,
+    make_text_label,
     make_value_list,
 )
 
@@ -507,6 +517,25 @@ def _table_item(text: str) -> QTableWidgetItem:
     return QTableWidgetItem(text)
 
 
+def _detail_controls_section() -> QWidget:
+    """Exhibit the fine-print builders, cell hosts and row actions (dv-ufu.3)."""
+    host, lay = _section(t("gallery.detail_controls.title"), t("gallery.detail_controls.subtitle"))
+    lay.addWidget(make_card_title(t("gallery.heading")))
+    lay.addWidget(make_small_body_label(t("gallery.subheading")))
+    lay.addWidget(make_text_label(t("gallery.subheading")))
+    lay.addWidget(make_elided_label(t("gallery.subheading")))
+    lay.addWidget(make_cell_control(make_line_edit(t("gallery.subheading"))))
+    lay.addWidget(make_disposition_combo())
+    row = _row(
+        make_icon_button("rotate-ccw", t("common.refresh")),
+        make_icon_text_button(t("common.save"), "check"),
+        make_refresh_button(t("common.refresh")),
+        make_reset_columns_button(t("dashboard.queue.columns")),
+    )
+    lay.addLayout(row)
+    return host
+
+
 def _tree_item(label: str) -> QTreeWidgetItem:
     """Build a tree item (the tree owns the item, the gallery owns the text)."""
     return QTreeWidgetItem([label])
@@ -663,6 +692,7 @@ class GalleryWindow(QWidget):
             _badge_section(),
             _input_section(),
             _container_section(),
+            _detail_controls_section(),
             _icons_section(),
             _data_section(),
         )

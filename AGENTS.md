@@ -136,6 +136,7 @@ Gate before handoff; run from the repository root when code (not docs-only) chan
 - `uv run poe typecheck` — must report `Success: no issues found`; the scope is `[tool.mypy] files` (`engine/`, `curation/`, `tools/tests`, `ui/`, `main.py`), so run bare `uv run mypy`. Every application module — `ui.*` included — is checked under full `--strict`; only the four test packages relax three "you must annotate" rules (`disallow_untyped_defs`, `disallow_incomplete_defs`, `disallow_untyped_decorators`), while `check_untyped_defs` and every shape check stay on (ADR 0008)
 - `uv run poe contracts` — import-linter contracts must stay green: `engine/` and `curation/` may not import `ui/` or `PySide6`, and the operational helpers in `tools/` may not import `ui/` (the UI probes are the documented exception)
 - `python tools/probes/run_all.py` — must end with `all N probes passed`; mandatory for UI/theme changes, and cheap enough to always run
+- `uv run poe goldens` — opt-in pixel-diff gate for painted UI (see `ui/tests/golden/README.md`). Agents propose candidates with `--propose-golden`; only a human runs `uv run poe golden-update` to bless baselines. Goldens need `QT_QPA_PLATFORM=windows` and are deselected from the default suite
 - headless box? set `QT_QPA_PLATFORM=offscreen` first, or the probes fail for the wrong reason
 - probes run against a throwaway temp workspace (see `tools/probes/README.md`) — never against the configured instance or the real `workspace/table_layout.json`
 - docs-only changes need neither
