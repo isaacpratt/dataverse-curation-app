@@ -111,9 +111,19 @@ def test_queue_paints_the_access_cell(win):
     dash._state_filter.setCurrentIndex(0)
     dash._apply_filter()
     col = dash._col_index.get("access")
+    pid_col = dash._col_index.get("persistent_id")
     assert col is not None
-    first = dash._table.item(0, col)
-    second = dash._table.item(1, col)
+    assert pid_col is not None
+    # A curator's saved queue layout may sort by any column, so locate the
+    # rows by id instead of assuming insertion order.
+    rows = {
+        dash._table.item(row, pid_col).text(): row
+        for row in range(dash._table.rowCount())
+        if dash._table.item(row, pid_col) is not None
+    }
+    assert set(rows) == {"p1", "p2"}, f"unexpected queue rows: {sorted(rows)}"
+    first = dash._table.item(rows["p1"], col)
+    second = dash._table.item(rows["p2"], col)
     assert first.text() == t("dashboard.access.draft_not_readable")
     assert "not permitted" in first.toolTip()
     assert second.text() == ""
