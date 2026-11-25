@@ -65,6 +65,9 @@ def test_each_text_style_resolves_to_its_face(qapp, token, family):
     assert resolved == family, f"{token}: {resolved!r}, expected {family!r}"
     label.close()
     label.deleteLater()
+    # Deferred deletion must complete before the next test's window guard
+    # walks topLevelWidgets(); a wrapper left behind can crash the worker.
+    qapp.processEvents()
 
 
 def test_mono_is_opt_in_and_only_the_raw_metadata_view_uses_it(qapp):
@@ -86,6 +89,7 @@ def test_mono_is_opt_in_and_only_the_raw_metadata_view_uses_it(qapp):
     for view in views:
         view.close()
         view.deleteLater()
+    qapp.processEvents()
 
 
 def test_no_raw_mono_font_outside_the_theme():
