@@ -23,6 +23,7 @@ This report records the intended quadrant and TGDP template of every published p
 | `reference/cli.md` | reference | Reference | Command-line arguments and exit codes. |
 | `reference/entry-checks.md` | reference | Reference | Entry-correctness check catalogue. |
 | `reference/project-layout.md` | reference | Reference | Repository layout and suite locations. |
+| `reference/ui-wireframe.md` | reference | Reference | Numbered widget map with a Qt class, objectName, layout and bounds legend. |
 | `reference/glossary.md` | reference | Glossary | Alphabetical term definitions. |
 | `explanation/architecture.md` | explanation | Concept | Components, threading, storage, layering. |
 | `explanation/discovery-flow.md` | explanation | Concept | Why discovery and enrichment work as they do. |

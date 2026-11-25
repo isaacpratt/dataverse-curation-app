@@ -499,4 +499,11 @@ ignore_imports = [
     "tools.probes.probe_review_params -> ui.widgets",
     "tools.probes.probe_check_sections -> ui.dataset",
     "tools.probes.probe_dataset_header -> ui.dataset",
+    # The wireframe generator is the same kind of harness: it boots the app
+    # offscreen and measures the real tree to publish docs/assets/ui-wireframe.svg
+    # and docs/reference/ui-wireframe.md (dv-6n6).
+    "tools.docs.gen_ui_wireframe -> ui.dataset",
+    "tools.docs.gen_ui_wireframe -> ui.gallery",
+    "tools.docs.gen_ui_wireframe -> ui.main_window",
+    "tools.docs.gen_ui_wireframe -> ui.theme",
 ]

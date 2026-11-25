@@ -5,7 +5,7 @@ audience: contributor        # curator | developer | contributor | all
 ---
 # Project layout reference
 
-Facts about the repository's structure, tasks and test roots. Task recipes live in [Run the gates](../how-to/run-the-gates.md) and [Package and release](../how-to/package-and-release.md); rationale lives in [Architecture](../explanation/architecture.md) and [UI conventions](../explanation/ui-conventions.md).
+Facts about the repository's structure, tasks and test roots. Task recipes live in [Run the gates](../how-to/run-the-gates.md) and [Package and release](../how-to/package-and-release.md); rationale lives in [Architecture](../explanation/architecture.md) and [UI conventions](../explanation/ui-conventions.md). To map a painted widget back to its class, `objectName`, layout and bounds, use the [UI wireframe](ui-wireframe.md).
 
 ## Repository layout
 
