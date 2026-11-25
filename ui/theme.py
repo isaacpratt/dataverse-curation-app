@@ -11,6 +11,7 @@ theme - so switching theme is a table swap, not a re-skin.
 """
 
 import os
+import re
 import subprocess
 import sys
 from collections.abc import Callable, Mapping
@@ -493,6 +494,59 @@ PALETTE_ROLE_MAP: dict[str, str] = {
     "TEXT_SUCCESS": "Link",
     "TEXT_WARNING": "LinkVisited",
 }
+
+
+#: App-sheet-only fallbacks for roles with no distinct QPalette slot.
+#: Duplicates are fine here: scoped sheets keep the exact role colour on
+#: the widgets that own those faces, so the app sheet only needs a
+#: theme-correct approximation.
+PALETTE_QSS_FALLBACK: dict[str, str] = {
+    "ACCENT_FOCUS_TINT": "ToolTipBase",
+    "ACCENT_FOCUS_RING": "Shadow",
+    "ACCENT_TERTIARY": "LinkVisited",
+    "BADGE_BLUE_BORDER": "Dark",
+    "BADGE_BLUE_TEXT": "Text",
+    "STATE_ERROR_BG": "AlternateBase",
+    "STATE_ERROR_BORDER": "Dark",
+    "STATE_ERROR_GRAPHIC": "LinkVisited",
+    "STATE_ERROR_SURFACE": "Base",
+    "STATE_ERROR_TEXT": "BrightText",
+}
+
+
+def _qt_qss_token(qt_role: str) -> str:
+    """Return Qt's hyphenated stylesheet name for a QPalette role."""
+    return re.sub(r"(?<!^)(?=[A-Z])", "-", qt_role).lower()
+
+
+def palette_qss() -> str:
+    """Return one theme-independent application stylesheet.
+
+    Colours come from ``palette(<role>)``, so switching the app palette
+    re-colours the app without calling ``setStyleSheet`` again. That call
+    costs ~1ms per live widget on a populated window; a palette swap is
+    effectively free. Exact, role-specific faces stay in scoped sheets
+    and are re-tinted by the retheme hook.
+    """
+    original: Callable[[str, str | None], str] = cast(
+        Callable[[str, str | None], str], globals()["role"]
+    )
+    mapping = {**PALETTE_QSS_FALLBACK, **PALETTE_ROLE_MAP}
+
+    def mapped(name: str, theme: str | None = None) -> str:
+        qt_role = mapping.get(name)
+        if qt_role is None:
+            return original(name, theme)
+        return f"palette({_qt_qss_token(qt_role)})"
+
+    globals()["role"] = mapped
+    try:
+        sheet = global_qss("light")
+    finally:
+        globals()["role"] = original
+    # Qt accepts palette() in colour values, not in the `background`
+    # shorthand.
+    return re.sub(r"background: palette\(([^)]+)\)", r"background-color: palette(\1)", sheet)
 
 
 def palette_for(theme: str | None = None) -> Any:
@@ -2185,6 +2239,11 @@ def retheme_widgets(app: "QApplication") -> int:
         return 0
 
 
+#: The palette-based application sheet is installed once; a switch only
+#: swaps the palette, which Qt applies without re-polishing every widget.
+_APP_QSS_INSTALLED = False
+
+
 def apply_theme(app: "QApplication", theme: str | None = None, *, retheme: bool = False) -> None:
     """Register the bundled faces, then apply global QSS and default font.
 
@@ -2209,7 +2268,16 @@ def apply_theme(app: "QApplication", theme: str | None = None, *, retheme: bool 
     # tokens are px (FONT_BODY=13) while a 9pt app font is ~12px.
     font.setPixelSize(FONT_BODY)
     app.setFont(font)
-    app.setStyleSheet(global_qss(theme or ACTIVE_THEME))
+
+    # One static, palette-based application sheet for the process lifetime.
+    # Switching themes replaces the palette (~0s) instead of the stylesheet
+    # (~1ms per live widget). Role-specific faces keep their exact colours
+    # in scoped sheets, re-tinted below.
+    global _APP_QSS_INSTALLED
+    if not _APP_QSS_INSTALLED:
+        app.setStyleSheet(palette_qss())
+        _APP_QSS_INSTALLED = True
+    app.setPalette(palette_for(theme or ACTIVE_THEME))
     _install_interaction_tracking(app)
     if retheme:
         retheme_widgets(app)

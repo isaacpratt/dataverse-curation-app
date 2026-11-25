@@ -577,8 +577,14 @@ def test_scoped_sheets_follow_a_live_switch(qapp):
         theme.set_active_theme("dark")
         theme.apply_theme(qapp, "dark", retheme=True)
 
-        # The application sheet moved...
-        assert theme.role("SURFACE_CARD", "dark") in qapp.styleSheet()
+        # The application sheet is palette-based and installed once; the
+        # switch changed the palette instead of replacing the whole sheet.
+        from PySide6.QtGui import QPalette
+
+        assert "palette(base)" in qapp.styleSheet()
+        assert qapp.palette().color(QPalette.ColorRole.Base).name() == theme.role(
+            "SURFACE_CARD", "dark"
+        )
         # ...and so did every scoped sheet the widgets already carried.
         assert card.styleSheet() != card_light
         assert theme.role("SURFACE_CARD", "dark") in card.styleSheet()
