@@ -162,6 +162,14 @@ type = "simple"
   help = "Run tests with engine coverage (floor from [tool.coverage.report])"
   cmd = "pytest -q --cov=engine --cov-report=term-missing"
 
+  # UI-only coverage, parallel because the UI suite is ~15 min serial and
+  # ~4 min with four workers. The floor is the honest clean-clone measurement
+  # and ratchets upward as UI tests land (dv-9ps); --cov-fail-under overrides
+  # the engine floor in [tool.coverage.report] for this task only.
+  [tool.poe.tasks.cover-ui]
+  help = "Run the UI suite with UI-only coverage against its ratcheting floor"
+  cmd = "pytest -q -n 4 ui/tests/ --cov=ui --cov-report=term-missing --cov-fail-under=71"
+
   # Parity tests against the R tooling's sample data. They are deselected by
   # default (the `samples` marker) because that data is a sibling clone, not
   # part of this repository; run this on purpose when you have it.
@@ -493,4 +501,7 @@ ignore_imports = [
     "tools.probes.probe_text_fit -> ui.main_window",
     "tools.probes.probe_text_fit -> ui.settings_dialog",
     "tools.probes.probe_text_fit -> ui.widgets",
+    "tools.probes.probe_theme_switch -> ui.main_window",
+    "tools.probes.probe_theme_switch -> ui.theme",
+    "tools.probes.probe_theme_switch -> ui.widgets",
 ]

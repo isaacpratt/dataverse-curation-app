@@ -45,7 +45,6 @@ from ui.theme import (
     ACTIVE_THEME,
     FONT_SMALL,
     enable_list_copy,
-    page_background_qss,
     selectable_labels,
     transparent_surface_qss,
 )
@@ -58,6 +57,8 @@ from ui.widgets import (
     make_body_label,
     make_multiline_input,
     make_page_heading,
+    set_icon,
+    set_sheet,
 )
 from ui.workers import (
     CheckWorker,
@@ -176,8 +177,10 @@ class DatasetDetailView(
         # One page-background rule for the view and every page surface it
         # hosts (top bar, stacked pages, canvases); the scroll areas that
         # carry them come with the rule.
-        self.setStyleSheet(
-            page_background_qss(
+        set_sheet(
+            self,
+            "page_background",
+            (
                 "DetailView",
                 "DetailTopBar",
                 "DetailPages",
@@ -185,8 +188,7 @@ class DatasetDetailView(
                 "DetailResponsePage",
                 "DetailResponseInner",
                 "Canvas",
-                theme=ACTIVE_THEME,
-            )
+            ),
         )
         self.setAutoFillBackground(False)
 
@@ -286,9 +288,7 @@ class DatasetDetailView(
         self._id_badge.setCursor(Qt.CursorShape.PointingHandCursor)
         self._id_badge.setToolTip(self._pid)
         try:
-            from ui.icons import role_icon as _link_icon
-
-            self._id_badge.setIcon(_link_icon("open_external", size=14))
+            set_icon(self._id_badge, "open_external", size=14)
         except Exception:
             pass
         badge_row.addWidget(self._id_badge)
@@ -325,9 +325,7 @@ class DatasetDetailView(
         self._record_btn.setToolTip(t("detail.header.export_record_tip"))
         self._record_btn.clicked.connect(self._on_export_record)
         try:
-            from ui.icons import role_icon as _export_icon
-
-            self._record_btn.setIcon(_export_icon("export", size=14))
+            set_icon(self._record_btn, "export", size=14)
         except Exception:
             pass
         actions_row.addWidget(self._record_btn)
@@ -337,9 +335,7 @@ class DatasetDetailView(
         self._check_btn.setToolTip(t("detail.header.run_checks_tip"))
         self._check_btn.clicked.connect(self._on_run_checks)
         try:
-            from ui.icons import role_icon as _run_icon
-
-            self._check_btn.setIcon(_run_icon("run", size=14))
+            set_icon(self._check_btn, "run", size=14)
         except Exception:
             pass
         actions_row.addWidget(self._check_btn)
@@ -358,11 +354,9 @@ class DatasetDetailView(
         # rail is navigation, this is chrome (dv-6wb).
         self._sidebar_toggle_btn = make_action_button("", kind="secondary", size="md")
         try:
-            from ui.icons import role_icon as _side_icon
-
             # Sidebar is open by default (_sidebar_collapsed = False), so the
             # toggle shows the "collapse" icon (sidebar_hide = panel-right-close).
-            self._sidebar_toggle_btn.setIcon(_side_icon("sidebar_hide"))
+            set_icon(self._sidebar_toggle_btn, "sidebar_hide")
         except Exception:
             self._sidebar_toggle_btn.setText(t("detail.sidebar.collapse_a11y"))
         self._sidebar_toggle_btn.setToolTip(t("detail.sidebar.collapse_tip"))
@@ -469,9 +463,7 @@ class DatasetDetailView(
         )
         self._raw_btn.clicked.connect(self._toggle_raw)
         try:
-            from ui.icons import icon as _rw_icon
-
-            self._raw_btn.setIcon(_rw_icon("chevron-right"))
+            set_icon(self._raw_btn, "chevron-right")
         except Exception:
             pass
         main_wrap.addWidget(self._raw_btn)
@@ -736,10 +728,9 @@ class DatasetDetailView(
             self._sidebar_collapsed = collapsed
             self._side_scroll.setVisible(not collapsed)
             try:
-                from ui.icons import role_icon as _side_icon
-
-                self._sidebar_toggle_btn.setIcon(
-                    _side_icon("sidebar_show" if collapsed else "sidebar_hide")
+                set_icon(
+                    self._sidebar_toggle_btn,
+                    "sidebar_show" if collapsed else "sidebar_hide",
                 )
             except Exception:
                 pass

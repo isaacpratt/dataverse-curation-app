@@ -362,7 +362,7 @@ def test_gallery_mode_round_trips_through_the_config(tmp_path):
     assert Config.load(path).app.gallery_theme_mode == "dark"
 
 
-def test_gallery_window_opens_on_the_saved_mode(qapp, tmp_path):
+def test_gallery_window_opens_on_the_saved_mode(gallery_without_app_theme, qapp, tmp_path):
     """The selector shows the remembered view, not always 'Both'."""
     from curation.config import Config
     from ui.gallery import GalleryWindow
@@ -379,7 +379,7 @@ def test_gallery_window_opens_on_the_saved_mode(qapp, tmp_path):
         window.deleteLater()
 
 
-def test_gallery_window_persists_a_new_choice(qapp, tmp_path):
+def test_gallery_window_persists_a_new_choice(gallery_without_app_theme, qapp, tmp_path):
     """Picking a view writes it, so reopening starts there."""
     from curation.config import Config
     from ui.gallery import GalleryWindow
@@ -400,7 +400,7 @@ def test_gallery_window_persists_a_new_choice(qapp, tmp_path):
         window.deleteLater()
 
 
-def test_gallery_window_without_config_still_opens(qapp):
+def test_gallery_window_without_config_still_opens(gallery_without_app_theme, qapp):
     """The gallery is reachable from `--gallery` with no config to write."""
     from ui.gallery import GalleryWindow
 
@@ -489,54 +489,264 @@ def test_animate_theme_change_fades_the_window_it_is_given(qapp):
     window.deleteLater()
 
 
-# --- The known limit of a live switch (dv-4jm.5 follow-up) ---------------
+# --- Scoped sheets follow a live switch (dv-4jm.7) -----------------------
 
 
-def test_app_sheet_follows_a_live_switch_but_scoped_sheets_do_not(qapp):
-    """Pin the current contract, including its gap.
+def test_scoped_sheets_follow_a_live_switch(qapp):
+    """A switch repaints widgets that carry their own sheet.
 
-    ``apply_theme`` replaces the *application* sheet, so anything painted
-    by the app-level rules follows a switch at once. A widget that set its
-    own stylesheet keeps it - Qt does not re-derive it - so kit factories
-    that bake a scoped sheet (card, button, input, checkbox, progress bar,
-    pane footer) hold their pre-switch face until the widget is rebuilt.
-
-    This test asserts the gap on purpose: it is the visible half of
-    dv-4jm.5 that is still open. When scoped sheets are made to follow a
-    switch, this test is the one to rewrite.
+    ``apply_theme`` replaces the application sheet, but a widget that called
+    ``setStyleSheet`` keeps that sheet - Qt does not re-derive it. Kit
+    factories register a rebuild, and ``apply_theme`` runs them, so a card or
+    button built before the switch paints the new palette without being
+    rebuilt.
     """
+    from PySide6.QtWidgets import QWidget
+
     from ui import theme
-    from ui.widgets import make_action_button, make_card
+    from ui.widgets import make_action_button, make_card, make_progress_bar
 
     theme.set_active_theme("light")
-    theme.apply_theme(qapp, "light")
+    theme.apply_theme(qapp, "light", retheme=True)
+    host = QWidget()
+    host.resize(240, 240)
+    host.show()
+    qapp.processEvents()
     try:
         card, _body, _title, _header = make_card("Probe")
         button = make_action_button("Probe")
+        bar = make_progress_bar()
+        # The rebuild covers what is on screen, so the widgets are shown -
+        # which is also how a curator meets them.
+        for widget in (card, button, bar):
+            widget.setParent(host)
+            widget.show()
+        qapp.processEvents()
         card_light = card.styleSheet()
         button_light = button.styleSheet()
-        app_light = qapp.styleSheet()
 
         assert theme.role("SURFACE_CARD", "light") in card_light
         assert theme.role("SURFACE_CARD", "light") in button_light
 
         theme.set_active_theme("dark")
-        theme.apply_theme(qapp, "dark")
+        theme.apply_theme(qapp, "dark", retheme=True)
 
         # The application sheet moved...
-        assert qapp.styleSheet() != app_light
         assert theme.role("SURFACE_CARD", "dark") in qapp.styleSheet()
-        # ...but the scoped sheets the widgets already carry did not.
-        assert card.styleSheet() == card_light
-        assert button.styleSheet() == button_light
+        # ...and so did every scoped sheet the widgets already carried.
+        assert card.styleSheet() != card_light
+        assert theme.role("SURFACE_CARD", "dark") in card.styleSheet()
+        assert button.styleSheet() != button_light
+        assert theme.role("ACCENT_PRIMARY", "dark") in bar.styleSheet()
 
-        # Rebuilding picks up the new palette: the generators are correct,
-        # it is the already-constructed widget that is stale.
-        rebuilt, _b, _t, _h = make_card("Probe")
-        assert theme.role("SURFACE_CARD", "dark") in rebuilt.styleSheet()
+        # And back again: the rebuild is not a one-way latch.
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+        assert theme.role("SURFACE_CARD", "light") in card.styleSheet()
+    finally:
+        host.close()
+        host.deleteLater()
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+
+
+def test_retheme_skips_widgets_that_are_gone(qapp):
+    """A destroyed widget must not break the switch.
+
+    The rebuild is stored on the widget, so it dies with it - but a widget
+    deleted in C++ while its Python wrapper lives on must be skipped rather
+    than raising.
+    """
+    from PySide6.QtWidgets import QWidget
+
+    from ui import theme
+
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light", retheme=True)
+    try:
+        orphan = QWidget()
+        orphan.setStyleSheet("QWidget { color: red; }")
+        orphan.deleteLater()
+        qapp.processEvents()
+
+        theme.set_active_theme("dark")
+        ran = theme.retheme_widgets(qapp)  # must not raise
+        assert ran >= 0
     finally:
         theme.set_active_theme("light")
-        theme.apply_theme(qapp, "light")
+        theme.apply_theme(qapp, "light", retheme=True)
+
+
+def test_retheme_can_be_switched_off_for_a_temporary_build(qapp):
+    """The gallery builds a second theme in one process.
+
+    With retheme on, switching to dark to build that column would repaint
+    the light column that is already built. ``retheme=False`` keeps the
+    temporary switch from touching existing widgets.
+    """
+    from PySide6.QtWidgets import QWidget
+
+    from ui import theme
+    from ui.widgets import make_card
+
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light", retheme=True)
+    host = QWidget()
+    host.resize(200, 200)
+    host.show()
+    qapp.processEvents()
+    try:
+        card, _b, _t, _h = make_card("Probe")
+        card.setParent(host)
+        card.show()
+        qapp.processEvents()
+        light_sheet = card.styleSheet()
+
+        theme.set_active_theme("dark")
+        theme.apply_theme(qapp, "dark", retheme=False)
+        assert card.styleSheet() == light_sheet, "a temporary switch must not repaint"
+
+        # A real switch, with retheme on, does.
+        theme.apply_theme(qapp, "dark", retheme=True)
+        assert card.styleSheet() != light_sheet
+    finally:
+        host.close()
+        host.deleteLater()
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+
+
+def test_every_surface_retints_on_a_live_switch(qapp):
+    """Every scoped surface follows one live light→dark→light cycle.
+
+    A small harness holds one of each sheet kind - page, card, band, rule,
+    button, search field, line edit, checkbox, progress bar, list, table,
+    badge and chip - plus the three non-widget surfaces: a widget glyph, a
+    model-item glyph and the painted ring. One cycle, three app-stylesheet
+    swaps, ~30 widgets instead of the whole main window (dv-314).
+
+    The real-window walk lives in ``probe_theme_switch.py``, which runs in
+    the same gate. Keep this harness in step when a view gains a new kind
+    of scoped sheet.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPixmap
+    from PySide6.QtWidgets import (
+        QFrame,
+        QListWidget,
+        QListWidgetItem,
+        QVBoxLayout,
+        QWidget,
+    )
+
+    from ui import theme
+    from ui import widgets as _widgets  # installs the retheme hook
+    from ui.icons import set_item_icon
+    from ui.ring import RingProgress
+    from ui.widgets import (
+        AppTable,
+        make_action_button,
+        make_badge,
+        make_card,
+        make_checkbox,
+        make_icon_button,
+        make_line_edit,
+        make_list,
+        make_progress_bar,
+        make_search_field,
+        make_split_chip,
+        set_flush_table_style,
+        set_sheet,
+    )
+
+    assert _widgets is not None
+    light_only = set(theme.LIGHT_ROLE_TABLE.values()) - set(theme.DARK_ROLE_TABLE.values())
+    dark_only = set(theme.DARK_ROLE_TABLE.values()) - set(theme.LIGHT_ROLE_TABLE.values())
+
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light", retheme=True)
+
+    host = QWidget()
+    host.setObjectName("ThemeHarness")
+    set_sheet(host, "page_background", ("ThemeHarness",))
+    host.resize(360, 320)
+    host.show()
+    column = QVBoxLayout(host)
+    card, _body, _title, _header = make_card("probe")
+    column.addWidget(card)
+    column.addWidget(make_action_button("probe"))
+    column.addWidget(make_search_field("probe"))
+    column.addWidget(make_line_edit("probe"))
+    column.addWidget(make_checkbox("probe"))
+    column.addWidget(make_progress_bar())
+    column.addWidget(make_list(flush=True))
+    table = AppTable(["a", "b"])
+    set_flush_table_style(table)
+    column.addWidget(table)
+    column.addWidget(make_badge("Draft"))
+    column.addWidget(make_split_chip("probe"))
+    band = QFrame()
+    band.setObjectName("HarnessBand")
+    set_sheet(band, "band", "SURFACE_TINT", "BORDER_SUBTLE", selector="QFrame#HarnessBand")
+    column.addWidget(band)
+    divider = QFrame()
+    set_sheet(divider, "rule", "QFrame", "BORDER_SUBTLE")
+    column.addWidget(divider)
+    button = make_icon_button("info")
+    column.addWidget(button)
+    listing = QListWidget()
+    item = QListWidgetItem("probe")
+    set_item_icon(item, "info")
+    listing.addItem(item)
+    column.addWidget(listing)
+    ring = RingProgress()
+    ring.resize(40, 40)
+    column.addWidget(ring)
+    for _ in range(6):
+        qapp.processEvents()
+
+    def stale(colours: set[str]) -> list[tuple[str, list[str]]]:
+        found = []
+        for widget in [host, *host.findChildren(QWidget)]:
+            try:
+                sheet = widget.styleSheet()
+            except Exception:
+                continue
+            if not sheet:
+                continue
+            hits = sorted({c for c in colours if c in sheet})
+            if hits:
+                found.append((widget.objectName() or type(widget).__name__, hits))
+        return found
+
+    def render_ring() -> object:
+        pixmap = QPixmap(40, 40)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        ring.render(pixmap)
+        return pixmap.toImage()
+
+    try:
+        light_icon = button.icon().cacheKey()
+        light_item = item.icon().cacheKey()
+        light_ring = render_ring()
+
+        theme.set_active_theme("dark")
+        theme.apply_theme(qapp, "dark", retheme=True)
+
+        assert not stale(light_only), stale(light_only)
+        assert button.icon().cacheKey() != light_icon, "the widget glyph kept its light tint"
+        assert item.icon().cacheKey() != light_item, "the item glyph kept its light tint"
+        assert render_ring() != light_ring, "the ring kept the light arc"
+
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+        assert not stale(dark_only), stale(dark_only)
+    finally:
+        theme.set_active_theme("light")
+        theme.apply_theme(qapp, "light", retheme=True)
+        host.close()
+        host.deleteLater()
+        qapp.processEvents()
 
 
 if __name__ == "__main__":

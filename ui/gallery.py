@@ -686,14 +686,14 @@ class GalleryWindow(QWidget):
         set_active_theme(theme_name)
         app_instance = QApplication.instance()
         if isinstance(app_instance, QApplication):
-            apply_theme(app_instance, theme_name)
+            apply_theme(app_instance, theme_name, retheme=False)
         try:
             for section in self._sections():
                 lay.addWidget(section)
         finally:
             set_active_theme(previous)
             if isinstance(app_instance, QApplication):
-                apply_theme(app_instance, previous)
+                apply_theme(app_instance, previous, retheme=False)
         return host
 
     def _show_dual_theme(self, body: QVBoxLayout) -> None:
@@ -725,7 +725,7 @@ class GalleryWindow(QWidget):
         set_active_theme("light")
         app_instance = QApplication.instance()
         assert isinstance(app_instance, QApplication)
-        apply_theme(app_instance, "light")
+        apply_theme(app_instance, "light", retheme=False)
 
         # Add sections to light body
         for section in self._sections():
@@ -735,7 +735,7 @@ class GalleryWindow(QWidget):
         set_active_theme("dark")
         app_instance = QApplication.instance()
         assert isinstance(app_instance, QApplication)
-        apply_theme(app_instance, "dark")
+        apply_theme(app_instance, "dark", retheme=False)
 
         # Add sections to dark body
         for section in self._sections():
@@ -745,7 +745,7 @@ class GalleryWindow(QWidget):
         set_active_theme(previous)
         app_instance = QApplication.instance()
         assert isinstance(app_instance, QApplication)
-        apply_theme(app_instance, previous)
+        apply_theme(app_instance, previous, retheme=False)
 
         # Create side-by-side layout
         dual_host = QWidget()

@@ -200,7 +200,10 @@ def test_the_dark_badges_are_legible():
 def test_the_active_role_table_is_logged(qapp):
     from curation.applog import lines
 
-    theme.apply_theme(qapp)
+    # Only the logging contract is under test. Calling apply_theme() here
+    # would swap the app stylesheet over every live widget - minutes late
+    # in the suite - for nothing this assertion checks.
+    theme._log_active_role_table()
     logged = [line for line in lines() if "theme-role-table" in line]
     assert logged, "the active role table was not logged"
     assert (

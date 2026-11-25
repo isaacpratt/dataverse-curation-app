@@ -5,6 +5,7 @@ from typing import Any
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame,
+    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -14,24 +15,21 @@ from ui.dataset.state import DetailState
 from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,
-    STATE_ERROR_GRAPHIC,
-    STATE_SUCCESS_GRAPHIC,
-    STATE_WARNING_GRAPHIC,
-    TEXT_AMBER,
     TEXT_DANGER,
     TEXT_SUBTLE,
     TEXT_SUCCESS,
+    colour,
     enable_list_copy,
 )
 from ui.widgets import (
     AppTable,
     add_info_tip,
-    flush_list_style,
-    flush_table_style,
     make_card,
     make_field_label,
     make_list,
     make_small_body_label,
+    set_flush_table_style,
+    set_sheet,
 )
 
 
@@ -93,11 +91,10 @@ class VersionsSection(DetailState):
             for i, (w, kind) in enumerate(flush_widgets):
                 last = i == len(flush_widgets) - 1
                 try:
-                    w.setStyleSheet(
-                        flush_table_style(last=last)
-                        if kind == "table"
-                        else flush_list_style(last=last)
-                    )
+                    if kind == "table" and isinstance(w, QTableWidget):
+                        set_flush_table_style(w, last=last)
+                    else:
+                        set_sheet(w, "list", last, True)
                 except Exception:
                     pass
 
@@ -233,15 +230,15 @@ class VersionsSection(DetailState):
                 return f"{path}/{name}"
             return name or path or t("detail.dataset_log.unnamed_file")
 
-        from ui.icons import icon as _ver_icon
+        from ui.icons import set_item_icon
 
         entries: list[tuple[str, str, str, str]] = []
         for f in diff.get("files_added") or []:
             entries.append(
                 (
                     t("detail.version_log.file_added", file=_fname(f)),
-                    TEXT_SUCCESS,
-                    STATE_SUCCESS_GRAPHIC,
+                    "TEXT_SUCCESS",
+                    "STATE_SUCCESS_GRAPHIC",
                     "plus",
                 )
             )
@@ -249,8 +246,8 @@ class VersionsSection(DetailState):
             entries.append(
                 (
                     t("detail.version_log.file_removed", file=_fname(f)),
-                    TEXT_DANGER,
-                    STATE_ERROR_GRAPHIC,
+                    "TEXT_DANGER",
+                    "STATE_ERROR_GRAPHIC",
                     "minus",
                 )
             )
@@ -263,8 +260,8 @@ class VersionsSection(DetailState):
                         old=_fname(old_f),
                         new=_fname(new_f),
                     ),
-                    TEXT_AMBER,
-                    STATE_WARNING_GRAPHIC,
+                    "TEXT_AMBER",
+                    "STATE_WARNING_GRAPHIC",
                     "arrow-right-left",
                 )
             )
@@ -277,8 +274,8 @@ class VersionsSection(DetailState):
                             file=fc.get("file", ""),
                             field=ch.get("field", ""),
                         ),
-                        ACCENT_PRIMARY,
-                        ACCENT_PRIMARY,
+                        "ACCENT_PRIMARY",
+                        "ACCENT_PRIMARY",
                         "pencil",
                     )
                 )
@@ -288,9 +285,9 @@ class VersionsSection(DetailState):
             for text, color, icon_color, icon_name in entries:
                 item = QListWidgetItem(text)
                 item.setToolTip(text)
-                item.setForeground(QColor(color))
+                item.setForeground(QColor(colour(color)))
                 try:
-                    item.setIcon(_ver_icon(icon_name, color=icon_color))
+                    set_item_icon(item, icon_name, color=icon_color)
                 except Exception:
                     pass
                 flist.addItem(item)

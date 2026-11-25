@@ -55,25 +55,18 @@ from curation.config import Config
 from ui.dashboard import DashboardView
 from ui.dialogs import show_warning
 from ui.i18n import t
-from ui.icons import icon as lucide_icon
 from ui.theme import (
-    ACCENT_FOCUS_TINT,
-    ACCENT_SECONDARY,
-    ACTIVE_THEME,
-    BORDER_SUBTLE,
-    STATE_ERROR_BG,
-    STATE_ERROR_GRAPHIC,
-    SURFACE_CARD,
-    SURFACE_RAISED,
-    TEXT_MUTED,
-    TEXT_ON_ACCENT,
-    TEXT_ON_SECONDARY,
-    TEXT_PRIMARY,
-    page_background_qss,
-    surface_frame_qss,
+    role,
     transparent_surface_qss,
 )
-from ui.widgets import AppButton, make_caption_label, make_split_chip, set_chip_room_limited
+from ui.widgets import (
+    AppButton,
+    make_caption_label,
+    make_split_chip,
+    set_chip_room_limited,
+    set_icon,
+    set_sheet,
+)
 
 if TYPE_CHECKING:
     from ui.settings_dialog import SettingsPane
@@ -265,27 +258,6 @@ def _maximized_client_rect(hwnd: int) -> tuple[int, int, int, int] | None:
 # control keeps the square Windows caption face and the red close hover,
 # which the kit's button kinds cannot express (the marker at the call
 # site records that exception).
-_WIN_BTN_QSS = (
-    f"QPushButton {{ background: transparent; color: {TEXT_PRIMARY}; border: none; "
-    "border-radius: 0px; }"
-    # Keyboard-focus tint: before hover so hover feedback wins when both apply.
-    f'QPushButton[focusVisible="true"] {{ background: {ACCENT_FOCUS_TINT}; }}'
-    f'QPushButton:hover, QPushButton[hovered="true"] {{ '
-    f"background: {SURFACE_RAISED}; }}"
-    f"QPushButton:pressed {{ background: {ACCENT_SECONDARY}; }}"
-)
-_WIN_CLOSE_QSS = (
-    f"QPushButton {{ background: transparent; color: {TEXT_PRIMARY}; border: none; "
-    "border-radius: 0px; }"
-    f'QPushButton[focusVisible="true"] {{ background: {ACCENT_FOCUS_TINT}; }}'
-    f'QPushButton:hover, QPushButton[hovered="true"] {{ '
-    f"background: {STATE_ERROR_GRAPHIC}; color: {TEXT_ON_ACCENT}; }}"
-    f"QPushButton:pressed {{ background: {STATE_ERROR_BG}; color: {TEXT_ON_ACCENT}; }}"
-)
-
-# The nav's hairline separators: a 1px frame in the subtle border colour.
-_SEPARATOR_QSS = surface_frame_qss(SURFACE_CARD, BORDER_SUBTLE, radius="0px", theme=ACTIVE_THEME)
-
 # QStyle standard pixmaps: the exact glyphs Windows paints in a native
 # caption (text characters never matched them, especially restore).
 _CAPTION_GLYPHS = {
@@ -359,7 +331,7 @@ class _CaptionButton(QPushButton):
         # theme-allow: a frameless window's caption button is window chrome,
         # not an app button (square caption face, red close hover) — the kit's
         # button kinds cannot express it.
-        self.setStyleSheet(_WIN_CLOSE_QSS if kind == "close" else _WIN_BTN_QSS)
+        set_sheet(self, "caption_button", kind)
         self._apply_icon()
 
     def set_glyph(self, kind: str) -> None:
@@ -379,9 +351,14 @@ class _CaptionButton(QPushButton):
     def _apply_icon(self) -> None:
         try:
             glyph = self.style().standardIcon(_CAPTION_GLYPHS[self._kind])
-            if self._kind == "close" and (self._hovered or self.underMouse() or self.isDown()):
-                glyph = _tinted_icon(glyph, TEXT_ON_ACCENT, 14)
-            self.setIcon(glyph)
+            # Tint the native glyph for the active theme: a frameless
+            # window's caption control otherwise keeps the platform's dark
+            # ink on a dark sheet (dv-314).
+            hovering = self._kind == "close" and (
+                self._hovered or self.underMouse() or self.isDown()
+            )
+            ink = role("TEXT_ON_ACCENT") if hovering else role("TEXT_PRIMARY")
+            self.setIcon(_tinted_icon(glyph, ink, 14))
         except Exception:
             pass
 
@@ -389,7 +366,7 @@ class _CaptionButton(QPushButton):
         """Mirror hover into a dynamic property and force the restyle.
 
         Qt's :hover state paint can be left stale when the cursor
-        teleports onto the button (see _WIN_CLOSE_QSS); the property
+        teleports onto the button (see ``caption_button_qss``); the property
         rule repaints deterministically from enter/leaveEvent instead.
         """
         on = bool(on)
@@ -487,7 +464,7 @@ class MainWindow(QMainWindow):
 
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setStyleSheet(_SEPARATOR_QSS)
+        set_sheet(sep, "rule", "QFrame", "BORDER_SUBTLE")
         sep.setFixedWidth(1)
         nav_lay.addWidget(sep)
 
@@ -540,7 +517,7 @@ class MainWindow(QMainWindow):
 
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.Shape.VLine)
-        sep2.setStyleSheet(_SEPARATOR_QSS)
+        set_sheet(sep2, "rule", "QFrame", "BORDER_SUBTLE")
         sep2.setFixedWidth(1)
         nav_lay.addWidget(sep2)
 
@@ -673,7 +650,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet(page_background_qss(theme=ACTIVE_THEME))
+        set_sheet(scroll, "page_background", ())
         scroll.setWidget(pane)
         return scroll
 
@@ -811,8 +788,8 @@ class MainWindow(QMainWindow):
     def _set_nav_icon(self, btn: QPushButton, name: str, active: bool) -> None:
         """Lucide glyph for a nav button, tinted to its active state."""
         try:
-            color = TEXT_ON_SECONDARY if active else TEXT_MUTED
-            btn.setIcon(lucide_icon(name, color=color, size=16))
+            color = "TEXT_ON_SECONDARY" if active else "TEXT_MUTED"
+            set_icon(btn, name, color=color, size=16)
             btn.setIconSize(QSize(16, 16))
         except Exception:
             pass

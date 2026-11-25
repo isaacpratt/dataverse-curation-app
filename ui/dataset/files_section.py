@@ -27,9 +27,6 @@ if TYPE_CHECKING:
 from ui.status_text import status_text
 from ui.theme import (
     ACTIVE_THEME,
-    SURFACE_PAGE,
-    SURFACE_SUBTLE,
-    band_qss,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -42,6 +39,7 @@ from ui.widgets import (
     make_elided_label,
     make_search_field,
     make_small_body_label,
+    set_sheet,
 )
 
 
@@ -168,7 +166,7 @@ class FilesSection(DetailState):
 
         # Footer: showing X of Y + total size
         footer = QFrame()
-        footer.setStyleSheet(band_qss(SURFACE_PAGE, SURFACE_SUBTLE, edge="top", theme=ACTIVE_THEME))
+        set_sheet(footer, "band", "SURFACE_PAGE", "SURFACE_SUBTLE", edge="top")
         fl = QHBoxLayout(footer)
         fl.setContentsMargins(16, 10, 16, 10)
         # Both footer labels elide: "No files yet - load metadata to see

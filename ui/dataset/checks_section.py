@@ -25,20 +25,12 @@ from ui.theme import (
     ACCENT_PRIMARY,
     ACTIVE_THEME,
     BORDER_SUBTLE,
-    STATE_ERROR_BG,
-    STATE_ERROR_BORDER,
     STATE_ERROR_GRAPHIC,
-    STATE_ERROR_TEXT,
-    STATE_WARNING_BORDER,
     STATE_WARNING_GRAPHIC,
-    STATE_WARNING_INK,
-    STATE_WARNING_SURFACE,
     SURFACE_ALT,
     SURFACE_SUBTLE,
     SURFACE_TINT,
     TEXT_MUTED,
-    TEXT_ON_ACCENT,
-    surface_frame_qss,
     transparent_surface_qss,
 )
 from ui.widgets import (
@@ -50,6 +42,7 @@ from ui.widgets import (
     make_disposition_combo,
     make_field_label,
     make_small_body_label,
+    set_sheet,
 )
 from ui.workers import CheckWorker
 
@@ -81,7 +74,7 @@ class ChecksSection(DetailState):
         rule = QFrame()
         rule.setObjectName("ChecksDivider")
         rule.setFixedHeight(1)
-        rule.setStyleSheet(f"QFrame#ChecksDivider {{ background: {BORDER_SUBTLE}; border: none; }}")
+        set_sheet(rule, "rule", "QFrame#ChecksDivider", "BORDER_SUBTLE")
         outer.addWidget(rule)
 
         head = QWidget()
@@ -199,13 +192,12 @@ class ChecksSection(DetailState):
                 or "Missing" in (badge or desc)
             )
         ):
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    SURFACE_SUBTLE,
-                    BORDER_SUBTLE,
-                    selector="QFrame#AutoCheckRow",
-                    theme=ACTIVE_THEME,
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "SURFACE_SUBTLE",
+                "BORDER_SUBTLE",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "circle-dashed", TEXT_MUTED
             badge_text = (
@@ -213,20 +205,20 @@ class ChecksSection(DetailState):
                 if "SKIP" in (badge or "").upper() or "skipped" in desc.lower()
                 else (badge or t("status.badges.warning"))
             )
-            badge_bg = SURFACE_ALT
-            badge_fg = TEXT_MUTED
+            badge_bg = "SURFACE_ALT"
+            badge_fg = "TEXT_MUTED"
         elif not passed and level in ("error", "warning"):
             # A warning row wears the warning face; only a real error
             # wears red (dv-gc9: "Unknown File Types" must read as a
-            # warning, never as an error).
+            # warning, never as an error). Role names, not resolved values,
+            # so a live theme switch repaints with the new palette (dv-314).
             is_error = level == "error"
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    STATE_ERROR_BG if is_error else STATE_WARNING_SURFACE,
-                    STATE_ERROR_BORDER if is_error else STATE_WARNING_BORDER,
-                    selector="QFrame#AutoCheckRow",
-                    theme=ACTIVE_THEME,
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "STATE_ERROR_BG" if is_error else "STATE_WARNING_SURFACE",
+                "STATE_ERROR_BORDER" if is_error else "STATE_WARNING_BORDER",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = (
                 ("octagon-x", STATE_ERROR_GRAPHIC)
@@ -236,41 +228,44 @@ class ChecksSection(DetailState):
             badge_text = badge or t(
                 "status.badges.error" if is_error else "status.badges.warning"
             )
-            badge_bg = STATE_ERROR_BG if is_error else STATE_WARNING_SURFACE
-            badge_fg = STATE_ERROR_TEXT if is_error else STATE_WARNING_INK
+            badge_bg = "STATE_ERROR_BG" if is_error else "STATE_WARNING_SURFACE"
+            badge_fg = "STATE_ERROR_TEXT" if is_error else "STATE_WARNING_INK"
         elif passed and level == "warning" and "Missing" in (badge or desc):
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    STATE_WARNING_SURFACE,
-                    STATE_WARNING_BORDER,
-                    selector="QFrame#AutoCheckRow",
-                    theme=ACTIVE_THEME,
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "STATE_WARNING_SURFACE",
+                "STATE_WARNING_BORDER",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "octagon-alert", STATE_WARNING_GRAPHIC
             badge_text = badge or t("status.badges.warning")
-            badge_bg = STATE_WARNING_SURFACE
-            badge_fg = STATE_WARNING_INK
+            badge_bg = "STATE_WARNING_SURFACE"
+            badge_fg = "STATE_WARNING_INK"
         elif passed:
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "SURFACE_TINT",
+                "BORDER_SUBTLE",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "check", ACCENT_PRIMARY
             badge_text = badge or t("status.badges.passed")
-            badge_bg = ACCENT_PRIMARY
-            badge_fg = TEXT_ON_ACCENT
+            badge_bg = "ACCENT_PRIMARY"
+            badge_fg = "TEXT_ON_ACCENT"
         else:
-            frame.setStyleSheet(
-                surface_frame_qss(
-                    SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#AutoCheckRow", theme=ACTIVE_THEME
-                )
+            set_sheet(
+                frame,
+                "surface_frame",
+                "SURFACE_TINT",
+                "BORDER_SUBTLE",
+                selector="QFrame#AutoCheckRow",
             )
             icon_name, icon_color = "minus", TEXT_MUTED
             badge_text = badge or t("common.em_dash")
-            badge_bg = SURFACE_ALT
-            badge_fg = TEXT_MUTED
+            badge_bg = "SURFACE_ALT"
+            badge_fg = "TEXT_MUTED"
         lay = QHBoxLayout(frame)
         lay.setContentsMargins(10, 8, 10, 8)
         lay.setSpacing(8)

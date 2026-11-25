@@ -44,22 +44,15 @@ from ui.theme import (
     ACCENT_PRIMARY,
     ACCENT_TERTIARY,
     ACTIVE_THEME,
-    BORDER_SUBTLE,
     STATE_ERROR_GRAPHIC,
-    SURFACE_CARD,
-    SURFACE_TINT,
     TEXT_MUTED,
-    band_qss,
-    page_background_qss,
     selectable_labels,
-    surface_frame_qss,
     transparent_surface_qss,
 )
 from ui.widgets import (
     AppTable,
     ElidedLabel,
     RingProgress,
-    flush_table_style,
     human_size,
     make_action_button,
     make_caption_label,
@@ -69,6 +62,8 @@ from ui.widgets import (
     make_refresh_button,
     make_search_field,
     make_small_body_label,
+    set_flush_table_style,
+    set_sheet,
 )
 from ui.workers import BulkCheckWorker, CrawlWorker
 
@@ -538,7 +533,7 @@ class DashboardView(QWidget):
         # Scoped to self: a bare `background` rule acts subtree-wide and
         # would override app-level backgrounds (e.g. the queue table face).
         self.setObjectName("DashboardView")
-        self.setStyleSheet(page_background_qss("DashboardView", theme=ACTIVE_THEME))
+        set_sheet(self, "page_background", ("DashboardView",))
 
         # ---- Metrics cards (values always from real data; 0 when empty) ----
         self._metrics_row = QHBoxLayout()
@@ -572,10 +567,8 @@ class DashboardView(QWidget):
         # ---- Curation Queue card ----
         queue_card = QFrame()
         queue_card.setObjectName("Card")
-        queue_card.setStyleSheet(
-            surface_frame_qss(
-                SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#Card", theme=ACTIVE_THEME
-            )
+        set_sheet(
+            queue_card, "surface_frame", "SURFACE_CARD", "BORDER_SUBTLE", selector="QFrame#Card"
         )
         queue_layout = QVBoxLayout(queue_card)
         queue_layout.setContentsMargins(0, 0, 0, 0)
@@ -583,11 +576,7 @@ class DashboardView(QWidget):
 
         header = QFrame()
         header.setObjectName("QueueHeaderBar")
-        header.setStyleSheet(
-            band_qss(
-                SURFACE_TINT, BORDER_SUBTLE, selector="QFrame#QueueHeaderBar", theme=ACTIVE_THEME
-            )
-        )
+        set_sheet(header, "band", "SURFACE_TINT", "BORDER_SUBTLE", selector="QFrame#QueueHeaderBar")
         # The queue header follows the card contract: the title row carries
         # the title (and only the title - no tools), and every tool lives
         # on the row below. The tools row fits at the 960px floor because
@@ -687,7 +676,7 @@ class DashboardView(QWidget):
         self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # Flush under the banner header (last child: square top meets the
         # banner, 8px bottom meets the card border — see flush_table_style).
-        self._table.setStyleSheet(flush_table_style())
+        set_flush_table_style(self._table)
         self._table.cellDoubleClicked.connect(self._on_double_click)
         # Keyboard parity for the queue: Enter/Return opens the focused row
         # (double-click alone locks out keyboard-only users), F5 refreshes,
@@ -741,10 +730,8 @@ class DashboardView(QWidget):
         # (replaces the separate pill row + status bar).
         pill = QFrame()
         pill.setObjectName("StatusPill")
-        pill.setStyleSheet(
-            surface_frame_qss(
-                SURFACE_CARD, BORDER_SUBTLE, selector="QFrame#StatusPill", theme=ACTIVE_THEME
-            )
+        set_sheet(
+            pill, "surface_frame", "SURFACE_CARD", "BORDER_SUBTLE", selector="QFrame#StatusPill"
         )
         pill_lay = QHBoxLayout(pill)
         pill_lay.setContentsMargins(14, 6, 14, 6)
@@ -1170,14 +1157,13 @@ class DashboardView(QWidget):
 
         card = QFrame()
         card.setObjectName("EmptyStateCard")
-        card.setStyleSheet(
-            surface_frame_qss(
-                SURFACE_CARD,
-                BORDER_SUBTLE,
-                selector="QFrame#EmptyStateCard",
-                theme=ACTIVE_THEME,
-                border_style="dashed",
-            )
+        set_sheet(
+            card,
+            "surface_frame",
+            "SURFACE_CARD",
+            "BORDER_SUBTLE",
+            selector="QFrame#EmptyStateCard",
+            border_style="dashed",
         )
         inner = QVBoxLayout(card)
         inner.setContentsMargins(32, 32, 32, 28)

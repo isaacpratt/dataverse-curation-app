@@ -34,7 +34,7 @@ from curation.storage import finding_key
 from engine.status import classify
 from ui.check_titles import check_summary, check_title
 from ui.i18n import t
-from ui.icons import file_icon, icon, status_icon
+from ui.icons import file_icon_name, set_item_icon, status_icon_name
 from ui.status_text import status_text
 from ui.widgets import disposition_label, human_size
 
@@ -98,7 +98,7 @@ def update_carets(  # noqa: C901 - grandfathered; complexity burns down as dv-hc
         except Exception:
             opened = False
         try:
-            item.setIcon(icon("folder-open" if opened else "folder"))
+            set_item_icon(item, "folder-open" if opened else "folder")
         except Exception:
             pass
 
@@ -284,7 +284,8 @@ def _check_items(check: Any, path: str, dispositions: dict[Any, Any] | None) -> 
         tip += "\n" + t("detail.disposition.tree_note", label=label)
     c_name = _new_item(check_title(check.check_id), tip)
     try:
-        c_name.setIcon(status_icon(kind))
+        c_name_name, c_name_color = status_icon_name(kind)
+        set_item_icon(c_name, c_name_name, color=c_name_color)
     except Exception:
         pass
     c_name.setData(
@@ -381,7 +382,7 @@ def build_tree_model(
             label = t("checks.files_folder") if parent == "." else parent + "/"
             parent_item = _new_item(label, label)
             try:
-                parent_item.setIcon(icon("folder"))
+                set_item_icon(parent_item, "folder")
             except Exception:
                 pass
             parent_item.setData({"kind": "folder", "dir": parent, "base": label}, _KIND_ROLE)
@@ -394,7 +395,9 @@ def build_tree_model(
             base = path.split("/")[-1]
             name_item = _new_item(base, tip)
             try:
-                name_item.setIcon(file_icon(path, staged=staged))
+                set_item_icon(
+                    name_item, file_icon_name(path), color=None if staged else "TEXT_ON_TINT"
+                )
             except Exception:
                 pass
             name_item.setData({"kind": "file", "path": path, "base": base}, _KIND_ROLE)

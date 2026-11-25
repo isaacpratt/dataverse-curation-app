@@ -36,7 +36,6 @@ import curation.applog as applog
 from ui.i18n import t
 from ui.theme import (
     ACCENT_PRIMARY,
-    ACCENT_PRIMARY_DEEP,
     ACCENT_TERTIARY,
     STATE_ERROR_GRAPHIC,
     STATE_WARNING_GRAPHIC,
@@ -53,6 +52,7 @@ from ui.widgets import (
     make_refresh_button,
     make_search_field,
     make_text_label,
+    set_icon,
 )
 
 
@@ -152,15 +152,13 @@ class LogPage(QWidget):
 
     def _style_live_btn(self) -> None:
         """Sync the Live/Paused label + dot icon (face stays standard)."""
-        from ui.icons import icon as _live_icon
-
         live = self._live_btn.isChecked()
         self._live_btn.setText(t("log.live") if live else t("log.paused"))
         try:
-            self._live_btn.setIcon(
-                _live_icon("circle-dot", color=ACCENT_PRIMARY_DEEP)
-                if live
-                else _live_icon("circle", color=TEXT_SUBTLE)
+            set_icon(
+                self._live_btn,
+                "circle-dot" if live else "circle",
+                color="ACCENT_PRIMARY_DEEP" if live else "TEXT_SUBTLE",
             )
         except Exception:
             pass
