@@ -84,4 +84,4 @@ repos:
         entry: uv run --group dev pymarkdown --strict-config --config .pymarkdown.json scan -r
         language: system
         types: [markdown]
-        files: "^(docs/.*\\.md|CONTRIBUTING\\.md|README\\.md)$"
+        files: "^(docs/.*\\.md|CONTRIBUTING\\.md|README\\.md|SECURITY\\.md)$"

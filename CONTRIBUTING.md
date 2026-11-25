@@ -1,6 +1,6 @@
 # Contributing to Dataverse Docent
 
-Thanks for helping improve Dataverse Docent. This guide covers how to report problems, propose changes, set up a development environment, and get your work through the gates. For the rules that govern the prose you write, read [docs/style-guide.md](docs/style-guide.md); the same guide is published on the [documentation site](https://isaacpratt.github.io/dataverse-curation-app/style-guide/) once Pages has deployed it.
+Thanks for helping improve Dataverse Docent. This guide covers how to report problems, propose changes, set up a development environment, and get your work through the gates. For the rules that govern the prose you write, read [docs/style-guide.md](docs/style-guide.md) or its [published version](https://isaacpratt.github.io/dataverse-curation-app/style-guide/).
 
 ## Report a bug or request a feature
 
@@ -52,7 +52,7 @@ CI runs the same gate on every pull request. A docs-only change still needs the 
 
 ## Write documentation
 
-- Follow [docs/style-guide.md](docs/style-guide.md) (also published on the documentation site once Pages has deployed it).
+- Follow [docs/style-guide.md](docs/style-guide.md) (also available on the [published documentation site](https://isaacpratt.github.io/dataverse-curation-app/style-guide/)).
 - Put one idea in one page and keep each page in one Diátaxis quadrant.
 - Use relative links between pages in `docs/`, fenced code blocks with a language, and commands copied from `pyproject.toml`.
 - Add a new page to the explicit `nav` in `zensical.toml`.

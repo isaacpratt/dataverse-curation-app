@@ -48,8 +48,9 @@ no server, so there is no need for an application-level secrets service.
   environment or to the plaintext file, and the fallback is loud.
 - The Windows exes are unsigned in the first releases (see `SECURITY.md`);
   credential storage does not change that. The signing policy was decided
-  on 2026-11-17 (SignPath Foundation, wired in `dv-4t6.6`), and the
-  decision bead was `dv-hcg.39`.
+  on 2026-11-17 (SignPath Foundation); wiring it into the release workflow
+  is tracked in `dv-4t6.6` and has not landed. The decision bead was
+  `dv-hcg.39`.
 
 ## Links
 

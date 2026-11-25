@@ -9,6 +9,10 @@
 > the frozen `docs/html/` tree was retired. References below to `docs/html/`
 > and to the original page names describe the state at the time of this
 > decision; the current layout is recorded in `docs/reports/diataxis-audit.md`.
+>
+> **Update (2026-11-24):** the repository is public and GitHub Pages is live at
+> `https://isaacpratt.github.io/dataverse-curation-app/`; the scheduled external
+> link check reports all published docs URLs reachable.
 
 ## Context
 

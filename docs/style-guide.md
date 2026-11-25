@@ -73,7 +73,7 @@ The `page_type` matches the quadrant, or `governance` for a governance page. The
 
 ## Linting
 
-- `uv run poe docs-lint` runs `pymarkdown --strict-config --config .pymarkdown.json scan -r docs CONTRIBUTING.md README.md`.
+- `uv run poe docs-lint` runs `pymarkdown --strict-config --config .pymarkdown.json scan -r docs CONTRIBUTING.md README.md SECURITY.md`.
 - `uv run poe docs-links` checks internal links in the Markdown tree offline; it makes no network requests.
 - `uv run poe docs` runs `zensical build --strict`; a broken relative link or anchor fails the build.
 - `uv run poe docs-check` chains Markdown lint, offline link check, both generated-section checks, and the strict build. This is the full docs gate.

@@ -162,6 +162,14 @@ type = "simple"
   help = "Run tests with engine coverage (floor from [tool.coverage.report])"
   cmd = "pytest -q --cov=engine --cov-report=term-missing"
 
+  # UI-only coverage, parallel because the UI suite is ~15 min serial and
+  # ~4 min with four workers. The floor is the honest clean-clone measurement
+  # and ratchets upward as UI tests land (dv-9ps); --cov-fail-under overrides
+  # the engine floor in [tool.coverage.report] for this task only.
+  [tool.poe.tasks.cover-ui]
+  help = "Run the UI suite with UI-only coverage against its ratcheting floor"
+  cmd = "pytest -q -n 4 ui/tests/ --cov=ui --cov-report=term-missing --cov-fail-under=71"
+
   # Parity tests against the R tooling's sample data. They are deselected by
   # default (the `samples` marker) because that data is a sibling clone, not
   # part of this repository; run this on purpose when you have it.
@@ -211,7 +219,7 @@ type = "simple"
 
   [tool.poe.tasks.docs-lint]
   help = "Lint the Markdown docs with pymarkdown (codespell runs in pre-commit)"
-  cmd = "pymarkdown --strict-config --config .pymarkdown.json scan -r docs CONTRIBUTING.md README.md"
+  cmd = "pymarkdown --strict-config --config .pymarkdown.json scan -r docs CONTRIBUTING.md README.md SECURITY.md"
 
   [tool.poe.tasks.docs]
   help = "Build the Zensical documentation site into site/ (strict: broken links fail)"
