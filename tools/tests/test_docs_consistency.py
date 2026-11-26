@@ -12,6 +12,7 @@ import json
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -87,6 +88,25 @@ def test_check_id_index_matches_registry() -> None:
     assert len(rows) == len(registry)
     assert block in page
     assert str(len(registry)) not in page  # no hardcoded registry count to go stale
+
+
+def test_tech_stack_reference_matches_the_lock() -> None:
+    """The published stack table is generated from the lock, not hand-written."""
+    sys.path.insert(0, str(ROOT / "tools" / "docs"))
+    from gen_tech_stack import check, render_stack
+
+    page = (DOCS / "reference" / "tech-stack.md").read_text(encoding="utf-8")
+    assert check(), "run `poe docs-gen-tech-stack` to regenerate the tech-stack reference"
+    block = render_stack()
+    assert block in page
+
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    declarations = project["project"]["dependencies"] + project["dependency-groups"]["dev"]
+    for declaration in declarations:
+        name = declaration.partition(">=")[0].partition("==")[0].strip()
+        assert f"`{name}`" in block, f"{name} absent from the generated stack table"
+    assert "`3.11`" in block
+    assert "`10.0.404`" in block
 
 
 def test_documented_api_endpoints_exist_in_source() -> None:

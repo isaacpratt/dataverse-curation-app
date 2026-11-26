@@ -99,7 +99,7 @@ External links are checked on a weekly schedule, not per PR.
 - `docs/index.md` — home and quadrant map
 - `docs/tutorials/first-review.md` — guided first review (TGDP Tutorial)
 - `docs/how-to/` — install, configure, run checks, respond/export, headless, add-a-check, gates, package/release
-- `docs/reference/` — checks, report contract, configuration, CLI, Dataverse API, entry checks, project layout, glossary
+- `docs/reference/` — checks, report contract, configuration, CLI, Dataverse API, entry checks, project layout, tech stack, glossary
 - `docs/explanation/` — architecture, discovery flow, entry correctness, engine port, UI conventions, design records
 - `docs/troubleshooting.md`, `docs/release-notes.md`, `docs/style-guide.md` — TGDP troubleshooting/release-notes and the docs style guide
 
