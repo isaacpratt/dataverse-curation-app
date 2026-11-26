@@ -83,6 +83,10 @@ class VersionsSection(DetailState):
             item = self._version_body.takeAt(0)
             w = item.widget()
             if w:
+                # Removed rows keep painting at their old geometry until
+                # deferred deletion runs; take them out of sight now.
+                w.hide()
+                w.setParent(None)
                 w.deleteLater()
         diff = self._version_diff
         versions = self._versions if isinstance(self._versions, list) else []

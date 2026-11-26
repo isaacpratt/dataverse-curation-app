@@ -261,6 +261,8 @@ class HeaderSection(DetailState):
                 item = self._auto_body.takeAt(i)
                 w = item.widget() if item is not None else None
                 if w is not None:
+                    w.hide()
+                    w.setParent(None)
                     w.deleteLater()
             if not files:
                 self._finding_keys = []
@@ -608,6 +610,7 @@ class HeaderSection(DetailState):
                 item = self._verdict_chips.takeAt(0)
                 w = item.widget() if item is not None else None
                 if w is not None:
+                    w.hide()  # never paint at the old geometry while pending deletion
                     w.setParent(None)  # unparent now; deleteLater is async
                     w.deleteLater()
             chips: list[QWidget] = []

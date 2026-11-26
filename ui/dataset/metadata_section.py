@@ -769,6 +769,12 @@ class MetadataSection(DetailState):
             item = lay.takeAt(0)
             widget = item.widget() if item is not None else None
             if widget is not None:
+                # A removed layout item keeps its parent and last geometry
+                # until Qt processes deleteLater. The "Load metadata"
+                # placeholder was painting over the rebuilt rows in that
+                # window (dv-nkip): hide and unparent it immediately.
+                widget.hide()
+                widget.setParent(None)
                 widget.deleteLater()
         self._meta_row_results = []
         self._meta_row_widgets = []
