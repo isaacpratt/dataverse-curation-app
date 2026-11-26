@@ -34,10 +34,38 @@ KEYRING_SERVICE = "Dataverse Docent"
 CONFIG_SCHEMA_VERSION = 1
 
 
-try:  # optional, hard-imported but never fatal to the app at runtime
-    import keyring as _keyring
-except Exception:  # pragma: no cover - keyring absent entirely
-    _keyring = None  # type: ignore[assignment]
+class _LazyKeyring:
+    """Import the OS credential store only when a token operation needs it.
+
+    ``keyring`` pulls in ``jaraco.context`` (~60ms) at import time. A curator
+    whose token lives in config.json never needs the store, so defer the
+    import to the first operation. Tests replace ``_keyring`` wholesale, so
+    the proxy must keep the module-level name and its truthiness contract.
+    """
+
+    def __init__(self) -> None:
+        self._module: Any = None
+        self._resolved = False
+
+    def _resolve(self) -> Any:
+        if not self._resolved:
+            try:
+                import keyring
+
+                self._module = keyring
+            except Exception:
+                self._module = None
+            self._resolved = True
+        return self._module
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._resolve(), name)
+
+    def __bool__(self) -> bool:
+        return self._resolve() is not None
+
+
+_keyring = _LazyKeyring()
 
 
 PRESETS: dict[str, str] = {
@@ -113,7 +141,7 @@ def _keyring_token(base_url: str) -> tuple[str, str]:
     ``error`` is a redaction-safe reason for a miss, so the caller can warn
     instead of silently running anonymous. Never raises.
     """
-    if _keyring is None:
+    if not _keyring:
         return "", "credential store unavailable"
     try:
         token = _keyring.get_password(KEYRING_SERVICE, str(base_url or "").rstrip("/") or "token")
@@ -543,7 +571,7 @@ class Config:
         token = self.dataverse.api_token
         persisted = token
         source = self.dataverse.api_token_source or "config"
-        if token and _keyring is not None:
+        if token and _keyring:
             try:
                 _keyring.set_password(KEYRING_SERVICE, kr_key, token)
                 return "", "keyring"
@@ -557,7 +585,7 @@ class Config:
                 except Exception:
                     pass
                 return token, "config"
-        if not token and _keyring is not None:
+        if not token and _keyring:
             # Token cleared in Settings: drop a stale credential, but do not
             # pay for a delete when there is nothing stored. On domain or
             # roaming profiles delete_password can block for seconds (dv-7cy8).

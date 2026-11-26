@@ -17,6 +17,7 @@ Intentional one-offs (NOT kit violations):
 
 import re
 import textwrap
+import weakref
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, cast
 
@@ -411,16 +412,63 @@ def _retheme_item_icons(widget: Any) -> int:
     return run
 
 
+#: Widgets whose scoped sheet was skipped because they were not visible
+#: during a switch. Weak: a widget destroyed while hidden must not be kept
+#: alive (or re-themed) later.
+_DEFERRED_RETHEME: "weakref.WeakSet[Any]" = weakref.WeakSet()
+
+
+class _ShowWatcher(QObject):
+    """Re-theme a deferred widget the moment it becomes visible."""
+
+    def eventFilter(self, obj: Any, event: Any) -> bool:
+        shown = event.type() in (QEvent.Type.Show, QEvent.Type.ShowToParent)
+        if shown and obj in _DEFERRED_RETHEME:
+            _DEFERRED_RETHEME.discard(obj)
+            obj.removeEventFilter(self)
+            try:
+                _retheme_widget(obj)
+                _retheme_item_icons(obj)
+            except Exception:
+                pass
+        return False
+
+
+_SHOW_WATCHER = _ShowWatcher()
+
+
+def _retheme_walk(root: Any) -> int:
+    """Re-theme one visible root; defer widgets that are not visible."""
+    run = 0
+    for widget in [root, *root.findChildren(QWidget)]:
+        try:
+            if not widget.isVisible():
+                # Defer, don't drop: the widget must wear the new theme
+                # when its page is shown. The watcher fires on Show and
+                # removes the widget from the set.
+                if getattr(widget, _theme.RETHEME_ATTR, None):
+                    _DEFERRED_RETHEME.add(widget)
+                    widget.installEventFilter(_SHOW_WATCHER)
+                continue
+            run += _retheme_widget(widget)
+            run += _retheme_item_icons(widget)
+        except Exception:
+            # One dead widget must not abort the whole switch.
+            continue
+    return run
+
+
 def _retheme_all(app: Any) -> int:
-    """Repaint every widget carrying a retheme spec. Returns how many ran.
+    """Repaint every *visible* widget carrying a retheme spec. Returns how many ran.
 
     Walks the *visible* top-level windows and their children, not
     ``app.allWidgets()``: a long session (and the test suite) accumulates
     hidden leaked windows, and walking those is what made a switch
-    expensive. A hidden page inside a visible window is still reached, so a
-    switch on the dashboard also fixes the detail page for when it is
-    shown. A widget in a hidden window is skipped and repainted by the next
-    switch after that window is shown.
+    expensive. Within a visible window, widgets that are not visible are
+    skipped too: a stacked page holds hundreds of descendants, and
+    re-polishing a hidden page's container costs ~0.5s. Those widgets are
+    registered with ``_SHOW_WATCHER`` and re-painted on the Show event, so
+    the page is correct when the curator next opens it.
     """
     run = 0
     roots: list[Any] = []
@@ -445,13 +493,7 @@ def _retheme_all(app: Any) -> int:
             pass
     try:
         for root in roots:
-            for widget in [root, *root.findChildren(QWidget)]:
-                try:
-                    run += _retheme_widget(widget)
-                    run += _retheme_item_icons(widget)
-                except Exception:
-                    # One dead widget must not abort the whole switch.
-                    continue
+            run += _retheme_walk(root)
     finally:
         for root in roots:
             try:

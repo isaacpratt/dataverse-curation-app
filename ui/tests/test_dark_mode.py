@@ -629,6 +629,55 @@ def test_retheme_skips_widgets_that_are_gone(qapp):
         theme.apply_theme(qapp, "light", retheme=True)
 
 
+def test_hidden_widget_defers_its_retint_until_shown(qapp):
+    """A hidden page is skipped on switch, then repainted on Show.
+
+    Re-polishing a hidden stacked page's container costs ~0.5s on a full
+    window, so a switch only touches visible widgets. The contract is that
+    the page is correct when the curator next opens it.
+    """
+    from PySide6.QtWidgets import QStackedWidget, QVBoxLayout, QWidget
+
+    from ui import theme
+    from ui.widgets import make_card
+
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light", retheme=True)
+    outer = QWidget()
+    outer.resize(240, 200)
+    outer_layout = QVBoxLayout(outer)
+    stack = QStackedWidget()
+    outer_layout.addWidget(stack)
+    shown = QWidget()
+    hidden = QWidget()
+    hidden.setObjectName("HiddenRetintHost")
+    stack.addWidget(shown)
+    stack.addWidget(hidden)
+    layout = QVBoxLayout(hidden)
+    outer.show()
+    qapp.processEvents()
+    card, _body, _title, _header = make_card("probe")
+    layout.addWidget(card)
+    stack.setCurrentIndex(1)
+    qapp.processEvents()
+    light_sheet = card.styleSheet()
+
+    stack.setCurrentIndex(0)  # the card's page is now hidden inside a visible window
+    qapp.processEvents()
+    theme.set_active_theme("dark")
+    theme.apply_theme(qapp, "dark", retheme=True)
+    qapp.processEvents()
+    assert card.styleSheet() == light_sheet, "hidden page must not be re-polished during the switch"
+
+    stack.setCurrentIndex(1)
+    qapp.processEvents()
+    assert card.styleSheet() != light_sheet
+    assert theme.role("SURFACE_CARD", "dark") in card.styleSheet()
+    outer.close()
+    theme.set_active_theme("light")
+    theme.apply_theme(qapp, "light", retheme=True)
+
+
 def test_retheme_can_be_switched_off_for_a_temporary_build(qapp):
     """The gallery builds a second theme in one process.
 

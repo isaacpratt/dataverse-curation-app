@@ -2264,6 +2264,32 @@ _APP_QSS_INSTALLED = False
 _APPLIED_PALETTE_THEME: str | None = None
 
 
+def _repolish_for_palette(app: "QApplication") -> None:
+    """Re-resolve ``palette(...)`` tokens after a palette swap.
+
+    Qt caches a resolved palette colour when a widget is polished, so
+    ``setPalette`` alone leaves already-polished widgets on the old palette
+    (dv-w0b9, dv-ygyv). Re-applying the whole application stylesheet re-
+    polishes every widget - ~1.6s on a populated window - just to refresh
+    those cached tokens. Calling ``unpolish``/``polish`` on the same
+    widgets resolves them in ~0.25s and paints identically.
+    """
+    from PySide6.QtWidgets import QWidget
+
+    try:
+        roots = [w for w in app.topLevelWidgets() if w.isVisible()]
+    except Exception:
+        return
+    for root in roots:
+        for widget in [root, *root.findChildren(QWidget)]:
+            try:
+                style = widget.style()
+                style.unpolish(widget)
+                style.polish(widget)
+            except Exception:
+                continue
+
+
 def apply_theme(app: "QApplication", theme: str | None = None, *, retheme: bool = False) -> None:
     """Register the bundled faces, then apply global QSS and default font.
 
@@ -2305,9 +2331,9 @@ def apply_theme(app: "QApplication", theme: str | None = None, *, retheme: bool 
         # widget is polished and caches the result. setPalette alone leaves
         # every already-polished widget on the old palette: the nav bar, page
         # backgrounds and nav-button hovers stayed light in dark mode
-        # (dv-w0b9, dv-ygyv). Re-applying the same stylesheet re-polishes the
-        # live widgets so those tokens resolve against the new palette.
-        app.setStyleSheet(palette_qss())
+        # (dv-w0b9, dv-ygyv). Re-polishing the widgets refreshes those tokens
+        # without re-applying - and re-parsing - the whole stylesheet.
+        _repolish_for_palette(app)
     _install_interaction_tracking(app)
     if retheme:
         retheme_widgets(app)
@@ -2525,6 +2551,12 @@ def label_badge_style(label: str) -> str:
 def _install_interaction_tracking(app: "QApplication") -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
     """Pointing-hand cursors + keyboard-only focus tint, in one app filter.
 
+    Installed once per application. ``apply_theme`` is called on every
+    theme switch; adding a fresh app-wide event filter and focusChanged
+    connection each time stacked them up, so every Qt event crossed into
+    Python once per switch ever made (2-4s per switch on a long session).
+    The guard below keeps exactly one pair for the process lifetime.
+
     Two behaviours share one QApplication event filter: QSS cannot set
     cursors, and it has no "focus arrived from the keyboard" selector.
     Keeping them together halves the Python callbacks during startup, when
@@ -2538,7 +2570,9 @@ def _install_interaction_tracking(app: "QApplication") -> None:  # noqa: C901 - 
     one loses it, painted as a colour tint — tabbing shows focus, clicking
     never does, and no outline is ever drawn (2026-10-02).
     """
-    try:
+    if getattr(app, "_interaction_installed", False):
+        return
+    try:  # optional, best-effort; a failed install must not break the theme
         from PySide6.QtCore import QEvent, QObject, Qt
         from PySide6.QtWidgets import QAbstractButton
 
@@ -2606,6 +2640,10 @@ def _install_interaction_tracking(app: "QApplication") -> None:  # noqa: C901 - 
                 pass
 
         app.focusChanged.connect(_on_focus_changed)
+        try:
+            cast(Any, app)._interaction_installed = True
+        except Exception:
+            pass
     except Exception:
         pass
 
