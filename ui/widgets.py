@@ -2583,6 +2583,23 @@ class _NoWheelCombo(QComboBox):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._wheel_armed = False
+        self._popup_delegate: QStyledItemDelegate | None = None
+
+    def _ensure_popup_delegate(self) -> None:
+        """Install the popup row delegate on first use, not at construction.
+
+        ``view()`` materialises QComboBox's internal list view (viewport plus
+        two scrollbars). Building it in the kit factory created ~375 hidden
+        widgets on the Review rules page alone. The delegate is needed only
+        when the curator actually opens the dropdown.
+        """
+        if self._popup_delegate is None:
+            self._popup_delegate = _ComboPopupRowDelegate(self)
+            self.view().setItemDelegate(self._popup_delegate)
+
+    def showPopup(self) -> None:
+        self._ensure_popup_delegate()
+        super().showPopup()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self._wheel_armed = True
@@ -2618,18 +2635,28 @@ def make_combo(
     height: int = 36,
     min_width: int = 130,
     tip: str = "",
+    accessible_name: str = "",
 ) -> QComboBox:
     """Build a standard dropdown (themed chevron, 12px semibold entries).
 
     items: list of labels or (label, data) tuples. Wheel-safe: the wheel
     only scrolls the value after the dropdown has been clicked open once.
+    The popup row delegate is installed on first open, so a page with many
+    combos does not build every hidden popup up front. ``height`` is a
+    minimum hit target, not a fixed box, so translated labels can grow.
     """
     combo = _NoWheelCombo(parent)
+    # Keep the declared hit-target and layout floor. AdjustToContents lets a
+    # translated label widen the field; the minimum width keeps dense grids
+    # from collapsing. Do not set minimumContentsLength: it forced every
+    # field wider than the layout's 110/180px contract.
     combo.setFixedHeight(height)
     combo.setMinimumWidth(min_width)
+    combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
     combo.setCursor(Qt.CursorShape.PointingHandCursor)
-    # Popup rows honor the app's menu row metrics (dv-tkz).
-    combo.view().setItemDelegate(_ComboPopupRowDelegate(combo))
+    name = accessible_name or tip
+    if name:
+        combo.setAccessibleName(name)
     if tip:
         combo.setToolTip(tip)
     for entry in items or []:
