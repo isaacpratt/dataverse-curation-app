@@ -629,6 +629,34 @@ def test_retheme_skips_widgets_that_are_gone(qapp):
         theme.apply_theme(qapp, "light", retheme=True)
 
 
+def test_retheme_registry_drops_destroyed_widgets(qapp):
+    """A destroyed C++ widget must not remain in the tracked set (dv-tqi4).
+
+    topLevelWidgets() used to hand back wrappers whose C++ object was gone;
+    the registry is pruned by the destroyed signal instead.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QWidget
+
+    from ui import theme
+    from ui.widgets import set_sheet
+
+    host = QWidget()
+    host.setObjectName("RegistryHost")
+    set_sheet(host, "page_background", ("RegistryHost",))
+    assert host in theme.RETHEME_WIDGETS
+    assert host in theme.retheme_top_levels()
+    host.show()
+    assert host in theme.visible_retheme_roots()
+    host.hide()
+    assert host not in theme.visible_retheme_roots()
+    host.deleteLater()
+    qapp.sendPostedEvents(host, QEvent.Type.DeferredDelete)
+    qapp.processEvents()
+    assert host not in theme.RETHEME_WIDGETS
+    assert host not in theme.retheme_top_levels()
+
+
 def test_hidden_widget_defers_its_retint_until_shown(qapp):
     """A hidden page is skipped on switch, then repainted on Show.
 

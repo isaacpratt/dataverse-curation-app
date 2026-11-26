@@ -155,6 +155,7 @@ def _register(widget: QWidget, name: str, *args: object, **kwargs: object) -> No
         specs = [s for s in specs if not (isinstance(s, tuple) and len(s) == 3 and s[0] == name)]
         specs.append((name, args, kwargs))
         setattr(widget, _theme.RETHEME_ATTR, specs)
+        _theme.register_retheme_widget(widget)
     except Exception:
         pass
 
@@ -471,18 +472,10 @@ def _retheme_all(app: Any) -> int:
     the page is correct when the curator next opens it.
     """
     run = 0
-    roots: list[Any] = []
-    try:
-        top_levels = app.topLevelWidgets()
-    except Exception:
-        return run
-    for top in top_levels:
-        # One dead leaked window must not abort the whole switch.
-        try:
-            if top.isVisible():
-                roots.append(top)
-        except Exception:
-            continue
+    # Roots come from the widgets we registered, never from
+    # QApplication.topLevelWidgets(): enumerating wrappers after C++
+    # deletion crashed Windows xdist workers with heap corruption (dv-tqi4).
+    roots = _theme.visible_retheme_roots()
     # One paint pass for the whole switch: rebuilding a sheet re-polishes
     # the widget, and letting each one repaint in turn is a visible freeze
     # on a window with a real dataset (dv-314).

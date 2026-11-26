@@ -59,7 +59,13 @@ def pane(qapp, tmp_path, monkeypatch):
     widget._start_probe_worker()
     if widget._probe_worker is not None:
         widget._probe_worker.wait(5000)
-    for _ in range(10):
+    # The done signal is queued; drain events until the version lands. Ten
+    # iterations was not enough on a loaded CI worker (intermittent flake).
+    for _ in range(100):
+        qapp.processEvents()
+        if widget._ext_probe_cache.get("pyreadstat", (None, "", ""))[1] == "1.2.3":
+            break
+    for _ in range(5):
         qapp.processEvents()
     yield widget
     widget.close()

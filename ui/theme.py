@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import weakref
 from collections.abc import Callable, Mapping
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, cast
@@ -450,6 +451,45 @@ ROLE_TABLES: dict[str, dict[str, str]] = {
 
 # The theme the app paints.
 ACTIVE_THEME = "light"
+
+
+#: Live widgets carrying a retheme spec. Weak, with entries dropped on
+#: ``destroyed``, so enumeration never touches a deleted C++ widget.
+RETHEME_WIDGETS: "weakref.WeakSet[Any]" = weakref.WeakSet()
+
+
+def register_retheme_widget(widget: "QWidget") -> None:
+    """Track a spec-bearing widget for live switches (dv-tqi4).
+
+    ``QApplication.topLevelWidgets()`` hands back Python wrappers whose C++
+    object may already be gone; touching one corrupted the heap on Windows
+    xdist workers. Tracking the widgets we own and dropping them on
+    ``destroyed`` removes that whole failure mode.
+    """
+    try:
+        if widget not in RETHEME_WIDGETS:
+            RETHEME_WIDGETS.add(widget)
+            widget.destroyed.connect(lambda *_a, w=widget: RETHEME_WIDGETS.discard(w))
+    except Exception:
+        pass
+
+
+def retheme_top_levels() -> list["QWidget"]:
+    """Top-level windows that own a tracked spec widget, visible or not."""
+    tops: list[QWidget] = []
+    for widget in list(RETHEME_WIDGETS):
+        try:
+            window = widget.window()
+            if window not in tops:
+                tops.append(window)
+        except Exception:
+            continue
+    return tops
+
+
+def visible_retheme_roots() -> list["QWidget"]:
+    """Return the visible windows a live switch should paint."""
+    return [w for w in retheme_top_levels() if w.isVisible()]
 
 
 def role_table(theme: str | None = None) -> Mapping[str, str]:
@@ -2276,11 +2316,7 @@ def _repolish_for_palette(app: "QApplication") -> None:
     """
     from PySide6.QtWidgets import QWidget
 
-    try:
-        roots = [w for w in app.topLevelWidgets() if w.isVisible()]
-    except Exception:
-        return
-    for root in roots:
+    for root in visible_retheme_roots():
         for widget in [root, *root.findChildren(QWidget)]:
             try:
                 style = widget.style()
@@ -2696,6 +2732,7 @@ def selectable_labels(root: "QWidget") -> None:
                 ]
                 specs.append(("label_palette", (), {}))
                 setattr(lbl, RETHEME_ATTR, specs)
+                register_retheme_widget(lbl)
             except Exception:
                 continue
     except Exception:
