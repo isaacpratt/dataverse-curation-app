@@ -468,10 +468,13 @@ class HeaderSection(DetailState):
         set_badge_label(pill, text, label=label)
 
     def _status_context(self) -> str:
-        """Short count detail for the compact widget, from state in memory."""
-        staged = int(getattr(self, "_staged_n", 0) or 0)
-        total = int(getattr(self, "_staged_total", 0) or 0)
-        return f"{staged}/{total}" if total else ""
+        """No count detail: the status line owns one full-width message.
+
+        A bare ``n/N`` beside the message was the leftover ``20/20`` element
+        users kept seeing (dv-4dg5); counts already live in the metadata and
+        file cards.
+        """
+        return ""
 
     def _refresh_rail_counts(self, summary: Any = None) -> None:
         """Feed the rail's result pills from every check family (dv-gfx.14).

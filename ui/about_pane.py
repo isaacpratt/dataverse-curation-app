@@ -143,6 +143,7 @@ class AboutPane(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds below this pane.
         self.setObjectName("AboutPane")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         set_sheet(self, "page_background", ("AboutPane",))
 
         # Updates section state (the feed logic lives in ui/updater.py).

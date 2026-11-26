@@ -665,6 +665,14 @@ class DatasetDetailView(
         except Exception:
             pass
 
+        # These cards sit flush under the tab bar: their header top corners
+        # must be square so no notch appears inside the sidebar (dv-0aoh).
+        # Applied after every builder has run, so a later repaint cannot
+        # restore the rounded standalone-card face.
+        for _card in (self._preview_card, self._version_card, self._dataset_log_card):
+            _card.setProperty("nestedCard", True)
+            set_sheet(_card, "card")
+
         self._install_shortcuts()
 
     def resizeEvent(self, event: QResizeEvent) -> None:

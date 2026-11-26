@@ -34,6 +34,8 @@ from PySide6.QtGui import (
     QKeySequence,
     QMouseEvent,
     QPainter,
+    QPaintEvent,
+    QPen,
     QPixmap,
     QShortcut,
     QShowEvent,
@@ -311,9 +313,11 @@ def _tinted_icon(source: QIcon, color: str, size: int = 16) -> QIcon:
 class _CaptionButton(QPushButton):
     """Windows caption button (minimize / maximize / restore / close).
 
-    Glyphs are QStyle standard pixmaps — the same artwork a native title
-    bar draws — instead of text characters. The close glyph flips to
-    white-on-red on hover/press, like the real thing.
+    The glyphs are painted as the thin, 1px shapes a modern Windows caption
+    uses. QStyle's standard pixmaps are the older, heavy outlined variants
+    (a filled square, an X in a box), which do not match the system chrome
+    on current Windows (dv-gl4p). The close glyph flips to white-on-red on
+    hover/press, like the real thing.
     """
 
     def __init__(self, kind: str, parent: QWidget | None = None) -> None:
@@ -332,6 +336,7 @@ class _CaptionButton(QPushButton):
         # not an app button (square caption face, red close hover) — the kit's
         # button kinds cannot express it.
         set_sheet(self, "caption_button", kind)
+        self.setIcon(QIcon())  # glyphs are painted directly in paintEvent
         self._apply_icon()
 
     def set_glyph(self, kind: str) -> None:
@@ -349,18 +354,30 @@ class _CaptionButton(QPushButton):
         self._apply_icon()
 
     def _apply_icon(self) -> None:
-        try:
-            glyph = self.style().standardIcon(_CAPTION_GLYPHS[self._kind])
-            # Tint the native glyph for the active theme: a frameless
-            # window's caption control otherwise keeps the platform's dark
-            # ink on a dark sheet (dv-314).
-            hovering = self._kind == "close" and (
-                self._hovered or self.underMouse() or self.isDown()
-            )
-            ink = role("TEXT_ON_ACCENT") if hovering else role("TEXT_PRIMARY")
-            self.setIcon(_tinted_icon(glyph, ink, 14))
-        except Exception:
-            pass
+        """Repaint the hand-drawn glyph (colour depends on hover/theme)."""
+        self.update()
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        # Let QSS paint the square caption face and the close hover first.
+        super().paintEvent(event)
+        hot = self._kind == "close" and (self._hovered or self.underMouse() or self.isDown())
+        ink = QColor(role("TEXT_ON_ACCENT") if hot else role("TEXT_PRIMARY"))
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        painter.setPen(QPen(ink, 1, Qt.PenStyle.SolidLine))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        cx, cy = self.width() // 2, self.height() // 2
+        if self._kind == "min":
+            painter.drawLine(cx - 5, cy, cx + 5, cy)
+        elif self._kind == "max":
+            painter.drawRect(cx - 5, cy - 5, 10, 10)
+        elif self._kind == "restore":
+            painter.drawRect(cx - 6, cy - 6, 8, 8)
+            painter.drawRect(cx - 3, cy - 3, 8, 8)
+        else:  # close
+            painter.drawLine(cx - 5, cy - 5, cx + 5, cy + 5)
+            painter.drawLine(cx + 5, cy - 5, cx - 5, cy + 5)
+        painter.end()
 
     def set_hovered(self, on: bool) -> None:
         """Mirror hover into a dynamic property and force the restyle.
@@ -682,7 +699,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        set_sheet(scroll, "page_background", ())
+        set_sheet(scroll, "page_background")
         scroll.setWidget(pane)
         return scroll
 
@@ -747,6 +764,17 @@ class MainWindow(QMainWindow):
             self._dashboard.start_background_load()
         except Exception:
             pass
+
+        # The Settings module pulls in curation.client/requests on first
+        # import (~400ms). Warm it while the dashboard paints so clicking
+        # Settings never pays that cost (dv-sfkb).
+        def _warm_settings() -> None:
+            try:
+                import ui.settings_dialog  # noqa: F401
+            except Exception:
+                pass
+
+        QTimer.singleShot(0, _warm_settings)
 
     # -- slots ----------------------------------------------------------
 
@@ -903,11 +931,6 @@ class MainWindow(QMainWindow):
         self._show_pane("log" if checked else None)
 
     def _on_settings_toggled(self, checked: bool) -> None:
-        if checked:
-            try:
-                self._ensure_settings().reload()
-            except Exception:
-                pass
         if not self._show_pane("settings" if checked else None):
             # Cancel kept the pane open; snap the toggle back without
             # re-entering this handler.
@@ -934,10 +957,6 @@ class MainWindow(QMainWindow):
         self._show_pane("help")
 
     def _open_settings(self) -> None:
-        try:
-            self._ensure_settings().reload()
-        except Exception:
-            pass
         self._show_pane("settings")
 
     def _on_configuration_changed(self) -> None:

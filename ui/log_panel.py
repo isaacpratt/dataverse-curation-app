@@ -16,7 +16,7 @@ same brand palette as the rest of the app.
 
 from re import Match
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -44,6 +44,7 @@ from ui.widgets import (
     make_search_field,
     make_text_label,
     set_icon,
+    set_sheet,
 )
 
 
@@ -53,6 +54,10 @@ class LogPage(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("LogPage")
+        # A plain QWidget needs WA_StyledBackground before its stylesheet
+        # background actually paints (dv-w0b9).
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        set_sheet(self, "page_background", ("LogPage",))
         layout = QVBoxLayout(self)
         # Same page padding as every other full-page view (MARGIN_PAGE).
         layout.setContentsMargins(24, 24, 24, 24)

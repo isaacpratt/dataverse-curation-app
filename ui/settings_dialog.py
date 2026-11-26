@@ -118,6 +118,28 @@ class _SizeWorker(QThread):
         self.done.emit(result if isinstance(result, dict) else {})
 
 
+class _ProbeWorker(QThread):
+    """Resolve package install states off the GUI thread; emits a result dict."""
+
+    done = Signal(dict)
+
+    def __init__(
+        self,
+        func: Callable[[], dict[str, tuple[bool | None, str, str]]],
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        register_worker(self)
+        self._func = func
+
+    def run(self) -> None:
+        try:
+            result = self._func()
+        except Exception:
+            result = {}
+        self.done.emit(result)
+
+
 class SettingsPane(QWidget):
     """Edit dataverse.base_url/api_token/subtree, app.workspace and tool paths.
 
@@ -153,6 +175,7 @@ class SettingsPane(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds (e.g. the extensions table).
         self.setObjectName("SettingsDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         set_sheet(self, "page_background", ("SettingsDialog",))
         # Baseline-based dirty tracking: capture the saved values after a
         # reload, compare on every edit, and guard every exit.
@@ -458,6 +481,11 @@ class SettingsPane(QWidget):
         self._tool_paths: dict[str, str] = {}
         self._shell_worker: _ShellWorker | None = None
         self._size_worker: _SizeWorker | None = None
+        self._probe_worker: _ProbeWorker | None = None
+        # Package version probing falls back to importing libraries in a
+        # frozen build, which takes >1s on first open. Cache the result and
+        # compute it off the GUI thread (dv-sfkb).
+        self._ext_probe_cache: dict[str, tuple[bool | None, str, str]] = {}
         # Package-size cache: os.walk per package is seconds-slow, so sizes
         # are computed once per pane lifetime; Refresh re-walks on demand.
         # First paint shows "…" and fills in from a background worker so the
@@ -474,14 +502,55 @@ class SettingsPane(QWidget):
         except Exception:
             pass
         QTimer.singleShot(0, self._start_size_worker)
+        QTimer.singleShot(0, self._start_probe_worker)
 
-    def _start_size_worker(self) -> None:
+    def _start_probe_worker(self) -> None:
+        """Resolve installed states/versions off the GUI thread (dv-sfkb)."""
+        if self._probe_worker is not None and self._probe_worker.isRunning():
+            return
+
+        def _work() -> dict[str, tuple[bool | None, str, str]]:
+            return {
+                pip_name: self._probe_extension(pip_name, import_name)
+                for pip_name, import_name, _desc in self.EXTENSIONS
+            }
+
+        worker = _ProbeWorker(_work, self)
+        worker.done.connect(self._on_probe_done)
+        worker.finished.connect(self._clear_probe_worker)
+        worker.finished.connect(worker.deleteLater)
+        self._probe_worker = worker
+        worker.start()
+
+    @staticmethod
+    def _probe_extension(pip_name: str, import_name: str) -> tuple[bool | None, str, str]:
+        try:
+            ver = importlib.metadata.version(pip_name)
+            return True, str(ver), t("settings.extensions.installed_lower")
+        except importlib.metadata.PackageNotFoundError:
+            try:
+                __import__(import_name)
+                return True, "—", t("settings.extensions.installed_lower")
+            except ImportError:
+                return False, "—", t("settings.extensions.not_installed")
+        except Exception:
+            return None, "?", "?"
+
+    def _on_probe_done(self, result: dict[str, Any]) -> None:
+        if not isinstance(result, dict):
+            return
+        self._ext_probe_cache.update(result)
+        self._refresh_extensions()
+
+    def _clear_probe_worker(self) -> None:
+        self._probe_worker = None
+
+    def _start_size_worker(self, *, force: bool = False) -> None:
         """Compute package sizes off the GUI thread; patch rows when done."""
         if self._size_worker is not None and self._size_worker.isRunning():
             return
         # The first fill already ran at construction; a refresh re-walks.
-        if getattr(self, "_sizes_started", False):
-            self._refresh_sizes()
+        if getattr(self, "_sizes_started", False) and not force:
             return
         self._sizes_started = True
         rows = list(self.EXTENSIONS)
@@ -541,7 +610,7 @@ class SettingsPane(QWidget):
         """Clear the size cache and re-walk installed packages on demand."""
         self._size_cache = {}
         self._refresh_extensions()
-        self._start_size_worker()
+        self._start_size_worker(force=True)
 
     def _on_reset_ext_view(self) -> None:
         """Reset the extensions table to its construction view."""
@@ -784,25 +853,11 @@ class SettingsPane(QWidget):
         for row, (pip_name, import_name, desc) in enumerate(self.EXTENSIONS):
             self.ext_table.setItem(row, 0, QTableWidgetItem(pip_name))
 
-            try:
-                ver = importlib.metadata.version(pip_name if pip_name != "Pillow" else "Pillow")
-                is_installed = True
-                version_text = str(ver)
-                state_tip = t("settings.extensions.installed_lower")
-            except importlib.metadata.PackageNotFoundError:
-                try:
-                    __import__(import_name)
-                    is_installed = True
-                    version_text = "—"
-                    state_tip = t("settings.extensions.installed_lower")
-                except ImportError:
-                    is_installed = False
-                    version_text = "—"
-                    state_tip = t("settings.extensions.not_installed")
-            except Exception:
-                is_installed = None  # unknown — minus glyph
-                version_text = "?"
-                state_tip = "?"
+            # The probe worker owns the slow metadata/import work; until it
+            # answers, show a quiet placeholder instead of blocking the UI.
+            is_installed, version_text, state_tip = self._ext_probe_cache.get(
+                pip_name, (None, "…", "…")
+            )
             # Installed column: icon only (check / X / minus); words live in
             # the tooltip/accessible text so the state isn't colour-only.
             inst_item = QTableWidgetItem("")
@@ -1420,6 +1475,16 @@ class SettingsPane(QWidget):
 
     def persist(self) -> bool:
         """Validate and write config.json; no navigation, no `saved` signal."""
+        # Nothing changed: skip the disk/keyring write, the retheme and the
+        # dashboard refresh entirely (dv-7cy8).
+        if self._snapshot() == self._baseline:
+            return True
+        old_connection = (
+            self._config.dataverse.base_url,
+            self._config.dataverse.api_token,
+            self._config.dataverse.collection,
+            self._config.app.workspace,
+        )
         try:
             base = normalise_base_url(self.url_edit.text())
         except ValueError:
@@ -1462,7 +1527,14 @@ class SettingsPane(QWidget):
         self._dirty = False
         self._footer.set_dirty(False)
         self._footer.set_status(t("settings.save.saved_to"))
-        self.configurationChanged.emit()
+        new_connection = (
+            self._config.dataverse.base_url,
+            self._config.dataverse.api_token,
+            self._config.dataverse.collection,
+            self._config.app.workspace,
+        )
+        if new_connection != old_connection:
+            self.configurationChanged.emit()
         return True
 
     def _on_save(self) -> None:
@@ -1490,6 +1562,10 @@ class SettingsPane(QWidget):
         )
 
         theme = resolve_theme_mode(self._config.app.theme_mode)
+        # The toggle already paints a live switch; do not walk and re-polish
+        # every widget again just because Settings was saved (dv-7cy8).
+        if theme == ACTIVE_THEME:
+            return
         app = QApplication.instance()
         if not isinstance(app, QApplication):
             set_active_theme(theme)

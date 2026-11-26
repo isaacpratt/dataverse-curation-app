@@ -126,7 +126,9 @@ def test_status_widget_stacks_text_bar_then_findings(qapp):
         assert widget._chips not in nested
         assert StatusWidget._clean_detail("*/*") == ""
         assert StatusWidget._clean_detail("* / *") == ""
-        assert StatusWidget._clean_detail("7/21") == "7/21"
+        # A bare count is not a status message (dv-4dg5).
+        assert StatusWidget._clean_detail("7/21") == ""
+        assert StatusWidget._clean_detail("12 passed · 2 warnings") == "12 passed · 2 warnings"
     finally:
         widget.deleteLater()
 

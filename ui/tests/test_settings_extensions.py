@@ -54,6 +54,11 @@ def pane(qapp, tmp_path, monkeypatch):
     if tabs is not None:
         tabs.setCurrentIndex(1)
     widget.show()
+    # Versions are resolved by a background worker now; wait for it so the
+    # assertions see real values rather than the initial placeholder.
+    widget._start_probe_worker()
+    if widget._probe_worker is not None:
+        widget._probe_worker.wait(5000)
     for _ in range(10):
         qapp.processEvents()
     yield widget
