@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from PySide6.QtCore import QEvent, QObject
     from PySide6.QtWidgets import (
         QApplication,
+        QLabel,
         QListWidget,
         QTableWidget,
         QWidget,
@@ -2587,18 +2588,31 @@ def _install_interaction_tracking(app: "QApplication") -> None:  # noqa: C901 - 
         pass
 
 
+def selectable_label_palette(label: "QLabel") -> None:
+    """Paint one selectable label's selection from the active role table."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor, QPalette
+
+    pal = label.palette()
+    pal.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.transparent)
+    pal.setColor(QPalette.ColorRole.Window, Qt.GlobalColor.transparent)
+    pal.setColor(QPalette.ColorRole.Highlight, QColor(role("ACCENT_TINT")))
+    pal.setColor(QPalette.ColorRole.HighlightedText, QColor(role("TEXT_ON_ACCENT")))
+    label.setPalette(pal)
+
+
 def selectable_labels(root: "QWidget") -> None:
     """Make every QLabel under root selectable with mouse + keyboard.
 
     The selection is themed: the system highlight colour is not used (it
     renders as a black box behind the text on a dark palette), the app
-    paints the same light-blue selection its inputs use. A rich-text
-    label also paints its document background with the palette's Base
-    role, which is kept transparent so no box shows behind the text.
+    paints the same blue selection its inputs use. A rich-text label also
+    paints its document background with the palette's Base role, which is
+    kept transparent so no box shows behind the text. The palette is
+    registered for re-tinting on a live switch.
     """
     try:
         from PySide6.QtCore import Qt
-        from PySide6.QtGui import QColor, QPalette
         from PySide6.QtWidgets import QLabel
 
         for lbl in root.findChildren(QLabel):
@@ -2609,12 +2623,19 @@ def selectable_labels(root: "QWidget") -> None:
                     | Qt.TextInteractionFlag.TextSelectableByMouse
                     | Qt.TextInteractionFlag.TextSelectableByKeyboard
                 )
-                pal = lbl.palette()
-                pal.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.transparent)
-                pal.setColor(QPalette.ColorRole.Window, Qt.GlobalColor.transparent)
-                pal.setColor(QPalette.ColorRole.Highlight, QColor(PRIMARY_FIXED))
-                pal.setColor(QPalette.ColorRole.HighlightedText, QColor(ON_SURFACE))
-                lbl.setPalette(pal)
+                selectable_label_palette(lbl)
+                # Append, never overwrite: a kit label may already carry
+                # a text-colour spec.
+                specs = getattr(lbl, RETHEME_ATTR, None)
+                if not isinstance(specs, list):
+                    specs = []
+                specs = [
+                    s
+                    for s in specs
+                    if not (isinstance(s, tuple) and len(s) == 3 and s[0] == "label_palette")
+                ]
+                specs.append(("label_palette", (), {}))
+                setattr(lbl, RETHEME_ATTR, specs)
             except Exception:
                 continue
     except Exception:

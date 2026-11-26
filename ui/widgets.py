@@ -335,6 +335,7 @@ _REBUILDERS: dict[str, Any] = {
     ),
     "caption_button": lambda w, kind: _apply_caption_button(w, kind),
     "icon": lambda w, name, color, size: _apply_icon(w, name, color, size),
+    "label_palette": lambda w: _theme.selectable_label_palette(w),
     "workflow_rail": lambda w: w._retheme(),
 }
 

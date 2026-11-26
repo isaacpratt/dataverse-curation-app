@@ -57,7 +57,7 @@ def qapp():
 
 
 @pytest.fixture(autouse=True)
-def _no_leaked_windows(qapp):
+def _drain_events(qapp):
     """Drain posted events between tests.
 
     Hiding leaked windows by enumerating ``topLevelWidgets()`` is no longer
