@@ -1244,9 +1244,7 @@ class DataverseClient(_DownloadsMixin):
             return
         from curation.client.errors import ApiTokenRequired
 
-        get_app_log().error(
-            f"{what} needs a Dataverse API token — no anonymous request was sent"
-        )
+        get_app_log().error(f"{what} needs a Dataverse API token — no anonymous request was sent")
         raise ApiTokenRequired(f"{what} requires a Dataverse API token; add one in Settings")
 
     def get_dataset_metadata(self, identifier: str) -> dict[str, Any]:

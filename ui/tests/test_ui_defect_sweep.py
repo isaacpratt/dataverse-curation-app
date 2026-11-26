@@ -66,9 +66,7 @@ def test_dashboard_first_load_keeps_content_autofit(win, qapp, tmp_path):
         dash._reset_queue_layout()
         for _ in range(10):
             qapp.processEvents()
-        after_reset = [
-            hdr.sectionSize(i) for i in range(hdr.count()) if not hdr.isSectionHidden(i)
-        ]
+        after_reset = [hdr.sectionSize(i) for i in range(hdr.count()) if not hdr.isSectionHidden(i)]
         assert first == after_reset, (first, after_reset)
     finally:
         fresh.close()
@@ -88,7 +86,8 @@ def test_rail_is_a_white_band_with_rule_spacing_and_shadow(qapp, tmp_path):
         sheet = rail.styleSheet().lower()
         assert "border-bottom" in sheet
         top = view._rail.parentWidget()
-        assert top is not None and top.layout() is not None
+        assert top is not None
+        assert top.layout() is not None
         assert top.layout().contentsMargins().top() > 0
     finally:
         view.close()
@@ -99,7 +98,7 @@ def test_rail_is_a_white_band_with_rule_spacing_and_shadow(qapp, tmp_path):
 
 
 def test_status_widget_stacks_text_bar_then_findings(qapp):
-    from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
+    from PySide6.QtWidgets import QVBoxLayout
 
     from ui.widgets import StatusWidget
 
@@ -201,7 +200,8 @@ def test_version_and_dataset_logs_are_top_aligned(qapp, tmp_path):
     try:
         assert view._version_body.alignment() & Qt.AlignmentFlag.AlignTop
         body = view._dataset_log.parentWidget()
-        assert body is not None and body.layout() is not None
+        assert body is not None
+        assert body.layout() is not None
         assert body.layout().alignment() & Qt.AlignmentFlag.AlignTop
     finally:
         view.close()
@@ -238,8 +238,8 @@ def test_log_highlighter_resolves_colours_from_live_roles(qapp, monkeypatch):
 
 
 def test_settings_uses_one_light_dark_switch(win, monkeypatch):
-    from ui.widgets import ToggleSwitch
     from ui.settings_dialog import SettingsPane
+    from ui.widgets import ToggleSwitch
 
     monkeypatch.setattr(SettingsPane, "_apply_theme", lambda self: None)
     pane = win._ensure_settings()

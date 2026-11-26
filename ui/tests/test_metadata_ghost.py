@@ -61,9 +61,7 @@ def test_placeholder_disappears_when_completeness_loads(qapp, tmp_path):
     pending = t("detail.metadata_check.pending_body")
     try:
         assert any(
-            pending in label.text()
-            for label in view.findChildren(QLabel)
-            if label.isVisible()
+            pending in label.text() for label in view.findChildren(QLabel) if label.isVisible()
         ), "the pending row must show before metadata loads"
 
         view._populate_completeness(_meta())

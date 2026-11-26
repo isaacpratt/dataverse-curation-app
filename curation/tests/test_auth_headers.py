@@ -98,9 +98,7 @@ def test_keyring_miss_is_flagged_instead_of_silent_anonymous(monkeypatch, tmp_pa
     from curation import config
 
     cfg_path = tmp_path / "config.json"
-    cfg_path.write_text(
-        '{"dataverse":{"api_token_source":"keyring"}}', encoding="utf-8"
-    )
+    cfg_path.write_text('{"dataverse":{"api_token_source":"keyring"}}', encoding="utf-8")
     monkeypatch.setattr(config, "resolve_config_path", lambda _p=None: cfg_path)
     monkeypatch.setattr(config, "_keyring_token", lambda _url: ("", "no credential stored"))
     cfg = config.Config.load()

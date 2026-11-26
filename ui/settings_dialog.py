@@ -1470,7 +1470,7 @@ class SettingsPane(QWidget):
             self.saved.emit()
 
     def _on_theme_toggled(self, checked: bool) -> None:
-        """The light/dark switch writes its mode and paints it live."""
+        """Write the chosen light/dark mode and paint it live."""
         if self._loading:
             return
         self._config.app.theme_mode = "dark" if checked else "light"

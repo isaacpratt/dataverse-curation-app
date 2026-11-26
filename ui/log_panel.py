@@ -33,8 +33,8 @@ from PySide6.QtWidgets import (
 )
 
 import curation.applog as applog
-from ui.i18n import t
 from ui import theme as _theme
+from ui.i18n import t
 from ui.theme import role
 from ui.widgets import (
     make_action_button,

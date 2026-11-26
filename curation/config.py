@@ -108,9 +108,7 @@ def _keyring_token(base_url: str) -> tuple[str, str]:
     if _keyring is None:
         return "", "credential store unavailable"
     try:
-        token = _keyring.get_password(
-            KEYRING_SERVICE, str(base_url or "").rstrip("/") or "token"
-        )
+        token = _keyring.get_password(KEYRING_SERVICE, str(base_url or "").rstrip("/") or "token")
     except Exception as exc:
         return "", f"credential store read failed ({type(exc).__name__})"
     if not token:

@@ -12,11 +12,7 @@ from curation.metadata_check import check_metadata_completeness, check_with_rule
 def _metadata(title: str) -> dict[str, Any]:
     return {
         "latestVersion": {
-            "metadataBlocks": {
-                "citation": {
-                    "fields": [{"typeName": "title", "value": title}]
-                }
-            }
+            "metadataBlocks": {"citation": {"fields": [{"typeName": "title", "value": title}]}}
         }
     }
 
