@@ -80,8 +80,8 @@ class VersionsSection(DetailState):
         from PySide6.QtWidgets import QListWidgetItem
 
         while self._version_body.count():
-            item = self._version_body.takeAt(0)
-            w = item.widget()
+            layout_item = self._version_body.takeAt(0)
+            w = layout_item.widget() if layout_item is not None else None
             if w:
                 # Removed rows keep painting at their old geometry until
                 # deferred deletion runs; take them out of sight now.

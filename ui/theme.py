@@ -15,6 +15,7 @@ import re
 import subprocess
 import sys
 from collections.abc import Callable, Mapping
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -460,13 +461,30 @@ def role_table(theme: str | None = None) -> Mapping[str, str]:
     return table
 
 
-def role(name: str, theme: str | None = None) -> str:
-    """Resolve one role name to the colour it wears in a theme."""
+def _resolve_role(name: str, theme: str | None = None) -> str:
+    """Look a role up in a theme's table, with no resolver in play."""
     table = role_table(theme)
     try:
         return table[name]
     except KeyError:
         raise KeyError(f"unknown role {name!r} in theme {theme or ACTIVE_THEME!r}") from None
+
+
+#: An optional resolver used while generating the static palette sheet.
+#: A ContextVar (rather than a module-global swap) keeps the override local
+#: to the generating thread/task and restores it by token, so generation is
+#: re-entrant and cannot leak into a parallel theme build.
+_ROLE_RESOLVER: ContextVar[Callable[[str, str | None], str] | None] = ContextVar(
+    "_ROLE_RESOLVER", default=None
+)
+
+
+def role(name: str, theme: str | None = None) -> str:
+    """Resolve one role name to the colour it wears in a theme."""
+    resolver = _ROLE_RESOLVER.get()
+    if resolver is not None:
+        return resolver(name, theme)
+    return _resolve_role(name, theme)
 
 
 #: Which of our semantic roles back a standard ``QPalette`` role. Only
@@ -530,22 +548,19 @@ def palette_qss() -> str:
     effectively free. Exact, role-specific faces stay in scoped sheets
     and are re-tinted by the retheme hook.
     """
-    original: Callable[[str, str | None], str] = cast(
-        Callable[[str, str | None], str], globals()["role"]
-    )
     mapping = {**PALETTE_QSS_FALLBACK, **PALETTE_ROLE_MAP}
 
     def mapped(name: str, theme: str | None = None) -> str:
         qt_role = mapping.get(name)
         if qt_role is None:
-            return original(name, theme)
+            return _resolve_role(name, theme)
         return f"palette({_qt_qss_token(qt_role)})"
 
-    globals()["role"] = mapped
+    token = _ROLE_RESOLVER.set(mapped)
     try:
         sheet = global_qss("light")
     finally:
-        globals()["role"] = original
+        _ROLE_RESOLVER.reset(token)
     # Qt accepts palette() in colour values, not in the `background`
     # shorthand.
     return re.sub(r"background: palette\(([^)]+)\)", r"background-color: palette(\1)", sheet)

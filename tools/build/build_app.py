@@ -23,6 +23,10 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.build._sizes import dir_size_mb  # noqa: E402
 
 #: The executable and its folder. One name, everywhere: the PyInstaller
 #: artefact, the shortcut target, the installer's --mainExe and the file a
@@ -87,17 +91,6 @@ SAFE_EXCLUDES = [
 EXAMPLE_CONFIG = ROOT / "config.example.json"
 
 
-def _dir_size_mb(path: Path) -> float:
-    total = 0
-    for item in path.rglob("*"):
-        try:
-            if item.is_file():
-                total += item.stat().st_size
-        except OSError:
-            continue
-    return total / (1024 * 1024)
-
-
 def build() -> Path:
     """Run PyInstaller and return the folder it produced."""
     args = [sys.executable, "-m", "PyInstaller", *ARGS]
@@ -118,7 +111,7 @@ def build() -> Path:
     if EXAMPLE_CONFIG.is_file():
         shutil.copy(EXAMPLE_CONFIG, dist / EXAMPLE_CONFIG.name)
 
-    print(f"{NAME}: {_dir_size_mb(dist):.0f} MB built in {elapsed:.0f} s -> {dist}")
+    print(f"{NAME}: {dir_size_mb(dist):.0f} MB built in {elapsed:.0f} s -> {dist}")
     return dist
 
 

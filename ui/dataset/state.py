@@ -46,10 +46,13 @@ from curation.client import DataverseClient
 from curation.config import Config
 from curation.download_manager import DownloadManager
 from ui.table_layout import TableLayout
-from ui.widgets import AppButton, AppTree, ElidedLabel, WorkflowRail
+from ui.widgets import AppButton, AppTree, ElidedLabel, StatusWidget, WorkflowRail
 from ui.workers import CheckWorker, DownloadWorker, MetadataWorker
 
 if TYPE_CHECKING:
+    from PySide6.QtGui import QShortcut
+
+    from engine.report import DatasetReport
     from ui.preview import PreviewCard
 
 
@@ -70,28 +73,28 @@ class DetailState(QWidget):
     _title: str
     _client: DataverseClient
     _dl_mgr: DownloadManager
-    _report: Any
-    _inventory: list[dict[Any, Any]]
-    _metadata: dict[Any, Any] | None
-    _guestbook: dict[Any, Any] | None
-    _account: dict[Any, Any]
-    _curation: dict[Any, Any]
-    _version_diff: dict[Any, Any] | None
-    _versions: Any
-    _timestamps: Any
-    _review_submissions: Any
+    _report: DatasetReport | None
+    _inventory: list[dict[str, Any]]
+    _metadata: dict[str, Any] | None
+    _guestbook: dict[str, Any] | None
+    _account: dict[str, Any]
+    _curation: dict[str, Any]
+    _version_diff: dict[str, Any] | None
+    _versions: list[dict[str, Any]]
+    _timestamps: dict[str, Any]
+    _review_submissions: list[dict[str, Any]]
     _in_review: bool
     _profile: str
-    _ruleset: dict[Any, Any]
+    _ruleset: dict[str, Any]
     #: What the dashboard already knew about this dataset (its search
     #: payload's state and access facts). It saves the detail page from
     #: asking for versions that cannot exist.
-    _dataset_hint: dict[Any, Any]
+    _dataset_hint: dict[str, Any]
     #: The open depositor follow-up for this dataset, refreshed from
     #: storage on load and after a decision commits; None when closed.
-    _follow_up: dict[Any, Any] | None
+    _follow_up: dict[str, Any] | None
     #: The curator's answers to the sensitivity (ethics) questions.
-    _sensitivity_answers: dict[Any, Any]
+    _sensitivity_answers: dict[str, Any]
 
     # -- workflow state -----------------------------------------------------
     _changes_loaded: bool
@@ -106,14 +109,14 @@ class DetailState(QWidget):
     #: The button that folds the sidebar away (the narrow-window toggle).
     _sidebar_toggle_btn: AppButton
     #: The keyboard shortcuts the page installed, so it can drop them.
-    _shortcuts: list[Any]
+    _shortcuts: list[QShortcut]
     #: Fires once the page has settled, so a slow instance can load the
     #: metadata without fighting the curator's first clicks.
     _auto_load_timer: QTimer
 
     # -- response state -----------------------------------------------------
-    _completeness_full: list[Any]
-    _response_sections: list[Any]
+    _completeness_full: list[dict[str, Any]]
+    _response_sections: list[dict[str, Any]]
     _response_dirty: bool
     _response_loading: bool
     _response_save_timer: QTimer | None
@@ -138,14 +141,14 @@ class DetailState(QWidget):
     _main_wrap: QVBoxLayout
     _side_scroll: QScrollArea
     _side_wrap: QVBoxLayout
-    _table_layouts: dict[Any, Any]
+    _table_layouts: dict[str, TableLayout]
 
     # -- the header ---------------------------------------------------------
-    _id_badge: Any
+    _id_badge: AppButton
     _status_pill: QLabel
     _curation_pill: QLabel
     _depositor_lbl: QLabel
-    _title_lbl: Any
+    _title_lbl: QLabel
     _status: QLabel
     _dl_btn: AppButton
     _dl_cancel_btn: AppButton
@@ -155,7 +158,7 @@ class DetailState(QWidget):
     #: True while the checks run and the primary button reads "Cancel".
     _checks_running: bool
     _checks_cancel_btn: AppButton
-    _status_widget: Any
+    _status_widget: StatusWidget
     _in_response: bool
     #: The row that carries the status line (an icon plus the message).
     _status_row: QWidget
@@ -166,7 +169,7 @@ class DetailState(QWidget):
     _verdict_label: QLabel
     _verdict_chips: QHBoxLayout
     #: The keys of the findings the verdict was computed from.
-    _finding_keys: list[Any]
+    _finding_keys: list[str]
 
     # -- the metadata card --------------------------------------------------
     _meta_card: QFrame
@@ -177,7 +180,7 @@ class DetailState(QWidget):
     _meta_check_tree: AppTree
     _meta_model: QStandardItemModel
     _meta_results: list[dict[str, Any]]
-    _block_labels: dict[Any, Any]
+    _block_labels: dict[str, Any]
     _raw_btn: AppButton
     _raw_view: QTextEdit | QPlainTextEdit
     #: The rows the metadata card is built from (one per metadata entry).
@@ -186,7 +189,7 @@ class DetailState(QWidget):
     _meta_row_results: list[dict[str, Any]]
     _meta_row_widgets: list[tuple[QFrame, int]]
     #: The results the curator chose not to look at (skipped checks).
-    _unchecked_results: list[Any]
+    _unchecked_results: list[dict[str, Any]]
     #: Whether the metadata card has been populated with a real dataset.
     _meta_loaded: bool
 
@@ -201,7 +204,7 @@ class DetailState(QWidget):
     _expand_btn: AppButton
     _file_footer_left: ElidedLabel
     _file_footer_right: QLabel
-    _file_checks_data: dict[str, list[Any]]
+    _file_checks_data: dict[str, list[dict[str, Any]]]
     _all_file_rows: list[tuple[str, int, str, str]]
     _staged_files: list[Path]
     _staged_names_cache: set[str]
@@ -214,25 +217,25 @@ class DetailState(QWidget):
     # -- the auto-checks section (inside the Dataset checks card) -------------
     _auto_card: QWidget
     _auto_summary: QLabel
-    _auto_body: Any
+    _auto_body: QVBoxLayout
     _auto_placeholder: QLabel
     #: The summary line without the finding counts, so the counts can be
     #: repainted without losing the wording.
     _auto_summary_base: str
     #: The finding dispositions the curator has already chosen.
-    _dispositions_cache: dict[Any, Any]
+    _dispositions_cache: dict[str, Any]
     # Test fixtures poke these onto the view (see ui/tests); declared so
     # mypy accepts the pattern without weakening the shape checks.
     _logged: list[tuple[Any, ...]]
     _status_msgs: list[str]
-    _statuses: Any
-    _jumps: Any
-    _responses: Any
+    _statuses: list[str]
+    _jumps: list[str]
+    _responses: list[int]
 
     # -- the version log card -----------------------------------------------
     _version_card: QFrame
     _version_summary: QLabel
-    _version_body: Any
+    _version_body: QVBoxLayout
 
     # -- the dataset log card -----------------------------------------------
     _dataset_log_card: QFrame
