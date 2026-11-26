@@ -8,8 +8,7 @@ standard window caption glyphs.
 from pathlib import Path
 from typing import Any
 
-import pytest
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette
 
 PID = "doi:10.5072/FK2/POLISH"
@@ -200,13 +199,15 @@ def test_extensions_wait_for_background_probe(qapp, tmp_path, monkeypatch):
         # Before the worker completes the table shows placeholders, never a
         # synchronous metadata probe on the GUI thread.
         before = pane.ext_table.item(0, 2)
-        assert before is not None and before.text() == "…"
+        assert before is not None
+        assert before.text() == "…"
         pane._start_probe_worker()
         assert pane._probe_worker is not None
         pane._probe_worker.wait(5000)
         _pump(qapp)
         after = pane.ext_table.item(0, 2)
-        assert after is not None and after.text() != "…"
+        assert after is not None
+        assert after.text() != "…"
     finally:
         pane.deleteLater()
         _pump(qapp, 10)
