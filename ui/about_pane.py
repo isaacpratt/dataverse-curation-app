@@ -84,6 +84,7 @@ def _build_provenance() -> tuple[str, str]:
             ["git", "rev-parse", "--short", "HEAD"],
             cwd=str(repo_root),
             stderr=_subprocess.DEVNULL,
+            timeout=5,
         )
         sha = out.decode().strip() or "dev"
     except Exception:

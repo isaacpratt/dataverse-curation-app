@@ -34,6 +34,7 @@ if str(ROOT) not in sys.path:
 from engine import __version__ as app_version  # noqa: E402
 from engine.version import parse  # noqa: E402
 from tools.build import check_pack  # noqa: E402
+from tools.build._sizes import dir_size_mb  # noqa: E402
 
 
 def find_vpk() -> Path:
@@ -91,10 +92,6 @@ def pack(
         str(out_dir),
     ]
     return subprocess.run(args, cwd=ROOT).returncode
-
-
-def _dir_size_mb(path: Path) -> float:
-    return sum(p.stat().st_size for p in path.rglob("*") if p.is_file()) / 1e6
 
 
 def clear_version(out_dir: Path, version: str) -> list[str]:
@@ -187,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"packed {version} in {elapsed:.0f} s: {setup.name} "
         f"({setup.stat().st_size / 1e6:.0f} MB), "
-        f"{_dir_size_mb(out_dir):.0f} MB in {out_dir}"
+        f"{dir_size_mb(out_dir):.0f} MB in {out_dir}"
     )
     if not had_previous:
         print(

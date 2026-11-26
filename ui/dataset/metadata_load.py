@@ -93,13 +93,18 @@ class MetadataLoadSection(DetailState):
         self._guestbook = guestbook if isinstance(guestbook, dict) else None
         account = extra.get("account")
         self._account = account if isinstance(account, dict) else {}
-        self._versions = extra.get("versions") if isinstance(extra.get("versions"), list) else []
-        self._timestamps = (
-            extra.get("timestamps") if isinstance(extra.get("timestamps"), dict) else {}
+        versions = extra.get("versions")
+        self._versions = (
+            [item for item in versions if isinstance(item, dict)]
+            if isinstance(versions, list)
+            else []
         )
+        timestamps = extra.get("timestamps")
+        self._timestamps = dict(timestamps) if isinstance(timestamps, dict) else {}
+        submissions = extra.get("review_submissions")
         self._review_submissions = (
-            extra.get("review_submissions")
-            if isinstance(extra.get("review_submissions"), list)
+            [item for item in submissions if isinstance(item, dict)]
+            if isinstance(submissions, list)
             else []
         )
         self._in_review = bool(extra.get("in_review", False))

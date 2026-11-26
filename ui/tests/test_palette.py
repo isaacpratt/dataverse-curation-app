@@ -42,3 +42,41 @@ def test_app_sheet_is_static_and_palette_based(qapp):
     assert used <= mapped, f"app-sheet roles without a palette mapping: {sorted(used - mapped)}"
     assert "palette(tool-tip-base)" not in sheet
     assert "palette(tooltip-base)" in sheet
+
+
+def test_palette_qss_does_not_patch_the_role_function(qapp):
+    """Generation is re-entrant: the resolver is scoped, not a global swap."""
+    import threading
+
+    original = theme.role
+    first = theme.palette_qss()
+    assert theme.role is original
+
+    # A failure mid-generation must also restore the resolver.
+    def _boom(name, theme_name=None):
+        raise RuntimeError("generation failed")
+
+    token = theme._ROLE_RESOLVER.set(_boom)
+    try:
+        try:
+            theme.palette_qss()
+        except RuntimeError:
+            pass
+    finally:
+        theme._ROLE_RESOLVER.reset(token)
+    assert theme.role is original
+    assert theme.role("SURFACE_PAGE", "light") == theme.role_table("light")["SURFACE_PAGE"]
+
+    # Concurrent generations see their own resolver and produce the same sheet.
+    sheets: list[str] = []
+
+    def generate():
+        sheets.append(theme.palette_qss())
+
+    threads = [threading.Thread(target=generate) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sheets == [first] * 4
+    assert theme.role is original

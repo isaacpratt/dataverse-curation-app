@@ -62,18 +62,11 @@ def qapp():
 def _drain_events(qapp):
     """Drain posted events between tests.
 
-    Hiding leaked windows by enumerating ``topLevelWidgets()`` is no longer
+    Enumerating ``topLevelWidgets()`` to hide leaked windows is no longer
     done: on Windows xdist workers that enumeration faulted (heap corruption
     0xc0000374) once enough wrappers had accumulated. Leaked windows are
     harmless now that the app stylesheet is palette-based and installed once.
     """
-    # instance() is typed as QCoreApplication | None; only QApplication has
-    # topLevelWidgets().
-    # Enumerating top-level widgets used to hide leaked windows between
-    # tests. On Windows xdist workers that enumeration faulted (heap
-    # corruption 0xc0000374) once enough wrappers had accumulated, so it is
-    # gone. Leaked windows no longer cost a theme switch now that the app
-    # sheet is palette-based and installed once.
     yield
     qapp.processEvents()
 

@@ -1437,11 +1437,8 @@ class SettingsPane(QWidget):
         self._config.dataverse.api_token = self.token_edit.text().strip()
         collection = self.subtree_edit.text().strip()
         self._config.dataverse.collection = collection
-        # keep subtree alias in sync for compat
-        try:
-            self._config.dataverse.subtree = collection
-        except Exception:
-            pass
+        # ``subtree`` is a property backed by ``collection``; assigning the
+        # canonical field already keeps the legacy alias in sync.
         self._config.app.workspace = ws
         self._config.app.tesseract = (self._tool_paths or {}).get("tesseract", "").strip()
         self._config.app.exiftool = (self._tool_paths or {}).get("exiftool", "").strip()
