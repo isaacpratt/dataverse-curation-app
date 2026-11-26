@@ -156,7 +156,7 @@ def test_status_widget_shows_three_faces(view):
     w.set_running("Running checks…", "14/21", 14 / 21)
     assert w.isVisible()
     assert w._title.text() == "Running checks…"
-    assert w._detail.text() == "14/21"
+    assert w._detail.text() == "", "bare n/N counts are not status text (dv-4dg5)"
     assert w._bar.value() == 66
 
     w.set_complete("All checks complete", "21/21")

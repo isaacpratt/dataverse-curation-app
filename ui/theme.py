@@ -2301,6 +2301,13 @@ def apply_theme(app: "QApplication", theme: str | None = None, *, retheme: bool 
     if name != _APPLIED_PALETTE_THEME:
         app.setPalette(palette_for(name))
         _APPLIED_PALETTE_THEME = name
+        # Qt resolves palette(base) / palette(light) / palette(accent) when a
+        # widget is polished and caches the result. setPalette alone leaves
+        # every already-polished widget on the old palette: the nav bar, page
+        # backgrounds and nav-button hovers stayed light in dark mode
+        # (dv-w0b9, dv-ygyv). Re-applying the same stylesheet re-polishes the
+        # live widgets so those tokens resolve against the new palette.
+        app.setStyleSheet(palette_qss())
     _install_interaction_tracking(app)
     if retheme:
         retheme_widgets(app)

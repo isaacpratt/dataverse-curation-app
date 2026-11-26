@@ -46,6 +46,9 @@ PRESETS: dict[str, str] = {
 }
 
 
+_PRINCIPAL_CACHE: dict[str, str] = {}
+
+
 def _windows_owner_principal() -> str:
     r"""Resolve the current Windows account as a principal `icacls` accepts.
 
@@ -55,6 +58,10 @@ def _windows_owner_principal() -> str:
     may hold a plaintext token must never be granted to ``Everyone``.
     """
     import subprocess
+
+    cache_key = f"{os.environ.get('USERDOMAIN', '')}|{os.environ.get('USERNAME', '')}"
+    if cache_key in _PRINCIPAL_CACHE:
+        return _PRINCIPAL_CACHE[cache_key]
 
     domain = os.environ.get("USERDOMAIN", "").strip()
     user = os.environ.get("USERNAME", "").strip()
@@ -70,6 +77,7 @@ def _windows_owner_principal() -> str:
             principal = ""
     if not principal or principal.lower() in {"everyone", "users", "authenticated users", "*"}:
         raise RuntimeError("could not resolve the current Windows account")
+    _PRINCIPAL_CACHE[cache_key] = principal
     return principal
 
 
@@ -550,9 +558,12 @@ class Config:
                     pass
                 return token, "config"
         if not token and _keyring is not None:
-            # Token cleared in Settings: drop the stale credential too.
+            # Token cleared in Settings: drop a stale credential, but do not
+            # pay for a delete when there is nothing stored. On domain or
+            # roaming profiles delete_password can block for seconds (dv-7cy8).
             try:
-                _keyring.delete_password(KEYRING_SERVICE, kr_key)
+                if _keyring.get_password(KEYRING_SERVICE, kr_key):
+                    _keyring.delete_password(KEYRING_SERVICE, kr_key)
             except Exception:
                 pass
         return persisted, source

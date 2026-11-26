@@ -533,6 +533,7 @@ class DashboardView(QWidget):
         # Scoped to self: a bare `background` rule acts subtree-wide and
         # would override app-level backgrounds (e.g. the queue table face).
         self.setObjectName("DashboardView")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         set_sheet(self, "page_background", ("DashboardView",))
 
         # ---- Metrics cards (values always from real data; 0 when empty) ----

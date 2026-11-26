@@ -15,6 +15,7 @@ Intentional one-offs (NOT kit violations):
   with no kit equivalent.
 """
 
+import re
 import textwrap
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, cast
@@ -181,10 +182,13 @@ def _reapply_card(card: QWidget) -> None:
     )
     top = card.findChild(QFrame, "CardTopBar")
     if top is not None:
+        # A card nested directly under a tab bar meets it edge to edge:
+        # curved top corners would read as a notch in the sidebar (dv-0aoh).
+        corner = "0px" if card.property("nestedCard") else "8px"
         top.setStyleSheet(
             f"QFrame#CardTopBar {{ background: {role('SURFACE_PAGE', theme)}; "
             f"border-bottom: 1px solid {role('SURFACE_SUBTLE', theme)}; "
-            "border-top-left-radius: 8px; border-top-right-radius: 8px; }"
+            f"border-top-left-radius: {corner}; border-top-right-radius: {corner}; }}"
         )
 
 
@@ -307,7 +311,7 @@ _REBUILDERS: dict[str, Any] = {
         )
     ),
     # --- View-level sheets (dv-314). Colour args are role names. ---
-    "page_background": lambda w, names: w.setStyleSheet(
+    "page_background": lambda w, names=(): w.setStyleSheet(
         page_background_qss(*names, theme=_active_theme())
     ),
     "surface_frame": lambda w, background, border, **kw: w.setStyleSheet(
@@ -3090,6 +3094,10 @@ class WorkflowRail(QWidget):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("WorkflowRail")
+        # A QWidget subclass does not paint stylesheet backgrounds/borders
+        # unless WA_StyledBackground is set. Without it the rail wore the
+        # page colour and its bottom rule never appeared (dv-k9tz).
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._nav_steps = nav_steps
         layout = QHBoxLayout(self)
         # Left margin aligns with the main column's content margin (16px card
@@ -3338,11 +3346,17 @@ class StatusWidget(QFrame):
         self._icon.setFixedSize(18, 18)
         self._icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._title = make_small_body_label("")
+        # The status line is full width (dv-4dg5): the words own all the
+        # horizontal space and never wrap into a narrow left-hand column.
+        self._title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._title.setWordWrap(False)
         self._detail = QLabel("")
         self._detail.setObjectName("CaptionSM")
-        # Prevent eliding/wrapping: the chip must be wide enough for one line.
-        self._detail.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._detail.setMinimumWidth(200)
+        # Detail text is optional prose, never a competing column. It only
+        # appears when a caller supplies a real message, and a bare n/N count
+        # is not a message.
+        self._detail.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._detail.hide()
         self._bar = make_progress_bar(height=4)
         self._bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         # Two rows: the words, then the bar directly under them (dv-gfx.3).
@@ -3387,7 +3401,15 @@ class StatusWidget(QFrame):
         so the line stays empty instead (2026-11-25).
         """
         value = str(text or "").strip()
-        return "" if value in {"*/*", "* / *"} else str(text or "")
+        if value in {"*/*", "* / *"} or re.fullmatch(r"\d+\s*/\s*\d+", value):
+            return ""
+        return str(text or "")
+
+    def _set_detail(self, text: str) -> None:
+        """Show optional detail prose on the status line, never bare counts."""
+        cleaned = self._clean_detail(text)
+        self._detail.setText(cleaned)
+        self._detail.setVisible(bool(cleaned))
 
     def _paint_icon(self, name: str, color: str) -> None:
         from ui.icons import icon as _icon
@@ -3414,7 +3436,7 @@ class StatusWidget(QFrame):
         """
         self._paint_icon("loader-circle", ACCENT_PRIMARY)
         self._title.setText(title)
-        self._detail.setText(self._clean_detail(detail))
+        self._set_detail(detail)
         # A new run starts fresh: last pass's verdict buttons are stale.
         self.clear_chips()
         if fraction is None:
@@ -3434,7 +3456,7 @@ class StatusWidget(QFrame):
         """Check + full success bar (no action button)."""
         self._paint_icon("circle-check", STATE_SUCCESS_GRAPHIC)
         self._title.setText(title)
-        self._detail.setText(self._clean_detail(detail))
+        self._set_detail(detail)
         self._bar.setRange(0, 100)
         self._bar.setValue(100)
         self._bar.show()
@@ -3444,7 +3466,7 @@ class StatusWidget(QFrame):
         """Alert + full error bar (no action button)."""
         self._paint_icon("circle-alert", STATE_ERROR_GRAPHIC)
         self._title.setText(title)
-        self._detail.setText(self._clean_detail(detail))
+        self._set_detail(detail)
         self._bar.setRange(0, 100)
         self._bar.setValue(100)
         self._bar.show()
@@ -3454,7 +3476,7 @@ class StatusWidget(QFrame):
         """Hide the strip and reset it for the next pass."""
         self.hide()
         self._title.setText("")
-        self._detail.setText("")
+        self._set_detail("")
         self._bar.hide()
         self.clear_chips()
 

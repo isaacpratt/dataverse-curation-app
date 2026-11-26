@@ -254,6 +254,7 @@ class ReviewConfigView(QWidget):
         # Scoped to self: a bare `background` rule would act subtree-wide
         # and override app-level backgrounds below this view.
         self.setObjectName("ReviewConfigView")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         set_sheet(self, "page_background", ("ReviewConfigView",))
 
         # Shared page-heading contract (HeadlineLG theme token) - same

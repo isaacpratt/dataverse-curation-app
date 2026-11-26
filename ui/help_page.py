@@ -6,6 +6,7 @@ whole story. Rebuilt on every show so the index covers pages opened
 during the session — a few dozen string copies, microseconds of work.
 """
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QFrame,
@@ -42,6 +43,7 @@ class HelpPane(QWidget):
         super().__init__(parent)
         # Scoped to self (same contract as the other stack pages).
         self.setObjectName("HelpPane")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         set_sheet(self, "page_background", ("HelpPane",))
 
         outer = QVBoxLayout(self)
