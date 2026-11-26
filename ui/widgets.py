@@ -335,6 +335,7 @@ _REBUILDERS: dict[str, Any] = {
     ),
     "caption_button": lambda w, kind: _apply_caption_button(w, kind),
     "icon": lambda w, name, color, size: _apply_icon(w, name, color, size),
+    "label_palette": lambda w: _theme.selectable_label_palette(w),
     "workflow_rail": lambda w: w._retheme(),
 }
 
@@ -3354,6 +3355,9 @@ class StatusWidget(QFrame):
             self._bar.setRange(0, 100)
             self._bar.setValue(int(max(0.0, min(1.0, fraction)) * 100))
             self._bar.show()
+        # Running is a new pass: verdict chips belong to the previous
+        # result and must not survive into it.
+        self.clear_chips()
         self.show()
 
     def set_complete(self, title: str, detail: str = "") -> None:

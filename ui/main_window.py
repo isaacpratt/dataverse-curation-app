@@ -637,6 +637,38 @@ class MainWindow(QMainWindow):
         except Exception:
             self._cloaked = False
 
+        # "Auto" used to read the OS once, when Settings was saved. Qt can
+        # report changes live, so follow them while the mode is auto.
+        self._install_os_theme_watcher()
+
+    def _install_os_theme_watcher(self) -> None:
+        """Follow the OS colour scheme while the configured mode is auto."""
+        from PySide6.QtWidgets import QApplication
+
+        app = cast(Any, QApplication.instance())
+        if not isinstance(app, QApplication):
+            return
+        try:
+            app.styleHints().colorSchemeChanged.connect(self._on_os_theme_changed)
+        except Exception:
+            # Older Qt has no signal; the setting still applies on save.
+            pass
+
+    def _on_os_theme_changed(self, *_args: object) -> None:
+        """Repaint for a live OS scheme change, but only in Auto mode."""
+        from PySide6.QtWidgets import QApplication
+
+        if getattr(self._config.app, "theme_mode", "light") != "auto":
+            return
+        app = cast(Any, QApplication.instance())
+        if not isinstance(app, QApplication):
+            return
+        from ui.theme import apply_theme, detect_os_theme, set_active_theme
+
+        name = detect_os_theme()
+        set_active_theme(name)
+        apply_theme(app, name, retheme=True)
+
     # -- status / repo badge -------------------------------------------
 
     @staticmethod

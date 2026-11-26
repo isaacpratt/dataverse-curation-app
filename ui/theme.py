@@ -11,6 +11,7 @@ theme - so switching theme is a table swap, not a re-skin.
 """
 
 import os
+import re
 import subprocess
 import sys
 from collections.abc import Callable, Mapping
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
     from PySide6.QtCore import QEvent, QObject
     from PySide6.QtWidgets import (
         QApplication,
+        QLabel,
         QListWidget,
         QTableWidget,
         QWidget,
@@ -467,6 +469,106 @@ def role(name: str, theme: str | None = None) -> str:
         raise KeyError(f"unknown role {name!r} in theme {theme or ACTIVE_THEME!r}") from None
 
 
+#: Which of our semantic roles back a standard ``QPalette`` role. Only
+#: generic colours can live in the palette: Qt exposes 21 roles, while the
+#: app stylesheet uses 29 distinct ones. Role-specific faces (badges, state
+#: colours, focus tints) stay in scoped sheets and are re-tinted by the
+#: retheme hook.
+PALETTE_ROLE_MAP: dict[str, str] = {
+    "SURFACE_PAGE": "Window",
+    "SURFACE_CARD": "Base",
+    "SURFACE_SUBTLE": "AlternateBase",
+    "SURFACE_TINT": "Midlight",
+    "SURFACE_RAISED": "Light",
+    "SURFACE_ALT": "Shadow",
+    "BORDER_SUBTLE": "Dark",
+    "BORDER_CONTROL": "Mid",
+    "ACCENT_PRIMARY": "Highlight",
+    "ACCENT_SECONDARY": "Accent",
+    "ACCENT_TINT": "ToolTipBase",
+    "TEXT_PRIMARY": "WindowText",
+    "TEXT_MUTED": "Text",
+    "TEXT_ON_ACCENT": "HighlightedText",
+    "TEXT_ON_SECONDARY": "BrightText",
+    "TEXT_ON_TINT": "ToolTipText",
+    "TEXT_PLACEHOLDER": "PlaceholderText",
+    "TEXT_SUCCESS": "Link",
+    "TEXT_WARNING": "LinkVisited",
+}
+
+
+#: App-sheet-only fallbacks for roles with no distinct QPalette slot.
+#: Duplicates are fine here: scoped sheets keep the exact role colour on
+#: the widgets that own those faces, so the app sheet only needs a
+#: theme-correct approximation.
+PALETTE_QSS_FALLBACK: dict[str, str] = {
+    "ACCENT_FOCUS_TINT": "ToolTipBase",
+    "ACCENT_FOCUS_RING": "Shadow",
+    "ACCENT_TERTIARY": "LinkVisited",
+    "BADGE_BLUE_BORDER": "Dark",
+    "BADGE_BLUE_TEXT": "Text",
+    "STATE_ERROR_BG": "AlternateBase",
+    "STATE_ERROR_BORDER": "Dark",
+    "STATE_ERROR_GRAPHIC": "LinkVisited",
+    "STATE_ERROR_SURFACE": "Base",
+    "STATE_ERROR_TEXT": "BrightText",
+}
+
+
+def _qt_qss_token(qt_role: str) -> str:
+    """Return Qt's hyphenated stylesheet name for a QPalette role."""
+    special = {"ToolTipBase": "tooltip-base", "ToolTipText": "tooltip-text"}
+    return special.get(qt_role, re.sub(r"(?<!^)(?=[A-Z])", "-", qt_role).lower())
+
+
+def palette_qss() -> str:
+    """Return one theme-independent application stylesheet.
+
+    Colours come from ``palette(<role>)``, so switching the app palette
+    re-colours the app without calling ``setStyleSheet`` again. That call
+    costs ~1ms per live widget on a populated window; a palette swap is
+    effectively free. Exact, role-specific faces stay in scoped sheets
+    and are re-tinted by the retheme hook.
+    """
+    original: Callable[[str, str | None], str] = cast(
+        Callable[[str, str | None], str], globals()["role"]
+    )
+    mapping = {**PALETTE_QSS_FALLBACK, **PALETTE_ROLE_MAP}
+
+    def mapped(name: str, theme: str | None = None) -> str:
+        qt_role = mapping.get(name)
+        if qt_role is None:
+            return original(name, theme)
+        return f"palette({_qt_qss_token(qt_role)})"
+
+    globals()["role"] = mapped
+    try:
+        sheet = global_qss("light")
+    finally:
+        globals()["role"] = original
+    # Qt accepts palette() in colour values, not in the `background`
+    # shorthand.
+    return re.sub(r"background: palette\(([^)]+)\)", r"background-color: palette(\1)", sheet)
+
+
+def palette_for(theme: str | None = None) -> Any:
+    """Return a ``QPalette`` carrying the active theme's generic roles.
+
+    A palette swap is effectively free (~0.0s on a 1,200-widget window)
+    against ~1.05s for a stylesheet swap, so generic colours should come
+    from the palette and only structural/role-specific QSS should be
+    re-applied on a switch.
+    """
+    from PySide6.QtGui import QColor, QPalette
+
+    table_name = theme or ACTIVE_THEME
+    palette = QPalette()
+    for role_name, qt_name in PALETTE_ROLE_MAP.items():
+        qt_role = getattr(QPalette.ColorRole, qt_name)
+        palette.setColor(qt_role, QColor(role(role_name, table_name)))
+    return palette
+
+
 def colour(value: str, theme: str | None = None) -> str:
     """Return ``value`` as a colour, resolving a role name when it is one.
 
@@ -501,10 +603,37 @@ def set_active_theme(name: str) -> None:
     globals().update(table)
 
 
+def _qt_color_scheme() -> str | None:
+    """Ask Qt for the OS colour scheme, or return None when it cannot say.
+
+    Qt 6.5+ exposes the desktop's light/dark preference through
+    ``QStyleHints.colorScheme()``. It is the platform-native source and
+    needs no registry reads or subprocesses. Headless/offscreen runs (and
+    older Qt) report ``Unknown``, which is why the platform fallbacks in
+    :func:`detect_os_theme` still matter.
+    """
+    try:
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QApplication
+
+        app = cast(Any, QApplication.instance())
+        if app is None:
+            return None
+        scheme = app.styleHints().colorScheme()
+        if scheme == Qt.ColorScheme.Dark:
+            return "dark"
+        if scheme == Qt.ColorScheme.Light:
+            return "light"
+    except Exception:
+        return None
+    return None
+
+
 def detect_os_theme() -> str:
     """Return "light" or "dark" for the desktop's current appearance.
 
-    "Auto" follows the OS, so the app needs one read per platform:
+    Qt's colour scheme is consulted first. Where Qt cannot answer (or no
+    application exists yet), the platform fallbacks are:
 
     * **Windows** - ``AppsUseLightTheme`` under the per-user Personalize
       key (0 = dark).
@@ -518,6 +647,9 @@ def detect_os_theme() -> str:
     Anything else, or any failure, reads as light: a wrong guess must
     never leave the curator on an unreadable palette.
     """
+    qt_scheme = _qt_color_scheme()
+    if qt_scheme is not None:
+        return qt_scheme
     platform = sys.platform
     try:
         if platform.startswith("win"):
@@ -2109,6 +2241,14 @@ def retheme_widgets(app: "QApplication") -> int:
         return 0
 
 
+#: The palette-based application sheet is installed once; a switch only
+#: swaps the palette, which Qt applies without re-polishing every widget.
+_APP_QSS_INSTALLED = False
+#: Avoid repeated setPalette calls: Qt re-policies on every one, and the
+#: suite applies the same theme many times per worker.
+_APPLIED_PALETTE_THEME: str | None = None
+
+
 def apply_theme(app: "QApplication", theme: str | None = None, *, retheme: bool = False) -> None:
     """Register the bundled faces, then apply global QSS and default font.
 
@@ -2133,7 +2273,19 @@ def apply_theme(app: "QApplication", theme: str | None = None, *, retheme: bool 
     # tokens are px (FONT_BODY=13) while a 9pt app font is ~12px.
     font.setPixelSize(FONT_BODY)
     app.setFont(font)
-    app.setStyleSheet(global_qss(theme or ACTIVE_THEME))
+
+    # One static, palette-based application sheet for the process lifetime.
+    # Switching themes replaces the palette (~0s) instead of the stylesheet
+    # (~1ms per live widget). Role-specific faces keep their exact colours
+    # in scoped sheets, re-tinted below.
+    global _APP_QSS_INSTALLED, _APPLIED_PALETTE_THEME
+    if not _APP_QSS_INSTALLED:
+        app.setStyleSheet(palette_qss())
+        _APP_QSS_INSTALLED = True
+    name = theme or ACTIVE_THEME
+    if name != _APPLIED_PALETTE_THEME:
+        app.setPalette(palette_for(name))
+        _APPLIED_PALETTE_THEME = name
     _install_interaction_tracking(app)
     if retheme:
         retheme_widgets(app)
@@ -2436,18 +2588,31 @@ def _install_interaction_tracking(app: "QApplication") -> None:  # noqa: C901 - 
         pass
 
 
+def selectable_label_palette(label: "QLabel") -> None:
+    """Paint one selectable label's selection from the active role table."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor, QPalette
+
+    pal = label.palette()
+    pal.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.transparent)
+    pal.setColor(QPalette.ColorRole.Window, Qt.GlobalColor.transparent)
+    pal.setColor(QPalette.ColorRole.Highlight, QColor(role("ACCENT_TINT")))
+    pal.setColor(QPalette.ColorRole.HighlightedText, QColor(role("TEXT_ON_ACCENT")))
+    label.setPalette(pal)
+
+
 def selectable_labels(root: "QWidget") -> None:
     """Make every QLabel under root selectable with mouse + keyboard.
 
     The selection is themed: the system highlight colour is not used (it
     renders as a black box behind the text on a dark palette), the app
-    paints the same light-blue selection its inputs use. A rich-text
-    label also paints its document background with the palette's Base
-    role, which is kept transparent so no box shows behind the text.
+    paints the same blue selection its inputs use. A rich-text label also
+    paints its document background with the palette's Base role, which is
+    kept transparent so no box shows behind the text. The palette is
+    registered for re-tinting on a live switch.
     """
     try:
         from PySide6.QtCore import Qt
-        from PySide6.QtGui import QColor, QPalette
         from PySide6.QtWidgets import QLabel
 
         for lbl in root.findChildren(QLabel):
@@ -2458,12 +2623,19 @@ def selectable_labels(root: "QWidget") -> None:
                     | Qt.TextInteractionFlag.TextSelectableByMouse
                     | Qt.TextInteractionFlag.TextSelectableByKeyboard
                 )
-                pal = lbl.palette()
-                pal.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.transparent)
-                pal.setColor(QPalette.ColorRole.Window, Qt.GlobalColor.transparent)
-                pal.setColor(QPalette.ColorRole.Highlight, QColor(PRIMARY_FIXED))
-                pal.setColor(QPalette.ColorRole.HighlightedText, QColor(ON_SURFACE))
-                lbl.setPalette(pal)
+                selectable_label_palette(lbl)
+                # Append, never overwrite: a kit label may already carry
+                # a text-colour spec.
+                specs = getattr(lbl, RETHEME_ATTR, None)
+                if not isinstance(specs, list):
+                    specs = []
+                specs = [
+                    s
+                    for s in specs
+                    if not (isinstance(s, tuple) and len(s) == 3 and s[0] == "label_palette")
+                ]
+                specs.append(("label_palette", (), {}))
+                setattr(lbl, RETHEME_ATTR, specs)
             except Exception:
                 continue
     except Exception:
