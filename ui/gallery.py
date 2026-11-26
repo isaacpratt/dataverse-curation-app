@@ -709,6 +709,12 @@ class GalleryWindow(QWidget):
         light_content = QWidget()
         light_content.setObjectName("GalleryContentLight")
         light_content.setStyleSheet(page_background_qss("GalleryContentLight", theme="light"))
+        # Scoped sheets carry exact role colours; app-level palette()
+        # references resolve against the widget's palette, so pin each
+        # column's palette to keep the two themes independent.
+        from ui.theme import palette_for
+
+        light_content.setPalette(palette_for("light"))
         light_body = QVBoxLayout(light_content)
         light_body.setContentsMargins(0, 0, 0, 0)
         light_body.setSpacing(24)
@@ -717,6 +723,7 @@ class GalleryWindow(QWidget):
         dark_content = QWidget()
         dark_content.setObjectName("GalleryContentDark")
         dark_content.setStyleSheet(page_background_qss("GalleryContentDark", theme="dark"))
+        dark_content.setPalette(palette_for("dark"))
         dark_body = QVBoxLayout(dark_content)
         dark_body.setContentsMargins(0, 0, 0, 0)
         dark_body.setSpacing(24)
