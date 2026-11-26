@@ -617,7 +617,7 @@ class DashboardView(QWidget):
             ],
             min_width=110,
         )
-        self._state_filter.currentTextChanged.connect(self._on_state_filter_changed)
+        self._state_filter.currentIndexChanged.connect(self._on_state_filter_changed)
         filter_row.addWidget(self._state_filter)
 
         self._label_filter = make_combo(
@@ -628,7 +628,7 @@ class DashboardView(QWidget):
             min_width=130,
             tip=t("dashboard.filters.label_tip"),
         )
-        self._label_filter.currentTextChanged.connect(self._apply_filter)
+        self._label_filter.currentIndexChanged.connect(self._apply_filter)
         filter_row.addWidget(self._label_filter)
 
         self._collection_filter = make_combo(
@@ -636,7 +636,7 @@ class DashboardView(QWidget):
             min_width=130,
             tip=t("dashboard.filters.collection_tip"),
         )
-        self._collection_filter.currentTextChanged.connect(self._apply_filter)
+        self._collection_filter.currentIndexChanged.connect(self._apply_filter)
         filter_row.addWidget(self._collection_filter)
 
         self._columns_btn = make_action_button(t("dashboard.queue.columns"), kind="chip")

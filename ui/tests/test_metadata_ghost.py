@@ -6,9 +6,9 @@ deferred delete, so an undisposed placeholder was painting across the
 completeness rows.
 """
 
-from typing import Any, cast
+from typing import Any
 
-from PySide6.QtWidgets import QApplication, QFrame, QLabel, QWidget
+from PySide6.QtWidgets import QFrame, QLabel, QWidget
 
 from ui.i18n import t
 
@@ -70,11 +70,13 @@ def test_placeholder_disappears_when_completeness_loads(qapp, tmp_path):
         assert not _pending_labels(view), "the pending row is still painted"
         # The placeholder was unparented, so it can no longer be found
         # under the view — and it must not be a visible orphan window.
-        app = cast("QApplication | None", QApplication.instance())
-        assert app is not None
+        # Use the tracked registry, not QApplication.topLevelWidgets():
+        # wrappers left behind after C++ deletion crashed CI workers (dv-tqi4).
+        from ui import theme as _theme
+
         orphans = [
             w
-            for w in app.topLevelWidgets()
+            for w in _theme.retheme_top_levels()
             if w.isVisible() and hasattr(w, "text") and pending in w.text()
         ]
         assert orphans == []

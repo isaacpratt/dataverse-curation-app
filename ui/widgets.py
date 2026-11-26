@@ -17,6 +17,7 @@ Intentional one-offs (NOT kit violations):
 
 import re
 import textwrap
+import weakref
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, cast
 
@@ -154,6 +155,7 @@ def _register(widget: QWidget, name: str, *args: object, **kwargs: object) -> No
         specs = [s for s in specs if not (isinstance(s, tuple) and len(s) == 3 and s[0] == name)]
         specs.append((name, args, kwargs))
         setattr(widget, _theme.RETHEME_ATTR, specs)
+        _theme.register_retheme_widget(widget)
     except Exception:
         pass
 
@@ -411,30 +413,69 @@ def _retheme_item_icons(widget: Any) -> int:
     return run
 
 
+#: Widgets whose scoped sheet was skipped because they were not visible
+#: during a switch. Weak: a widget destroyed while hidden must not be kept
+#: alive (or re-themed) later.
+_DEFERRED_RETHEME: "weakref.WeakSet[Any]" = weakref.WeakSet()
+
+
+class _ShowWatcher(QObject):
+    """Re-theme a deferred widget the moment it becomes visible."""
+
+    def eventFilter(self, obj: Any, event: Any) -> bool:
+        shown = event.type() in (QEvent.Type.Show, QEvent.Type.ShowToParent)
+        if shown and obj in _DEFERRED_RETHEME:
+            _DEFERRED_RETHEME.discard(obj)
+            obj.removeEventFilter(self)
+            try:
+                _retheme_widget(obj)
+                _retheme_item_icons(obj)
+            except Exception:
+                pass
+        return False
+
+
+_SHOW_WATCHER = _ShowWatcher()
+
+
+def _retheme_walk(root: Any) -> int:
+    """Re-theme one visible root; defer widgets that are not visible."""
+    run = 0
+    for widget in [root, *root.findChildren(QWidget)]:
+        try:
+            if not widget.isVisible():
+                # Defer, don't drop: the widget must wear the new theme
+                # when its page is shown. The watcher fires on Show and
+                # removes the widget from the set.
+                if getattr(widget, _theme.RETHEME_ATTR, None):
+                    _DEFERRED_RETHEME.add(widget)
+                    widget.installEventFilter(_SHOW_WATCHER)
+                continue
+            run += _retheme_widget(widget)
+            run += _retheme_item_icons(widget)
+        except Exception:
+            # One dead widget must not abort the whole switch.
+            continue
+    return run
+
+
 def _retheme_all(app: Any) -> int:
-    """Repaint every widget carrying a retheme spec. Returns how many ran.
+    """Repaint every *visible* widget carrying a retheme spec. Returns how many ran.
 
     Walks the *visible* top-level windows and their children, not
     ``app.allWidgets()``: a long session (and the test suite) accumulates
     hidden leaked windows, and walking those is what made a switch
-    expensive. A hidden page inside a visible window is still reached, so a
-    switch on the dashboard also fixes the detail page for when it is
-    shown. A widget in a hidden window is skipped and repainted by the next
-    switch after that window is shown.
+    expensive. Within a visible window, widgets that are not visible are
+    skipped too: a stacked page holds hundreds of descendants, and
+    re-polishing a hidden page's container costs ~0.5s. Those widgets are
+    registered with ``_SHOW_WATCHER`` and re-painted on the Show event, so
+    the page is correct when the curator next opens it.
     """
     run = 0
-    roots: list[Any] = []
-    try:
-        top_levels = app.topLevelWidgets()
-    except Exception:
-        return run
-    for top in top_levels:
-        # One dead leaked window must not abort the whole switch.
-        try:
-            if top.isVisible():
-                roots.append(top)
-        except Exception:
-            continue
+    # Roots come from the widgets we registered, never from
+    # QApplication.topLevelWidgets(): enumerating wrappers after C++
+    # deletion crashed Windows xdist workers with heap corruption (dv-tqi4).
+    roots = _theme.visible_retheme_roots()
     # One paint pass for the whole switch: rebuilding a sheet re-polishes
     # the widget, and letting each one repaint in turn is a visible freeze
     # on a window with a real dataset (dv-314).
@@ -445,13 +486,7 @@ def _retheme_all(app: Any) -> int:
             pass
     try:
         for root in roots:
-            for widget in [root, *root.findChildren(QWidget)]:
-                try:
-                    run += _retheme_widget(widget)
-                    run += _retheme_item_icons(widget)
-                except Exception:
-                    # One dead widget must not abort the whole switch.
-                    continue
+            run += _retheme_walk(root)
     finally:
         for root in roots:
             try:
@@ -2541,6 +2576,23 @@ class _NoWheelCombo(QComboBox):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._wheel_armed = False
+        self._popup_delegate: QStyledItemDelegate | None = None
+
+    def _ensure_popup_delegate(self) -> None:
+        """Install the popup row delegate on first use, not at construction.
+
+        ``view()`` materialises QComboBox's internal list view (viewport plus
+        two scrollbars). Building it in the kit factory created ~375 hidden
+        widgets on the Review rules page alone. The delegate is needed only
+        when the curator actually opens the dropdown.
+        """
+        if self._popup_delegate is None:
+            self._popup_delegate = _ComboPopupRowDelegate(self)
+            self.view().setItemDelegate(self._popup_delegate)
+
+    def showPopup(self) -> None:
+        self._ensure_popup_delegate()
+        super().showPopup()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self._wheel_armed = True
@@ -2576,18 +2628,28 @@ def make_combo(
     height: int = 36,
     min_width: int = 130,
     tip: str = "",
+    accessible_name: str = "",
 ) -> QComboBox:
     """Build a standard dropdown (themed chevron, 12px semibold entries).
 
     items: list of labels or (label, data) tuples. Wheel-safe: the wheel
     only scrolls the value after the dropdown has been clicked open once.
+    The popup row delegate is installed on first open, so a page with many
+    combos does not build every hidden popup up front. ``height`` is a
+    minimum hit target, not a fixed box, so translated labels can grow.
     """
     combo = _NoWheelCombo(parent)
+    # Keep the declared hit-target and layout floor. AdjustToContents lets a
+    # translated label widen the field; the minimum width keeps dense grids
+    # from collapsing. Do not set minimumContentsLength: it forced every
+    # field wider than the layout's 110/180px contract.
     combo.setFixedHeight(height)
     combo.setMinimumWidth(min_width)
+    combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
     combo.setCursor(Qt.CursorShape.PointingHandCursor)
-    # Popup rows honor the app's menu row metrics (dv-tkz).
-    combo.view().setItemDelegate(_ComboPopupRowDelegate(combo))
+    name = accessible_name or tip
+    if name:
+        combo.setAccessibleName(name)
     if tip:
         combo.setToolTip(tip)
     for entry in items or []:

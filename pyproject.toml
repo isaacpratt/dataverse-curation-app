@@ -465,14 +465,16 @@ type = "forbidden"
 source_modules = ["tools"]
 forbidden_modules = ["ui"]
 # The probes ARE the UI's test harness: they drive the views offscreen and
-# assert on pixels and geometry. The paint benchmark is the same kind of
-# tool: it drives the real dashboard to measure the queue's painting
-# window. Every other tool (audit, sbom, licenses, notice, smoke, doc
-# links, complexity) is an operational helper that runs outside the app
-# and must stay importable without Qt.
+# assert on pixels and geometry. The benchmarks are the same kind of tool:
+# bench_paint_window measures the queue's painting window, bench_session
+# times each phase of a live session. Every other tool (audit, sbom,
+# licenses, notice, smoke, doc links, complexity) is an operational helper
+# that runs outside the app and must stay importable without Qt.
 ignore_imports = [
     "tools.perf.bench_paint_window -> ui.dashboard",
     "tools.perf.bench_paint_window -> ui.theme",
+    "tools.perf.bench_session -> ui.main_window",
+    "tools.perf.bench_session -> ui.theme",
     "tools.probes._common -> ui.theme",
     "tools.probes.probe_about_updates -> ui.about_pane",
     "tools.probes.probe_about_updates -> ui.updater",
