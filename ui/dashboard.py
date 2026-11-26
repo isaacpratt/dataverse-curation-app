@@ -1311,8 +1311,10 @@ class DashboardView(QWidget):
 
         The fit sizes the columns to their content; the slack that is left
         over goes to the filler column so the queue still reads at window
-        width.
+        width. Construction widths saved by the first viewport fit are no
+        longer the widths to restore on a widen (dv-81l follow-up).
         """
+        self._queue_unscaled = None
         self._fit_queue_columns()
 
     def _schedule_column_fit(self) -> None:
@@ -1471,8 +1473,20 @@ class DashboardView(QWidget):
         self._fit_queue_columns()
 
     def _apply_default_column_visibility(self) -> None:
-        for i, (_key, _h, visible) in enumerate(COLUMNS):
-            self._set_column_visible(i, visible)
+        # Qt emits sectionResized when a column is hidden. At construction
+        # that looked like a user drag to AppTable, which locked content
+        # auto-fit before any rows arrived — the first-load squish from
+        # dv-81l. Apply defaults with header signals blocked, then do a
+        # single viewport fit (2026-11-25).
+        hdr = self._table.horizontalHeader()
+        was_blocked = hdr.signalsBlocked()
+        hdr.blockSignals(True)
+        try:
+            for i, (_key, _h, visible) in enumerate(COLUMNS):
+                self._table.setColumnHidden(i, not visible)
+        finally:
+            hdr.blockSignals(was_blocked)
+        self._fit_queue_columns()
 
     def _show_columns_menu(self) -> None:
         self._show_columns_menu_at(
@@ -2208,7 +2222,11 @@ class DashboardView(QWidget):
         # latch at that too-small width and leave the columns squished
         # until the user reset them (dv-81l).
         self._table.refit_columns_to_content()
-        self._table.fit_columns_to_content()
+        # dv-81l follow-up: fitting in this same call measures stale content
+        # hints (Qt has not re-laid the new items yet) and latches squished
+        # widths. Defer one event-loop turn so the fit sees final geometry —
+        # the same widths a manual Reset Columns produces (2026-11-25).
+        QTimer.singleShot(0, self._table.fit_columns_to_content)
         self._table.viewport().update()
 
     def _apply_filter(self) -> None:

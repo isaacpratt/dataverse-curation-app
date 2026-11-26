@@ -8,6 +8,8 @@ the tests never call (detail loaders fire async and are never awaited).
 """
 
 import os
+import tempfile
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -97,6 +99,9 @@ def win(qapp):
         cfg = Config.load(None)
     except Exception:
         cfg = Config()
+    # The session window must not read a developer's saved table layout or
+    # local state: either can re-sort/replace rows mid-test (2026-11-25).
+    cfg.app.workspace = Path(tempfile.mkdtemp(prefix="docent-ui-session-"))
     window = MainWindow(cfg)
     try:
         # A detail view constructed without cached metadata fires its load

@@ -36,12 +36,11 @@ def _refusal(path: str, status: int, body: str = "") -> tuple[str, str]:  # noqa
     says_missing = "not found" in text or "does not exist" in text
 
     if status in (401, 403):
-        # A 401/403 whose body is about the TOKEN being rejected is an auth
-        # failure, not a curation-scope refusal: "User with token ... not
-        # found" means the token itself was rejected (2026-11-24). A body
-        # that merely starts with "User ..." but talks about permission
-        # stays the expected curation-scope answer.
-        if "token" in text:
+        # A 401/403 whose body is about the TOKEN being rejected — or which
+        # names :guest / a bad API key — is an auth failure, never a
+        # curation-scope refusal (2026-11-25). Painting these EXPECTED was
+        # what hid a missing token behind "not in the dataset's scope".
+        if "token" in text or "api key" in text or ":guest" in text:
             return "", ""
         if says_missing and is_versions:
             # The version is gone (not hidden): answer as the 404 case.

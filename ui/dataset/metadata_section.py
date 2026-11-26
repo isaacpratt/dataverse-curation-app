@@ -346,6 +346,7 @@ class MetadataSection(DetailState):
                 self._inventory,
                 self._staged_dir_or_none(),
                 include_unchecked=True,
+                title=getattr(self, "_title", None) or None,
             )
             self._completeness_full = [r for r in full if r.get("status") != "skipped"]
             self._unchecked_results = [r for r in full if r.get("status") == "skipped"]
@@ -355,7 +356,10 @@ class MetadataSection(DetailState):
             from curation.metadata_check import check_metadata_completeness
 
             results = check_metadata_completeness(
-                metadata, profile=self._profile, inventory=self._inventory
+                metadata,
+                profile=self._profile,
+                inventory=self._inventory,
+                title=getattr(self, "_title", None) or None,
             )
             self._unchecked_results = []
             self._completeness_full = [
@@ -765,6 +769,12 @@ class MetadataSection(DetailState):
             item = lay.takeAt(0)
             widget = item.widget() if item is not None else None
             if widget is not None:
+                # A removed layout item keeps its parent and last geometry
+                # until Qt processes deleteLater. The "Load metadata"
+                # placeholder was painting over the rebuilt rows in that
+                # window (dv-nkip): hide and unparent it immediately.
+                widget.hide()
+                widget.setParent(None)
                 widget.deleteLater()
         self._meta_row_results = []
         self._meta_row_widgets = []

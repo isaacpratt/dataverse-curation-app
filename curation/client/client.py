@@ -7,6 +7,7 @@ client.downloads (mixed into DataverseClient below). See
 docs/reference/dataverse-api.md for endpoints and auth.
 """
 
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -52,8 +53,14 @@ class DataverseClient(_DownloadsMixin):
         # validates), but workers build clients from their own copies of the
         # URL and the token is sent in a header on every request.
         self._base_url = normalise_base_url(base_url)
-        self._api_token = api_token
+        self._api_token = str(api_token or "").strip()
         self._timeout = timeout
+        if not self._api_token:
+            # stdlib logging, never the app request log (which stays API-only).
+            logging.getLogger("dataverse_docent").warning(
+                "Dataverse client created without an API token; authenticated "
+                "reads will be refused before they are sent"
+            )
         # A requests.Session is not thread-safe, and this client is shared by
         # the enrichment, lock-probe and detail-fetch pools. Give each thread
         # its own session so connection reuse stays per-thread and no two
@@ -68,6 +75,11 @@ class DataverseClient(_DownloadsMixin):
         # _last_fetch_answered aggregates the latest shared round.
         self._last_allowed_got_200 = False
         self._last_fetch_answered = False
+
+    @property
+    def is_authenticated(self) -> bool:
+        """Whether this client can send an API key at all."""
+        return bool(self._api_token)
 
     @property
     def _session(self) -> requests.Session:
@@ -1226,7 +1238,17 @@ class DataverseClient(_DownloadsMixin):
 
     # -- metadata ------------------------------------------------------------
 
+    def _require_token(self, what: str) -> None:
+        """Refuse an authenticated read before it goes out as :guest."""
+        if self.is_authenticated:
+            return
+        from curation.client.errors import ApiTokenRequired
+
+        get_app_log().error(f"{what} needs a Dataverse API token — no anonymous request was sent")
+        raise ApiTokenRequired(f"{what} requires a Dataverse API token; add one in Settings")
+
     def get_dataset_metadata(self, identifier: str) -> dict[str, Any]:
+        self._require_token("dataset metadata")
         if ":" in identifier:
             payload = self._get_json(
                 "/api/datasets/:persistentId",
@@ -1266,6 +1288,7 @@ class DataverseClient(_DownloadsMixin):
         return data if isinstance(data, dict) else {}
 
     def get_file_inventory(self, identifier: str, version: str = "draft") -> list[dict[str, Any]]:
+        self._require_token("file inventory")
         data, api_version, tried = self._fetch_version_data(
             identifier, version, fall_back_on_auth=True
         )

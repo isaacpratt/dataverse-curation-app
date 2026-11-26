@@ -587,6 +587,7 @@ def check_metadata_completeness(
     profile: str = DEFAULT_PROFILE,
     inventory: list[dict[str, Any]] | None = None,
     staged_dir: Any = None,
+    title: str | None = None,
 ) -> list[dict[str, Any]]:
     """Deterministic completeness check for the chosen profile/ruleset.
 
@@ -602,7 +603,9 @@ def check_metadata_completeness(
         key = PROFILE_TO_RULESET.get(profile, profile)
         if key in pool or profile in ("McMaster", "Minimal"):
             ruleset = _rr.get_ruleset(key, pool)
-            evaluated = _rr.evaluate_ruleset(metadata or {}, ruleset, inventory, staged_dir)
+            evaluated = _rr.evaluate_ruleset(
+                metadata or {}, ruleset, inventory, staged_dir, title=title
+            )
             # Strip engine-only keys for the legacy {field, requirement,
             # value, status} contract (callers that need rule ids use
             # check_with_ruleset below).
@@ -624,8 +627,15 @@ def check_metadata_completeness(
     latest = metadata.get("latestVersion") or {}
     blocks = latest.get("metadataBlocks") or metadata.get("metadataBlocks") or {}
     if profile == "Minimal":
-        return _check_minimal(metadata, blocks, inventory)
-    return _check_mcmaster(metadata, blocks, inventory)
+        results = _check_minimal(metadata, blocks, inventory)
+    else:
+        results = _check_mcmaster(metadata, blocks, inventory)
+    if title is not None:
+        for row in results:
+            if str(row.get("field", "")).lower() == "title":
+                row["value"] = str(title) or "—"
+                row["status"] = "complete" if str(title).strip() else "incomplete"
+    return results
 
 
 def check_with_ruleset(
@@ -635,6 +645,7 @@ def check_with_ruleset(
     staged_dir: Any = None,
     rulesets: dict[str, Any] | None = None,
     include_unchecked: bool = False,
+    title: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Full rule evaluation (keeps rule_id/level/pending for the Response pane)."""
     import curation.review_rules as _rr
@@ -644,7 +655,12 @@ def check_with_ruleset(
     # falls back to the default for unknown keys.
     ruleset = _rr.get_ruleset(ruleset_key, pool)
     return _rr.evaluate_ruleset(
-        metadata or {}, ruleset, inventory, staged_dir, include_unchecked=include_unchecked
+        metadata or {},
+        ruleset,
+        inventory,
+        staged_dir,
+        include_unchecked=include_unchecked,
+        title=title,
     ), ruleset
 
 

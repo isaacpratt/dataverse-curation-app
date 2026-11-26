@@ -18,6 +18,8 @@ The client uses the Native/Search API only — no PostgreSQL/Solr. All endpoints
 | Settings | Token set or changed in Settings (Ctrl+,) |
 | Preset | Borealis Demo — `demo.borealisdata.ca` → `https://demo.borealisdata.ca` |
 | 401 response | A selectable dialog points at Settings. The token is never stored in SQLite and never leaves in diagnostics copies |
+| Missing token | A credential-store token is loaded even when `config.json` is absent; a keyring miss warns in the Log and sets `token_missing`. Dataset metadata/inventory reads are refused locally (no anonymous request is sent) with a "add a token in Settings" message |
+| Guest 401 | `User :guest is not permitted…` or `Bad API key` means the request had no API key. These are logged as ERROR, never as an EXPECTED curation-scope refusal (dv-6rdy) |
 | Base URL validation | Must be `https://` with a host; plain HTTP and trailing slashes are rejected/normalised in `curation/config.py` |
 
 ## Endpoints used

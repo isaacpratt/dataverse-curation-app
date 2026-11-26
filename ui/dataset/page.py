@@ -202,7 +202,9 @@ class DatasetDetailView(
         top = QWidget()
         top.setObjectName("DetailTopBar")
         top_lay = QVBoxLayout(top)
-        top_lay.setContentsMargins(0, 0, 0, 0)
+        # Breathe around the rail: it is a white band on the page, not a
+        # second nav bar glued to the window chrome (2026-11-25).
+        top_lay.setContentsMargins(0, 8, 0, 8)
         top_lay.setSpacing(0)
         root.addWidget(top)
 
@@ -217,6 +219,9 @@ class DatasetDetailView(
 
         # ---- Content row: scrolling main column + sticky sidebar ----
         content_row = QHBoxLayout(review_page)
+        # The sidebar's own host adds the air on its left and right; the
+        # row keeps its original geometry so the main column still fits at
+        # the 960px floor (2026-11-25).
         content_row.setContentsMargins(0, 0, 0, 0)
         content_row.setSpacing(0)
 
@@ -245,7 +250,16 @@ class DatasetDetailView(
         side_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         side_scroll.setMinimumWidth(280)
         side_scroll.setMaximumWidth(400)
-        content_row.addWidget(side_scroll, 2)
+        # The host owns the left/right air around the card. It folds with
+        # the scroll area so no empty gutter remains at narrow widths.
+        side_host = QWidget()
+        side_host.setObjectName("DetailSideHost")
+        side_host_lay = QVBoxLayout(side_host)
+        side_host_lay.setContentsMargins(12, 0, 12, 0)
+        side_host_lay.setSpacing(0)
+        side_host_lay.addWidget(side_scroll)
+        content_row.addWidget(side_host, 2)
+        self._side_host = side_host
         self._side_scroll = side_scroll
         # None = the width decides (the sidebar folds away below
         # _SIDEBAR_COLLAPSE_BELOW); True/False = the user decided.
@@ -380,9 +394,11 @@ class DatasetDetailView(
         self._depositor_lbl = make_body_label(t("detail.header.loading_metadata"), wrap=False)
         identity_col.addWidget(self._depositor_lbl)
         middle_row.addLayout(identity_col, 1)
-        self._status_widget = StatusWidget()
-        middle_row.addWidget(self._status_widget, 0)
         self._canvas_lay.addLayout(middle_row)
+        # The status owns a full-width row of its own: words, then bar, then
+        # the findings buttons — never squeezed beside the title (2026-11-25).
+        self._status_widget = StatusWidget()
+        self._canvas_lay.addWidget(self._status_widget)
         # The unified element lives in the scrolling header; the verdict
         # refresh feeds its action chips (2026-11-24).
         self._refresh_verdict()
@@ -390,10 +406,17 @@ class DatasetDetailView(
         # metadata makes `meta` truthy immediately.
         self._update_header_link(None)
 
-        # The rail shades the view on screen (dv-gfx.4) and takes a shadow
-        # once the column scrolls under it (dv-gfx.15).
+        # The rail is a white band with a hairline and a soft shadow under it
+        # (dv-gfx.4, 2026-11-25). The shadow is always on: it is the band's
+        # elevation, not a signal that the column has scrolled.
         self._rail.set_active_step("dataset_checks")
         self._rail_scrolled = False
+        try:
+            from ui.theme import apply_elevation
+
+            apply_elevation(self._rail, blur=12, dy=3, alpha=26)
+        except Exception:
+            pass
         try:
             self._scroll.verticalScrollBar().valueChanged.connect(self._sync_rail_shadow)
         except Exception:
@@ -484,9 +507,9 @@ class DatasetDetailView(
         # main_wrap was added to the canvas above; the container is only a
         # handle for the section (kept for callers that reach for it).
 
-        # SIDEBAR (right): one overlay panel with three tabs — Preview,
-        # Version log, Dataset log — so the sidebar needs no scrollbar of
-        # its own (2026-11-24).
+        # SIDEBAR (right): one card, with its tab bar as the card header and
+        # the tabbed panels as its body (2026-11-25). The card stops halfway
+        # down the page instead of stretching with the main column.
         side_wrap = QVBoxLayout()
         side_wrap.setSpacing(0)
         side_wrap.setContentsMargins(0, 0, 0, 0)
@@ -508,7 +531,29 @@ class DatasetDetailView(
 
         self._dataset_log_card = self._build_dataset_log_card()
         self._side_tabs.addTab(self._dataset_log_card, t("detail.sections.dataset_log"))
-        side_wrap.addWidget(self._side_tabs)
+
+        # The tabs ARE the sidebar's header: put them in a card so the
+        # whole panel reads as one surface with a header, not a bare tab
+        # widget stuck to the page edge.
+        side_card = QFrame()
+        side_card.setObjectName("Card")
+        side_card_lay = QVBoxLayout(side_card)
+        side_card_lay.setContentsMargins(0, 0, 0, 0)
+        side_card_lay.setSpacing(0)
+        side_card_lay.addWidget(self._side_tabs)
+        set_sheet(side_card, "card")
+        try:
+            from ui.theme import apply_elevation
+
+            apply_elevation(side_card)
+        except Exception:
+            pass
+        self._side_card = side_card
+
+        side_wrap.addWidget(side_card, 0, Qt.AlignmentFlag.AlignTop)
+        # The leftover page height stays empty below the card: the sidebar
+        # never claims the full column (2026-11-25).
+        side_wrap.addStretch(1)
 
         side_container = QWidget()
         side_container.setLayout(side_wrap)
@@ -516,8 +561,6 @@ class DatasetDetailView(
         side_container.setStyleSheet(
             transparent_surface_qss("DetailSideContainer", theme=ACTIVE_THEME)
         )
-        # The tab widget owns the panel; no outer scroll area, so the
-        # sidebar has no scrollbar of its own (2026-11-24).
         side_scroll.setWidget(side_container)
         side_scroll.setWidgetResizable(True)
 
@@ -626,33 +669,36 @@ class DatasetDetailView(
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
+        self._sync_sidebar_height()
         self._sync_sidebar()
         self._sync_rail_shadow()
 
-    def _sync_rail_shadow(self) -> None:
-        """Shadow under the rail once the column has scrolled (dv-gfx.15).
+    def _sync_sidebar_height(self) -> None:
+        """Cap the sidebar card at roughly half the page height.
 
-        The rail sits above the scrolling canvas, so it never moves; the
-        shadow is the cue that the page has slid under it.
+        The main column scrolls; the sidebar is a compact companion card,
+        not a second full-height column (2026-11-25).
+        """
+        card = getattr(self, "_side_card", None)
+        if card is None:
+            return
+        half = max(360, int(self.height() * 0.5))
+        card.setMaximumHeight(half)
+
+    def _sync_rail_shadow(self) -> None:
+        """Keep the rail's soft shadow in place (2026-11-25).
+
+        The band reads as a floating white surface at all times, not only
+        after the column scrolls; ``apply_elevation`` reuses the effect so
+        this stays a no-cost idempotent repaint.
         """
         rail = getattr(self, "_rail", None)
-        scroll = getattr(self, "_scroll", None)
-        if rail is None or scroll is None:
+        if rail is None:
             return
-        try:
-            scrolled = scroll.verticalScrollBar().value() > 0
-        except Exception:
-            scrolled = False
-        if scrolled == bool(getattr(self, "_rail_scrolled", False)):
-            return
-        self._rail_scrolled = scrolled
         try:
             from ui.theme import apply_elevation
 
-            if scrolled:
-                apply_elevation(rail, blur=12, dy=3, alpha=26)
-            else:
-                rail.setGraphicsEffect(None)
+            apply_elevation(rail, blur=12, dy=3, alpha=26)
         except Exception:
             pass
 
@@ -727,6 +773,9 @@ class DatasetDetailView(
             # the state hasn't changed (dv-3d0.1).
             self._sidebar_collapsed = collapsed
             self._side_scroll.setVisible(not collapsed)
+            host = getattr(self, "_side_host", None)
+            if host is not None:
+                host.setVisible(not collapsed)
             try:
                 set_icon(
                     self._sidebar_toggle_btn,

@@ -33,18 +33,9 @@ from PySide6.QtWidgets import (
 )
 
 import curation.applog as applog
+from ui import theme as _theme
 from ui.i18n import t
-from ui.theme import (
-    ACCENT_PRIMARY,
-    ACCENT_TERTIARY,
-    STATE_ERROR_GRAPHIC,
-    STATE_WARNING_GRAPHIC,
-    TEXT_AMBER,
-    TEXT_DANGER,
-    TEXT_MUTED,
-    TEXT_SUBTLE,
-    TEXT_SUCCESS,
-)
+from ui.theme import role
 from ui.widgets import (
     make_action_button,
     make_page_heading,
@@ -82,10 +73,10 @@ class LogPage(QWidget):
         legend = QHBoxLayout()
         legend.setSpacing(14)
         for text, colour, tip in (
-            (t("log.err_chip"), TEXT_DANGER, t("log.err_tip")),
-            (t("log.warn_chip"), STATE_WARNING_GRAPHIC, t("log.warn_tip")),
-            (t("log.expected_chip"), TEXT_MUTED, t("log.expected_tip")),
-            (t("log.plain_chip"), TEXT_MUTED, t("log.plain_tip")),
+            (t("log.err_chip"), "TEXT_DANGER", t("log.err_tip")),
+            (t("log.warn_chip"), "STATE_WARNING_GRAPHIC", t("log.warn_tip")),
+            (t("log.expected_chip"), "TEXT_MUTED", t("log.expected_tip")),
+            (t("log.plain_chip"), "TEXT_MUTED", t("log.plain_tip")),
         ):
             legend.addWidget(make_text_label(text, color=colour, tip=tip, selectable=True))
         header.addLayout(legend)
@@ -176,6 +167,10 @@ class LogPage(QWidget):
             self._timer.stop()
 
     def _refresh(self) -> None:
+        # A theme switch does not re-run the highlighter by itself; refresh
+        # its token colours here so the Log follows the live palette.
+        if self._highlighter._roles_theme != _theme.ACTIVE_THEME:
+            self._highlighter.set_theme()
         lines = applog.lines()
         needle = ""
         try:
@@ -236,41 +231,76 @@ class LogHighlighter(QSyntaxHighlighter):
     # Status codes after an arrow ("→ 403:") tint the number by class.
     _STATUS_RE = r"(?:→|->|=>)\s*(\d{3})\b"
 
+    # Resolved in _apply_roles from the live role table; declared here so
+    # the highlighter's dynamic repaint stays type-checkable (ADR 0008).
+    line_error_format: QTextCharFormat
+    line_warn_format: QTextCharFormat
+    line_expected_format: QTextCharFormat
+    error_format: QTextCharFormat
+    warn_format: QTextCharFormat
+    expected_format: QTextCharFormat
+    info_format: QTextCharFormat
+    timestamp_format: QTextCharFormat
+    method_format: QTextCharFormat
+    url_base_format: QTextCharFormat
+    url_path_format: QTextCharFormat
+    doi_format: QTextCharFormat
+    key_format: QTextCharFormat
+    value_format: QTextCharFormat
+    error_code_format: QTextCharFormat
+    warn_code_format: QTextCharFormat
+    expected_code_format: QTextCharFormat
+    ok_code_format: QTextCharFormat
+
+    # (attribute, role, bold) — resolved against the *live* role table so a
+    # light→dark switch repaints the log like every other view (2026-11-25).
+    _FORMATS: tuple[tuple[str, str, bool], ...] = (
+        ("line_error_format", "STATE_ERROR_GRAPHIC", False),
+        ("line_warn_format", "STATE_WARNING_GRAPHIC", False),
+        ("line_expected_format", "TEXT_MUTED", False),
+        ("error_format", "STATE_ERROR_GRAPHIC", True),
+        ("warn_format", "STATE_WARNING_GRAPHIC", True),
+        ("expected_format", "TEXT_MUTED", True),
+        ("info_format", "ACCENT_PRIMARY", True),
+        ("timestamp_format", "TEXT_SUBTLE", False),
+        ("method_format", "TEXT_AMBER", True),
+        ("url_base_format", "ACCENT_PRIMARY", True),
+        ("url_path_format", "ACCENT_TERTIARY", False),
+        ("doi_format", "TEXT_SUCCESS", True),
+        ("key_format", "TEXT_MUTED", False),
+        ("value_format", "TEXT_SUCCESS", False),
+        ("error_code_format", "STATE_ERROR_GRAPHIC", True),
+        ("warn_code_format", "STATE_WARNING_GRAPHIC", True),
+        ("expected_code_format", "TEXT_MUTED", True),
+        ("ok_code_format", "TEXT_SUCCESS", True),
+    )
+
     def __init__(self, parent: QTextDocument) -> None:
         super().__init__(parent)
+        self._roles_theme = ""
+        self._apply_roles()
+        self._install_patterns()
 
-        def _format(color: str, *, bold: bool = False) -> QTextCharFormat:
-            fmt = QTextCharFormat()
-            fmt.setForeground(QColor(color))
-            if bold:
-                fmt.setFontWeight(QFont.Weight.Bold)
-            return fmt
+    @staticmethod
+    def _format(color: str, *, bold: bool = False) -> QTextCharFormat:
+        fmt = QTextCharFormat()
+        fmt.setForeground(QColor(color))
+        if bold:
+            fmt.setFontWeight(QFont.Weight.Bold)
+        return fmt
 
-        # Line severity: plain coloured text for the body, bold for the
-        # severity word itself.
-        self.line_error_format = _format(STATE_ERROR_GRAPHIC)
-        self.line_warn_format = _format(STATE_WARNING_GRAPHIC)
-        # An expected refusal is not a problem — it is the server's
-        # documented answer, so it stays in the muted tone.
-        self.line_expected_format = _format(TEXT_MUTED)
-        self.error_format = _format(STATE_ERROR_GRAPHIC, bold=True)
-        self.warn_format = _format(STATE_WARNING_GRAPHIC, bold=True)
-        self.expected_format = _format(TEXT_MUTED, bold=True)
-        self.info_format = _format(ACCENT_PRIMARY, bold=True)
+    def _apply_roles(self) -> None:
+        """Resolve every token colour from the active theme's role table."""
+        for attr, name, bold in self._FORMATS:
+            setattr(self, attr, self._format(role(name), bold=bold))
+        self._roles_theme = _theme.ACTIVE_THEME
 
-        # Token colours.
-        self.timestamp_format = _format(TEXT_SUBTLE)
-        self.method_format = _format(TEXT_AMBER, bold=True)
-        self.url_base_format = _format(ACCENT_PRIMARY, bold=True)
-        self.url_path_format = _format(ACCENT_TERTIARY)
-        self.doi_format = _format(TEXT_SUCCESS, bold=True)
-        self.key_format = _format(TEXT_MUTED)
-        self.value_format = _format(TEXT_SUCCESS)
-        self.error_code_format = _format(STATE_ERROR_GRAPHIC, bold=True)
-        self.warn_code_format = _format(STATE_WARNING_GRAPHIC, bold=True)
-        self.expected_code_format = _format(TEXT_MUTED, bold=True)
-        self.ok_code_format = _format(TEXT_SUCCESS, bold=True)
+    def set_theme(self) -> None:
+        """Repaint an already-highlighted document after a theme switch."""
+        self._apply_roles()
+        self.rehighlight()
 
+    def _install_patterns(self) -> None:
         import re
 
         self._regex = re
@@ -330,6 +360,10 @@ class LogHighlighter(QSyntaxHighlighter):
             self.setFormat(match.start(), length, fmt)
 
     def highlightBlock(self, text: str) -> None:  # noqa: C901 - grandfathered; complexity burns down as dv-hcg decomposition lands
+        # Colours follow the live palette: a light→dark switch is picked up
+        # on the next paint, with no widget-level retheme hook (2026-11-25).
+        if self._roles_theme != _theme.ACTIVE_THEME:
+            self._apply_roles()
         severity = self._severity(text)
         if severity == "error":
             self.setFormat(0, len(text), self.line_error_format)

@@ -1811,10 +1811,10 @@ QComboBox::drop-down {{
     subcontrol-position: top right;
 }}
 {_chevron_qss(theme=theme)}
-/* Popup floats just below the button (the kit offsets it ~4px): fully
-   rounded on every corner, so opening it never changes the field's shape.
-   Item metrics are pinned (not font-implied) so every menu spaces choices
-   identically no matter which card hosts the combo. */
+/* Popup opens flush below the button: fully rounded on every corner, so
+   opening it never changes the field's shape and no white strip appears
+   between the selector and its options. Item metrics are pinned (not
+   font-implied) so every menu spaces choices identically. */
 QComboBox QAbstractItemView {{
     background: {role("SURFACE_CARD", theme)};
     border: 1px solid {role("BORDER_SUBTLE", theme)};
@@ -1836,8 +1836,8 @@ QComboBox QAbstractItemView::item:selected {{
     color: {role("TEXT_PRIMARY", theme)};
     border: none;
 }}
-/* The field keeps its rounded corners while open: the popup floats below
-   it (see the kit's showPopup gap), so there is no junction to square off. */
+/* The field keeps its rounded corners while open: the popup sits directly
+   below it, so there is no junction to square off and no gap to paint. */
 
 /* ===== Table ===== */
 /* Item views mark the current cell/row with the secondary fill (the

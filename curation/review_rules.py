@@ -1780,6 +1780,7 @@ def evaluate_ruleset(  # noqa: C901 - grandfathered; complexity burns down as dv
     inventory: list[dict[str, Any]] | None = None,
     staged_dir: Any = None,
     include_unchecked: bool = False,
+    title: str | None = None,
 ) -> list[dict[str, Any]]:
     """Run every enabled rule. Never raises.
 
@@ -1788,6 +1789,10 @@ def evaluate_ruleset(  # noqa: C901 - grandfathered; complexity burns down as dv
     display-only ``status="skipped"`` row is synthesized for each unchecked
     rule (level ``unchecked``, value ``—``) so the UI can offer a "not
     checked" view; they carry no verdict and no disposition key.
+
+    ``title`` overrides ``citation.title``: the dataset page shows the title
+    of the version being reviewed, which can differ from ``latestVersion``
+    (2026-11-25).
     """
     results: list[dict[str, Any]] = []
     # Pre-scan: ids of the checked field rules, so a synthesized unchecked
@@ -1859,9 +1864,14 @@ def evaluate_ruleset(  # noqa: C901 - grandfathered; complexity burns down as dv
                         }
                     )
                 continue
-            ok, val = _eval_handler(
-                handler, metadata or {}, blocks, block, field, fr, inventory=inventory
-            )
+            if title is not None and block == "citation" and field == "title":
+                # The title on screen belongs to the version being reviewed,
+                # not the metadata blob the API happened to load.
+                ok, val = bool(str(title).strip()), str(title)
+            else:
+                ok, val = _eval_handler(
+                    handler, metadata or {}, blocks, block, field, fr, inventory=inventory
+                )
             results.append(
                 {
                     "rule_id": rule_id,

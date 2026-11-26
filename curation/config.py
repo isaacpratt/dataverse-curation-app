@@ -86,6 +86,36 @@ def _warn_acl_failure(reason: str) -> None:
         pass
 
 
+def _warn_token_missing(reason: str) -> None:
+    """Say why the app is about to run anonymous (never logs the token)."""
+    try:
+        from curation.applog import get_app_log
+
+        get_app_log().warn(
+            f"no Dataverse API token available ({reason}) — requests will be "
+            "anonymous; add a token in Settings"
+        )
+    except Exception:
+        pass
+
+
+def _keyring_token(base_url: str) -> tuple[str, str]:
+    """Read the credential store for ``base_url``; return (token, error).
+
+    ``error`` is a redaction-safe reason for a miss, so the caller can warn
+    instead of silently running anonymous. Never raises.
+    """
+    if _keyring is None:
+        return "", "credential store unavailable"
+    try:
+        token = _keyring.get_password(KEYRING_SERVICE, str(base_url or "").rstrip("/") or "token")
+    except Exception as exc:
+        return "", f"credential store read failed ({type(exc).__name__})"
+    if not token:
+        return "", "no credential stored for this Dataverse"
+    return str(token), ""
+
+
 def validate_raw(raw: object) -> dict[str, Any]:
     """Validate the decoded config.json payload shape.
 
@@ -346,6 +376,9 @@ class DataverseConfig:
     # where the persisted token lives at rest: "keyring" | "config" | "env"
     # (absent in older configs - treated as "config")
     api_token_source: str = "config"
+    # True when the configured source was asked for a token but none came
+    # back. The UI surfaces this instead of firing anonymous reads.
+    token_missing: bool = False
 
     # backward-compat alias for older configs / docs
     @property
@@ -394,6 +427,16 @@ class Config:
             if env_token:
                 cfg.dataverse.api_token = env_token
                 cfg.dataverse.api_token_source = "env"
+            else:
+                # No config file is not a reason to ignore a token already
+                # stored in the OS credential store (2026-11-25).
+                kr, error = _keyring_token(cfg.dataverse.base_url)
+                if kr:
+                    cfg.dataverse.api_token = kr
+                    cfg.dataverse.api_token_source = "keyring"
+                else:
+                    cfg.dataverse.token_missing = True
+                    _warn_token_missing(error)
             if env_collection:
                 cfg.dataverse.collection = env_collection
             env_ws = _env_workspace()
@@ -456,28 +499,25 @@ class Config:
         # Keyring holds the token when the config says so (or when a stale
         # source marker names it); a stored plaintext token wins whenever
         # the store is empty/unreadable (pre-migration or fallback case).
-        if cfg.dataverse.api_token_source == "keyring" and _keyring is not None:
-            try:
-                kr = _keyring.get_password(
-                    KEYRING_SERVICE, cfg.dataverse.base_url.rstrip("/") or "token"
-                )
-            except Exception:
-                kr = None
-                try:
-                    from curation.applog import get_app_log
-
-                    get_app_log().warn("keyring read failed; falling back to token in config.json")
-                except Exception:
-                    pass
+        if cfg.dataverse.api_token_source == "keyring":
+            kr, error = _keyring_token(cfg.dataverse.base_url)
             if kr:
                 cfg.dataverse.api_token = kr
                 cfg.dataverse.api_token_source = "keyring"
+            else:
+                cfg.dataverse.token_missing = not bool(cfg.dataverse.api_token)
+                if cfg.dataverse.token_missing:
+                    _warn_token_missing(error)
+        if not cfg.dataverse.api_token:
+            cfg.dataverse.token_missing = True
+            _warn_token_missing("config.json holds no token")
         # Env overrides apply on top of file.
         if env_url:
             cfg.dataverse.base_url = normalise_base_url(env_url)
         if env_token:
             cfg.dataverse.api_token = env_token
             cfg.dataverse.api_token_source = "env"
+            cfg.dataverse.token_missing = False
         if env_collection:
             cfg.dataverse.collection = env_collection
         env_ws = _env_workspace()

@@ -57,8 +57,8 @@ from ui.theme import (
 from ui.widgets import (
     AppTable,
     PaneFooter,
+    ToggleSwitch,
     make_action_button,
-    make_checkbox,
     make_combo,
     make_field_label,
     make_icon_text_button,
@@ -161,7 +161,9 @@ class SettingsPane(QWidget):
         self._baseline: dict[str, str] = {}
 
         outer = QVBoxLayout()
-        outer.setContentsMargins(24, 24, 24, 24)
+        # 20px top/bottom (was 24): the page fits a standard viewport without
+        # a scrollbar on General (2026-11-25).
+        outer.setContentsMargins(24, 20, 24, 20)
         outer.setSpacing(16)
 
         # Shared page-heading contract (HeadlineLG + BodyMD theme tokens):
@@ -175,6 +177,7 @@ class SettingsPane(QWidget):
             outer.addWidget(sub)
 
         tabs = QTabWidget()
+        self._tabs = tabs
 
         # General tab
         general = QWidget()
@@ -279,27 +282,26 @@ class SettingsPane(QWidget):
 
         tabs.addTab(general, t("settings.tabs.general"))
 
-        # Theme controls live on the General tab (2026-11-24): a separate
-        # Appearance tab was one more click for a single switch.
-
+        # Theme: one Tailwind-style light/dark switch instead of a dropdown
+        # plus a separate auto checkbox (2026-11-25). Existing configs that
+        # still say "auto" are resolved to the current system theme here.
         theme_label = make_field_label(t("settings.appearance.theme_label"))
         form.addRow(theme_label)
-        self.theme_mode_combo = make_combo(
-            [
-                (t("settings.appearance.theme_light"), "light"),
-                (t("settings.appearance.theme_dark"), "dark"),
-                (t("settings.appearance.theme_auto"), "auto"),
-            ],
-            min_width=200,
-        )
-        self.theme_mode_combo.currentIndexChanged.connect(self._on_theme_mode_changed)
-        form.addRow("", self.theme_mode_combo)
-
-        # Auto-switch checkbox
-        self.auto_theme_checkbox = make_checkbox(t("settings.appearance.auto_switch"))
-        self.auto_theme_checkbox.setToolTip(t("settings.appearance.auto_switch_tip"))
-        self.auto_theme_checkbox.toggled.connect(self._on_auto_theme_toggled)
-        form.addRow("", self.auto_theme_checkbox)
+        theme_row = QHBoxLayout()
+        theme_row.setContentsMargins(0, 0, 0, 0)
+        theme_row.setSpacing(8)
+        light_lbl = QLabel(t("settings.appearance.theme_light"))
+        light_lbl.setObjectName("CaptionSM")
+        theme_row.addWidget(light_lbl)
+        self.theme_toggle = ToggleSwitch()
+        self.theme_toggle.setToolTip(t("settings.appearance.theme_toggle_tip"))
+        self.theme_toggle.toggled.connect(self._on_theme_toggled)
+        theme_row.addWidget(self.theme_toggle)
+        dark_lbl = QLabel(t("settings.appearance.theme_dark"))
+        dark_lbl.setObjectName("CaptionSM")
+        theme_row.addWidget(dark_lbl)
+        theme_row.addStretch(1)
+        form.addRow("", theme_row)
 
         # Extensions tab: optional libs + external binaries.
         # Flush tab page (card pattern): zero layout margins; the table
@@ -393,6 +395,20 @@ class SettingsPane(QWidget):
         bottom_lay.addLayout(ext_btn_row)
         ext_layout.addWidget(bottom)
         tabs.addTab(ext_tab, t("settings.tabs.extensions"))
+        self._ext_tab = ext_tab
+
+        def _sync_ext_table_height(index: int) -> None:
+            """Only the visible Extensions tab claims the tall table."""
+            full = index == tabs.indexOf(ext_tab)
+            height = (
+                getattr(self, "_ext_full_height", 0)
+                if full
+                else getattr(self, "_ext_compact_height", 0)
+            )
+            if height:
+                self.ext_table.setMinimumHeight(height)
+
+        tabs.currentChanged.connect(_sync_ext_table_height)
         # Outline wrapper: the tab pane cannot draw rounded corners itself
         # (Qt drops the arcs — see theme.py TabWidget note), so a plain
         # card draws the outline. Standard card inset keeps flush children
@@ -400,7 +416,7 @@ class SettingsPane(QWidget):
         tabs_card = QFrame()
         tabs_card.setObjectName("Card")
         card_lay = QVBoxLayout(tabs_card)
-        card_lay.setContentsMargins(16, 12, 16, 12)
+        card_lay.setContentsMargins(16, 10, 16, 10)
         card_lay.setSpacing(8)
         card_lay.addWidget(tabs)
         outer.addWidget(tabs_card, 1)
@@ -556,14 +572,15 @@ class SettingsPane(QWidget):
                 "tesseract": self._config.app.tesseract or "",
                 "exiftool": self._config.app.exiftool or "",
             }
-            # Load theme settings
+            # Load theme into the single switch. An older "auto" setting is
+            # resolved to the system theme, but saving writes light/dark.
+            from ui.theme import resolve_theme_mode
+
             theme_mode = getattr(self._config.app, "theme_mode", "light")
-            self.theme_mode_combo.setCurrentIndex(self.theme_mode_combo.findData(theme_mode))
-            # Auto-switch checkbox
-            auto_theme = theme_mode == "auto"
-            self.auto_theme_checkbox.setChecked(auto_theme)
-            if auto_theme:
-                self.theme_mode_combo.setEnabled(False)
+            dark = resolve_theme_mode(theme_mode) == "dark"
+            self.theme_toggle.blockSignals(True)
+            self.theme_toggle.setChecked(dark)
+            self.theme_toggle.blockSignals(False)
             self._on_preset_changed(self.preset_combo.currentText())
         finally:
             self._loading = False
@@ -581,6 +598,7 @@ class SettingsPane(QWidget):
             "workspace": self.workspace_edit.text().strip(),
             "tesseract": (self._tool_paths or {}).get("tesseract", "").strip(),
             "exiftool": (self._tool_paths or {}).get("exiftool", "").strip(),
+            "theme_mode": "dark" if self.theme_toggle.isChecked() else "light",
         }
 
     def _refresh_dirty(self) -> None:
@@ -916,11 +934,18 @@ class SettingsPane(QWidget):
         # column's cell forces a 168px preferred width via sizeHint, so
         # the fit never shrinks it below Reinstall+Uninstall.
         self.ext_table.fit_columns_to_content()
-        # dv-ub0: the table is at least as tall as its content, so no row
-        # is ever clipped inside it; the Settings pane scrolls instead.
+        # dv-ub0: no row is clipped when the Extensions tab is open, but its
+        # content height must not dictate the pane's height on General —
+        # that forced a page scrollbar and a blank strip (2026-11-25).
         try:
             header_h = self.ext_table.horizontalHeader().height() or 30
-            self.ext_table.setMinimumHeight(header_h + self.ext_table.rowCount() * 44 + 2)
+            self._ext_full_height = header_h + self.ext_table.rowCount() * 44 + 2
+            self._ext_compact_height = header_h + 2 * 44
+            self.ext_table.setMinimumHeight(
+                self._ext_full_height
+                if self._tabs.currentIndex() == self._tabs.indexOf(self._ext_tab)
+                else self._ext_compact_height
+            )
         except Exception:
             pass
 
@@ -1420,8 +1445,8 @@ class SettingsPane(QWidget):
         self._config.app.workspace = ws
         self._config.app.tesseract = (self._tool_paths or {}).get("tesseract", "").strip()
         self._config.app.exiftool = (self._tool_paths or {}).get("exiftool", "").strip()
-        # Save theme settings
-        self._config.app.theme_mode = self.theme_mode_combo.currentData() or "light"
+        # Save the theme the switch shows (light/dark).
+        self._config.app.theme_mode = "dark" if self.theme_toggle.isChecked() else "light"
         try:
             self._config.save()
             # Apply theme immediately after saving
@@ -1444,22 +1469,13 @@ class SettingsPane(QWidget):
         if self.persist():
             self.saved.emit()
 
-    def _on_theme_mode_changed(self, index: int) -> None:
-        """Handle theme mode combo change."""
-        theme_mode = self.theme_mode_combo.currentData()
-        if theme_mode:
-            self._config.app.theme_mode = theme_mode
-            self._refresh_dirty()
-
-    def _on_auto_theme_toggled(self, checked: bool) -> None:
-        """Handle auto-switch checkbox toggle."""
-        if checked:
-            self._config.app.theme_mode = "auto"
-        else:
-            # If unchecking auto, keep current theme but don't auto-switch
-            if self._config.app.theme_mode == "auto":
-                self._config.app.theme_mode = "light"
+    def _on_theme_toggled(self, checked: bool) -> None:
+        """Write the chosen light/dark mode and paint it live."""
+        if self._loading:
+            return
+        self._config.app.theme_mode = "dark" if checked else "light"
         self._refresh_dirty()
+        self._apply_theme()
 
     def _apply_theme(self) -> None:
         """Apply the current theme setting to the app."""

@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -105,14 +106,16 @@ class LogRail(DetailState):
         self._dataset_log.setSizeAdjustPolicy(
             QAbstractItemView.SizeAdjustPolicy.AdjustToContentsOnFirstShow
         )
-        self._dataset_log.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        self._dataset_log.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self._dataset_log.setWordWrap(True)
         self._dataset_log.setToolTip(t("detail.dataset_log.tip"))
         # Edge to edge (dv-gfx.17): the list is the card's content, not a
         # box inside a box, so the card's own padding would inset it twice.
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
-        body.addWidget(self._dataset_log)
+        # Rows start at the top of the card; spare height stays below them.
+        body.setAlignment(Qt.AlignmentFlag.AlignTop)
+        body.addWidget(self._dataset_log, 0, Qt.AlignmentFlag.AlignTop)
         return card
 
     def _state(self) -> "AppState | None":
