@@ -3354,6 +3354,9 @@ class StatusWidget(QFrame):
             self._bar.setRange(0, 100)
             self._bar.setValue(int(max(0.0, min(1.0, fraction)) * 100))
             self._bar.show()
+        # Running is a new pass: verdict chips belong to the previous
+        # result and must not survive into it.
+        self.clear_chips()
         self.show()
 
     def set_complete(self, title: str, detail: str = "") -> None:
