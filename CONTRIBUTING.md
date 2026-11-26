@@ -1,6 +1,6 @@
 # Contributing to Dataverse Docent
 
-Thanks for helping improve Dataverse Docent. This guide covers how to report problems, propose changes, set up a development environment, and get your work through the gates. For the rules that govern the prose you write, read [docs/style-guide.md](docs/style-guide.md) or its [published version](https://isaacpratt.github.io/dataverse-curation-app/style-guide/).
+Thanks for helping improve Dataverse Docent. This guide covers how to report problems, propose changes, set up a development environment, and get your work through the gates. For the rules that govern the prose you write, read [docs/internal/style-guide.md](docs/internal/style-guide.md).
 
 ## Report a bug or request a feature
 
@@ -37,7 +37,7 @@ Thanks for helping improve Dataverse Docent. This guide covers how to report pro
 
 ## Run the checks
 
-Before you open a pull request, run the gates in [Run the gates](docs/how-to/run-the-gates.md) and confirm they pass:
+Before you open a pull request, run the gates in [Run the gates](docs/internal/how-to/run-the-gates.md) and confirm they pass:
 
 ```powershell
 uv run poe check       # lint, format-check, typecheck, contracts, tests
@@ -52,7 +52,7 @@ CI runs the same gate on every pull request. A docs-only change still needs the 
 
 ## Write documentation
 
-- Follow [docs/style-guide.md](docs/style-guide.md) (also available on the [published documentation site](https://isaacpratt.github.io/dataverse-curation-app/style-guide/)).
+- Follow [docs/internal/style-guide.md](docs/internal/style-guide.md) (also available on the [published documentation site](https://isaacpratt.github.io/dataverse-curation-app/style-guide/)).
 - Put one idea in one page and keep each page in one Diátaxis quadrant.
 - Use relative links between pages in `docs/`, fenced code blocks with a language, and commands copied from `pyproject.toml`.
 - Add a new page to the explicit `nav` in `zensical.toml`.

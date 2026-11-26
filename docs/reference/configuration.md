@@ -38,7 +38,7 @@ Every key present in `config.example.json`:
 | `DATAVERSE_COLLECTION` | string | env > config.json | Collection alias used for discovery (`subtree`) |
 | `DATAVERSE_WORKSPACE` | path | env > config.json `app.workspace` (default `~/Documents/curation-workspace`) | Where staged downloads and caches live |
 
-`DOCENT_STARTUP_LOG` is an independent opt-in runtime variable: when set to a file path, startup phase timings are appended there (see [Project layout](project-layout.md#startup-timing)).
+`DOCENT_STARTUP_LOG` is an independent opt-in runtime variable: when set to a file path, startup phase timings are appended there.
 
 ## On-disk artefacts
 
@@ -55,7 +55,6 @@ Every file the app writes, its resolution rule and who writes it. Runtime caches
 | `downloads/` | `app.workspace` subfolder (default `~/Documents/curation-workspace/downloads`) | Download manager | staged originals; skip-if-staged detection; never tracked |
 | `workspace/`, `.curation-workspace/` | CWD (if used) | reserved/caches | variant of the workspace concept used by older builds; gitignored |
 | `metadatablocks_cache.json`, `curation_labels.json` | `app.workspace` | Metadatablock/labels caches | field catalog + allowed curation labels (best-effort, disposable) |
-| `.mypy_cache/`, `.ruff_cache/`, `.pytest_cache/`, `.pyi-cache/`, `__pycache__/` | CWD | tooling | local caches; all gitignored |
 
 ## See also
 

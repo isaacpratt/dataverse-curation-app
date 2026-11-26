@@ -11,5 +11,5 @@ current plan.
 | `diataxis-audit.md` | The quadrant/template audit of the published Markdown pages (dv-uq6). The published proposal snapshots live in `docs/proposals/`, not here. |
 
 The plan itself lives in **beads** (`bd ready`, `bd list`, `bd show <id>`).
-`docs/explanation/design-records/index.md` is the pointer to the published
+`docs/internal/explanation/design-records/index.md` is the pointer to the published
 proposal snapshots; this folder keeps the older HTML reports for provenance.

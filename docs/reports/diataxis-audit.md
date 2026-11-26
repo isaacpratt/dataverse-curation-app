@@ -1,6 +1,6 @@
 # Diátaxis quadrant audit
 
-This report records the intended quadrant and TGDP template of every published page after the Diátaxis rewrite (bead `dv-uq6`). It is a tracked report under `docs/reports/` and is excluded from the site build; it has no front matter.
+This report records the intended quadrant and TGDP template of every page after the Diátaxis rewrite (bead `dv-uq6`). Rows prefixed `internal/` are maintainer pages excluded from the site build; the rest are published. It is a tracked report under `docs/reports/` and is excluded from the site build; it has no front matter.
 
 ## Quadrant audit table
 
@@ -13,27 +13,27 @@ This report records the intended quadrant and TGDP template of every published p
 | `how-to/run-checks.md` | how-to | How-to | Goal-oriented check run. |
 | `how-to/respond-and-export.md` | how-to | How-to | Goal-oriented response draft and report export. |
 | `how-to/run-headless.md` | how-to | How-to | Goal-oriented headless scan. |
-| `how-to/add-a-check.md` | how-to | How-to | Developer task steps for extending the engine. |
-| `how-to/run-the-gates.md` | how-to | How-to | Developer task steps for the local gate. |
-| `how-to/package-and-release.md` | how-to | How-to | Developer task steps for packaging and publishing. |
+| `internal/how-to/add-a-check.md` | how-to | How-to | Developer task steps for extending the engine. |
+| `internal/how-to/run-the-gates.md` | how-to | How-to | Developer task steps for the local gate. |
+| `internal/how-to/package-and-release.md` | how-to | How-to | Developer task steps for packaging and publishing. |
 | `reference/checks.md` | reference | Reference | Factual check semantics and issue taxonomy. |
 | `reference/report-contract.md` | reference | Reference | JSON report contract. |
 | `reference/configuration.md` | reference | Reference | Configuration keys and environment overrides. |
 | `reference/dataverse-api.md` | reference | Reference | Native/Search API endpoints and auth. |
 | `reference/cli.md` | reference | Reference | Command-line arguments and exit codes. |
 | `reference/entry-checks.md` | reference | Reference | Entry-correctness check catalogue. |
-| `reference/project-layout.md` | reference | Reference | Repository layout and suite locations. |
-| `reference/tech-stack.md` | reference | Reference | Generated dependency versions and toolchain pins. |
+| `internal/reference/project-layout.md` | reference | Reference | Repository layout and suite locations. |
+| `internal/reference/tech-stack.md` | reference | Reference | Generated dependency versions and toolchain pins. |
 | `reference/glossary.md` | reference | Glossary | Alphabetical term definitions. |
-| `explanation/architecture.md` | explanation | Concept | Components, threading, storage, layering. |
-| `explanation/discovery-flow.md` | explanation | Concept | Why discovery and enrichment work as they do. |
-| `explanation/entry-correctness.md` | explanation | Concept | Rationale behind the entry-correctness rules. |
-| `explanation/engine-port.md` | explanation | Concept | R-to-Python port matrix and decisions. |
-| `explanation/ui-conventions.md` | explanation | Concept | Theme, table and widget contracts. |
-| `explanation/design-records/index.md` | explanation | Concept | Index of architecture decision records and their rationale. |
+| `internal/explanation/architecture.md` | explanation | Concept | Components, threading, storage, layering. |
+| `internal/explanation/discovery-flow.md` | explanation | Concept | Why discovery and enrichment work as they do. |
+| `internal/explanation/entry-correctness.md` | explanation | Concept | Rationale behind the entry-correctness rules. |
+| `internal/explanation/engine-port.md` | explanation | Concept | R-to-Python port matrix and decisions. |
+| `internal/explanation/ui-conventions.md` | explanation | Concept | Theme, table and widget contracts. |
+| `internal/explanation/design-records/index.md` | explanation | Concept | Index of architecture decision records and their rationale. |
 | `troubleshooting.md` | troubleshooting | Troubleshooting | Symptom-led diagnosis and fixes. |
 | `release-notes.md` | governance | Release notes | Channels and condensed change summary. |
-| `style-guide.md` | governance | Style guide | In-repository rules for documentation authors. |
+| `internal/style-guide.md` | governance | Style guide | In-repository rules for documentation authors. |
 
 ## Historical and retired material
 

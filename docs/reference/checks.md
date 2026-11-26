@@ -5,11 +5,11 @@ audience: all                # curator | developer | contributor | all
 ---
 # Checks reference
 
-The engine has one registered check module per key in `engine/checks/__init__.py:registry`. Each module owns one **family ID** (for example `format.csv`) and declares a scope; a run emits more specific check IDs beneath that family (for example `format.csv.structure`). Results are carried by the [DatasetReport contract](report-contract.md). The checks are ports of the R inspectors in `CUR_Res_CurationTools`.
+Each check owns one **family ID** (for example `format.csv`) and declares a scope; a run emits more specific check IDs beneath that family (for example `format.csv.structure`). Results are carried by the [DatasetReport contract](report-contract.md).
 
 ## How checks run
 
-Compound file extensions (for example `.fq.gz` or `.tar.gz`) shed one outer layer before dispatch. Symlinks are skipped; each file runs in isolation so one crash cannot sink the report. Results aggregate into the DatasetReport contract (JSON + Markdown). Secrets/PII scanners (hush-scan, piigex) are required and bundled — never "missing". Structured PII uses `regions=["intl"]` plus the Canadian postal/SIN pack; foreign national IDs are disabled by policy.
+Compound file extensions (for example `.fq.gz` or `.tar.gz`) shed one outer layer before dispatch. Symlinks are skipped; each file runs in isolation so one crash cannot sink the report. Results aggregate into the DatasetReport contract (JSON + Markdown). Secrets/PII scanners are required and bundled — never "missing".
 
 ## Badge meanings
 
@@ -41,7 +41,7 @@ Every module emits all owned IDs every run — passes such as "No zero-byte file
 
 ## Check ID index
 
-The registry family IDs, each with its owning module and declared scope. This table is generated from `engine.checks.registry` by `poe docs-gen-checks`; a drift test fails when it changes without the registry. A report can also contain more specific IDs under these families, plus the runner-emitted hint `inventory.unchecked_types` (not a registry key):
+The family IDs, each with its declared scope. A report can also contain more specific IDs under these families, plus the hint `inventory.unchecked_types`:
 
 <!-- BEGIN GENERATED CHECK ID INDEX -->
 | Check ID | Module | Scope |
@@ -74,7 +74,7 @@ The registry family IDs, each with its owning module and declared scope. This ta
 
 ## Per-module checks
 
-Scope is `dataset` or `file`, declared by each check class (`Check.scope`) and enforced at registration: dataset checks run once over the whole staged set and report under `dataset_checks`; file checks run once per matching file and report in that file's `checks`. Extensions say which files a check reads, not what its findings are about — the two are independent, so a cross-file check can read `.csv` and still be dataset-scoped (`engine/tests/test_check_scope.py`). On the dataset page, Dataset checks shows `dataset_checks` (and the metadata completeness card), while File checks shows every `files[].checks` entry in its folder → file → check tree; a finding is never printed in both.
+A check is either dataset-scoped or file-scoped. Dataset checks run once over the staged set and report under `dataset_checks`; file checks run once per matching file and report in that file's `checks`. On the dataset page, Dataset checks shows `dataset_checks` (and the metadata completeness card), while File checks shows every `files[].checks` entry in its folder → file → check tree; a finding is never printed in both.
 
 | Module | Scope | Check IDs | Examines | Notable findings |
 | --- | --- | --- | --- | --- |
@@ -103,7 +103,7 @@ Scope is `dataset` or `file`, declared by each check class (`Check.scope`) and e
 | varmeta_check | dataset | metadata.var_coverage | Per-file variable-metadata coverage from Dataverse's DDI: how many variables carry a label. Rides the per-file coverage map and the labels on its first result so the File Manifest annotates each tabular file and the dictionary draft works offline. | Tabular file with no variable labels (warning); under half labeled (warning); skipped without an inventory |
 | readme_check | dataset | metadata.readme_sections | Scores the staged README against the five standard sections (overview, files, methods, missing-data codes, sharing/access) by scanning its heading lines; a ruleset may override the section list with `section_rules`. Details record which sections were found/missing; the depositor template can use `{readme_sections}`. | Missing required section(s) (warning); missing optional section only (info); skipped when no README is present (the presence rule still applies) |
 
-MATLAB `.mat` (and any format without a module) is reported once per dataset as `inventory.unchecked_types` (warning) — manual review required. `scipy` stays optional by design.
+MATLAB `.mat` (and any format without a module) is reported once per dataset as `inventory.unchecked_types` (warning) — manual review required.
 
 ## Registry guidance
 

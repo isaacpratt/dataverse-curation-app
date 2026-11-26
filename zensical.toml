@@ -12,8 +12,10 @@ repo_url = "https://github.com/isaacpratt/dataverse-curation-app"
 repo_name = "isaacpratt/dataverse-curation-app"
 docs_dir = "docs"
 site_dir = "site"
-# Historical design records and reports are kept in the repo but not published.
+# Internal developer docs, historical design records and reports are kept in
+# the repo but not published: the public site serves curators, not contributors.
 exclude_docs = """
+/internal/
 /reports/
 /adr/
 """
@@ -22,9 +24,10 @@ not_in_nav = """
 /proposals/
 """
 
-# One page, one quadrant. Home, troubleshooting, release notes and the style
-# guide are TGDP/governance page types rather than quadrants; they sit after
-# the four quadrants so the nav reads as a Diátaxis map.
+# One page, one quadrant. Home, troubleshooting and release notes are
+# TGDP/governance page types rather than quadrants; they sit after the three
+# public quadrants so the nav reads as a Diátaxis map. Explanation and
+# contributor material lives in docs/internal/ and is excluded from the site.
 nav = [
   { "Home" = "index.md" },
   { "Tutorials" = [
@@ -36,9 +39,6 @@ nav = [
       { "Run checks on a dataset" = "how-to/run-checks.md" },
       { "Respond and export" = "how-to/respond-and-export.md" },
       { "Run headless" = "how-to/run-headless.md" },
-      { "Add a check" = "how-to/add-a-check.md" },
-      { "Run the gates" = "how-to/run-the-gates.md" },
-      { "Package and release" = "how-to/package-and-release.md" },
   ]},
   { "Reference" = [
       { "Checks" = "reference/checks.md" },
@@ -47,21 +47,10 @@ nav = [
       { "Dataverse API" = "reference/dataverse-api.md" },
       { "CLI" = "reference/cli.md" },
       { "Entry checks" = "reference/entry-checks.md" },
-      { "Project layout" = "reference/project-layout.md" },
-      { "Tech stack" = "reference/tech-stack.md" },
       { "Glossary" = "reference/glossary.md" },
-  ]},
-  { "Explanation" = [
-      { "Architecture" = "explanation/architecture.md" },
-      { "Discovery flow" = "explanation/discovery-flow.md" },
-      { "Entry correctness" = "explanation/entry-correctness.md" },
-      { "Engine port" = "explanation/engine-port.md" },
-      { "UI conventions" = "explanation/ui-conventions.md" },
-      { "Design records" = "explanation/design-records/index.md" },
   ]},
   { "Troubleshooting" = "troubleshooting.md" },
   { "Release notes" = "release-notes.md" },
-  { "Documentation style guide" = "style-guide.md" },
 ]
 
 extra_css = ["assets/extra.css"]

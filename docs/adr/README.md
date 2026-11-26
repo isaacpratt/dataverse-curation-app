@@ -37,6 +37,6 @@ Each ADR is one page with the same headings:
 4. If a decision is reversed, write a new ADR and mark the old one
    `Superseded by ADR-XXXX`; do not edit history.
 
-The decision log in `docs/explanation/architecture.md` holds the UI-level decisions;
+The decision log in `docs/internal/explanation/architecture.md` holds the UI-level decisions;
 these ADRs hold the repository-level ones (toolchain, layout, packaging,
 security).

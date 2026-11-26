@@ -42,4 +42,4 @@ Add a format or dataset check to the engine, register it, test it, and document 
 
 4. Run the gates. Follow [Run the gates](run-the-gates.md) and confirm `uv run poe check` and `uv run poe probes` pass. [The project layout reference](../reference/project-layout.md) lists where each suite lives.
 
-5. Document the semantics. Describe what the check examines, its `check_id` values, and the meaning of each finding in [the checks reference](../reference/checks.md).
+5. Document the semantics. Describe what the check examines, its `check_id` values, and the meaning of each finding in [the checks reference](../../reference/checks.md).

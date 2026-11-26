@@ -95,7 +95,7 @@ def test_tech_stack_reference_matches_the_lock() -> None:
     sys.path.insert(0, str(ROOT / "tools" / "docs"))
     from gen_tech_stack import check, render_stack
 
-    page = (DOCS / "reference" / "tech-stack.md").read_text(encoding="utf-8")
+    page = (DOCS / "internal" / "reference" / "tech-stack.md").read_text(encoding="utf-8")
     assert check(), "run `poe docs-gen-tech-stack` to regenerate the tech-stack reference"
     block = render_stack()
     assert block in page

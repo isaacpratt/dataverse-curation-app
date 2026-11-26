@@ -1,5 +1,5 @@
 !!! warning "Historical snapshot"
-    This page is a frozen proposal snapshot kept for provenance. It is intentionally **out of the site navigation** and is not a statement of current behaviour. See [Architecture](../explanation/architecture.md) and the [design records](../explanation/design-records/index.md) pointer for the live picture.
+    This page is a frozen proposal snapshot kept for provenance. It is intentionally **out of the site navigation** and is not a statement of current behaviour. See [Architecture](https://github.com/isaacpratt/dataverse-curation-app/blob/master/docs/internal/explanation/architecture.md) and the [design records](https://github.com/isaacpratt/dataverse-curation-app/blob/master/docs/internal/explanation/design-records/index.md) pointer for the live picture.
 
 # Dataset review page — Top 10 improvement proposals
 

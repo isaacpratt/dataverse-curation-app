@@ -20,7 +20,7 @@ Find the message or symptom you see, then apply its fix. For setup steps, see [c
 | Download interrupted | A network interruption or a cancelled transfer. | Re-download. The previous stage is cleaned up and prior reports are preserved. |
 | Download says "Guestbook response" required | The dataset collects a [guestbook](reference/glossary.md) before download. | Fill any required field in the download window (prefilled from your account) and submit it. If the form did not appear, reload the dataset metadata and try again. |
 | Checksum mismatch on `.tab` | The server regenerates the tabular ingest product, so its checksum differs. | Compare the UNF in the message, or fetch the original format. A mismatch on any other format is real corruption — re-download it. |
-| `NameError: QWidget` in Settings | A bug fixed in the 2026-08-26 build. | Update to a release from [GitHub Releases](https://github.com/isaacpratt/dataverse-curation-app/releases) dated 2026-08-26 or later. |
+| `NameError: QWidget` in Settings | An older release's Settings bug. | Update to the latest release from [GitHub Releases](https://github.com/isaacpratt/dataverse-curation-app/releases). |
 
 ## Expected log lines
 

@@ -74,5 +74,5 @@ became `curation/client/`.
   (root-module consolidation), `dv-hcg.26` (Qt-free dashboard cache),
   `dv-hcg.34` (module-size guideline).
 - `AGENTS.md` — repository layout map.
-- `docs/explanation/architecture.md` — component map.
+- `docs/internal/explanation/architecture.md` — component map.
 - ADR 0006 — the curation core package.

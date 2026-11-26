@@ -1,6 +1,6 @@
 # Agent Instructions
 
-Design decisions: native PySide6 desktop app (single process), API-token authentication against the Dataverse Native/Search API, SQLite for local state, PyInstaller packaging. See `docs/explanation/architecture.md`.
+Design decisions: native PySide6 desktop app (single process), API-token authentication against the Dataverse Native/Search API, SQLite for local state, PyInstaller packaging. See `docs/internal/explanation/architecture.md`.
 
 ## Repository layout
 
@@ -87,7 +87,7 @@ Published at https://isaacpratt.github.io/dataverse-curation-app/, built from
 Markdown in `docs/` by Zensical (`zensical.toml`, native config, explicit nav
 grouped by quadrant). **Documentation as code:** the Markdown tree is the only
 source of truth; no HTML source remains. Every page declares its quadrant and
-TGDP template in front matter; `docs/style-guide.md` and root `CONTRIBUTING.md`
+TGDP template in front matter; `docs/internal/style-guide.md` and root `CONTRIBUTING.md`
 are the rules for docs changes, and `docs/reports/diataxis-audit.md` records the
 quadrant audit. Build/preview with `uv run poe docs` / `uv run poe docs-serve`;
 the full docs gate is `uv run poe docs-check` (Markdown lint, offline links,
@@ -98,10 +98,11 @@ External links are checked on a weekly schedule, not per PR.
 
 - `docs/index.md` — home and quadrant map
 - `docs/tutorials/first-review.md` — guided first review (TGDP Tutorial)
-- `docs/how-to/` — install, configure, run checks, respond/export, headless, add-a-check, gates, package/release
-- `docs/reference/` — checks, report contract, configuration, CLI, Dataverse API, entry checks, project layout, tech stack, glossary
-- `docs/explanation/` — architecture, discovery flow, entry correctness, engine port, UI conventions, design records
-- `docs/troubleshooting.md`, `docs/release-notes.md`, `docs/style-guide.md` — TGDP troubleshooting/release-notes and the docs style guide
+- `docs/how-to/` — install, configure, run checks, respond/export, headless (curator-facing only)
+- `docs/reference/` — checks, report contract, configuration, CLI, Dataverse API, entry checks, glossary
+- `docs/internal/` (not published) — design decisions, explanation pages, developer how-tos, project layout, tech stack, style guide
+- `docs/internal/explanation/` (not published) — architecture, discovery flow, entry correctness, engine port, UI conventions, design records
+- `docs/troubleshooting.md`, `docs/release-notes.md`, `docs/internal/style-guide.md` — TGDP troubleshooting/release-notes and the docs style guide
 
 This project uses **bd** (beads) for issue tracking and project plan. Run `bd prime` for full workflow context.
 
@@ -306,7 +307,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Bead creation
 
-Use `.beads/templates/bead-creation.md` for every new bead. Before creating: `bd list` + `bd search` for dedup, confirm the item is still open (closed items are in beads, not `docs/explanation/design-records/index.md` — never re-create them), set type/priority, and order children with `bd dep add` so `bv` shows the work order. Descriptions are self-contained markdown: Outcome → Context (with file/section anchors) → Hooks → Tests (unit + e2e/probe, with what passing looks like). One bead, one outcome — split sequencing into separate beads. After creating, `bd show <id>` and fix anything that needs context you had to remember.
+Use `.beads/templates/bead-creation.md` for every new bead. Before creating: `bd list` + `bd search` for dedup, confirm the item is still open (closed items are in beads, not `docs/internal/explanation/design-records/index.md` — never re-create them), set type/priority, and order children with `bd dep add` so `bv` shows the work order. Descriptions are self-contained markdown: Outcome → Context (with file/section anchors) → Hooks → Tests (unit + e2e/probe, with what passing looks like). One bead, one outcome — split sequencing into separate beads. After creating, `bd show <id>` and fix anything that needs context you had to remember.
 
 ## License
 

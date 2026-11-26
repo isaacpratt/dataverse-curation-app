@@ -5,7 +5,7 @@ audience: developer          # curator | developer | contributor | all
 ---
 # Why the engine is a Python port
 
-The check engine re-implements the inspectors from `CUR_Res_CurationTools` in Python. No R runtime ships with the app. This page records why that choice was made, how parity is established, where the port deliberately differs from the R scripts, and what had to be true before the project could proceed. It is a design record; the current list of checks and what each examines belongs in the [checks reference](../reference/checks.md).
+The check engine re-implements the inspectors from `CUR_Res_CurationTools` in Python. No R runtime ships with the app. This page records why that choice was made, how parity is established, where the port deliberately differs from the R scripts, and what had to be true before the project could proceed. It is a design record; the current list of checks and what each examines belongs in the [checks reference](../../reference/checks.md).
 
 ## Why Python rather than portable R
 
@@ -49,4 +49,4 @@ A single failing format was acceptable — it degrades to a documented "not exec
 
 ## The port as a design record
 
-The R-script-to-module mapping — keyed by R script, Python module, library, parity sample and status — was a historical design record kept alongside the original R scripts; it documented a completed port rather than telling anyone how to do anything. That matrix was retired with the original hand-authored HTML pages: the repository no longer publishes it. What remains is the rationale on this page, the divergences and go/no-go criteria recorded here, and the current behaviour in the [checks reference](../reference/checks.md). The decision log in [Architecture](architecture.md#decision-log) records when the port was accepted.
+The R-script-to-module mapping — keyed by R script, Python module, library, parity sample and status — was a historical design record kept alongside the original R scripts; it documented a completed port rather than telling anyone how to do anything. That matrix was retired with the original hand-authored HTML pages: the repository no longer publishes it. What remains is the rationale on this page, the divergences and go/no-go criteria recorded here, and the current behaviour in the [checks reference](../../reference/checks.md). The decision log in [Architecture](architecture.md#decision-log) records when the port was accepted.

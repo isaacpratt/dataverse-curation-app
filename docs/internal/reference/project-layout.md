@@ -12,10 +12,10 @@ Facts about the repository's structure, tasks and test roots. Task recipes live 
 | File / directory | Role |
 | --- | --- |
 | `main.py` | `--headless`/`--out`/`--format`/`--persistent-id`/`--export-record`/`--config`/`--dataverse`/`--gallery`; lazy Qt (TYPE_CHECKING-only at import); sibling-libs loader (exe dir and its parent); exits 0/1/2; MainWindow with TopNav + QStackedWidget (dashboard/detail/settings/review-config/about/log) |
-| `config.example.json` | Configuration template (see [Configuration reference](configuration.md)) |
+| `config.example.json` | Configuration template (see [Configuration reference](../../reference/configuration.md)) |
 | `curation/startup_probe.py` | Opt-in `DOCENT_STARTUP_LOG` phase timings (process start → first paint); no-op unless the variable is set. The only `tools/`-origin module that became app code, because `main.py` and `ui/dashboard.py` import it at runtime |
 | `curation/config.py` | `DataverseConfig` (base_url, token, collection alias), `AppConfig` (workspace, tesseract, exiftool), `Config.load/save`, `resolve_config_path()` (legacy candidates: CWD → exe dir → exe parent → exe grandparent; a new portable file lands in the exe parent), `PRESETS`, DATAVERSE_* env overrides |
-| `curation/client/` | `DataverseClient` (`client.py`, `http.py`, `downloads.py`, `parsers.py`, `caches.py`, `constants.py`, `errors.py`, `refusals.py`, `access.py`) — total-driven discovery (`_search_page` → rows + `total_count`) and pooled inventory enrichment (`enrich_datasets_with_inventory`); endpoints in [Dataverse API](dataverse-api.md) |
+| `curation/client/` | `DataverseClient` (`client.py`, `http.py`, `downloads.py`, `parsers.py`, `caches.py`, `constants.py`, `errors.py`, `refusals.py`, `access.py`) — total-driven discovery (`_search_page` → rows + `total_count`) and pooled inventory enrichment (`enrich_datasets_with_inventory`); endpoints in [Dataverse API](../../reference/dataverse-api.md) |
 | `curation/download_manager.py` | `quote`/`quote_from`, `missing_files`/`is_fully_staged`, `approve_and_download` (+ `download_originals`), `verify` → `(ok, problems, warnings)`, zip-slip guard, per-dataset cache, per-PID download locks |
 | `curation/metadata_check.py` | `PROFILES`, `DEFAULT_PROFILE="McMaster"`, `check_metadata_completeness`, ORCID regex, `requirements_profiles.json` support |
 | `curation/review_rules.py` | `RULESETS_VERSION=2`, `FIELD_CATALOG`, builtin McMaster/Minimal rulesets, per-Dataverse assignment, content-rule evaluation |
@@ -27,7 +27,7 @@ Facts about the repository's structure, tasks and test roots. Task recipes live 
 | `engine/checks/base.py` | `Check` base + `CheckResult` dataclass with `to_dict`/`from_dict` |
 | `engine/checks/<format>_check.py` | 24 modules (csv, xlsx, sav, dta, sas7bdat, json, xml, ipynb, sqlite, hdf5, nc, gpkg, tiff, images, pdf, text, code, secret, containers, fastq, extensions, access, varmeta, readme); lazy heavy imports |
 | `engine/checks/_util.py` | `missing_library`, `skipped`, `detect_encoding`, `find_emails`/`find_pii` (piigex `regions=["intl"]` + CA postal/SIN; foreign national IDs disabled), `pii_result` |
-| `engine/checks/__init__.py` | Registry auto-built from `_MODULES` (24 keys) — see [Check ID index](checks.md#check-id-index) |
+| `engine/checks/__init__.py` | Registry auto-built from `_MODULES` (24 keys) — see [Check ID index](../../reference/checks.md#check-id-index) |
 | `engine/checks/guidance.py` | Per-check "Why this matters" / "How to fix" registry |
 | `engine/constants.py` | `EngineCaps` scan caps (samples, rows, members, pixels…) |
 | `engine/status.py` | `classify`/`summarize`/`file_status`/`status_label` badge taxonomy |
@@ -132,6 +132,6 @@ Warm onedir launches reach first paint in roughly 0.9–1.1 s on the reference m
 
 ## See also
 
-- [Checks reference](checks.md)
-- [Configuration reference](configuration.md)
-- [Glossary](glossary.md)
+- [Checks reference](../../reference/checks.md)
+- [Configuration reference](../../reference/configuration.md)
+- [Glossary](../../reference/glossary.md)

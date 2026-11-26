@@ -1,4 +1,4 @@
-"""Generate the tech-stack reference in ``docs/reference/tech-stack.md``.
+"""Generate the tech-stack reference in ``docs/internal/reference/tech-stack.md``.
 
 Declared floors come from ``pyproject.toml``; exact versions come from
 ``uv.lock`` for the Python version pinned in ``.python-version``. The .NET SDK
@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-PAGE = ROOT / "docs" / "reference" / "tech-stack.md"
+PAGE = ROOT / "docs" / "internal" / "reference" / "tech-stack.md"
 BEGIN = "<!-- BEGIN GENERATED TECH STACK -->"
 END = "<!-- END GENERATED TECH STACK -->"
 

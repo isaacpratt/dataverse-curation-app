@@ -1,6 +1,6 @@
 """Minimal prose checks for the published documentation (Vale without Vale).
 
-This repo is uv-only, so the house style rules from ``docs/style-guide.md`` are
+This repo is uv-only, so the house style rules from ``docs/internal/style-guide.md`` are
 checked in Python rather than by adding a Go linter. The rules here are small
 and deterministic on purpose: banned filler words, first person, undated or
 stale verification claims, and backticked repository paths that no longer
@@ -49,7 +49,7 @@ def _published_pages() -> list[Path]:
     pages = []
     for path in DOCS.rglob("*.md"):
         rel = path.relative_to(DOCS).as_posix()
-        if rel.startswith(("adr/", "reports/", "proposals/")):
+        if rel.startswith(("adr/", "internal/", "reports/", "proposals/")):
             continue
         pages.append(path)
     return sorted(pages)
