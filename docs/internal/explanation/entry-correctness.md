@@ -5,7 +5,7 @@ audience: developer          # curator | developer | contributor | all
 ---
 # Why entry-correctness rules exist
 
-Presence checks answer "did the depositor fill this field?". They cannot answer "does the value look like a real description, a real title, a plausible date?". The `looks_correct` rule handler closes that gap by checking the *text* of a metadata entry while remaining an ordinary field rule in the completeness engine. This page explains why it is shaped that way, how its failures are handled, and what enrolling it responsibly looks like. The parameter-by-parameter semantics and the starter JSON live in the [entry checks reference](../reference/entry-checks.md).
+Presence checks answer "did the depositor fill this field?". They cannot answer "does the value look like a real description, a real title, a plausible date?". The `looks_correct` rule handler closes that gap by checking the *text* of a metadata entry while remaining an ordinary field rule in the completeness engine. This page explains why it is shaped that way, how its failures are handled, and what enrolling it responsibly looks like. The parameter-by-parameter semantics and the starter JSON live in the [entry checks reference](../../reference/entry-checks.md).
 
 ## Why it is a handler, not a second pipeline
 
@@ -15,13 +15,13 @@ That decision has a large payoff and one constraint. There is no second code pat
 
 ## The design intent behind the nine checks
 
-The nine sub-checks are `min_length`, `regex` (with `regex_mode`), `blocklist`, `not_common_placeholders`, `not_all_caps`, `controlled_vocabulary`, `date`, `date_order` and `url`. They can be combined on one rule; each catches a distinct failure mode of deposited text, and each is local and deterministic. Their exact parameters and messages are in the [entry checks reference](../reference/entry-checks.md).
+The nine sub-checks are `min_length`, `regex` (with `regex_mode`), `blocklist`, `not_common_placeholders`, `not_all_caps`, `controlled_vocabulary`, `date`, `date_order` and `url`. They can be combined on one rule; each catches a distinct failure mode of deposited text, and each is local and deterministic. Their exact parameters and messages are in the [entry checks reference](../../reference/entry-checks.md).
 
 Length and text-shape checks handle the "clearly unfinished" class. `min_length` measures content — concatenated for a plain multi-entry field such as `dsDescription`, per entry for a dotted compound path such as `author.authorAffiliation` — because "the description is at least 50 characters" is a single knob a curator can reason about. `regex` with `regex_mode` expresses discipline-specific shapes when a pattern is genuinely known. `blocklist` and the built-in `not_common_placeholders` catch the refusal list and the usual filler words; `not_all_caps` catches shouted titles and only fires when the value actually has cased letters. The intent is to flag low-effort entries, not to judge prose quality.
 
 `controlled_vocabulary` answers a different question: is the value drawn from an agreed set? It is deliberately an inline list on the rule, because a vocabulary without an owner is worse than none — a list the depositors were never taught will fail every deposit. `date` and `date_order` encode the repository's ISO convention and the high-signal case of a reversed range on a compound date field. `url` is a scheme-and-host sanity check by design, not a network probe.
 
-Together they cover plausibility at the level a curator can act on in a letter. What each param accepts, the exact bracketed reason it emits and a paste-ready rule are in [Entry checks reference](../reference/entry-checks.md); duplicating them here would turn this page into a lookup table.
+Together they cover plausibility at the level a curator can act on in a letter. What each param accepts, the exact bracketed reason it emits and a paste-ready rule are in [Entry checks reference](../../reference/entry-checks.md); duplicating them here would turn this page into a lookup table.
 
 ## Failure philosophy: fail closed
 

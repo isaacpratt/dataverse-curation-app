@@ -111,9 +111,9 @@ Geometry is part of the contract. The queue has no horizontal scrollbar, so its 
 
 ## Reports and extensibility
 
-The engine and the GUI communicate through `DatasetReport` JSON, implemented in `engine/report.py` and specified in the [report contract](../reference/report-contract.md). The GUI renders that structure directly, without knowing individual checks; headless mode exercises the same contract. A format check is a new module in `engine/checks/` implementing `Check`, registered in the registry. The Automated checks card and `list_planned_checks()` pick it up automatically, and missing optional libraries surface as "Missing …" rather than errors.
+The engine and the GUI communicate through `DatasetReport` JSON, implemented in `engine/report.py` and specified in the [report contract](../../reference/report-contract.md). The GUI renders that structure directly, without knowing individual checks; headless mode exercises the same contract. A format check is a new module in `engine/checks/` implementing `Check`, registered in the registry. The Automated checks card and `list_planned_checks()` pick it up automatically, and missing optional libraries surface as "Missing …" rather than errors.
 
-Scope is now declared, not inferred: every check states whether its findings are about the dataset or a file, the registry refuses a class that omits the declaration, and routing follows it. Extensions only say which files a check reads, so a cross-file check can still report once for the dataset. All 24 registered checks declare a scope. Human-readable names come from one `TITLES` registry, so a check is never shown to a curator by its raw ID. See the [checks reference](../reference/checks.md) for what each check examines.
+Scope is now declared, not inferred: every check states whether its findings are about the dataset or a file, the registry refuses a class that omits the declaration, and routing follows it. Extensions only say which files a check reads, so a cross-file check can still report once for the dataset. All 24 registered checks declare a scope. Human-readable names come from one `TITLES` registry, so a check is never shown to a curator by its raw ID. See the [checks reference](../../reference/checks.md) for what each check examines.
 
 ## Startup and first paint
 
@@ -129,27 +129,4 @@ Install identity is fixed in `tools/build/check_pack.py`: the pack ID names the 
 
 ## Decision log
 
-A condensed record of the decisions that shaped the current shape. The full history lives in the repository's decision records and beads.
-
-| Date | Decision |
-| --- | --- |
-| 2026-08-17 | PySide6 single-process desktop; API-token auth; Python port over portable R (~400 MB). |
-| 2026-08-21/25 | CLI draft crawl and IN_REVIEW locks; paginated Search fallback; streaming download; connection-reset retry; metadata completeness as a first-class feature; lazy imports. |
-| 2026-09-08/15 | Detail main + sticky sidebar; settings/about as stack panes; log strip became the Log page; problems-vs-warnings verification; originals-only tabular deposits; skip-if-staged; QThread adoption; dashboard cache-first paint. |
-| 2026-09-11/23 | `ui/widgets.py` kit as single source of truth (a QML UI was rejected); audit batches for dispatch, missing-lib guards, atomic staging, retries, caps and taxonomy. |
-| 2026-09-25 → 10-02 | Theme tokens single-sourced; keyboard parity and plain-language errors; colour-not-outline focus; Copy diagnostics that never include the token. |
-| 2026-10-06 | Dataverse Docent rebrand; probe suites promoted to permanent tests and CI. |
-| 2026-10-29 | The crawler was removed after its upstream restructure broke the CLI contract. Discovery became total-driven Search at `per_page=1000` plus in-process pooled inventory enrichment, available to every user including frozen builds; a painted-row window was added for very large collections. |
-| 2026-11-04 | One layout controller per table header, persisting user gestures only; the queue's split header demoted to an opt-in fallback; one reset-columns affordance; one type scale; versioned layout entries. |
-| 2026-11-06 | Beads became the planner: issues live in a local Dolt database, `bd ready` is the queue, and docs/proposals mirror rather than lead. |
-| 2026-11-07 | Card header contract: titles and tools on separate rows; one decimal size helper; measured first-load geometry. |
-| 2026-11-12 | Metadata check restyled to the Auto-Checks idiom; human-readable check names from one registry; expected API refusals classified rather than reported as bugs. |
-| 2026-11-13 | Entry-correctness rules (`looks_correct`) added with fail-closed semantics; review configuration gained a Check picker and an entry-checks panel. |
-| 2026-11-16 | Velopack replaced the earlier installer plan; user-editable files moved to `%APPDATA%`; the curation core was consolidated under `curation/`. |
-| 2026-11-16 | One name and one build: the app, the artefact, the installer and the distribution all say Dataverse Docent; the two-variant build was removed. |
-| 2026-11-17 | The dataset detail module was split into a facade over ten section modules sharing one typed contract; the queue painting window and enrichment cap were measured and confirmed. |
-| 2026-11-19 | Every check now declares its scope; the Python floor was made 3.11 everywhere; dependency floors were aligned with what ships. |
-| 2026-11-20 | All application code moved to full strict type checking with only tests relaxed; documentation moved from hand-authored HTML to a Markdown tree built by Zensical and configured for GitHub Pages. |
-| 2026-11-23 | The docs were rewritten into Diátaxis quadrants with TGDP templates, and the old HTML tree was retired. |
-
-The proposal snapshots that produced several of these decisions are kept as historical design records, described in [Design records](design-records/index.md).
+The dated decision log and the rationale collected from the public pages are kept in [Design decisions](../design-decisions.md). The proposal snapshots that produced several of those decisions are described in [Design records](design-records/index.md).

@@ -23,7 +23,7 @@ One page serves one quadrant. A tutorial teaches; a how-to is a short recipe wit
 
 ## Front matter
 
-Every page published by Zensical (that is, every `.md` under `docs/` except the `adr/`, `reports/` and `proposals/` folders) begins with exactly five lines of front matter, followed immediately by one H1. Root files such as `README.md` and `CONTRIBUTING.md` are not Zensical pages and carry no front matter:
+Every page published by Zensical (that is, every `.md` under `docs/` except the `adr/`, `internal/`, `reports/` and `proposals/` folders) begins with exactly five lines of front matter, followed immediately by one H1. Root files such as `README.md` and `CONTRIBUTING.md` are not Zensical pages and carry no front matter:
 
 ```yaml
 ---
@@ -68,7 +68,7 @@ The `page_type` matches the quadrant, or `governance` for a governance page. The
 - Put a blank line before every list, table, and heading.
 - Give every table a separator row.
 - Leave no trailing whitespace. End every file with a single newline.
-- Use relative Markdown links between pages in `docs/` (for example `../reference/project-layout.md` from `docs/how-to/`). Use an absolute URL only for an external resource, such as the GitHub Releases page.
+- Use relative Markdown links between pages in `docs/` (for example `../../reference/project-layout.md` from `docs/internal/how-to/`). Use an absolute URL only for an external resource, such as the GitHub Releases page.
 - Add a new page to the explicit `nav` in `zensical.toml`; an unlisted page will not appear in the published site.
 
 ## Linting

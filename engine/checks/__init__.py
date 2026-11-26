@@ -1,6 +1,6 @@
 """Registry of format checks, ported from the CUR_Res_CurationTools R scripts.
 
-See docs/explanation/engine-port.md for port status and docs/reference/report-contract.md for the
+See docs/internal/explanation/engine-port.md for port status and docs/reference/report-contract.md for the
 check_id namespaces.
 """
 

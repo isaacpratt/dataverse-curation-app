@@ -113,10 +113,6 @@ Reads that cannot exist are not sent. The Native API's dataset read answers with
 
 `curation.curation_record.export_record()` composes the review's local outputs into one dated `curation-record/<YYYYMMDD-HHMMSS>/` folder beside the dataset's workspace folder: checks report (JSON + Markdown), depositor response, the curation timeline from `state.db`, per-finding dispositions, the sensitivity questionnaire, the recorded decision + curation label, and a `sha256sums.txt` manifest of the staged files — bound by `index.json` that hashes every artifact. The GUI exposes it as the header's Export record button; headless runs take `--export-record`. No server calls are involved: the record is a local audit bundle.
 
-## Verification snapshot (point in time, 2026-11-03)
-
-These figures were observed against `https://demo.borealisdata.ca` on 2026-11-03 and are a design record, not a live status: a demo collection changes over time. Version → Borealis; search `subtree=mcmaster` → 14 datasets in one page (`total_count=14`); whole repository → 2,097 datasets over 3 pages at `per_page=1000`; dataset lookup → citation title OK; versions → 23 files; bundle → 358 477 bytes streamed and unzipped. Empty alias and `:root` return the whole repo; root alias is `dv`. The demo is a real Borealis Dataverse deployment (v6.8.4-SP), not a production instance; a token-backed authenticated pass is deferred.
-
 ## See also
 
 - [Configuration reference](configuration.md)

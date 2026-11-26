@@ -11,8 +11,8 @@ Some material is worth keeping because it explains *why* the app is the way it i
 
 The 2026-11 dataset-review critique produced two proposal reports. Both are **historical design records**: they capture a moment in the project's thinking, are intentionally out of the site navigation (`not_in_nav`) and are not statements of what the app does today. Their approved ideas became beads; for the live picture, start with [Architecture](../architecture.md), the ADR index below and `bd ready`.
 
-- [Top 10 dataset-review proposals](../../proposals/top10-dataset-review.md) — the approved dossier, with each idea's outcome, code changes, rationale and scoring.
-- [22 further ideas for dataset review](../../proposals/other-ideas-dataset-review.md) — the companion report, including the full source bibliography behind the critique.
+- [Top 10 dataset-review proposals](../../../proposals/top10-dataset-review.md) — the approved dossier, with each idea's outcome, code changes, rationale and scoring.
+- [22 further ideas for dataset review](../../../proposals/other-ideas-dataset-review.md) — the companion report, including the full source bibliography behind the critique.
 
 The decision recorded here is that these snapshots stay as historical design records rather than being rewritten into quadrant pages. They were written for a specific review; recasting them as current guidance would make them both stale and misleading. Provenance is their job.
 

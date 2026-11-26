@@ -6,7 +6,7 @@ audience: developer
 
 # Package and release
 
-Build the Windows artefacts, verify them locally, then publish from CI. For the authoritative list of published versions, see [the release notes](../release-notes.md).
+Build the Windows artefacts, verify them locally, then publish from CI. For the authoritative list of published versions, see [the release notes](../../release-notes.md).
 
 ## Prerequisites
 

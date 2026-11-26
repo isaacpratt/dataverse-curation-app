@@ -81,5 +81,5 @@ Two constraints shaped the answer:
 - Beads: `dv-hcg` (audit), `dv-hcg.28` (UI typing ramp), `dv-5ns`
   (the original typing bead, superseded by the ramp).
 - `pyproject.toml` — `[tool.mypy] files` and the `ui.*` override.
-- `docs/reference/project-layout.md` — the type-check gate.
+- `docs/internal/reference/project-layout.md` — the type-check gate.
 - ADR 0006 — the curation core package (the mypy scope it described).

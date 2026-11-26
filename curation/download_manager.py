@@ -3,7 +3,7 @@
 Flow: quote (file count + total bytes from the inventory, no download) ->
 curator approval -> zip bundle download with progress -> safe unzip ->
 checksum verification against the Dataverse inventory. Network work runs on
-Qt worker threads; see docs/explanation/architecture.md.
+Qt worker threads; see docs/internal/explanation/architecture.md.
 """
 
 import os

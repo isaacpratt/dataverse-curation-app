@@ -100,7 +100,7 @@ Start with [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the quality gates and t
 
 ## Roadmap
 
-Remaining work is tracked in beads (`bd ready` / `bd list`); completed decisions are recorded in [Architecture](https://isaacpratt.github.io/dataverse-curation-app/explanation/architecture/) and `docs/adr/`.
+Remaining work is tracked in beads (`bd ready` / `bd list`); completed decisions are recorded in `docs/internal/design-decisions.md` and `docs/adr/`.
 
 ## Context
 

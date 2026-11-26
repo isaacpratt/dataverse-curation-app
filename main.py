@@ -1,7 +1,7 @@
 """Launch the Dataverse Docent entry point.
 
 Default is the desktop GUI; --headless runs the engine on a staged
-dataset directory and writes a JSON report (see docs/reference/project-layout.md).
+dataset directory and writes a JSON report (see docs/internal/reference/project-layout.md).
 """
 
 import argparse

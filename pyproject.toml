@@ -242,7 +242,7 @@ type = "simple"
   cmd = "python tools/docs/gen_cli_reference.py --check"
 
   [tool.poe.tasks.docs-gen-tech-stack]
-  help = "Regenerate the tech-stack reference in docs/reference/tech-stack.md from pyproject.toml, uv.lock and the toolchain pins"
+  help = "Regenerate the tech-stack reference in docs/internal/reference/tech-stack.md from pyproject.toml, uv.lock and the toolchain pins"
   cmd = "python tools/docs/gen_tech_stack.py --write"
 
   [tool.poe.tasks.docs-gen-tech-stack-check]

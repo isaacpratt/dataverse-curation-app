@@ -44,7 +44,7 @@ ALLOWED_TEMPLATES = {
 }
 ALLOWED_AUDIENCES = {"curator", "developer", "contributor", "all"}
 PYPROJECT = ROOT / "pyproject.toml"
-STYLE_GUIDE = DOCS / "style-guide.md"
+STYLE_GUIDE = DOCS / "internal" / "style-guide.md"
 
 
 def _published_pages() -> list[Path]:
@@ -52,7 +52,7 @@ def _published_pages() -> list[Path]:
     pages = []
     for path in DOCS.rglob("*.md"):
         rel = path.relative_to(DOCS).as_posix()
-        if rel.startswith(("adr/", "reports/", "html/", "proposals/")):
+        if rel.startswith(("adr/", "internal/", "reports/", "html/", "proposals/")):
             continue
         pages.append(path)
     return sorted(pages)
@@ -68,7 +68,7 @@ def _front_matter(path: Path) -> dict[str, str]:
 
 def test_every_published_page_declares_one_quadrant() -> None:
     pages = _published_pages()
-    assert len(pages) >= 27, f"expected the full rewritten docs tree, found {len(pages)} pages"
+    assert len(pages) >= 15, f"expected the public curator docs tree, found {len(pages)} pages"
     for path in pages:
         fields = _front_matter(path)
         page_type = fields.get("page_type", "")
@@ -170,10 +170,10 @@ def test_nav_is_grouped_by_quadrant() -> None:
     for entry in config["project"]["nav"]:
         if isinstance(entry, dict):
             groups.extend(entry.keys())
-    assert groups[:5] == [
+    assert groups[:4] == [
         "Home",
         "Tutorials",
         "How-to guides",
         "Reference",
-        "Explanation",
     ], f"nav quadrants out of order: {groups}"
+    assert "Explanation" not in groups, "explanation pages are internal, not published"

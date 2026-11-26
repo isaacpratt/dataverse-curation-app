@@ -42,7 +42,7 @@ def _red() -> str:
 # ui/tests/test_icon_inventory.py all read (dv-kvb). A role says what a
 # mark is for; the value names the bundled asset. Adding a role here is how
 # a control gets its glyph - a text character or a hand-drawn path is never
-# the answer (see docs/reference/project-layout.md, "Icons").
+# the answer (see docs/internal/reference/project-layout.md, "Icons").
 ICON_ROLES: dict[str, str] = {
     "refresh": "rotate-ccw",
     "reset": "rotate-ccw",

@@ -64,11 +64,11 @@ Configuration lives in `requirements_profiles.json` (v2, beside `config.json`: t
 | --- | --- |
 | Plausibility, not truth | Catches "no description yet", "ALL CAPS", reversed date ranges — never whether the content is about the data |
 | `min_length` | Counts codepoints including spaces; cannot distinguish a long word salad from a real summary |
-| `controlled_vocabulary` | Fails every depositor not on the list; the list is a maintained artifact |
-| `date` | ISO-only by design; deposits in other shapes (DD/MM/YYYY, month names) fail the rule |
-| `regex` | An invalid pattern fails loudly; a careless-but-valid pattern can flag everything |
-| ORCID | Author identifiers keep their dedicated handler; not duplicated as a regex rule |
-| Not covered | Live DOI/ISNI resolution, controlled file-content checks for metadata, and negation ("must NOT contain X" as a first-class rule) |
+| `controlled_vocabulary` | Fails every depositor whose value is not on the configured list |
+| `date` | ISO-style dates only; other shapes (DD/MM/YYYY, month names) fail the rule |
+| `regex` | An invalid pattern fails loudly; a valid pattern can still flag intended values |
+| ORCID | Author identifiers use the dedicated ORCID handler |
+| Not covered | Live DOI/ISNI resolution, controlled file-content checks for metadata, and negation ("must NOT contain X") |
 
 ## See also
 

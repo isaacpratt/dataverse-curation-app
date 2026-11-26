@@ -73,5 +73,5 @@ behaviour-preserving annotation fixes — they add no runtime code.
 - Bead: `dv-a4w` (the ratified policy decision and implementation).
 - `pyproject.toml` — `[tool.mypy]` and the single `[[tool.mypy.overrides]]`
   block for the four test packages.
-- `docs/reference/project-layout.md` — the type-check gate description.
+- `docs/internal/reference/project-layout.md` — the type-check gate description.
 - ADR 0007 — the earlier UI relaxation, superseded by this ADR.

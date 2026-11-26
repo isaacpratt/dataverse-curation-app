@@ -31,7 +31,7 @@ Copy this structure into every new `bd create --description`. A bead is the unit
 - **Future-self check:** could a new agent pick this up in 6 months with only the bead plus the repo? If not, add the missing context.
 - **One bead, one outcome.** If it needs sequencing, split it and order with `bd dep add`.
 - **Don't close the loop in the title.** Titles state the work (`Fix X`), not the result (`X fixed`).
-- **Docs are part of the bead.** If it changes behavior, the hooks include the docs page that documents it (`docs/reference/`, `docs/how-to/`, `docs/tutorials/`, `docs/explanation/`, `README.md`, `AGENTS.md`); follow `docs/style-guide.md`.
-- **Decision records:** if the bead settles a repository-level question (toolchain, layout, packaging, security), write an ADR in `docs/adr/` with the format in `docs/adr/README.md` and link it from the bead's Hooks. UI-level choices go in the decision log in `docs/explanation/architecture.md` instead.
+- **Docs are part of the bead.** If it changes behavior, the hooks include the docs page that documents it (`docs/reference/`, `docs/how-to/`, `docs/tutorials/`, `docs/internal/explanation/`, `README.md`, `AGENTS.md`); follow `docs/internal/style-guide.md`.
+- **Decision records:** if the bead settles a repository-level question (toolchain, layout, packaging, security), write an ADR in `docs/adr/` with the format in `docs/adr/README.md` and link it from the bead's Hooks. UI-level choices go in the decision log in `docs/internal/explanation/architecture.md` instead.
 - **Changelog:** if the change is user-visible, add a bullet to CHANGELOG.md's Unreleased section in the same commit.
 - After creating, run `bd show <id>` and read it back. Fix anything you have to make up from memory.
